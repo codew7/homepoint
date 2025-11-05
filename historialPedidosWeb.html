@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos Web</title>
+  <link rel="icon" href="faviconnegro.png" type="image/png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <!-- Firebase Auth Check -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="config.js"></script>
+  <script>
+    firebase.initializeApp(firebaseConfig);
+    
+    // Sistema de autenticación completo
+    let admin = false;
+    let authResolved = false;
+    
+    // Lista de emails de administradores
+    const adminEmails = ["distribuidorahomepoint@gmail.com"];
+
+    // Función para redirigir a login con parámetro de retorno
+    function redirigirALogin() {
+        const currentUrl = encodeURIComponent(window.location.href);
+        window.location.href = `login.html?redirect=${currentUrl}`;
+    }
+
+    // Timeout de seguridad: verificar autenticación después de 5 segundos
+    setTimeout(() => {
+        if (!authResolved) {
+            console.log('Timeout de autenticación alcanzado, redirigiendo a login');
+            redirigirALogin();
+        }
+    }, 5000);
+
+    firebase.auth().onAuthStateChanged(user => {
+        console.log('Firebase Auth State Changed:', user ? 'Usuario autenticado' : 'No hay usuario');
+        authResolved = true;
+        
+        if (user) {
+            // Verificar si es administrador
+            admin = adminEmails.includes(user.email);
+            console.log('Usuario admin:', admin);
+            
+            // Mostrar indicador apropiado
+            mostrarIndicadorUsuario(user, admin);
+            
+            // Inicializar la página después de la autenticación
+            inicializarHistorialPedidos();
+        } else {
+            redirigirALogin();
+        }
+    });
+
+    // Función para mostrar indicador de usuario
+    function mostrarIndicadorUsuario(user, esAdmin) {
+        const userIndicator = document.getElementById('userIndicator');
+        const adminIndicator = document.getElementById('adminIndicator');
+        
+        // Verificar que los elementos existan antes de manipular sus estilos
+        if (adminIndicator && userIndicator) {
+            if (esAdmin) {
+                adminIndicator.style.display = 'block';
+                userIndicator.style.display = 'none';
+            } else {
+                adminIndicator.style.display = 'none';
+                userIndicator.style.display = 'block';
+            }
+        } else {
+            console.error('No se encontraron los elementos userIndicator o adminIndicator');
+        }
+    }
+
+    // Función para cerrar sesión
+    function cerrarSesion() {
+        firebase.auth().signOut().then(() => {
+            console.log('Sesión cerrada exitosamente');
+            redirigirALogin();
+        }).catch((error) => {
+            console.error('Error al cerrar sesión:', error);
+            alert('Error al cerrar sesión. Inténtalo de nuevo.');
+        });
+    }
+  </script>
+  <!-- Fin Firebase Auth Check -->
+
+  <style>
+    /* === RESET Y VARIABLES === */
+    :root {
+      --primary-color: #4CAF50;
+      --primary-dark: #388E3C;
+      --primary-light: #81C784;
+      --secondary-color: #2196F3;
+      --accent-color: #FFD600;
+      --danger-color: #f44336;
+      --warning-color: #FF9800;
+      --success-color: #25D366;
+      --text-dark: #212121;
+      --text-light: #757575;
+      --bg-light: #f5f5f5;
+      --bg-white: #ffffff;
+      --border-color: #e0e0e0;
+      --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.15);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+      min-height: 100vh;
+      padding: 0;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    /* === HEADER === */
+    header {
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+      padding: 1.5rem 1.5rem 2rem 1.5rem;
+      box-shadow: var(--shadow-md);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      width: 100%;
+    }
+
+    header h1 {
+      margin: 0 0 1.5rem 0;
+      font-size: 2rem;
+      color: white;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      text-align: center;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* === INDICADORES DE USUARIO === */
+    .user-indicator {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 25px;
+      padding: 0.5rem 1rem;
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+    }
+
+    .user-indicator:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .user-indicator i {
+      font-size: 1rem;
+    }
+
+    .logout-btn {
+      background: rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+      padding: 0;
+      box-shadow: none;
+      flex-shrink: 0;
+    }
+
+    .logout-btn:hover {
+      background: rgba(255, 255, 255, 0.4);
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .logout-btn i {
+      font-size: 0.9rem;
+    }
+
+    /* === FILTROS === */
+    #filtroStatusBtns {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .filtro-row {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .filtro-row button {
+      padding: 0.5rem 1.25rem;
+      border: 2px solid white;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      white-space: nowrap;
+    }
+
+    .filtro-row button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .filtro-row button:active {
+      transform: translateY(0);
+    }
+
+    /* === CONTENEDOR PRINCIPAL === */
+    .main-container {
+      max-width: 100%;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .table-wrapper {
+      background: var(--bg-white);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* === TABLA === */
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 800px;
+    }
+
+    thead {
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      padding: 1rem 0.75rem;
+      color: white;
+      font-weight: 600;
+      text-align: center;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--primary-dark);
+    }
+
+    tbody tr {
+      transition: var(--transition);
+      border-bottom: 1px solid var(--border-color);
+      background: white;
+    }
+
+    tbody tr:hover {
+      background: #e8f5e9;
+      box-shadow: 0 3px 12px rgba(76, 175, 80, 0.2);
+      transform: scale(1.01);
+    }
+
+    td {
+      padding: 1rem 0.75rem;
+      text-align: center;
+      vertical-align: middle;
+      font-size: 0.9rem;
+      color: var(--text-dark);
+    }
+
+    /* === COLUMNAS === */
+    .col-indicador { width: 3%; min-width: 40px; }
+    .col-nombre { width: 18%; min-width: 150px; }
+    .col-fecha { width: 12%; min-width: 120px; }
+    .col-entrega { width: 10%; min-width: 90px; }
+    .col-estado { width: 10%; min-width: 90px; }
+    .col-unidades { width: 8%; min-width: 60px; }
+    .col-nota { width: 20%; min-width: 180px; }
+    .col-eliminar { width: 12%; min-width: 120px; }
+
+    /* === ELEMENTOS ESPECIALES === */
+    .dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--danger-color);
+      animation: pulse 2s infinite;
+      box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 6px rgba(244, 67, 54, 0);
+      }
+    }
+
+    .cancelado-row {
+      background: #f5f5f5 !important;
+      color: #9e9e9e !important;
+      opacity: 0.7;
+    }
+
+    .cancelado-row:hover {
+      background: #eeeeee !important;
+    }
+
+    /* === CAMPO DE NOTA === */
+    .nota-input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-family: inherit;
+      transition: var(--transition);
+      background: white;
+    }
+
+    .nota-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    }
+
+    /* === BOTONES DE ACCIÓN === */
+    button {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-icon:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-icon:active {
+      transform: translateY(0);
+    }
+
+    .btn-whatsapp {
+      background: var(--success-color);
+      color: white;
+    }
+
+    .btn-whatsapp:disabled {
+      background: #9e9e9e;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .btn-copy {
+      background: var(--warning-color);
+      color: white;
+    }
+
+    .btn-delete {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    /* === BOTÓN DESCARGAR TODO === */
+    #btnDescargarTodo {
+      background: linear-gradient(135deg, var(--secondary-color) 0%, #1976D2 100%);
+      color: white;
+      border: none;
+      border-radius: 25px;
+      padding: 0.75rem 2rem;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: var(--shadow-md);
+      transition: var(--transition);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #btnDescargarTodo:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    #pieDescargarTodo {
+      text-align: center;
+      padding: 2rem 0;
+    }
+
+    /* === BADGES === */
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-abierto {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .badge-cerrado {
+      background: #e0e0e0;
+      color: #616161;
+    }
+
+    .badge-entregado {
+      background: #e1f5fe;
+      color: #0277bd;
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 1200px) {
+      .main-container {
+        padding: 0 0.5rem;
+        margin: 1.5rem auto;
+      }
+
+      table {
+        min-width: 700px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      header {
+        padding: 1rem 1rem 1.5rem 1rem;
+      }
+
+      header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .user-indicator {
+        top: 0.5rem;
+        right: 0.5rem;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+      }
+
+      .user-indicator span {
+        display: none;
+      }
+
+      .user-indicator i {
+        font-size: 1.1rem;
+      }
+
+      .logout-btn {
+        width: 24px;
+        height: 24px;
+      }
+
+      .filtro-row button {
+        padding: 0.4rem 1rem;
+        font-size: 0.85rem;
+      }
+
+      .main-container {
+        margin: 1rem auto;
+      }
+
+      th, td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.85rem;
+      }
+
+      .btn-icon {
+        width: 32px;
+        height: 32px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      header {
+        padding: 0.75rem 0.5rem 1rem 0.5rem;
+      }
+
+      header h1 {
+        font-size: 1.25rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .main-container {
+        padding: 0 0.25rem;
+        margin: 0.75rem auto;
+      }
+
+      .table-wrapper {
+        border-radius: var(--radius-sm);
+        margin-bottom: 1rem;
+      }
+
+      table {
+        min-width: 600px;
+      }
+
+      th, td {
+        padding: 0.6rem 0.4rem;
+        font-size: 0.8rem;
+      }
+
+      .filtro-row {
+        gap: 0.4rem;
+      }
+
+      .filtro-row button {
+        padding: 0.35rem 0.8rem;
+        font-size: 0.8rem;
+      }
+
+      .btn-icon {
+        width: 30px;
+        height: 30px;
+      }
+
+      .nota-input {
+        font-size: 0.8rem;
+        padding: 0.4rem;
+      }
+
+      #btnDescargarTodo {
+        padding: 0.6rem 1.5rem;
+        font-size: 0.9rem;
+      }
+    }
+
+    /* === ANIMACIONES === */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    tbody tr {
+      animation: fadeInUp 0.3s ease-out;
+    }
+
+    /* === SCROLL PERSONALIZADO === */
+    .table-scroll::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    .table-scroll::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+      background: var(--primary-light);
+      border-radius: 4px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-color);
+    }
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📋 Pedidos Web</h1>
+    
+    <!-- Indicador de Administrador -->
+    <div id="adminIndicator" class="user-indicator" style="display: none;">
+      <i class="bi bi-shield-check"></i>
+      <span>Modo Administrador</span>
+    </div>
+    
+    <!-- Indicador de Usuario Normal -->
+    <div id="userIndicator" class="user-indicator" style="display: none;">
+      <i class="bi bi-person-circle"></i>
+      <span>Usuario</span>
+      <button class="logout-btn" onclick="cerrarSesion()" title="Cerrar Sesión">
+        <i class="bi bi-box-arrow-right"></i>
+      </button>
+    </div>
+    
+    <div id="filtroStatusBtns"></div>
+  </header>
+
+  <div class="main-container">
+    <div class="table-wrapper">
+      <div class="table-scroll">
+        <table id="tabla">
+          <thead>
+            <tr>
+              <th class="col-indicador"><i class="bi bi-bell-fill"></i></th>
+              <th class="col-nombre">Nombre</th>
+              <th class="col-fecha">Fecha</th>
+              <th class="col-entrega">Entrega</th>
+              <th class="col-estado">Estado</th>
+              <th class="col-unidades">Unid.</th>
+              <th class="col-nota">Nota</th>
+              <th class="col-eliminar">Acciones</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<!-- Datalist para las opciones de nota -->
+<datalist id="notaEstadosDatalist">
+  <option value="esperando respuesta">
+  <option value="esperando cierre">
+  <option value="espera cotización">
+  <option value="esperando pago">
+  <option value="pago">
+  <option value="retira">
+  <option value="no responde">
+</datalist>
+
+<script>
+  // Declarar variables globales y db
+  const db = firebase.database();
+  const tbody = document.querySelector('#tabla tbody');
+  const filtroStatusBtns = document.getElementById('filtroStatusBtns');
+
+  let pedidos = {};           // cache local para filtrar
+
+  // Estados posibles 
+  const estados = [
+    { label: 'Abierto', value: 'ABIERTO', color: '#4CAF50' },
+    { label: 'Cerrado', value: 'CERRADO', color: '#4CAF50' },
+    { label: 'Entrega', value: 'DESPACHADO/ENTREGADO', color: '#4CAF50' },
+    { label: 'Cancel', value: 'CANCELADO', color: '#4CAF50' },
+  ];
+
+  // Por defecto seleccionados
+  let statusSeleccionados = ['ABIERTO', 'CERRADO'];
+  let entregaSeleccionada = null; // 'Retiro', 'Envio' o null
+
+  // Función para inicializar el historial de pedidos después de la autenticación
+  function inicializarHistorialPedidos() {
+    // Si la página ya está cargada, ejecutar inmediatamente
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', configurarEventListeners);
+    } else {
+      configurarEventListeners();
+    }
+  }
+
+  let descargandoTodo = false;
+  let listenerPedidos = null;
+
+  function configurarEventListeners() {
+    renderBotonesFiltro();
+    agregarBotonDescargarTodo();
+    cargarPedidosUltimos30Dias();
+  }
+
+  function cargarPedidosUltimos30Dias() {
+    if (listenerPedidos) listenerPedidos.off();
+    descargandoTodo = false;
+    const ahora = Date.now();
+    const hace30dias = ahora - 30 * 24 * 60 * 60 * 1000;
+    // Consulta por timestamp >= hace 30 días
+    listenerPedidos = db.ref('pedidos').orderByChild('timestamp').startAt(hace30dias);
+    listenerPedidos.on('value', snap => {
+      pedidos = [];
+      snap.forEach(child => {
+        const p = child.val() || {};
+        p.id = child.key;
+        pedidos.push(p);
+      });
+      renderTabla();
+    });
+  }
+
+  function cargarPedidosTodos() {
+    if (listenerPedidos) listenerPedidos.off();
+    descargandoTodo = true;
+    listenerPedidos = db.ref('pedidos');
+    listenerPedidos.on('value', snap => {
+      pedidos = [];
+      snap.forEach(child => {
+        const p = child.val() || {};
+        p.id = child.key;
+        pedidos.push(p);
+      });
+      renderTabla();
+    });
+  }
+
+  function agregarBotonDescargarTodo() {
+    let btn = document.getElementById('btnDescargarTodo');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'btnDescargarTodo';
+      btn.textContent = 'Descargar todo';
+      btn.style.background = '#2196F3';
+      btn.style.color = '#fff';
+      btn.style.border = '1.5px solid #2196F3';
+      btn.style.borderRadius = '18px';
+  btn.style.padding = '6px 16px';
+  btn.style.fontWeight = 'bold';
+  btn.style.cursor = 'pointer';
+  btn.style.margin = '30px auto 0 auto';
+  btn.style.display = 'block';
+  btn.style.fontSize = '1em';
+      btn.onclick = function() {
+        if (!descargandoTodo) cargarPedidosTodos();
+      };
+      // Insertar el botón fuera del contenedor de la tabla, como pie de página independiente
+      let pie = document.getElementById('pieDescargarTodo');
+      if (!pie) {
+        pie = document.createElement('div');
+        pie.id = 'pieDescargarTodo';
+        pie.style.width = '100vw';
+        pie.style.display = 'flex';
+        pie.style.justifyContent = 'center';
+        pie.style.alignItems = 'center';
+        pie.style.margin = '0 auto 30px auto';
+        // Insertar pie al final del body
+        document.body.appendChild(pie);
+      }
+      pie.appendChild(btn);
+    }
+    // Mostrar/ocultar según estado
+    btn.style.display = descargandoTodo ? 'none' : 'block';
+  }
+
+  function renderBotonesFiltro() {
+    filtroStatusBtns.innerHTML = '';
+    // Primera fila: Abierto, Cerrado, Entrega, Cancel
+    const row1 = document.createElement('div');
+    row1.className = 'filtro-row';
+    ['Abierto', 'Cerrado', 'Entrega', 'Cancel'].forEach(label => {
+      const est = estados.find(e => e.label === label);
+      const btn = document.createElement('button');
+      btn.textContent = est.label;
+      btn.style.background = statusSeleccionados.includes(est.value) ? est.color : '#fff';
+      btn.style.color = statusSeleccionados.includes(est.value) ? (est.textColor || '#fff') : '#333';
+      btn.style.border = '1.5px solid ' + est.color;
+      btn.style.borderRadius = '18px';
+      btn.style.padding = '6px 16px';
+      btn.style.fontWeight = 'bold';
+      btn.style.cursor = 'pointer';
+      btn.style.transition = 'all 0.2s';
+      btn.onclick = () => {
+        if (est.value === 'ABIERTO' || est.value === 'CERRADO') {
+          // Toggle solo para ABIERTO y CERRADO
+          if (statusSeleccionados.includes(est.value)) {
+            statusSeleccionados = statusSeleccionados.filter(s => s !== est.value);
+          } else {
+            if (statusSeleccionados.includes('ABIERTO') || statusSeleccionados.includes('CERRADO')) {
+              statusSeleccionados.push(est.value);
+            } else {
+              statusSeleccionados = [est.value];
+            }
+          }
+        } else {
+          statusSeleccionados = [est.value];
+        }
+        renderBotonesFiltro();
+        renderTabla();
+      };
+      row1.appendChild(btn);
+    });
+    filtroStatusBtns.appendChild(row1);
+
+    // Segunda fila: Retiro, Envio, Todos
+    const row2 = document.createElement('div');
+    row2.className = 'filtro-row';
+    // Retiro
+    const btnRetiro = document.createElement('button');
+    btnRetiro.textContent = 'Retiro';
+    btnRetiro.style.background = entregaSeleccionada === 'Retiro' ? '#FFD600' : '#fff';
+    btnRetiro.style.color = entregaSeleccionada === 'Retiro' ? '#333' : '#333';
+    btnRetiro.style.border = '1.5px solid #FFD600';
+    btnRetiro.style.borderRadius = '18px';
+    btnRetiro.style.padding = '6px 16px';
+    btnRetiro.style.fontWeight = 'bold';
+    btnRetiro.style.cursor = 'pointer';
+    btnRetiro.onclick = () => {
+      entregaSeleccionada = entregaSeleccionada === 'Retiro' ? null : 'Retiro';
+      renderBotonesFiltro();
+      renderTabla();
+    };
+    row2.appendChild(btnRetiro);
+    // Envio
+    const btnEnvio = document.createElement('button');
+    btnEnvio.textContent = 'Envio';
+    btnEnvio.style.background = entregaSeleccionada === 'Envio' ? '#FFD600' : '#fff';
+    btnEnvio.style.color = entregaSeleccionada === 'Envio' ? '#333' : '#333';
+    btnEnvio.style.border = '1.5px solid #FFD600';
+    btnEnvio.style.borderRadius = '18px';
+    btnEnvio.style.padding = '6px 16px';
+    btnEnvio.style.fontWeight = 'bold';
+    btnEnvio.style.cursor = 'pointer';
+    btnEnvio.onclick = () => {
+      entregaSeleccionada = entregaSeleccionada === 'Envio' ? null : 'Envio';
+      renderBotonesFiltro();
+      renderTabla();
+    };
+    row2.appendChild(btnEnvio);
+    // Todos
+    const btnTodos = document.createElement('button');
+    btnTodos.textContent = 'Todos';
+    btnTodos.style.background = statusSeleccionados.length === 0 && !entregaSeleccionada ? '#4CAF50' : '#fff';
+    btnTodos.style.color = statusSeleccionados.length === 0 && !entregaSeleccionada ? '#fff' : '#333';
+    btnTodos.style.border = '1.5px solid #4CAF50';
+    btnTodos.style.borderRadius = '18px';
+    btnTodos.style.padding = '6px 16px';
+    btnTodos.style.fontWeight = 'bold';
+    btnTodos.style.cursor = 'pointer';
+    btnTodos.onclick = () => {
+      statusSeleccionados = [];
+      entregaSeleccionada = null;
+      renderBotonesFiltro();
+      renderTabla();
+    };
+    row2.appendChild(btnTodos);
+    filtroStatusBtns.appendChild(row2);
+  }
+
+  renderBotonesFiltro();
+
+  function getSelectedStatuses() {
+    return statusSeleccionados.length ? statusSeleccionados : null;
+  }
+
+  function getEntregaPedido(p) {
+    if (
+      p.cliente &&
+      typeof p.cliente.direccion === 'string' &&
+      p.cliente.direccion.trim() !== ''
+    ) {
+      return 'Envio';
+    }
+    return 'Retiro';
+  }
+
+  function renderTabla() {
+    const statusSel = getSelectedStatuses();
+    tbody.innerHTML = '';
+
+    pedidos
+      .filter(p => {
+        // Filtrar pedidos que NO tengan CREATEDBY: 'admin'
+        if (p.createdby === 'admin') return false;
+        if (!statusSel) return true;
+        let estado = 'ABIERTO';
+        if (p.status === 'DESPACHADO/ENTREGADO') {
+          estado = 'DESPACHADO/ENTREGADO';
+        } else if (p.status === 'CANCELADO') {
+          estado = 'CANCELADO';
+        } else if (p.status === 'CERRADO' || p.locked) {
+          estado = 'CERRADO';
+        } else if (p.status === 'ABIERTO') {
+          estado = 'ABIERTO';
+        }
+        return statusSel.includes(estado);
+      })
+      .filter(p => {
+        if (!entregaSeleccionada) return true;
+        return getEntregaPedido(p) === entregaSeleccionada;
+      })
+      .sort((a, b) => b.timestamp - a.timestamp) // más nuevos arriba
+      .forEach(p => {
+        const tr = document.createElement('tr');
+        if (p.status === 'CANCELADO') tr.classList.add('cancelado-row');
+        // Si el pedido está ABIERTO y tiene más de 7 días, marcar en naranja
+        const ahora = Date.now();
+        const sieteDiasMs = 7 * 24 * 60 * 60 * 1000;
+        if ((p.status === 'ABIERTO' || (!p.status && !p.locked)) && (ahora - p.timestamp > sieteDiasMs)) {
+          tr.style.background = '#edb461'; // naranja
+          tr.style.color = '#fff';
+        }
+        // Si el pedido está DESPACHADO/ENTREGADO, marcar en verde agua
+        if (p.status === 'DESPACHADO/ENTREGADO') {
+          tr.style.background = '#bbfacb'; // verde clarito
+          tr.style.color = '#458254';
+        }
+
+        /* --- 1. Indicador de modificación --- */
+  const indCell = tr.insertCell();
+  indCell.className = 'col-indicador';
+        if (p.adminViewed === false) {
+          const dot = document.createElement('span');
+          dot.className = 'dot';
+          indCell.appendChild(dot);
+        }
+
+        /* --- 3. Nombre cliente --- */
+  const nombreCell = tr.insertCell();
+  nombreCell.className = 'col-nombre';
+        const nombreSpan = document.createElement('span');
+        nombreSpan.textContent = p.cliente?.nombre || '—';
+        nombreSpan.style.cursor = 'pointer';
+        nombreSpan.style.color = '#2196F3';
+        nombreSpan.style.textDecoration = 'underline';
+        nombreSpan.onclick = () => {
+          window.open(`pedidos.html?id=${p.id}&admin=true`, '_blank');
+          db.ref(`pedidos/${p.id}`).update({ adminViewed: true })
+            .catch(() => console.error('No se pudo marcar adminViewed'));
+        };
+        nombreCell.appendChild(nombreSpan);
+
+        /* --- 4. Fecha corta --- */
+        const fecha = new Date(p.timestamp);
+        const fechaCell = tr.insertCell();
+        fechaCell.className = 'col-fecha';
+        fechaCell.textContent =
+          fecha.toLocaleDateString('es-AR') + ' ' +
+          fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+
+        /* --- 6. ENTREGA --- */
+        let tipoEntrega = '';
+        const provincia = p.cliente?.provincia ? p.cliente.provincia.trim() : '';
+        if (p.tipoEntrega === 'Showroom') {
+          tipoEntrega = 'Retiro';
+        } else if (!provincia) {
+          tipoEntrega = 'Retiro';
+        } else if (p.tipoEntrega !== 'Showroom') {
+          if (provincia !== 'Gran Buenos Aires' && provincia !== 'CABA') {
+            tipoEntrega = 'Envio';
+          } else if (provincia === ' Gran Buenos Aires' || provincia === 'CABA') {
+            tipoEntrega = 'Envio?';
+          } else {
+            tipoEntrega = 'Envio';
+          }
+        } else {
+          tipoEntrega = 'Retiro';
+        }
+  const entregaCell = tr.insertCell();
+  entregaCell.className = 'col-entrega';
+  entregaCell.textContent = tipoEntrega;
+
+        /* --- 7. Estado --- */
+        let estado = 'ABIERTO';
+        if (p.status === 'DESPACHADO/ENTREGADO') {
+          estado = 'DESPACHADO/ENTREGADO';
+        } else if (p.status === 'CANCELADO') {
+          estado = 'CANCELADO';
+        } else if (p.status === 'CERRADO' || p.locked) {
+          estado = 'CERRADO';
+        } else if (p.status === 'ABIERTO') {
+          estado = 'ABIERTO';
+        }
+  const estadoCell = tr.insertCell();
+  estadoCell.className = 'col-estado';
+  estadoCell.textContent = estado;
+
+  /* --- Unidades totales --- */
+  const unidadesCell = tr.insertCell();
+  unidadesCell.className = 'col-unidades';
+  let totalUnidades = 0;
+  if (Array.isArray(p.items)) {
+    totalUnidades = p.items.reduce((sum, item) => sum + (parseInt(item.cantidad) || 0), 0);
+  }
+  unidadesCell.textContent = totalUnidades;
+
+        /* --- 8. Nota --- */
+        const notaCell = tr.insertCell();
+        notaCell.className = 'col-nota';
+        // Contenedor para nota y fecha
+        const notaCont = document.createElement('div');
+        notaCont.style.display = 'flex';
+        notaCont.style.flexDirection = 'column';
+        notaCont.style.alignItems = 'stretch';
+        notaCont.style.gap = '0.25rem';
+
+        // Crear select en lugar de input con datalist
+        const notaSelect = document.createElement('select');
+        notaSelect.className = 'nota-input';
+        notaSelect.style.cursor = 'pointer';
+        
+        // Opciones del select
+        const opcionesNota = [
+          { value: '', label: '---' },
+          { value: 'esperando respuesta', label: 'Esperando respuesta' },
+          { value: 'esperando cierre', label: 'Esperando cierre' },
+          { value: 'espera cotización', label: 'Espera cotización' },
+          { value: 'esperando pago', label: 'Esperando pago' },
+          { value: 'pago', label: 'Pago' },
+          { value: 'retira', label: 'Retira' },
+          { value: 'no responde', label: 'No responde' }
+        ];
+        
+        // Agregar opciones al select
+        opcionesNota.forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.label;
+          if (p.nota === opt.value) {
+            option.selected = true;
+          }
+          notaSelect.appendChild(option);
+        });
+
+        // Fecha de última actualización
+        const notaFecha = p.notaFecha ? new Date(p.notaFecha) : null;
+        const fechaLabel = document.createElement('span');
+        fechaLabel.style.fontSize = '0.7rem';
+        fechaLabel.style.color = '#999';
+        fechaLabel.style.fontStyle = 'italic';
+        fechaLabel.style.textAlign = 'left';
+        fechaLabel.textContent = (notaFecha && (p.nota && p.nota.trim() !== '')) ? `Actualización ${notaFecha.toLocaleDateString('es-AR')}` : '';
+
+        function actualizarNota(nuevaNota) {
+          const ahora = Date.now();
+          db.ref(`pedidos/${p.id}`).update({ nota: nuevaNota, notaFecha: ahora })
+            .then(() => {
+              fechaLabel.textContent = (nuevaNota && nuevaNota.trim() !== '')
+                ? `Actualización: ${new Date(ahora).toLocaleDateString('es-AR')} ${new Date(ahora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
+                : '';
+            })
+            .catch(() => console.error('Error al guardar la nota'));
+        }
+
+        // Cambio inmediato al seleccionar
+        notaSelect.addEventListener('change', function() {
+          actualizarNota(this.value);
+        });
+
+        notaCont.appendChild(notaSelect);
+        notaCont.appendChild(fechaLabel);
+        notaCell.appendChild(notaCont);
+
+        /* --- 9. Acciones (llamada, compartir y eliminar) --- */
+        const acciones = tr.insertCell();
+        acciones.className = 'col-eliminar';
+        
+        // Contenedor flex para los botones
+        const botonesContainer = document.createElement('div');
+        botonesContainer.style.display = 'flex';
+        botonesContainer.style.gap = '0.5rem';
+        botonesContainer.style.justifyContent = 'center';
+        botonesContainer.style.alignItems = 'center';
+        botonesContainer.style.flexWrap = 'nowrap';
+        
+        // Botón Llamar/WhatsApp
+        const telefono = p.cliente?.telefono ? p.cliente.telefono.replace(/[^\d]/g, '') : '';
+        let telClean = telefono;
+        if (telClean.startsWith('0')) telClean = telClean.substring(1);
+        if (telClean && !telClean.startsWith('54')) telClean = '54' + telClean;
+        const btnTel = document.createElement('button');
+        btnTel.innerHTML = '<i class="bi bi-whatsapp"></i>';
+        btnTel.title = 'WhatsApp';
+        btnTel.className = 'btn-icon btn-whatsapp';
+        btnTel.disabled = !telClean;
+        btnTel.onclick = () => {
+          if (telClean) {
+            window.open(`https://api.whatsapp.com/send/?phone=${telClean}`, '_blank');
+          }
+        };
+        botonesContainer.appendChild(btnTel);
+        
+        // Botón Copiar URL
+        const btnCopiar = document.createElement('button');
+        btnCopiar.innerHTML = '<i class="bi bi-link-45deg"></i>';
+        btnCopiar.title = 'Copiar enlace';
+        btnCopiar.className = 'btn-icon btn-copy';
+        btnCopiar.onclick = () => {
+          const urlBase = window.location.origin + '/pedidos.html?id=' + p.id;
+          navigator.clipboard.writeText(urlBase).then(() => {
+            btnCopiar.innerHTML = '<i class="bi bi-check-lg"></i>';
+            setTimeout(() => {
+              btnCopiar.innerHTML = '<i class="bi bi-link-45deg"></i>';
+            }, 2000);
+          }).catch(err => {
+            alert('No se pudo copiar la URL');
+            console.error('Error al copiar:', err);
+          });
+        };
+        botonesContainer.appendChild(btnCopiar);
+        
+        // Botón Eliminar
+        const btnEliminar = document.createElement('button');
+        btnEliminar.innerHTML = '<i class="bi bi-trash-fill"></i>';
+        btnEliminar.title = 'Eliminar';
+        btnEliminar.className = 'btn-icon btn-delete';
+        btnEliminar.onclick = () => {
+          mostrarModalClave(() => {
+            if (confirm('¿Está seguro que desea eliminar este pedido? Esta acción es irreversible.')) {
+              db.ref(`pedidos/${p.id}`).remove()
+                .catch(()=>alert('Error al eliminar el pedido'));
+            }
+          });
+        };
+        botonesContainer.appendChild(btnEliminar);
+        
+        acciones.appendChild(botonesContainer);
+
+        tbody.appendChild(tr);
+      });
+}
+
+
+</script>
+
+<!-- Modal de autorización reutilizable -->
+<div id="modalClave" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);justify-content:center;align-items:center;z-index:9999;">
+  <div style="background:#fff;padding:2rem;border-radius:16px;min-width:280px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2);text-align:center;animation:fadeInUp 0.3s ease-out;">
+    <div style="font-size:1.2rem;margin-bottom:1rem;font-weight:600;color:#212121;">
+      <i class="bi bi-shield-lock-fill" style="color:#4CAF50;font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
+      Código de autorización
+    </div>
+    <input id="inputClave" type="password" style="width:180px;padding:0.75rem;font-size:1.1rem;margin-bottom:1.5rem;border:2px solid #e0e0e0;border-radius:8px;text-align:center;letter-spacing:2px;font-weight:bold;" maxlength="8" autocomplete="off" placeholder="••••••" autofocus>
+    <br>
+    <div style="display:flex;gap:0.75rem;justify-content:center;">
+      <button id="btnOkClave" style="background:#4CAF50;color:#fff;padding:0.75rem 1.5rem;border-radius:8px;font-weight:600;flex:1;max-width:120px;">Confirmar</button>
+      <button id="btnCancelClave" style="background:#757575;color:#fff;padding:0.75rem 1.5rem;border-radius:8px;font-weight:600;flex:1;max-width:120px;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function mostrarModalClave(onSuccess) {
+  const modal = document.getElementById('modalClave');
+  const input = document.getElementById('inputClave');
+  const btnOk = document.getElementById('btnOkClave');
+  const btnCancel = document.getElementById('btnCancelClave');
+  input.value = '';
+  modal.style.display = 'flex';
+  input.focus();
+  btnOk.onclick = () => {
+    if (input.value === '212118') {
+      modal.style.display = 'none';
+      onSuccess();
+    } else {
+      alert('Código incorrecto. No se eliminará el pedido.');
+      input.value = '';
+      input.focus();
+    }
+  };
+  btnCancel.onclick = () => { modal.style.display = 'none'; };
+  input.onkeydown = e => { if (e.key === 'Enter') btnOk.onclick(); };
+}
+</script>
+
+</body>
+</html>

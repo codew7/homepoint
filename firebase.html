@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Database Manager</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #1a1a1a;
+            color: #e8eaed;
+            line-height: 1.4;
+            font-size: 13px;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2d2d2d;
+            padding: 16px 24px;
+            border-bottom: 1px solid #3c4043;
+            position: relative;
+        }
+        
+        .header h1 {
+            color: #e8eaed;
+            font-size: 20px;
+            font-weight: 400;
+            margin-bottom: 4px;
+        }
+        
+        .header p {
+            color: #9aa0a6;
+            font-size: 14px;
+        }
+        
+        .search-bar {
+            background: #2d2d2d;
+            padding: 16px 24px;
+            border-bottom: 1px solid #3c4043;
+            display: flex;
+            gap: 12px;
+        }
+        
+        .search-bar input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #5f6368;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #3c4043;
+            color: #e8eaed;
+        }
+        
+        .search-bar input::placeholder {
+            color: #9aa0a6;
+        }
+        
+        .search-bar button {
+            padding: 8px 16px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .search-bar button:hover {
+            background: #1557b0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #9aa0a6;
+        }
+        
+        .error {
+            background: #d93025;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 16px 24px;
+        }
+        
+        .success {
+            background: #137333;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 16px 24px;
+        }
+        
+        .data-container {
+            flex: 1;
+            overflow-y: auto;
+            background: #1a1a1a;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .database-tree {
+            padding: 16px 0;
+        }
+        
+        .tree-node {
+            position: relative;
+        }
+        
+        .tree-node-header {
+            display: flex;
+            align-items: center;
+            padding: 4px 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .tree-node-header:hover {
+            background: #2d2d2d;
+        }
+        
+        .tree-node-indent {
+            width: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .tree-node-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            cursor: pointer;
+            color: #9aa0a6;
+        }
+        
+        .tree-node-key {
+            color: #8ab4f8;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        
+        .tree-node-type {
+            color: #9aa0a6;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        
+        .tree-node-value {
+            color: #e8eaed;
+            flex: 1;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+            position: relative;
+        }
+        
+        .tree-node-value.editable:hover {
+            background: #2d2d2d;
+        }
+        
+        .tree-node-value.editing {
+            background: #1a1a1a;
+            border: 1px solid #1a73e8;
+        }
+        
+        .tree-node-value.string {
+            color: #a8e6cf;
+        }
+        
+        .tree-node-value.number {
+            color: #ffd93d;
+        }
+        
+        .tree-node-value.boolean {
+            color: #ff9b9b;
+        }
+        
+        .tree-node-value.null {
+            color: #9aa0a6;
+            font-style: italic;
+        }
+        
+        .tree-node-actions {
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .tree-node-header:hover .tree-node-actions {
+            opacity: 1;
+        }
+        
+        .tree-action-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            background: #3c4043;
+            color: #e8eaed;
+        }
+        
+        .tree-action-btn:hover {
+            background: #5f6368;
+        }
+        
+        .tree-action-btn.delete {
+            background: #d93025;
+        }
+        
+        .tree-action-btn.delete:hover {
+            background: #b52d20;
+        }
+        
+        .tree-node-children {
+            display: none;
+            border-left: 1px solid #3c4043;
+            margin-left: 32px;
+        }
+        
+        .tree-node-children.expanded {
+            display: block;
+        }
+        
+        .tree-node.expanded > .tree-node-header .tree-node-icon::before {
+            content: "▼";
+        }
+        
+        .tree-node.collapsed > .tree-node-header .tree-node-icon::before {
+            content: "▶";
+        }
+        
+        .tree-node.leaf > .tree-node-header .tree-node-icon::before {
+            content: "•";
+            color: #5f6368;
+        }
+        
+        .edit-input {
+            background: #3c4043;
+            border: 1px solid #1a73e8;
+            color: #e8eaed;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            width: 100%;
+            outline: none;
+        }
+        
+        .edit-textarea {
+            background: #3c4043;
+            border: 1px solid #1a73e8;
+            color: #e8eaed;
+            padding: 6px;
+            border-radius: 3px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            width: 100%;
+            min-height: 60px;
+            resize: vertical;
+            outline: none;
+        }
+        
+        .edit-buttons {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+        }
+        
+        .edit-btn {
+            padding: 2px 6px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .edit-btn.save {
+            background: #137333;
+            color: white;
+        }
+        
+        .edit-btn.cancel {
+            background: #5f6368;
+            color: white;
+        }
+        
+        .stats {
+            background: #2d2d2d;
+            padding: 12px 24px;
+            border-bottom: 1px solid #3c4043;
+            display: none;
+        }
+        
+        .stats-row {
+            display: flex;
+            gap: 24px;
+            font-size: 12px;
+            color: #9aa0a6;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .stat-number {
+            color: #8ab4f8;
+            font-weight: 500;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #9aa0a6;
+        }
+
+        /* Estilos para indicadores de usuario */
+        .user-indicator {
+            position: absolute;
+            top: 12px;
+            right: 24px;
+            background: rgba(26, 115, 232, 0.15);
+            border: 1px solid rgba(26, 115, 232, 0.3);
+            border-radius: 16px;
+            padding: 6px 12px;
+            color: #8ab4f8;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .user-indicator i {
+            font-size: 14px;
+        }
+
+        .logout-btn {
+            background: rgba(26, 115, 232, 0.2);
+            border: 1px solid rgba(26, 115, 232, 0.3);
+            color: #8ab4f8;
+            border-radius: 12px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-left: 6px;
+            font-size: 12px;
+        }
+
+        .logout-btn:hover {
+            background: rgba(26, 115, 232, 0.3);
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: #2d2d2d;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid #3c4043;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #3c4043;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 500;
+            color: #e8eaed;
+        }
+        
+        .close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #9aa0a6;
+        }
+        
+        .close:hover {
+            color: #e8eaed;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #3c4043;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background: #1a73e8;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1557b0;
+        }
+        
+        .btn-secondary {
+            background: #5f6368;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4a5056;
+        }
+        
+        .btn-danger {
+            background: #d93025;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #b52d20;
+        }
+        
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #2d2d2d;
+            border-top: 1px solid #404040;
+            padding: 10px 20px;
+            font-size: 12px;
+            color: #9aa0a6;
+            z-index: 1000;
+        }
+        
+        .footer .stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: transparent;
+            padding: 0;
+            border: none;
+        }
+        
+        .footer .stats span {
+            display: inline-block;
+        }
+        
+        .footer .stats span:first-child {
+            font-weight: 500;
+        }
+        
+        /* Ajustar el contenido principal para el footer */
+        .content {
+            padding-bottom: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Firebase Database Manager</h1>
+            <p>Realtime Database - Visualización y gestión de datos</p>
+            
+            <!-- Indicador de Administrador -->
+            <div id="adminIndicator" class="user-indicator" style="display: none;">
+                <i class="bi bi-shield-check"></i>
+                <span>Admin</span>
+                <button class="logout-btn" onclick="cerrarSesion()" title="Cerrar Sesión">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            </div>
+            
+            <!-- Indicador de Usuario -->
+            <div id="userIndicator" class="user-indicator" style="display: none;">
+                <i class="bi bi-person-circle"></i>
+                <span>Usuario</span>
+                <button class="logout-btn" onclick="cerrarSesion()" title="Cerrar Sesión">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Buscar en la base de datos...">
+            <button onclick="searchData()">Buscar</button>
+            <button onclick="clearSearch()">Limpiar</button>
+            <button onclick="refreshData()">Actualizar</button>
+        </div>
+        
+        <div class="stats" id="stats">
+            <div class="stats-row">
+                <div class="stat-item">
+                    <span class="stat-number" id="totalRecords">0</span>
+                    <span>registros</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="totalNodes">0</span>
+                    <span>nodos</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="filteredRecords">0</span>
+                    <span>filtrados</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="message"></div>
+        
+        <div id="loading" class="loading">
+            <p>Cargando datos...</p>
+        </div>
+        
+        <div class="data-container" id="dataContainer" style="display: none;">
+            <div class="database-tree" id="databaseTree">
+                <!-- Los datos se cargarán aquí -->
+            </div>
+        </div>
+        
+        <div class="no-results" id="noResults" style="display: none;">
+            <p>No se encontraron resultados para la búsqueda.</p>
+        </div>
+    </div>
+
+    <!-- Modal para confirmación de eliminación -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Confirmar Eliminación</h3>
+                <button class="close" onclick="closeDeleteModal()">&times;</button>
+            </div>
+            <p>¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="confirmDelete()">Eliminar</button>
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    
+    <!-- Config -->
+    <script src="config.js"></script>
+    
+    <!-- Sistema de Autenticación -->
+    <script>
+        // Inicializar Firebase solo una vez
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+        
+        // Sistema de autenticación completo
+        let admin = false;
+        let authResolved = false;
+        
+        // Lista de emails de administradores
+        const adminEmails = ["distribuidorahomepoint@gmail.com"];
+
+        // Función para redirigir a login con parámetro de retorno
+        function redirigirALogin() {
+            const currentUrl = encodeURIComponent(window.location.href);
+            window.location.href = `login.html?redirect=${currentUrl}`;
+        }
+
+        // Timeout de seguridad: verificar autenticación después de 5 segundos
+        setTimeout(() => {
+            if (!authResolved) {
+                console.log('Timeout de autenticación alcanzado, redirigiendo a login');
+                redirigirALogin();
+            }
+        }, 5000);
+
+        firebase.auth().onAuthStateChanged(user => {
+            console.log('Firebase Auth State Changed:', user ? 'Usuario autenticado' : 'No hay usuario');
+            authResolved = true;
+            
+            if (user) {
+                // Verificar si es administrador
+                admin = adminEmails.includes(user.email);
+                console.log('Usuario admin:', admin);
+                
+                // Mostrar indicador apropiado
+                mostrarIndicadorUsuario(user, admin);
+                
+                // Inicializar la página después de la autenticación
+                inicializarFirebaseManager();
+            } else {
+                redirigirALogin();
+            }
+        });
+
+        // Función para mostrar indicador de usuario
+        function mostrarIndicadorUsuario(user, esAdmin) {
+            const userIndicator = document.getElementById('userIndicator');
+            const adminIndicator = document.getElementById('adminIndicator');
+            
+            if (esAdmin) {
+                adminIndicator.style.display = 'block';
+                userIndicator.style.display = 'none';
+            } else {
+                adminIndicator.style.display = 'none';
+                userIndicator.style.display = 'block';
+            }
+        }
+
+        // Función para cerrar sesión
+        function cerrarSesion() {
+            firebase.auth().signOut().then(() => {
+                console.log('Sesión cerrada exitosamente');
+                redirigirALogin();
+            }).catch((error) => {
+                console.error('Error al cerrar sesión:', error);
+                alert('Error al cerrar sesión. Inténtalo de nuevo.');
+            });
+        }
+    </script>
+    
+    <script>
+        // Inicializar Firebase (ya inicializado arriba)
+        // const db = firebase.database(); // Ya declarado arriba
+        
+        // Variables globales
+        let allData = {};
+        let filteredData = {};
+        let currentEditPath = '';
+        let currentEditData = {};
+        let currentDeletePath = '';
+        let expandedNodes = new Set();
+        
+        // Función para inicializar Firebase Manager después de la autenticación
+        function inicializarFirebaseManager() {
+            // Si la página ya está cargada, ejecutar inmediatamente
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', configurarEventListeners);
+            } else {
+                configurarEventListeners();
+            }
+        }
+
+        function configurarEventListeners() {
+            // Cargar datos al iniciar
+            loadAllData();
+            
+            // Configurar event listeners
+            document.getElementById('searchInput').addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase().trim();
+                if (searchTerm === '') {
+                    clearSearch();
+                }
+            });
+            
+            document.getElementById('searchInput').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    searchData();
+                }
+            });
+            
+            // Soporte para teclas de escape
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    closeEditModal();
+                    closeDeleteModal();
+                }
+            });
+            
+            // Cerrar modales al hacer clic fuera
+            window.onclick = function(event) {
+                const editModal = document.getElementById('editModal');
+                const deleteModal = document.getElementById('deleteModal');
+                
+                if (event.target === editModal) {
+                    closeEditModal();
+                }
+                if (event.target === deleteModal) {
+                    closeDeleteModal();
+                }
+            }
+            
+            // Cerrar edición de campo al hacer clic fuera
+            document.addEventListener('click', function(event) {
+                const editingFields = document.querySelectorAll('.field-value.editing');
+                editingFields.forEach(field => {
+                    if (!field.contains(event.target)) {
+                        const fieldId = field.id;
+                        if (fieldId) {
+                            cancelEdit(fieldId);
+                        }
+                    }
+                });
+            });
+        }
+        
+        // Función para cargar todos los datos
+        function loadAllData() {
+            showLoading(true);
+            showMessage('', '');
+            
+            // Cargar datos de nodos específicos en lugar del root
+            const nodesToLoad = ['admins', 'clientes', 'movimientos', 'pedidos'];
+            const promises = nodesToLoad.map(node => {
+                return db.ref(node).once('value').then(snapshot => {
+                    return { node, data: snapshot.val() };
+                }).catch(error => {
+                    console.warn(`No se pudo cargar ${node}:`, error);
+                    return { node, data: null };
+                });
+            });
+            
+            Promise.all(promises)
+                .then(results => {
+                    allData = {};
+                    results.forEach(({ node, data }) => {
+                        if (data) {
+                            allData[node] = data;
+                        }
+                    });
+                    filteredData = allData;
+                    renderData();
+                    updateStats();
+                    showLoading(false);
+                })
+                .catch(error => {
+                    console.error('Error loading data:', error);
+                    showMessage('Error al cargar los datos: ' + error.message, 'error');
+                    showLoading(false);
+                });
+        }
+        
+        // Función para renderizar los datos en formato árbol
+        function renderData() {
+            const container = document.getElementById('databaseTree');
+            const noResults = document.getElementById('noResults');
+            const dataContainer = document.getElementById('dataContainer');
+            
+            if (Object.keys(filteredData).length === 0) {
+                dataContainer.style.display = 'none';
+                noResults.style.display = 'block';
+                return;
+            }
+            
+            dataContainer.style.display = 'block';
+            noResults.style.display = 'none';
+            
+            container.innerHTML = renderTreeNodes(filteredData, 0, '');
+        }
+        
+        // Función para renderizar nodos del árbol
+        function renderTreeNodes(data, level = 0, parentPath = '') {
+            if (typeof data !== 'object' || data === null) {
+                return '';
+            }
+            
+            let html = '';
+            const sortedKeys = Object.keys(data).sort();
+            
+            sortedKeys.forEach(key => {
+                const value = data[key];
+                const isObject = typeof value === 'object' && value !== null;
+                const currentPath = parentPath ? `${parentPath}/${key}` : key;
+                const nodeKey = `${currentPath}_${level}`;
+                const isExpanded = expandedNodes.has(nodeKey);
+                const nodeClass = isObject ? (isExpanded ? 'expanded' : 'collapsed') : 'leaf';
+                const indent = level * 20;
+                
+                html += `
+                    <div class="tree-node ${nodeClass}" data-key="${key}" data-level="${level}" data-path="${currentPath}">
+                        <div class="tree-node-header" style="padding-left: ${24 + indent}px;">
+                            <div class="tree-node-icon" onclick="toggleTreeNode('${key}', ${level}, '${currentPath}')"></div>
+                            <span class="tree-node-key">"${key}"</span>
+                            <span class="tree-node-type">${getNodeType(value)}</span>
+                            <span class="tree-node-value ${getValueClass(value)} ${admin && !isObject ? 'editable' : ''}" 
+                                  ${admin && !isObject ? `onclick="editTreeValue('${key}', ${level}, '${currentPath}')"` : ''}>
+                                ${formatTreeValue(value)}
+                            </span>
+                            ${admin && shouldShowDeleteButton(key, level, currentPath) ? `
+                                <div class="tree-node-actions">
+                                    <button class="tree-action-btn delete" onclick="deleteTreeNode('${key}', ${level}, '${currentPath}')">
+                                        Eliminar
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                        ${isObject ? `
+                            <div class="tree-node-children ${isExpanded ? 'expanded' : ''}" id="children-${key}-${level}">
+                                ${isExpanded ? renderTreeNodes(value, level + 1, currentPath) : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            return html;
+        }
+        
+        // Función para determinar si debe mostrarse el botón de eliminar
+        function shouldShowDeleteButton(key, level, path) {
+            // Solo mostrar botón de eliminar para:
+            // 1. Nodos de nivel 0 (raíz) solo si es "movimientos"
+            // 2. Registros individuales dentro de cualquier nodo (level > 0)
+            
+            if (level === 0) {
+                // Para nodos raíz, solo permitir eliminar "movimientos"
+                return key.toLowerCase() === 'movimientos';
+            } else {
+                // Para registros individuales dentro de nodos, permitir eliminación
+                return true;
+            }
+        }
+        
+        // Función para obtener el tipo de nodo
+        function getNodeType(value) {
+            if (value === null) return 'null';
+            if (typeof value === 'boolean') return 'boolean';
+            if (typeof value === 'number') return 'number';
+            if (typeof value === 'string') return 'string';
+            if (Array.isArray(value)) return `array[${value.length}]`;
+            if (typeof value === 'object') return `object{${Object.keys(value).length}}`;
+            return 'unknown';
+        }
+        
+        // Función para obtener la clase CSS del valor
+        function getValueClass(value) {
+            if (value === null) return 'null';
+            if (typeof value === 'boolean') return 'boolean';
+            if (typeof value === 'number') return 'number';
+            if (typeof value === 'string') return 'string';
+            return '';
+        }
+        
+        // Función para formatear el valor en el árbol
+        function formatTreeValue(value) {
+            if (typeof value === 'object' && value !== null) {
+                return '';
+            }
+            if (typeof value === 'string') {
+                return `"${value}"`;
+            }
+            if (value === null) {
+                return 'null';
+            }
+            return String(value);
+        }
+        
+        // Función para alternar nodos del árbol
+        function toggleTreeNode(key, level, path) {
+            const nodeKey = `${path}_${level}`;
+            const node = document.querySelector(`[data-key="${key}"][data-level="${level}"][data-path="${path}"]`);
+            const childrenContainer = document.getElementById(`children-${key}-${level}`);
+            
+            if (!node || !childrenContainer) return;
+            
+            if (expandedNodes.has(nodeKey)) {
+                expandedNodes.delete(nodeKey);
+                node.classList.remove('expanded');
+                node.classList.add('collapsed');
+                childrenContainer.classList.remove('expanded');
+                childrenContainer.innerHTML = '';
+            } else {
+                expandedNodes.add(nodeKey);
+                node.classList.remove('collapsed');
+                node.classList.add('expanded');
+                childrenContainer.classList.add('expanded');
+                
+                // Buscar los datos correspondientes
+                const nodeData = findNodeDataByPath(path);
+                if (nodeData) {
+                    childrenContainer.innerHTML = renderTreeNodes(nodeData, level + 1, path);
+                }
+            }
+        }
+        
+        // Función para encontrar datos por path
+        function findNodeDataByPath(path) {
+            const pathParts = path.split('/');
+            let currentData = filteredData;
+            
+            for (const part of pathParts) {
+                if (currentData && typeof currentData === 'object') {
+                    currentData = currentData[part];
+                } else {
+                    return null;
+                }
+            }
+            
+            return currentData;
+        }
+        
+        // Función para encontrar datos de un nodo
+        function findNodeData(key, level) {
+            // Buscar en los datos filtrados primero
+            if (level === 0) {
+                return filteredData[key] || allData[key];
+            }
+            
+            // Para niveles más profundos, necesitamos navegar por la estructura
+            // Implementación mejorada para manejar múltiples niveles
+            const pathKeys = getPathKeys(key, level);
+            let currentData = filteredData;
+            
+            for (let i = 0; i < pathKeys.length; i++) {
+                if (currentData && typeof currentData === 'object') {
+                    currentData = currentData[pathKeys[i]];
+                } else {
+                    return null;
+                }
+            }
+            
+            return currentData;
+        }
+        
+        // Función auxiliar para obtener las claves del path
+        function getPathKeys(key, level) {
+            // Esta es una implementación simplificada
+            // En una implementación completa, necesitaríamos trackear el path completo
+            return [key];
+        }
+        
+        // Función para editar valor del árbol
+        function editTreeValue(key, level, path) {
+            if (!admin) {
+                showMessage('Solo los administradores pueden editar valores', 'error');
+                return;
+            }
+            
+            const valueElement = document.querySelector(`[data-key="${key}"][data-level="${level}"][data-path="${path}"] .tree-node-value`);
+            if (!valueElement || valueElement.classList.contains('editing')) {
+                return;
+            }
+            
+            const currentValue = findNodeDataByPath(path);
+            valueElement.classList.add('editing');
+            
+            let inputHtml = '';
+            if (typeof currentValue === 'object' && currentValue !== null) {
+                inputHtml = `
+                    <textarea class="edit-textarea" id="edit-${key}-${level}">${JSON.stringify(currentValue, null, 2)}</textarea>
+                `;
+            } else {
+                inputHtml = `
+                    <input type="text" class="edit-input" id="edit-${key}-${level}" value="${currentValue}">
+                `;
+            }
+            
+            valueElement.innerHTML = `
+                ${inputHtml}
+                <div class="edit-buttons">
+                    <button class="edit-btn save" onclick="saveTreeValue('${key}', ${level}, '${path}')">✓</button>
+                    <button class="edit-btn cancel" onclick="cancelTreeEdit('${key}', ${level}, '${path}')">✗</button>
+                </div>
+            `;
+            
+            const input = document.getElementById(`edit-${key}-${level}`);
+            input.focus();
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    saveTreeValue(key, level, path);
+                } else if (e.key === 'Escape') {
+                    cancelTreeEdit(key, level, path);
+                }
+            });
+        }
+        
+        // Función para encontrar el valor de un nodo (legacy - mantenida por compatibilidad)
+        function findNodeValue(key, level) {
+            return findNodeDataByPath(key);
+        }
+        
+        // Función para guardar valor del árbol
+        function saveTreeValue(key, level, path) {
+            const input = document.getElementById(`edit-${key}-${level}`);
+            const valueElement = document.querySelector(`[data-key="${key}"][data-level="${level}"][data-path="${path}"] .tree-node-value`);
+            
+            if (!input || !valueElement) return;
+            
+            let newValue = input.value;
+            
+            // Intentar parsear el valor
+            try {
+                if (newValue.trim().startsWith('{') || newValue.trim().startsWith('[')) {
+                    newValue = JSON.parse(newValue);
+                } else if (newValue === 'true' || newValue === 'false') {
+                    newValue = newValue === 'true';
+                } else if (newValue === 'null') {
+                    newValue = null;
+                } else if (!isNaN(newValue) && newValue.trim() !== '') {
+                    newValue = Number(newValue);
+                }
+            } catch (e) {
+                // Si no se puede parsear, mantener como string
+            }
+            
+            // Actualizar en Firebase
+            db.ref(path).set(newValue)
+                .then(() => {
+                    showMessage('Valor actualizado correctamente', 'success');
+                    
+                    // Actualizar datos locales
+                    updateLocalData(path, newValue);
+                    
+                    // Actualizar UI
+                    valueElement.classList.remove('editing');
+                    valueElement.innerHTML = formatTreeValue(newValue);
+                    valueElement.className = `tree-node-value ${getValueClass(newValue)} ${admin ? 'editable' : ''}`;
+                })
+                .catch(error => {
+                    console.error('Error updating value:', error);
+                    showMessage('Error al actualizar el valor: ' + error.message, 'error');
+                    cancelTreeEdit(key, level, path);
+                });
+        }
+        
+        // Función para actualizar datos locales
+        function updateLocalData(path, newValue) {
+            const pathParts = path.split('/');
+            
+            // Actualizar en allData
+            let currentData = allData;
+            for (let i = 0; i < pathParts.length - 1; i++) {
+                if (!currentData[pathParts[i]]) {
+                    currentData[pathParts[i]] = {};
+                }
+                currentData = currentData[pathParts[i]];
+            }
+            currentData[pathParts[pathParts.length - 1]] = newValue;
+            
+            // Actualizar en filteredData
+            currentData = filteredData;
+            for (let i = 0; i < pathParts.length - 1; i++) {
+                if (!currentData[pathParts[i]]) {
+                    currentData[pathParts[i]] = {};
+                }
+                currentData = currentData[pathParts[i]];
+            }
+            currentData[pathParts[pathParts.length - 1]] = newValue;
+        }
+        
+        // Función para cancelar edición del árbol
+        function cancelTreeEdit(key, level, path) {
+            const valueElement = document.querySelector(`[data-key="${key}"][data-level="${level}"][data-path="${path}"] .tree-node-value`);
+            if (!valueElement) return;
+            
+            const originalValue = findNodeDataByPath(path);
+            valueElement.classList.remove('editing');
+            valueElement.innerHTML = formatTreeValue(originalValue);
+        }
+        
+        // Función para eliminar nodo del árbol
+        function deleteTreeNode(key, level, path) {
+            if (!admin) {
+                showMessage('Solo los administradores pueden eliminar nodos', 'error');
+                return;
+            }
+            
+            // Validación adicional de seguridad
+            if (level === 0 && key.toLowerCase() !== 'movimientos') {
+                showMessage('Solo se puede eliminar el nodo completo "Movimientos" por seguridad', 'error');
+                return;
+            }
+            
+            currentDeletePath = path;
+            document.getElementById('deleteModal').style.display = 'flex';
+        }
+        
+        // Función para obtener el tipo de valor
+        function getValueType(value) {
+            if (value === null) return 'null';
+            if (typeof value === 'boolean') return 'boolean';
+            if (typeof value === 'number') return 'number';
+            if (typeof value === 'string') return 'string';
+            if (Array.isArray(value)) return 'array';
+            if (typeof value === 'object') return 'object';
+            return 'string';
+        }
+        
+        // Función para formatear valores
+        function formatValue(value) {
+            if (value === null) return 'null';
+            if (typeof value === 'boolean') return value.toString();
+            if (typeof value === 'number') return value.toLocaleString();
+            if (typeof value === 'string') return value;
+            if (Array.isArray(value)) return `[${value.length} elementos]`;
+            if (typeof value === 'object') return `{${Object.keys(value).length} campos}`;
+            return String(value);
+        }
+        
+        // Función para alternar la expansión de nodos (mantener para compatibilidad)
+        function toggleNode(nodeName) {
+            toggleTreeNode(nodeName, 0);
+        }
+        
+        // Función para buscar datos
+        function searchData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            
+            if (!searchTerm) {
+                filteredData = allData;
+                renderData();
+                updateStats();
+                return;
+            }
+            
+            filteredData = {};
+            
+            Object.keys(allData).forEach(nodeName => {
+                const nodeData = allData[nodeName];
+                
+                if (typeof nodeData === 'object' && nodeData !== null) {
+                    const filteredRecords = {};
+                    
+                    Object.keys(nodeData).forEach(recordId => {
+                        if (recordId.toLowerCase().includes(searchTerm)) {
+                            filteredRecords[recordId] = nodeData[recordId];
+                        }
+                    });
+                    
+                    if (Object.keys(filteredRecords).length > 0) {
+                        filteredData[nodeName] = filteredRecords;
+                    }
+                } else {
+                    // Para nodos que no son objetos
+                    if (nodeName.toLowerCase().includes(searchTerm)) {
+                        filteredData[nodeName] = nodeData;
+                    }
+                }
+            });
+            
+            renderData();
+            updateStats();
+        }
+        
+        // Función para limpiar búsqueda
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filteredData = allData;
+            renderData();
+            updateStats();
+        }
+        
+        // Función para actualizar datos
+        function refreshData() {
+            loadAllData();
+        }
+        
+        // Función para actualizar estadísticas
+        function updateStats() {
+            const totalRecords = countRecords(allData);
+            const totalNodes = Object.keys(allData).length;
+            const filteredRecords = countRecords(filteredData);
+            
+            document.getElementById('totalRecords').textContent = totalRecords;
+            document.getElementById('totalNodes').textContent = totalNodes;
+            document.getElementById('filteredRecords').textContent = filteredRecords;
+            
+            document.getElementById('stats').style.display = 'block';
+        }
+        
+        // Función para contar registros
+        function countRecords(data) {
+            let count = 0;
+            
+            Object.keys(data).forEach(nodeName => {
+                const nodeData = data[nodeName];
+                
+                if (typeof nodeData === 'object' && nodeData !== null) {
+                    count += Object.keys(nodeData).length;
+                } else {
+                    count += 1;
+                }
+            });
+            
+            return count;
+        }
+        
+        // Función para eliminar nodo completo
+        function deleteNode(nodeName) {
+            deleteTreeNode(nodeName, 0);
+        }
+        
+        // Función para eliminar registro
+        function deleteRecord(recordPath) {
+            if (!admin) {
+                showMessage('Solo los administradores pueden eliminar registros', 'error');
+                return;
+            }
+            
+            currentDeletePath = recordPath;
+            document.getElementById('deleteModal').style.display = 'flex';
+        }
+        
+        // Función para confirmar eliminación
+        function confirmDelete() {
+            db.ref(currentDeletePath).remove()
+                .then(() => {
+                    showMessage('Elemento eliminado correctamente', 'success');
+                    closeDeleteModal();
+                    loadAllData();
+                })
+                .catch(error => {
+                    console.error('Error deleting element:', error);
+                    showMessage('Error al eliminar el elemento: ' + error.message, 'error');
+                });
+        }
+        
+        // Función para cerrar modal de eliminación
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            currentDeletePath = '';
+        }
+        
+        // Función para mostrar/ocultar loading
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+        
+        // Función para mostrar mensajes
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            if (message) {
+                messageDiv.innerHTML = `<div class="${type}">${message}</div>`;
+                setTimeout(() => {
+                    messageDiv.innerHTML = '';
+                }, 5000);
+            } else {
+                messageDiv.innerHTML = '';
+            }
+        }
+    </script>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="stats" id="stats">
+            <span>Total de registros: <span id="totalRecords">0</span></span>
+            <span>Nodos: <span id="totalNodes">0</span></span>
+            <span>Filtrados: <span id="filteredRecords">0</span></span>
+        </div>
+    </footer>
+</body>
+</html>

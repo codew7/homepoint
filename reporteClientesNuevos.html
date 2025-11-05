@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Clientes Nuevos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            gap: 15px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9em;
+        }
+
+        .control-group select, .control-group input {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #0056b3;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border-left: 4px solid #007bff;
+            transition: transform 0.3s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .metric-card h3 {
+            color: #495057;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+
+        .metric-change {
+            font-size: 0.9em;
+            padding: 4px 8px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .positive {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .negative {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .chart-section {
+            padding: 30px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+
+        .table-section {
+            padding: 30px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .table-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1em;
+            color: #6c757d;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            letter-spacing: 1px;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .inversion-input {
+            width: 100px;
+            padding: 5px 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.9em;
+            text-align: right;
+        }
+
+        .costo-cliente {
+            font-weight: 600;
+            color: #28a745;
+        }
+
+        .sin-inversion {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+                padding: 20px;
+                gap: 15px;
+            }
+
+            .chart-section, .table-section {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Reporte de Clientes Nuevos</h1>
+            <p>Análisis de adquisición de clientes basado en primeras compras</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="yearSelect">Año:</label>
+                <select id="yearSelect">
+                    <!-- Se llena dinámicamente -->
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="monthSelect">Mes (opcional):</label>
+                <select id="monthSelect">
+                    <option value="">Todos los meses</option>
+                    <option value="0">Enero</option>
+                    <option value="1">Febrero</option>
+                    <option value="2">Marzo</option>
+                    <option value="3">Abril</option>
+                    <option value="4">Mayo</option>
+                    <option value="5">Junio</option>
+                    <option value="6">Julio</option>
+                    <option value="7">Agosto</option>
+                    <option value="8">Septiembre</option>
+                    <option value="9">Octubre</option>
+                    <option value="10">Noviembre</option>
+                    <option value="11">Diciembre</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="tipoClienteSelect">Tipo de Cliente:</label>
+                <select id="tipoClienteSelect">
+                    <option value="">Todos</option>
+                    <option value="mayorista">Mayorista</option>
+                    <option value="consumidor final">Consumidor Final</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="entregaSelect">Tipo de Entrega:</label>
+                <select id="entregaSelect">
+                    <option value="">Todos los tipos</option>
+                    <option value="Local">Local</option>
+                    <option value="Envios">Envios</option>
+                </select>
+            </div>
+            <button class="btn" onclick="actualizarReporte()">Actualizar Reporte</button>
+            <button class="btn" onclick="exportarDatos()">Exportar CSV</button>
+        </div>
+
+        <div id="loading" class="loading">
+            <p>🔄 Conectando a Firebase...</p>
+            <div style="margin-top: 10px;">
+                <small id="loadingStatus">Inicializando conexión...</small>
+            </div>
+        </div>
+
+        <div id="content" style="display: none;">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>Clientes Nuevos Total</h3>
+                    <div class="metric-value" id="totalNuevos">0</div>
+                    <span class="metric-change" id="cambioTotal">Calculando...</span>
+                </div>
+                <div class="metric-card">
+                    <h3>Promedio Semanal</h3>
+                    <div class="metric-value" id="promedioSemanal">0</div>
+                    <span class="metric-change" id="cambioSemanal">Calculando...</span>
+                </div>
+                <div class="metric-card">
+                    <h3>Promedio Mensual</h3>
+                    <div class="metric-value" id="promedioMensual">0</div>
+                    <span class="metric-change" id="cambioMensual">Calculando...</span>
+                </div>
+                <div class="metric-card">
+                    <h3>Mejor Semana</h3>
+                    <div class="metric-value" id="mejorSemana">0</div>
+                    <span class="metric-change" id="fechaMejorSemana">Calculando...</span>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <h2>📈 Evolución de Clientes Nuevos</h2>
+                <div class="chart-container">
+                    <canvas id="chartCanvas"></canvas>
+                </div>
+            </div>
+
+            <div class="table-section">
+                <div class="table-tabs">
+                    <button class="tab active" onclick="cambiarTab('semanal')">Por Semana</button>
+                    <button class="tab" onclick="cambiarTab('mensual')">Por Mes</button>
+                    <button class="tab" onclick="cambiarTab('detalle')">Detalle de Clientes</button>
+                </div>
+
+                <div id="semanal" class="tab-content active">
+                    <div class="table-container">
+                        <table id="tablaSemanal">
+                            <thead>
+                                <tr>
+                                    <th>Semana</th>
+                                    <th>Fecha Inicio</th>
+                                    <th>Fecha Fin</th>
+                                    <th>Clientes Nuevos</th>
+                                    <th>Acumulado</th>
+                                    <th>Crecimiento</th>
+                                    <th>Inversión</th>
+                                    <th>Costo/Cliente</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="mensual" class="tab-content">
+                    <div class="table-container">
+                        <table id="tablaMensual">
+                            <thead>
+                                <tr>
+                                    <th>Mes</th>
+                                    <th>Clientes Nuevos</th>
+                                    <th>Acumulado</th>
+                                    <th>Crecimiento %</th>
+                                    <th>Promedio Semanal</th>
+                                    <th>Inversión</th>
+                                    <th>Costo/Cliente</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="detalle" class="tab-content">
+                    <div class="table-container">
+                        <table id="tablaDetalle">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Primera Compra</th>
+                                    <th>Semana</th>
+                                    <th>Mes</th>
+                                    <th>Tipo Entrega</th>
+                                    <th>Total Pedidos</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p>❌ Error al cargar los datos. Verifica la conexión a Firebase.</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyA4fVBCRgkhbTAaOyWg4cAkw7UXokF2uu8",
+            authDomain: "pedidos-87064.firebaseapp.com",
+            databaseURL: "https://pedidos-87064-default-rtdb.firebaseio.com",
+            projectId: "pedidos-87064",
+            storageBucket: "pedidos-87064.firebasestorage.app",
+            messagingSenderId: "294352872886",
+            appId: "1:294352872886:web:a5ffe0a214f23dca73cd17"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Variables globales
+        let pedidosData = {};
+        let clientesNuevos = [];
+        let chart = null;
+        let currentYear = new Date().getFullYear();
+        let currentMonth = '';
+        let currentEntrega = '';
+        let tiposEntrega = [];
+
+        // Funciones para manejar inversiones en localStorage
+        function guardarInversion(tipo, periodo, valor) {
+            const key = `inversion_${tipo}_${periodo}`;
+            if (valor && valor > 0) {
+                localStorage.setItem(key, valor.toString());
+            } else {
+                localStorage.removeItem(key);
+            }
+        }
+
+        function obtenerInversion(tipo, periodo) {
+            const key = `inversion_${tipo}_${periodo}`;
+            const valor = localStorage.getItem(key);
+            return valor ? parseFloat(valor) : 0;
+        }
+
+        function calcularCostoPorCliente(inversion, clientesNuevos) {
+            if (!inversion || inversion <= 0 || !clientesNuevos || clientesNuevos <= 0) {
+                return 0;
+            }
+            return inversion / clientesNuevos;
+        }
+
+        // Función para obtener datos de Firebase
+        async function cargarDatos() {
+            try {
+                console.log('Iniciando carga de datos...');
+                document.getElementById('loadingStatus').textContent = 'Conectando a Firebase...';
+                
+                // Verificar conexión
+                const connectedRef = database.ref('.info/connected');
+                connectedRef.on('value', (snapshot) => {
+                    if (snapshot.val() === true) {
+                        console.log('Conectado a Firebase');
+                        document.getElementById('loadingStatus').textContent = 'Conectado. Cargando pedidos...';
+                    } else {
+                        console.log('Desconectado de Firebase');
+                        document.getElementById('loadingStatus').textContent = 'Error de conexión...';
+                    }
+                });
+                
+                document.getElementById('loadingStatus').textContent = 'Obteniendo datos de pedidos...';
+                const snapshot = await database.ref('pedidos').once('value');
+                pedidosData = snapshot.val() || {};
+                console.log('Datos cargados:', Object.keys(pedidosData).length, 'pedidos');
+                console.log('Muestra de datos:', Object.keys(pedidosData).slice(0, 3).map(key => ({
+                    id: key,
+                    data: pedidosData[key]
+                })));
+                
+                if (Object.keys(pedidosData).length === 0) {
+                    throw new Error('No se encontraron pedidos en la base de datos');
+                }
+                
+                document.getElementById('loadingStatus').textContent = 'Procesando datos...';
+                procesarDatos();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                console.error('Error al cargar datos:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').innerHTML = `
+                    <p>❌ Error al cargar los datos: ${error.message}</p>
+                    <p>Verifica:</p>
+                    <ul>
+                        <li>La conexión a internet</li>
+                        <li>La configuración de Firebase</li>
+                        <li>Que existan datos en el nodo 'pedidos'</li>
+                    </ul>
+                    <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Reintentar</button>
+                `;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // Función para procesar los datos y encontrar clientes nuevos
+        function procesarDatos() {
+            console.log('Procesando datos...');
+            const clientes = {};
+            let pedidosProcesados = 0;
+            let pedidosConCliente = 0;
+            let pedidosDespachados = 0;
+            tiposEntrega = [];
+            
+            // Agrupar pedidos por cliente
+            Object.keys(pedidosData).forEach(pedidoId => {
+                const pedido = pedidosData[pedidoId];
+                pedidosProcesados++;
+                
+                // Verificar que el pedido esté DESPACHADO/ENTREGADO
+                const status = pedido.status || pedido.estado || '';
+                if (status !== 'DESPACHADO/ENTREGADO') {
+                    return; // Saltar pedidos que no tengan exactamente el status "DESPACHADO/ENTREGADO"
+                }
+                pedidosDespachados++;
+                
+                // Recopilar tipos de entrega
+                const tipoEntrega = pedido.entrega || pedido.tipoEntrega || '';
+                if (tipoEntrega && !tiposEntrega.includes(tipoEntrega)) {
+                    tiposEntrega.push(tipoEntrega);
+                }
+                
+                // Revisar diferentes campos posibles para el nombre del cliente
+                const nombreCliente = pedido.nombreCompleto || 
+                                    (pedido.cliente && pedido.cliente.nombre) ||
+                                    (pedido.cliente && pedido.cliente.nombreCompleto) ||
+                                    (pedido.cliente && pedido.cliente.cliente) ||
+                                    pedido.cliente || 
+                                    pedido.nombre || 
+                                    pedido.clienteNombre ||
+                                    pedido.nombreCliente;
+                
+                // Revisar diferentes campos posibles para la fecha
+                const fechaPedido = pedido.fecha || 
+                                  pedido.fechaPedido || 
+                                  pedido.timestamp ||
+                                  pedido.fechaCreacion;
+                
+                console.log(`Pedido ${pedidoId}:`, {
+                    nombreCompleto: pedido.nombreCompleto,
+                    cliente: pedido.cliente,
+                    clienteNombre: pedido.cliente ? pedido.cliente.nombre : 'N/A',
+                    nombre: pedido.nombre,
+                    fecha: pedido.fecha,
+                    fechaPedido: pedido.fechaPedido,
+                    status: status,
+                    entrega: tipoEntrega,
+                    campos: Object.keys(pedido),
+                    estructuraCliente: pedido.cliente ? Object.keys(pedido.cliente) : 'No hay objeto cliente'
+                });
+                
+                if (nombreCliente && fechaPedido) {
+                    pedidosConCliente++;
+                    const cliente = nombreCliente.toString().toLowerCase().trim();
+                    let fecha;
+                    
+                    // Intentar parsear la fecha
+                    if (typeof fechaPedido === 'string') {
+                        fecha = new Date(fechaPedido);
+                    } else if (typeof fechaPedido === 'number') {
+                        // Podría ser timestamp
+                        fecha = new Date(fechaPedido);
+                    } else {
+                        fecha = new Date(fechaPedido);
+                    }
+                    
+                    // Verificar que la fecha sea válida
+                    if (!isNaN(fecha.getTime())) {
+                        if (!clientes[cliente]) {
+                            clientes[cliente] = [];
+                        }
+                        
+                        clientes[cliente].push({
+                            fecha: fecha,
+                            pedidoId: pedidoId,
+                            pedido: pedido
+                        });
+                    } else {
+                        console.warn(`Fecha inválida en pedido ${pedidoId}:`, fechaPedido);
+                    }
+                } else {
+                    console.warn(`Pedido ${pedidoId} sin nombre de cliente o fecha:`, {
+                        nombreCliente,
+                        fechaPedido,
+                        estructuraCompleta: pedido,
+                        tieneObjetoCliente: !!pedido.cliente,
+                        camposCliente: pedido.cliente ? Object.keys(pedido.cliente) : 'N/A'
+                    });
+                }
+            });
+
+            console.log(`Procesados: ${pedidosProcesados} pedidos, ${pedidosDespachados} con status "DESPACHADO/ENTREGADO", ${pedidosConCliente} con cliente y fecha`);
+            console.log(`Clientes únicos encontrados: ${Object.keys(clientes).length}`);
+            console.log(`Tipos de entrega encontrados: ${tiposEntrega}`);
+
+            // Encontrar primera compra de cada cliente
+            clientesNuevos = [];
+            Object.keys(clientes).forEach(cliente => {
+                const pedidosCliente = clientes[cliente].sort((a, b) => a.fecha - b.fecha);
+                const primeraCompra = pedidosCliente[0];
+                
+                // Detectar tipoCliente
+                let tipoCliente = '';
+                if (primeraCompra.pedido && primeraCompra.pedido.cliente && primeraCompra.pedido.cliente.tipoCliente) {
+                    tipoCliente = (primeraCompra.pedido.cliente.tipoCliente + '').toLowerCase();
+                }
+                clientesNuevos.push({
+                    nombre: cliente,
+                    primeraCompra: primeraCompra.fecha,
+                    totalPedidos: pedidosCliente.length,
+                    pedidoId: primeraCompra.pedidoId,
+                    tipoEntrega: primeraCompra.pedido.entrega || primeraCompra.pedido.tipoEntrega || '',
+                    tipoCliente: tipoCliente,
+                    pedido: primeraCompra.pedido
+                });
+            });
+
+            // Ordenar por fecha de primera compra
+            clientesNuevos.sort((a, b) => a.primeraCompra - b.primeraCompra);
+            
+            console.log(`Clientes nuevos identificados: ${clientesNuevos.length}`);
+            console.log('Primeros 5 clientes:', clientesNuevos.slice(0, 5));
+
+            // Llenar selectores
+            llenarSelectorAnios();
+            llenarSelectorEntrega();
+            
+            // Generar reporte inicial
+            actualizarReporte();
+        }
+
+        // Función para llenar el selector de tipos de entrega
+        function llenarSelectorEntrega() {
+            console.log('Tipos de entrega encontrados en los datos:', tiposEntrega);
+            // El selector ya tiene las opciones predefinidas: Local y Envios
+            // Solo validamos que los datos coincidan con estas opciones
+            const opcionesValidas = ['Local', 'Envios'];
+            const tiposNoReconocidos = tiposEntrega.filter(tipo => !opcionesValidas.includes(tipo));
+            if (tiposNoReconocidos.length > 0) {
+                console.warn('Tipos de entrega no reconocidos encontrados:', tiposNoReconocidos);
+            }
+        }
+
+        // Función para llenar el selector de años
+        function llenarSelectorAnios() {
+            console.log('Llenando selector de años...');
+            const yearSelect = document.getElementById('yearSelect');
+            const years = new Set();
+            
+            clientesNuevos.forEach(cliente => {
+                years.add(cliente.primeraCompra.getFullYear());
+            });
+
+            console.log('Años encontrados:', Array.from(years));
+
+            yearSelect.innerHTML = '';
+            
+            if (years.size === 0) {
+                const option = document.createElement('option');
+                option.value = new Date().getFullYear();
+                option.textContent = new Date().getFullYear();
+                option.selected = true;
+                yearSelect.appendChild(option);
+                console.log('No se encontraron años, usando año actual');
+            } else {
+                Array.from(years).sort((a, b) => b - a).forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    if (year === currentYear) option.selected = true;
+                    yearSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Función para obtener el número de semana del año
+        function getWeekNumber(date) {
+            const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+            const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
+            return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+        }
+
+        // Función para obtener fecha de inicio y fin de semana
+        function getWeekDates(year, week) {
+            const firstDayOfYear = new Date(year, 0, 1);
+            const daysToAdd = (week - 1) * 7 - firstDayOfYear.getDay();
+            const startDate = new Date(year, 0, 1 + daysToAdd);
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            return { start: startDate, end: endDate };
+        }
+
+        // Función para filtrar clientes por año, mes y tipo de entrega
+        function filtrarClientes() {
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const month = document.getElementById('monthSelect').value;
+            const entrega = document.getElementById('entregaSelect').value;
+            const tipoCliente = document.getElementById('tipoClienteSelect').value;
+
+            return clientesNuevos.filter(cliente => {
+                const fechaCliente = cliente.primeraCompra;
+                if (fechaCliente.getFullYear() !== year) return false;
+                if (month !== '' && fechaCliente.getMonth() !== parseInt(month)) return false;
+                if (entrega !== '' && cliente.tipoEntrega !== entrega) return false;
+                if (tipoCliente !== '' && cliente.tipoCliente !== tipoCliente) return false;
+                return true;
+            });
+        }
+
+        // Función para generar datos semanales
+        function generarDatosSemanales(clientesFiltrados) {
+            const datosSemana = {};
+            
+            clientesFiltrados.forEach(cliente => {
+                const fecha = cliente.primeraCompra;
+                const year = fecha.getFullYear();
+                const week = getWeekNumber(fecha);
+                const key = `${year}-W${week}`;
+                
+                if (!datosSemana[key]) {
+                    const weekDates = getWeekDates(year, week);
+                    datosSemana[key] = {
+                        year,
+                        week,
+                        startDate: weekDates.start,
+                        endDate: weekDates.end,
+                        count: 0,
+                        clientes: []
+                    };
+                }
+                
+                datosSemana[key].count++;
+                datosSemana[key].clientes.push(cliente);
+            });
+
+            return Object.values(datosSemana).sort((a, b) => a.startDate - b.startDate);
+        }
+
+        // Función para generar datos mensuales
+        function generarDatosMensuales(clientesFiltrados) {
+            const datosMes = {};
+            
+            clientesFiltrados.forEach(cliente => {
+                const fecha = cliente.primeraCompra;
+                const year = fecha.getFullYear();
+                const month = fecha.getMonth();
+                const key = `${year}-${month}`;
+                
+                if (!datosMes[key]) {
+                    datosMes[key] = {
+                        year,
+                        month,
+                        count: 0,
+                        clientes: []
+                    };
+                }
+                
+                datosMes[key].count++;
+                datosMes[key].clientes.push(cliente);
+            });
+
+            return Object.values(datosMes).sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month - b.month;
+            });
+        }
+
+        // Función para actualizar métricas
+        function actualizarMetricas(clientesFiltrados, datosSemanales, datosMensuales) {
+            const totalNuevos = clientesFiltrados.length;
+            const promedioSemanal = datosSemanales.length > 0 ? (totalNuevos / datosSemanales.length).toFixed(1) : 0;
+            const promedioMensual = datosMensuales.length > 0 ? (totalNuevos / datosMensuales.length).toFixed(1) : 0;
+            
+            let mejorSemana = 0;
+            let fechaMejorSemana = 'N/A';
+            if (datosSemanales.length > 0) {
+                const semanaMax = datosSemanales.reduce((max, semana) => 
+                    semana.count > max.count ? semana : max, datosSemanales[0]);
+                mejorSemana = semanaMax.count;
+                fechaMejorSemana = `Semana ${semanaMax.week}/${semanaMax.year}`;
+            }
+
+            // Calcular cambios porcentuales comparando con período anterior
+            let cambioTotal = 'Sin datos previos';
+            let cambioSemanal = 'Sin datos previos';
+            let cambioMensual = 'Sin datos previos';
+
+            document.getElementById('totalNuevos').textContent = totalNuevos;
+            document.getElementById('promedioSemanal').textContent = promedioSemanal;
+            document.getElementById('promedioMensual').textContent = promedioMensual;
+            document.getElementById('mejorSemana').textContent = mejorSemana;
+            
+            document.getElementById('cambioTotal').textContent = cambioTotal;
+            document.getElementById('cambioTotal').className = 'metric-change';
+            
+            document.getElementById('cambioSemanal').textContent = cambioSemanal;
+            document.getElementById('cambioSemanal').className = 'metric-change';
+            
+            document.getElementById('cambioMensual').textContent = cambioMensual;
+            document.getElementById('cambioMensual').className = 'metric-change';
+            
+            document.getElementById('fechaMejorSemana').textContent = fechaMejorSemana;
+            document.getElementById('fechaMejorSemana').className = 'metric-change';
+        }
+
+        // Función para actualizar gráfico
+        function actualizarGrafico(datosSemanales) {
+            const ctx = document.getElementById('chartCanvas').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+
+            const labels = datosSemanales.map(d => `S${d.week}/${d.year}`);
+            const data = datosSemanales.map(d => d.count);
+            const acumulado = [];
+            let suma = 0;
+            data.forEach(valor => {
+                suma += valor;
+                acumulado.push(suma);
+            });
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Acumulado',
+                            data: acumulado,
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Clientes Nuevos por Semana',
+                            data: data,
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Acumulado'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Clientes por Semana'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Evolución de Clientes Nuevos'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Función para actualizar tabla semanal
+        function actualizarTablaSemanal(datosSemanales) {
+            const tbody = document.querySelector('#tablaSemanal tbody');
+            tbody.innerHTML = '';
+            
+            let acumulado = 0;
+            datosSemanales.forEach((semana, index) => {
+                acumulado += semana.count;
+                const crecimiento = index > 0 ? 
+                    (((semana.count - datosSemanales[index-1].count) / datosSemanales[index-1].count) * 100).toFixed(1) : 
+                    '0';
+                
+                const periodoSemanal = `${semana.year}-W${semana.week}`;
+                const inversionGuardada = obtenerInversion('semanal', periodoSemanal);
+                const costoPorCliente = calcularCostoPorCliente(inversionGuardada, semana.count);
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>Semana ${semana.week}</td>
+                    <td>${semana.startDate.toLocaleDateString()}</td>
+                    <td>${semana.endDate.toLocaleDateString()}</td>
+                    <td><strong>${semana.count}</strong></td>
+                    <td>${acumulado}</td>
+                    <td><span class="${crecimiento >= 0 ? 'positive' : 'negative'}">${crecimiento}%</span></td>
+                    <td>
+                        <input type="number" 
+                               class="inversion-input" 
+                               placeholder="$0" 
+                               value="${inversionGuardada || ''}"
+                               onchange="actualizarInversionSemanal('${periodoSemanal}', this.value, ${semana.count})"
+                               min="0" 
+                               step="0.01">
+                    </td>
+                    <td>
+                        <span class="costo-cliente" id="costo-semanal-${periodoSemanal}">
+                            ${costoPorCliente > 0 ? '$' + costoPorCliente.toFixed(2) : '<span class="sin-inversion">-</span>'}
+                        </span>
+                    </td>
+                `;
+            });
+        }
+
+        // Función para actualizar tabla mensual
+        function actualizarTablaMensual(datosMensuales) {
+            const tbody = document.querySelector('#tablaMensual tbody');
+            tbody.innerHTML = '';
+            
+            const meses = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            
+            let acumulado = 0;
+            datosMensuales.forEach((mes, index) => {
+                acumulado += mes.count;
+                const crecimiento = index > 0 ? 
+                    (((mes.count - datosMensuales[index-1].count) / datosMensuales[index-1].count) * 100).toFixed(1) : 
+                    '0';
+                
+                // Calcular promedio semanal del mes
+                const primerDia = new Date(mes.year, mes.month, 1);
+                const ultimoDia = new Date(mes.year, mes.month + 1, 0);
+                const diasEnMes = ultimoDia.getDate();
+                const semanasEnMes = Math.ceil(diasEnMes / 7);
+                const promedioSemanal = (mes.count / semanasEnMes).toFixed(1);
+                
+                const periodoMensual = `${mes.year}-${mes.month}`;
+                const inversionGuardada = obtenerInversion('mensual', periodoMensual);
+                const costoPorCliente = calcularCostoPorCliente(inversionGuardada, mes.count);
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${meses[mes.month]} ${mes.year}</td>
+                    <td><strong>${mes.count}</strong></td>
+                    <td>${acumulado}</td>
+                    <td><span class="${crecimiento >= 0 ? 'positive' : 'negative'}">${crecimiento}%</span></td>
+                    <td>${promedioSemanal}</td>
+                    <td>
+                        <input type="number" 
+                               class="inversion-input" 
+                               placeholder="$0" 
+                               value="${inversionGuardada || ''}"
+                               onchange="actualizarInversionMensual('${periodoMensual}', this.value, ${mes.count})"
+                               min="0" 
+                               step="0.01">
+                    </td>
+                    <td>
+                        <span class="costo-cliente" id="costo-mensual-${periodoMensual}">
+                            ${costoPorCliente > 0 ? '$' + costoPorCliente.toFixed(2) : '<span class="sin-inversion">-</span>'}
+                        </span>
+                    </td>
+                `;
+            });
+        }
+
+        // Función para actualizar tabla de detalle
+        function actualizarTablaDetalle(clientesFiltrados) {
+            const tbody = document.querySelector('#tablaDetalle tbody');
+            tbody.innerHTML = '';
+            
+            const meses = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            
+            clientesFiltrados.forEach(cliente => {
+                const fecha = cliente.primeraCompra;
+                const semana = getWeekNumber(fecha);
+                const mes = meses[fecha.getMonth()];
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td style="text-transform: capitalize;">${cliente.nombre}</td>
+                    <td>${fecha.toLocaleDateString()}</td>
+                    <td>S${semana}/${fecha.getFullYear()}</td>
+                    <td>${mes} ${fecha.getFullYear()}</td>
+                    <td>${cliente.tipoEntrega || 'No especificado'}</td>
+                    <td>${cliente.totalPedidos}</td>
+                `;
+            });
+        }
+
+        // Función principal para actualizar el reporte
+        function actualizarReporte() {
+            console.log('Actualizando reporte...');
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const month = document.getElementById('monthSelect').value;
+            const entrega = document.getElementById('entregaSelect').value;
+            
+            console.log(`Filtros: año=${year}, mes=${month}, entrega=${entrega}`);
+            
+            currentYear = year;
+            currentMonth = month;
+            currentEntrega = entrega;
+            
+            const clientesFiltrados = filtrarClientes();
+            console.log(`Clientes filtrados: ${clientesFiltrados.length}`);
+            
+            const datosSemanales = generarDatosSemanales(clientesFiltrados);
+            const datosMensuales = generarDatosMensuales(clientesFiltrados);
+            
+            console.log(`Datos semanales: ${datosSemanales.length} semanas`);
+            console.log(`Datos mensuales: ${datosMensuales.length} meses`);
+            
+            actualizarMetricas(clientesFiltrados, datosSemanales, datosMensuales);
+            actualizarGrafico(datosSemanales);
+            actualizarTablaSemanal(datosSemanales);
+            actualizarTablaMensual(datosMensuales);
+            actualizarTablaDetalle(clientesFiltrados);
+            
+            console.log('Reporte actualizado completamente');
+        }
+
+        // Función para cambiar pestañas
+        function cambiarTab(tabName) {
+            // Ocultar todas las pestañas
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Mostrar pestaña seleccionada
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Función para actualizar inversión semanal
+        function actualizarInversionSemanal(periodo, valor, clientesNuevos) {
+            const inversion = parseFloat(valor) || 0;
+            guardarInversion('semanal', periodo, inversion);
+            
+            const costoPorCliente = calcularCostoPorCliente(inversion, clientesNuevos);
+            const elementoCosto = document.getElementById(`costo-semanal-${periodo}`);
+            
+            if (elementoCosto) {
+                if (costoPorCliente > 0) {
+                    elementoCosto.innerHTML = '$' + costoPorCliente.toFixed(2);
+                    elementoCosto.className = 'costo-cliente';
+                } else {
+                    elementoCosto.innerHTML = '<span class="sin-inversion">-</span>';
+                    elementoCosto.className = 'costo-cliente';
+                }
+            }
+        }
+
+        // Función para actualizar inversión mensual
+        function actualizarInversionMensual(periodo, valor, clientesNuevos) {
+            const inversion = parseFloat(valor) || 0;
+            guardarInversion('mensual', periodo, inversion);
+            
+            const costoPorCliente = calcularCostoPorCliente(inversion, clientesNuevos);
+            const elementoCosto = document.getElementById(`costo-mensual-${periodo}`);
+            
+            if (elementoCosto) {
+                if (costoPorCliente > 0) {
+                    elementoCosto.innerHTML = '$' + costoPorCliente.toFixed(2);
+                    elementoCosto.className = 'costo-cliente';
+                } else {
+                    elementoCosto.innerHTML = '<span class="sin-inversion">-</span>';
+                    elementoCosto.className = 'costo-cliente';
+                }
+            }
+        }
+
+        // Función para exportar datos a CSV
+        function exportarDatos() {
+            const clientesFiltrados = filtrarClientes();
+            const datosSemanales = generarDatosSemanales(clientesFiltrados);
+            const datosMensuales = generarDatosMensuales(clientesFiltrados);
+            
+            // CSV de datos por cliente
+            let csvClientes = 'Cliente,Primera Compra,Año,Mes,Semana,Tipo Entrega,Total Pedidos\n';
+            
+            const meses = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            
+            clientesFiltrados.forEach(cliente => {
+                const fecha = cliente.primeraCompra;
+                const semana = getWeekNumber(fecha);
+                const mes = meses[fecha.getMonth()];
+                
+                csvClientes += `"${cliente.nombre}","${fecha.toLocaleDateString()}",${fecha.getFullYear()},"${mes}",${semana},"${cliente.tipoEntrega || 'No especificado'}",${cliente.totalPedidos}\n`;
+            });
+            
+            // CSV de resumen semanal con inversiones
+            let csvSemanal = 'Tipo,Periodo,Clientes Nuevos,Inversión,Costo por Cliente\n';
+            
+            datosSemanales.forEach(semana => {
+                const periodoSemanal = `${semana.year}-W${semana.week}`;
+                const inversion = obtenerInversion('semanal', periodoSemanal);
+                const costoPorCliente = calcularCostoPorCliente(inversion, semana.count);
+                
+                csvSemanal += `Semanal,"Semana ${semana.week}/${semana.year}",${semana.count},${inversion},${costoPorCliente.toFixed(2)}\n`;
+            });
+            
+            // CSV de resumen mensual con inversiones
+            datosMensuales.forEach(mes => {
+                const periodoMensual = `${mes.year}-${mes.month}`;
+                const inversion = obtenerInversion('mensual', periodoMensual);
+                const costoPorCliente = calcularCostoPorCliente(inversion, mes.count);
+                
+                csvSemanal += `Mensual,"${meses[mes.month]} ${mes.year}",${mes.count},${inversion},${costoPorCliente.toFixed(2)}\n`;
+            });
+            
+            // Crear archivo combinado
+            const csvCombinado = csvClientes + '\n' + csvSemanal;
+            
+            const blob = new Blob([csvCombinado], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            
+            let nombreArchivo = `reporte_completo_${currentYear}`;
+            if (currentMonth) nombreArchivo += `_${(parseInt(currentMonth) + 1).toString().padStart(2, '0')}`;
+            if (currentEntrega) nombreArchivo += `_${currentEntrega.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            nombreArchivo += '.csv';
+            
+            link.download = nombreArchivo;
+            link.click();
+        }
+
+        // Event listeners
+        document.getElementById('yearSelect').addEventListener('change', actualizarReporte);
+        document.getElementById('monthSelect').addEventListener('change', actualizarReporte);
+    document.getElementById('entregaSelect').addEventListener('change', actualizarReporte);
+    document.getElementById('tipoClienteSelect').addEventListener('change', actualizarReporte);
+
+        // Inicializar la aplicación
+        window.addEventListener('load', cargarDatos);
+    </script>
+</body>
+</html>
