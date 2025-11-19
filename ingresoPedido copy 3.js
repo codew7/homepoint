@@ -1,19 +1,51 @@
 // Script para ingresoPedido.html: manejo de formulario, artículos dinámicos y registro en Firebase
 
 document.addEventListener('DOMContentLoaded', function() {
+  // --- TAB = Agregar Artículo ---
   // === BLOQUEO DE CONTROLES HASTA CARGA DE ARTÍCULOS ===
   // Elementos a bloquear: inputs, selects, botones, tabla de artículos
+  // Usar las referencias ya declaradas más abajo
   let bloqueables = [];
+  // La declaración de form, addItemBtn, itemsBody ya existe más abajo
+  // Por lo tanto, solo inicializar bloqueables después de esas declaraciones
+  // (El resto del código sigue igual hasta la declaración de form, itemsBody, addItemBtn)
+  // === OPTIMIZACIÓN: TAB HANDLER CON THROTTLING ===
+  let tabHandlerTimeout;
+  document.addEventListener('keydown', function(e) {
+    // Solo si es TAB, sin Shift, y no en textarea ni en select2 search
+    if (e.key === 'Tab' && !e.shiftKey) {
+      const active = document.activeElement;
+      // No interceptar si está en textarea, input tipo hidden, o en el buscador de select2
+      if (active && (
+        active.tagName === 'TEXTAREA' ||
+        (active.tagName === 'INPUT' && active.type === 'hidden') ||
+        (active.classList && active.classList.contains('select2-search__field'))
+      )) {
+        return;
+      }
+      
+      e.preventDefault();
+      
+      // Usar throttling para evitar múltiples ejecuciones rápidas
+      clearTimeout(tabHandlerTimeout);
+      tabHandlerTimeout = setTimeout(() => {
+        const btn = document.getElementById('addItemBtn');
+        if (btn && !btn.disabled) {
+          btn.click();
+        }
+      }, 50);
+    }
+  }, { passive: false }); // Especificar passive: false para preventDefault
   // Firebase ya está inicializado en el HTML
 
   // Elementos del DOM
   const form = document.getElementById('orderForm');
   const itemsBody = document.getElementById('itemsBody');
-  const searchInput = document.getElementById('searchInput');
-  const searchQuantity = document.getElementById('searchQuantity');
-  const searchResults = document.getElementById('searchResults');
-  const addSearchItemBtn = document.getElementById('addSearchItemBtn');
-  // Inicializar bloqueables aquí, después de declarar form, itemsBody
+  const addItemBtn = document.getElementById('addItemBtn');
+  const barcodeInput = document.getElementById('barcodeInput');
+  const barcodeStatus = document.getElementById('barcodeStatus');
+  const barcodeQuantity = document.getElementById('barcodeQuantity');
+  // Inicializar bloqueables aquí, después de declarar form, itemsBody, addItemBtn
   bloqueables = [];
   if (form) {
     Array.from(form.elements).forEach(el => {
@@ -22,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+  if (addItemBtn) bloqueables.push(addItemBtn);
   if (itemsBody) bloqueables.push(itemsBody);
   function setControlesBloqueados(bloquear) {
     bloqueables.forEach(el => {
@@ -55,6 +88,127 @@ document.addEventListener('DOMContentLoaded', function() {
   const messageDiv = document.getElementById('message');
 
   let items = [];
+
+  // === DETECCIÓN GLOBAL DE ESCÁNER DE CÓDIGO DE BARRAS ===
+  let barcodeBuffer = '';
+  let barcodeTimeout = null;
+  let isProcessingBarcode = false;
+  const BARCODE_INPUT_SPEED = 50; // Los scanners escriben en menos de 50ms
+  const MIN_BARCODE_LENGTH = 3;
+  
+  // Listener global para detectar input rápido del escáner
+  document.addEventListener('keypress', function(e) {
+    // Ignorar si ya estamos procesando un código
+    if (isProcessingBarcode) {
+      return;
+    }
+    
+    // Ignorar si ya estamos en el campo de código de barras
+    if (document.activeElement === barcodeInput) {
+      return;
+    }
+    
+    // Ignorar si estamos en un textarea o en campos específicos que necesitan input normal
+    const activeElement = document.activeElement;
+    if (activeElement && (
+      activeElement.tagName === 'TEXTAREA' ||
+      activeElement.classList.contains('select2-search__field') ||
+      activeElement.id === 'nombre' ||
+      activeElement.id === 'telefono' ||
+      activeElement.id === 'direccion' ||
+      activeElement.id === 'dni' ||
+      activeElement.id === 'email' ||
+      activeElement.id === 'observaciones'
+    )) {
+      return;
+    }
+    
+    // Ignorar teclas especiales y Enter
+    if (e.key === 'Enter' || e.key === 'Tab' || e.ctrlKey || e.altKey || e.metaKey) {
+      return;
+    }
+    
+    // Acumular caracteres
+    barcodeBuffer += e.key;
+    
+    // Limpiar timeout anterior
+    clearTimeout(barcodeTimeout);
+    
+    // Establecer nuevo timeout
+    barcodeTimeout = setTimeout(() => {
+      // Si el buffer tiene contenido después del timeout, no es un scanner
+      // (el usuario escribe más lento)
+      barcodeBuffer = '';
+    }, BARCODE_INPUT_SPEED);
+    
+    // Si acumulamos suficientes caracteres rápidamente, es probable que sea un scanner
+    if (barcodeBuffer.length >= MIN_BARCODE_LENGTH) {
+      // Prevenir que el input vaya al campo actual
+      e.preventDefault();
+      
+      // Redirigir al campo de código de barras
+      if (barcodeInput && !isProcessingBarcode) {
+        // Si no estamos en el campo correcto, mover el foco
+        if (document.activeElement !== barcodeInput) {
+          // Limpiar el buffer del campo actual si es un input
+          if (activeElement && activeElement.tagName === 'INPUT') {
+            // Restaurar el valor original (sin los caracteres del scanner)
+            const currentValue = activeElement.value || '';
+            const charsToRemove = barcodeBuffer.length - 1; // -1 porque el último carácter está en e.key
+            if (currentValue.length >= charsToRemove) {
+              activeElement.value = currentValue.substring(0, currentValue.length - charsToRemove);
+            }
+          }
+          
+          // Mostrar indicador visual
+          if (barcodeStatus) {
+            showBarcodeStatus('scanning');
+          }
+        }
+      }
+      
+      // Continuar esperando más caracteres del scanner
+      clearTimeout(barcodeTimeout);
+      barcodeTimeout = setTimeout(() => {
+        // Cuando termina el escaneo, procesar el código
+        if (barcodeInput && barcodeBuffer.length >= MIN_BARCODE_LENGTH && !isProcessingBarcode) {
+          isProcessingBarcode = true;
+          
+          // Enfocar el campo de código de barras
+          barcodeInput.focus();
+          
+          // Limpiar y establecer el valor
+          barcodeInput.value = barcodeBuffer.trim();
+          
+          // Procesar el código directamente (sin disparar Enter)
+          processBarcodeInput(barcodeBuffer.trim());
+          
+          // Resetear después de un pequeño delay
+          setTimeout(() => {
+            isProcessingBarcode = false;
+          }, 200);
+        }
+        barcodeBuffer = '';
+      }, 100); // Esperar 100ms después del último carácter
+    }
+  });
+  
+  // Limpiar buffer si cambiamos de campo manualmente
+  document.addEventListener('focusin', function(e) {
+    if (e.target !== barcodeInput && barcodeBuffer.length > 0) {
+      barcodeBuffer = '';
+      clearTimeout(barcodeTimeout);
+    }
+  });
+  
+  // Auto-enfocar el campo de código de barras al cargar la página
+  window.addEventListener('load', function() {
+    setTimeout(() => {
+      if (barcodeInput) {
+        barcodeInput.focus();
+      }
+    }, 500);
+  });
 
   // === COTIZACIÓN DÓLAR ===
   const cotizacionValorElement = document.getElementById('cotizacionValor');
@@ -151,6 +305,10 @@ document.addEventListener('DOMContentLoaded', function() {
         articulosPorNombre[item[3]] = item;
       });
       
+      // Invalidar cache al cargar nuevos artículos
+      articulosOrdenadosCache = null;
+      optionsHtmlCache = '';
+      
       // Actualizar items existentes con datos frescos de Google Sheets
       actualizarTodosLosItems();
       // Habilitar controles después de cargar
@@ -158,8 +316,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // Mantener tipoCliente como solo lectura
       radiosTipoCliente.forEach(radio => radio.disabled = true);
       
-      // Inicializar buscador de artículos después de cargar
-      initializeSearchArticulos();
+      // Inicializar scanner de código de barras después de cargar artículos
+      initializeBarcodeScanner();
     })
     .catch(() => {
       // Si falla la carga, mantener controles deshabilitados
@@ -365,10 +523,29 @@ function getTipoCliente() {
     
   }
 
+  // === CACHE PARA OPTIMIZACIÓN ===
+  let articulosOrdenadosCache = null;
+  let optionsHtmlCache = '';
 
+  function getArticulosOrdenados() {
+    if (!articulosOrdenadosCache) {
+      articulosOrdenadosCache = [...articulosDisponibles].sort((a, b) => {
+        const nombreA = (a[3] || '').toLowerCase();
+        const nombreB = (b[3] || '').toLowerCase();
+        return nombreA.localeCompare(nombreB, 'es');
+      });
+      // Generar HTML de opciones una sola vez
+      optionsHtmlCache = '<option value="">Seleccione artículo</option>' + 
+        articulosOrdenadosCache.map(art => 
+          `<option value="${art[3]}" data-codigo="${art[2]}" data-precio="${art[6] || art[5] || ''}">${art[3]}</option>`
+        ).join('');
+    }
+    return articulosOrdenadosCache;
+  }
 
   // === OPTIMIZACIÓN: CREAR UNA SOLA FILA ===
   function createRowElement(item, idx) {
+    const articulosOrdenados = getArticulosOrdenados();
     const primeraImagen = obtenerPrimeraImagen(item.nombre);
     
     const row = document.createElement('tr');
@@ -379,22 +556,49 @@ function getTipoCliente() {
         ${primeraImagen ? `<img src="${primeraImagen}" class="articulo-img" style="width:50px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="Imagen del artículo" onerror="this.style.display='none'">` : '<span style="color:#ccc;">Sin img</span>'}
       </td>
       <td><input type="text" value="${item.codigo || ''}" class="codigo" maxlength="20" style="width:80px" readonly></td>
-      <td><div class="nombre-display" style="padding:8px;min-width:220px;">${item.nombre || ''}</div></td>
+      <td>
+        <select class="nombre-select" data-idx="${idx}" style="width:220px">
+          ${optionsHtmlCache}
+        </select>
+      </td>
       <td><input type="number" value="${item.cantidad}" class="cantidad" min="1" style="width:60px"></td>
       <td><input type="text" value="${item.valorU}" class="valorU" min="0" step="1" style="width:80px"></td>
       <td class="valorTotal">${(item.cantidad * item.valorU).toLocaleString('es-AR', {maximumFractionDigits:0})}</td>
       <td><button type="button" class="remove-btn" data-idx="${idx}" style="background:#d32f2f;color:#fff;border:none;border-radius:4px;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Eliminar"><span style="font-weight:bold;font-size:20px;line-height:1;">&times;</span></button></td>
     `;
 
+    // Seleccionar la opción correcta
+    if (item.nombre) {
+      const select = row.querySelector('.nombre-select');
+      select.value = item.nombre;
+    }
+
     return row;
   }
 
   // === OPTIMIZACIÓN: SETUP DE EVENT LISTENERS PARA UNA FILA ===
   function setupRowEventListeners(row, idx) {
+    const select = row.querySelector('.nombre-select');
+    const removeBtn = row.querySelector('.remove-btn');
     const imgElement = row.querySelector('.articulo-img');
     
-    // Nota: Los botones de eliminar ahora usan event delegation global
-    // No se agregan event listeners individuales para evitar problemas con índices
+    // Flag para rastrear si se seleccionó un artículo
+    let itemWasSelected = false;
+    let closeTimeout = null;
+    
+    // Event listener para select (throttled)
+    let selectChangeTimeout;
+    select.addEventListener('change', function() {
+      clearTimeout(selectChangeTimeout);
+      selectChangeTimeout = setTimeout(() => {
+        handleSelectChange(this, idx);
+      }, 50);
+    });
+    
+    // Event listener para botón eliminar
+    removeBtn.addEventListener('click', function() {
+      removeItem(idx);
+    });
     
     // Configurar efecto hover para imagen con cleanup
     let hoverCleanup = null;
@@ -405,51 +609,228 @@ function getTipoCliente() {
       }
     }
 
-    // Retornar función de cleanup
+    // Inicializar Select2 de forma asíncrona
+    const $select = $(select);
+    
+    // Configurar Select2 con configuración optimizada
+    requestAnimationFrame(() => {
+      try {
+        $select.select2({
+          placeholder: 'Seleccione artículo',
+          width: '95%',
+          minimumResultsForSearch: 10, // Solo mostrar búsqueda si hay más de 10 items
+          dropdownAutoWidth: true,
+          templateResult: function(option) {
+            // Template simple para mejor rendimiento
+            if (!option.id) return option.text;
+            return $('<span>').text(option.text);
+          }
+        });
+        
+        // Marcar cuando se abre el selector
+        $select.on('select2:open', function(e) {
+          itemWasSelected = false;
+          clearTimeout(closeTimeout);
+        });
+        
+        $select.on('select2:select', function(e) {
+          // Marcar que se seleccionó un artículo
+          itemWasSelected = true;
+          
+          // Usar setTimeout para no bloquear el hilo principal
+          setTimeout(() => {
+            this.dispatchEvent(new Event('change', { bubbles: true }));
+          }, 0);
+        });
+        
+        // Manejar cierre del selector sin selección
+        $select.on('select2:close', function(e) {
+          clearTimeout(closeTimeout);
+          closeTimeout = setTimeout(() => {
+            // Solo eliminar si NO se seleccionó ningún artículo
+            if (!itemWasSelected) {
+              const currentItem = items[idx];
+              if (currentItem && !currentItem.nombre) {
+                // Si es la última fila y está vacía, eliminarla
+                const isLastRow = idx === items.length - 1;
+                if (isLastRow) {
+                  removeItem(idx);
+                }
+              }
+            }
+            // Resetear el flag para la próxima vez
+            itemWasSelected = false;
+          }, 150);
+        });
+      } catch (error) {
+        console.warn('Error inicializando Select2:', error);
+      }
+    });
+
+    // Retornar objetos y función de cleanup
     return { 
+      select: $select,
       cleanup: function() {
+        clearTimeout(selectChangeTimeout);
+        clearTimeout(closeTimeout);
         if (hoverCleanup) hoverCleanup();
+        try {
+          if ($select.hasClass('select2-hidden-accessible')) {
+            $select.select2('destroy');
+          }
+        } catch (e) {
+          // Silenciar errores de destrucción de Select2
+        }
       }
     };
   }
 
-
+  // === OPTIMIZACIÓN: MANEJAR CAMBIO DE SELECT ===
+  function handleSelectChange(selectElement, idx) {
+    const nombreSel = selectElement.value;
+    const row = selectElement.closest('tr');
+    
+    // Verificar si el producto ya existe en otra fila
+    if (nombreSel) {
+      const existingIndex = items.findIndex((item, index) => 
+        index !== idx && item.nombre === nombreSel
+      );
+      
+      if (existingIndex !== -1) {
+        // Sumar cantidad al producto existente
+        items[existingIndex].cantidad += items[idx].cantidad;
+        
+        // Actualizar la fila existente
+        const existingRow = itemsBody.querySelector(`tr[data-idx="${existingIndex}"]`);
+        if (existingRow) {
+          const cantidadInput = existingRow.querySelector('.cantidad');
+          const valorTotalCell = existingRow.querySelector('.valorTotal');
+          
+          cantidadInput.value = items[existingIndex].cantidad;
+          valorTotalCell.textContent = (items[existingIndex].cantidad * items[existingIndex].valorU).toLocaleString('es-AR', {maximumFractionDigits:0});
+          
+          // Highlight temporal de la fila existente
+          existingRow.style.backgroundColor = '#fff3cd';
+          setTimeout(() => {
+            existingRow.style.backgroundColor = '';
+          }, 1500);
+        }
+        
+        // Remover la fila actual
+        removeItem(idx);
+        
+        // Mostrar notificación toast con imagen
+        showBarcodeNotification(nombreSel, items[existingIndex].cantidad, true);
+        
+        return;
+      }
+      
+      // Si es un artículo nuevo (no existe duplicado), mostrar notificación
+      showBarcodeNotification(nombreSel, items[idx].cantidad, false);
+    }
+    
+    // Usar función auxiliar para actualizar todos los campos consistentemente
+    actualizarCamposArticulo(items[idx], nombreSel);
+    
+    // Batch DOM updates para mejor rendimiento
+    requestAnimationFrame(() => {
+      // Actualizar interfaz en una sola operación
+      const updates = {
+        codigo: items[idx].codigo,
+        valorU: items[idx].valorU,
+        valorTotal: (items[idx].cantidad * items[idx].valorU).toLocaleString('es-AR', {maximumFractionDigits:0})
+      };
+      
+      row.querySelector('.codigo').value = updates.codigo;
+      row.querySelector('.valorU').value = updates.valorU;
+      row.querySelector('.valorTotal').textContent = updates.valorTotal;
+      
+      // Actualizar imagen del artículo de forma optimizada
+      updateRowImage(row, nombreSel);
+      
+      // Usar debounce para cálculos (ya optimizado)
+      debouncedCalculations();
+      
+      // Enfocar campo cantidad después del render
+      setTimeout(() => {
+        const cantidadInput = row.querySelector('.cantidad');
+        if (cantidadInput) {
+          cantidadInput.focus();
+          const val = cantidadInput.value;
+          if (cantidadInput.type !== 'number') {
+            cantidadInput.setSelectionRange(val.length, val.length);
+          }
+        }
+      }, 0);
+    });
+  }
+  
+  // === FUNCIÓN AUXILIAR PARA ACTUALIZAR IMAGEN DE FILA ===
+  function updateRowImage(row, nombreSel) {
+    const imgCell = row.querySelector('td:first-child');
+    const primeraImagen = obtenerPrimeraImagen(nombreSel);
+    
+    if (primeraImagen) {
+      imgCell.innerHTML = `<img src="${primeraImagen}" class="articulo-img" style="width:50px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="Imagen del artículo" onerror="this.style.display='none'">`;
+      const imgElement = imgCell.querySelector('.articulo-img');
+      if (imgElement) {
+        // Crear hover de forma asíncrona
+        requestAnimationFrame(() => {
+          crearHoverImagen(imgElement, primeraImagen);
+        });
+      }
+    } else {
+      imgCell.innerHTML = '<span style="color:#ccc;">Sin img</span>';
+    }
+  }
 
   // === OPTIMIZACIÓN: REMOVER ITEM SIN RE-RENDERIZAR TODO ===
   function removeItem(idx) {
-    // Validar índice antes de proceder
-    if (idx < 0 || idx >= items.length) {
-      console.warn(`Índice inválido para eliminar: ${idx}`);
-      return;
-    }
-    
-    // Remover del array de items
     items.splice(idx, 1);
     
-    // Remover la fila del DOM inmediatamente
+    // Remover la fila del DOM
     const rowToRemove = itemsBody.querySelector(`tr[data-idx="${idx}"]`);
     if (rowToRemove) {
+      // Limpiar event listeners y Select2 antes de remover
+      try {
+        const select = rowToRemove.querySelector('.nombre-select');
+        if (select && $(select).hasClass('select2-hidden-accessible')) {
+          $(select).select2('destroy');
+        }
+      } catch (e) {
+        // Silenciar errores de destrucción
+      }
+      
       rowToRemove.remove();
     }
     
-    // Actualizar todos los índices de las filas restantes
-    const remainingRows = Array.from(itemsBody.querySelectorAll('tr[data-idx]'));
+    // Actualizar índices en las filas restantes de forma optimizada
+    const remainingRows = itemsBody.querySelectorAll('tr[data-idx]');
+    const updateBatch = [];
     
     remainingRows.forEach((row) => {
       const currentIdx = parseInt(row.getAttribute('data-idx'));
       if (currentIdx > idx) {
         const newIdx = currentIdx - 1;
-        // Actualizar data-idx de la fila y del botón
-        row.setAttribute('data-idx', newIdx);
-        const removeBtn = row.querySelector('.remove-btn');
-        if (removeBtn) {
-          removeBtn.setAttribute('data-idx', newIdx);
-        }
+        updateBatch.push({
+          row,
+          newIdx,
+          select: row.querySelector('.nombre-select'),
+          removeBtn: row.querySelector('.remove-btn')
+        });
       }
     });
     
-    // Recalcular totales después de eliminar
-    debouncedCalculations();
+    // Aplicar actualizaciones en batch
+    requestAnimationFrame(() => {
+      updateBatch.forEach(({ row, newIdx, select, removeBtn }) => {
+        row.setAttribute('data-idx', newIdx);
+        if (select) select.setAttribute('data-idx', newIdx);
+        if (removeBtn) removeBtn.setAttribute('data-idx', newIdx);
+      });
+      
+      debouncedCalculations();
+    });
   }
 
   // === DEBOUNCE PARA CÁLCULOS ===
@@ -476,6 +857,8 @@ function getTipoCliente() {
 
   function renderItems() {
     // Limpiar cache al re-renderizar por completo
+    articulosOrdenadosCache = null;
+    optionsHtmlCache = '';
     costosCache = null;
     lastItemsHash = '';
     
@@ -510,7 +893,22 @@ function getTipoCliente() {
       
       for (let i = startIdx; i < endIdx; i++) {
         const task = setupTasks[i];
-        setupRowEventListeners(task.row, task.idx);
+        const { select } = setupRowEventListeners(task.row, task.idx);
+        
+        // Configurar Select2 si es necesario
+        if (task.shouldOpenSelect) {
+          setTimeout(() => {
+            try {
+              select.select2('open');
+              setTimeout(() => {
+                const $search = $('.select2-container--open .select2-search__field');
+                if ($search.length) $search[0].focus();
+              }, 50);
+            } catch (e) {
+              console.warn('Error abriendo Select2:', e);
+            }
+          }, 100);
+        }
         
         // Actualizar campos si hay artículo seleccionado
         if (task.item.nombre && articulosPorNombre[task.item.nombre]) {
@@ -603,221 +1001,125 @@ function getTipoCliente() {
 
 
   // === OPTIMIZACIÓN: AGREGAR ITEM SIN RE-RENDERIZAR TODO ===
-
-
-  // === SCANNER DE CÓDIGO DE BARRAS ===
-  // === NUEVA FUNCIONALIDAD DE BÚSQUEDA DE ARTÍCULOS ===
-  let selectedResultIndex = -1;
-  let selectedArticuloNombre = null;
-  
-  function initializeSearchArticulos() {
-    if (!searchInput || !searchResults) return;
-    
-    let searchTimeout;
-    
-    // Configurar evento de input para búsqueda en tiempo real
-    searchInput.addEventListener('input', function() {
-      clearTimeout(searchTimeout);
-      const query = this.value.trim().toLowerCase();
-      
-      // Limpiar selección previa al escribir
-      selectedArticuloNombre = null;
-      
-      if (query.length < 2) {
-        searchResults.style.display = 'none';
-        searchResults.innerHTML = '';
-        selectedResultIndex = -1;
+  function addNewItem() {
+    // Si hay al menos un artículo y el último no tiene nombre seleccionado, no permitir agregar otro
+    if (items.length > 0) {
+      const lastItem = items[items.length - 1];
+      if (!lastItem.nombre) {
+        showPopup('Debe seleccionar un artículo antes de agregar una nueva fila.', '❗', false);
         return;
       }
-      
-      // Debounce para evitar búsquedas excesivas
-      searchTimeout = setTimeout(() => {
-        performSearch(query);
-        selectedResultIndex = -1;
-      }, 200);
-    });
+    }
     
-    // Navegación con teclado en el campo de búsqueda
-    searchInput.addEventListener('keydown', function(e) {
-      const resultItems = searchResults.querySelectorAll('.search-result-item');
+    const newItem = { codigo: '', codigoBarras: '', nombre: '', cantidad: 1, valorU: 0, valorC: 0, categoria: '', seleccionado: '', valorG: 0 };
+    items.push(newItem);
+    
+    const newIdx = items.length - 1;
+    const row = createRowElement(newItem, newIdx);
+    itemsBody.appendChild(row);
+    
+    // Configurar event listeners para la nueva fila de forma asíncrona
+    requestAnimationFrame(() => {
+      const { select } = setupRowEventListeners(row, newIdx);
       
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (resultItems.length > 0) {
-          selectedResultIndex = Math.min(selectedResultIndex + 1, resultItems.length - 1);
-          updateSelectedResult(resultItems);
+      // Abrir Select2 automáticamente con delay optimizado
+      setTimeout(() => {
+        try {
+          select.select2('open');
+          setTimeout(() => {
+            const $search = $('.select2-container--open .select2-search__field');
+            if ($search.length) $search[0].focus();
+          }, 100);
+        } catch (e) {
+          console.warn('Error abriendo Select2 en nueva fila:', e);
         }
-      } else if (e.key === 'ArrowUp') {
+      }, 150);
+      
+      // Cálculos después de configurar
+      debouncedCalculations();
+    });
+  }
+
+  // === SCANNER DE CÓDIGO DE BARRAS ===
+  function initializeBarcodeScanner() {
+    if (!barcodeInput || !barcodeStatus) return;
+    
+    let scanTimeout;
+    let isScanning = false;
+    
+    // Configurar estado inicial
+    showBarcodeStatus('ready');
+    
+    
+    // También procesar al presionar Enter
+    barcodeInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
         e.preventDefault();
-        if (resultItems.length > 0) {
-          selectedResultIndex = Math.max(selectedResultIndex - 1, 0);
-          updateSelectedResult(resultItems);
+        clearTimeout(scanTimeout);
+        const value = e.target.value.trim();
+        if (value.length > 0) {
+          processBarcodeInput(value);
         }
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        // Seleccionar artículo y mover al campo cantidad
-        if (selectedResultIndex >= 0 && resultItems[selectedResultIndex]) {
-          selectArticuloAndFocusQuantity(resultItems[selectedResultIndex]);
-        } else if (resultItems[0]) {
-          selectArticuloAndFocusQuantity(resultItems[0]);
-        }
-      } else if (e.key === 'Escape') {
-        searchResults.style.display = 'none';
-        searchResults.innerHTML = '';
-        selectedResultIndex = -1;
-        selectedArticuloNombre = null;
       }
     });
     
-    // Enter en campo cantidad para agregar artículo
-    if (searchQuantity) {
-      searchQuantity.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (selectedArticuloNombre) {
-            addArticuloFromSearch(selectedArticuloNombre);
-          }
-        }
+    // Auto-focus al campo cuando se hace clic en el área del scanner
+    const scannerArea = document.getElementById('barcodeScanner');
+    if (scannerArea) {
+      scannerArea.addEventListener('click', function() {
+        barcodeInput.focus();
       });
-      
-      searchQuantity.addEventListener('input', function() {
+    }
+    
+    // Validar campo de cantidad - solo números positivos
+    if (barcodeQuantity) {
+      barcodeQuantity.addEventListener('input', function() {
         let value = parseInt(this.value) || 1;
         if (value < 1) value = 1;
         if (value > 999) value = 999;
         this.value = value;
       });
       
-      searchQuantity.addEventListener('focus', function() {
+      // Seleccionar todo el texto al hacer focus para fácil edición
+      barcodeQuantity.addEventListener('focus', function() {
         this.select();
       });
     }
-    
-    // Botón de agregar
-    if (addSearchItemBtn) {
-      addSearchItemBtn.addEventListener('click', function() {
-        if (selectedArticuloNombre) {
-          addArticuloFromSearch(selectedArticuloNombre);
-        }
-      });
-    }
-    
-    // Cerrar resultados al hacer clic fuera
-    document.addEventListener('click', function(e) {
-      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-        searchResults.style.display = 'none';
-        selectedResultIndex = -1;
-      }
-    });
   }
   
-  function selectArticuloAndFocusQuantity(resultItem) {
-    const nombreArticulo = resultItem.getAttribute('data-nombre');
-    selectedArticuloNombre = nombreArticulo;
-    
-    // Actualizar el campo de búsqueda con el nombre del artículo
-    if (searchInput) {
-      searchInput.value = nombreArticulo;
-    }
-    
-    // Ocultar resultados
-    if (searchResults) {
-      searchResults.style.display = 'none';
-      searchResults.innerHTML = '';
-    }
-    
-    // Enfocar campo cantidad
-    if (searchQuantity) {
-      searchQuantity.focus();
-      searchQuantity.select();
-    }
-  }
-  
-  function updateSelectedResult(resultItems) {
-    // Remover clase de todos los items
-    resultItems.forEach((item, idx) => {
-      item.classList.remove('keyboard-selected');
-      if (idx === selectedResultIndex) {
-        item.classList.add('keyboard-selected');
-        // Scroll automático para mantener el item visible
-        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    });
-  }
-  
-  function performSearch(query) {
-    if (!searchResults) return;
-    
-    // Buscar en columnas C (código - índice 2), D (nombre - índice 3) y L (códigos de barras - índice 11)
-    const results = articulosDisponibles.filter(art => {
-      const codigo = (art[2] || '').toLowerCase();
-      const nombre = (art[3] || '').toLowerCase();
-      const codigosBarras = (art[11] || '').toLowerCase();
-      
-      return codigo.includes(query) || 
-             nombre.includes(query) || 
-             codigosBarras.includes(query);
-    }).slice(0, 15); // Limitar a 15 resultados
-    
-    if (results.length === 0) {
-      searchResults.innerHTML = '<div class="search-no-results">No se encontraron resultados</div>';
-      searchResults.style.display = 'block';
+  function processBarcodeInput(barcode) {
+    if (!barcode || barcode.length < 3) {
+      showBarcodeStatus('error', 'Código muy corto');
+      clearBarcodeInput();
       return;
     }
     
-    // Renderizar resultados
-    searchResults.innerHTML = results.map(art => {
-      const codigo = art[2] || '';
-      const nombre = art[3] || '';
-      const imagenUrl = art[1] ? art[1].split(',')[0]?.trim() : '';
-      
-      return `
-        <div class="search-result-item" data-nombre="${nombre}">
-          ${imagenUrl ? `<img src="${imagenUrl}" class="search-result-img" alt="${nombre}" onerror="this.style.display='none'">` : '<div class="search-result-img-placeholder"></div>'}
-          <div class="search-result-info">
-            <div class="search-result-name">${nombre}</div>
-            <div class="search-result-code">Código: ${codigo}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    // Obtener cantidad especificada (por defecto 1)
+    const cantidadEspecificada = barcodeQuantity ? (parseInt(barcodeQuantity.value) || 1) : 1;
     
-    searchResults.style.display = 'block';
+    // Buscar artículo por código
+    const articulo = articulosPorCodigo[barcode];
     
-    // Agregar event listeners a los resultados
-    searchResults.querySelectorAll('.search-result-item').forEach((item, idx) => {
-      item.addEventListener('click', function() {
-        selectArticuloAndFocusQuantity(this);
-      });
-      
-      // Actualizar índice seleccionado al pasar el mouse
-      item.addEventListener('mouseenter', function() {
-        selectedResultIndex = idx;
-        updateSelectedResult(searchResults.querySelectorAll('.search-result-item'));
-      });
-    });
-  }
-  
-  function addArticuloFromSearch(nombreArticulo) {
-    if (!nombreArticulo || !articulosPorNombre[nombreArticulo]) {
+    if (!articulo) {
+      showBarcodeStatus('error', 'Código no encontrado');
+      showPopup(`❌ Código de barras "${barcode}" no encontrado en el inventario.`, '❌', false);
+      clearBarcodeInput();
       return;
     }
-    
-    const articulo = articulosPorNombre[nombreArticulo];
-    
-    // Obtener cantidad especificada
-    const cantidadEspecificada = searchQuantity ? (parseInt(searchQuantity.value) || 1) : 1;
     
     // Verificar disponibilidad
     if (articulo[4]?.toLowerCase() === 'no disponible') {
-      showPopup(`⚠️ El artículo "${nombreArticulo}" no está disponible.`, '⚠️', false);
+      showBarcodeStatus('error', 'Artículo no disponible');
+      showPopup(`⚠️ El artículo "${articulo[3]}" no está disponible.`, '⚠️', false);
+      clearBarcodeInput();
       return;
     }
     
     // Verificar si el artículo ya existe en la lista
-    const existingItemIndex = items.findIndex(item => item.nombre === nombreArticulo);
+    const existingItemIndex = items.findIndex(item => item.nombre === articulo[3]);
     
     if (existingItemIndex !== -1) {
-      // Incrementar cantidad del artículo existente
+      // Incrementar cantidad del artículo existente por la cantidad especificada
       items[existingItemIndex].cantidad += cantidadEspecificada;
       
       // Actualizar la fila visualmente
@@ -847,14 +1149,20 @@ function getTipoCliente() {
         }, 1500);
       }
       
-      // Mostrar notificación
-      showItemNotification(nombreArticulo, items[existingItemIndex].cantidad, true);
+      // Mostrar información del código específico escaneado
+      const codigosDisponibles = articulo[11] ? articulo[11].split(',').map(c => c.trim()).filter(c => c) : [];
+      const esMultipleCodigo = codigosDisponibles.length > 1;
+      const infoCodigoExtra = esMultipleCodigo ? ` (Código: ${barcode})` : '';
+      
+      showBarcodeStatus('success', `+${cantidadEspecificada} ${articulo[3]}`);
+      // Mostrar notificación con imagen del artículo
+      showBarcodeNotification(articulo[3], items[existingItemIndex].cantidad, true);
     } else {
-      // Agregar nuevo artículo
+      // Agregar nuevo artículo usando la misma lógica que el método manual
       const newItem = {
         codigo: '',
         codigoBarras: '',
-        nombre: nombreArticulo,
+        nombre: articulo[3] || '', // Solo asignar el nombre inicialmente
         cantidad: cantidadEspecificada,
         valorU: 0,
         valorC: 0,
@@ -863,13 +1171,13 @@ function getTipoCliente() {
         valorG: 0
       };
       
-      // Actualizar campos del artículo
-      actualizarCamposArticulo(newItem, nombreArticulo);
+      // Usar la función existente para actualizar todos los campos correctamente
+      actualizarCamposArticulo(newItem, articulo[3]);
       
-      // Restaurar cantidad especificada
+      // Restaurar la cantidad especificada (que podría haber sido sobrescrita)
       newItem.cantidad = cantidadEspecificada;
       
-      // Recalcular valorG
+      // Recalcular valorG con la cantidad correcta
       newItem.valorG = (newItem.valorU - newItem.valorC) * newItem.cantidad;
       
       items.push(newItem);
@@ -886,38 +1194,71 @@ function getTipoCliente() {
         row.style.backgroundColor = '';
       }, 1500);
       
-      // Mostrar notificación
-      showItemNotification(nombreArticulo, cantidadEspecificada, false);
+      // Mostrar información del código específico escaneado
+      const codigosDisponibles = articulo[11] ? articulo[11].split(',').map(c => c.trim()).filter(c => c) : [];
+      const esMultipleCodigo = codigosDisponibles.length > 1;
+      const infoCodigoExtra = esMultipleCodigo ? ` (Código: ${barcode})` : '';
+      
+      showBarcodeStatus('success', `Agregado: ${articulo[3]}`);
+      // Mostrar notificación con imagen del artículo
+      showBarcodeNotification(articulo[3], cantidadEspecificada, false);
     }
     
     // Recalcular totales
     debouncedCalculations();
     
-    // Limpiar búsqueda
-    clearSearch();
+    // Limpiar input y restablecer cantidad para el próximo escaneo
+    setTimeout(() => {
+      clearBarcodeInput();
+      resetBarcodeQuantity();
+    }, 1000);
   }
   
-  function clearSearch() {
-    if (searchInput) {
-      searchInput.value = '';
+  function showBarcodeStatus(type, message = '') {
+    if (!barcodeStatus) return;
+    
+    barcodeStatus.innerHTML = '';
+    
+    switch (type) {
+      case 'ready':
+        barcodeStatus.innerHTML = '🔍';
+        barcodeStatus.style.color = '#6c757d';
+        barcodeStatus.title = 'Listo para escanear';
+        break;
+      case 'scanning':
+        barcodeStatus.innerHTML = '⏳';
+        barcodeStatus.style.color = '#007bff';
+        barcodeStatus.title = 'Escaneando...';
+        break;
+      case 'success':
+        barcodeStatus.innerHTML = '✅';
+        barcodeStatus.style.color = '#28a745';
+        barcodeStatus.title = message || 'Artículo encontrado';
+        setTimeout(() => showBarcodeStatus('ready'), 2000);
+        break;
+      case 'error':
+        barcodeStatus.innerHTML = '❌';
+        barcodeStatus.style.color = '#dc3545';
+        barcodeStatus.title = message || 'Error en escaneo';
+        setTimeout(() => showBarcodeStatus('ready'), 3000);
+        break;
     }
-    if (searchResults) {
-      searchResults.style.display = 'none';
-      searchResults.innerHTML = '';
+  }
+  
+  function clearBarcodeInput() {
+    if (barcodeInput) {
+      barcodeInput.value = '';
     }
-    if (searchQuantity) {
-      searchQuantity.value = 1;
-    }
-    selectedResultIndex = -1;
-    selectedArticuloNombre = null;
-    // Volver a enfocar el campo de búsqueda
-    if (searchInput) {
-      searchInput.focus();
+  }
+  
+  function resetBarcodeQuantity() {
+    if (barcodeQuantity) {
+      barcodeQuantity.value = 1;
     }
   }
 
   // === FUNCIÓN PARA MOSTRAR NOTIFICACIÓN CON IMAGEN (TOAST) ===
-  function showItemNotification(nombreArticulo, cantidad, isIncrement = false) {
+  function showBarcodeNotification(nombreArticulo, cantidad, isIncrement = false) {
     // Obtener imagen del artículo
     const imagenUrl = obtenerPrimeraImagen(nombreArticulo);
     
@@ -1009,20 +1350,7 @@ function getTipoCliente() {
     }, 4000);
   }
 
-  // === EVENT DELEGATION PARA BOTONES DE ELIMINAR ===
-  itemsBody.addEventListener('click', function(e) {
-    // Verificar si se hizo clic en el botón de eliminar o su contenido
-    const removeBtn = e.target.closest('.remove-btn');
-    if (removeBtn) {
-      const row = removeBtn.closest('tr');
-      if (row) {
-        const idx = parseInt(row.getAttribute('data-idx'));
-        if (idx >= 0 && idx < items.length) {
-          removeItem(idx);
-        }
-      }
-    }
-  });
+addItemBtn.addEventListener('click', addNewItem);
 
   // === OPTIMIZACIÓN: EVENT DELEGATION PARA INPUTS ===
   itemsBody.addEventListener('input', function(e) {

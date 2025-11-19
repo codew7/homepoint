@@ -1547,9 +1547,7 @@
                     fechaFormatted: fechaPedido.toLocaleDateString('es-AR'),
                     cliente: pedido.cliente?.nombre || 'Sin nombre',
                     tipoCliente: tipoCliente,
-                    // Incluir createdby original y la entrega derivada usando el nuevo criterio
-                    createdby: pedido.createdby || pedido.createdBy || null,
-                    entrega: obtenerTipoEntrega(pedido),
+                    entrega: pedido.entrega || 'N/A',
                     medioPago: medioPago.toLowerCase(), // Normalizar a minúsculas
                     totalPedido: totalPedido,
                     gananciaPedido: gananciaPedido,
@@ -1951,23 +1949,6 @@
             return indicePeriodo;
         }
 
-        // Derivar el tipo de entrega a partir de `createdby`.
-        // Reglas:
-        // - createdby === 'admin' => 'Local'
-        // - createdby === 'web' => 'Envios'
-        // - campo ausente o cualquier otro valor => 'Local'
-        function obtenerTipoEntrega(pedido) {
-            try {
-                const cb = (pedido && (pedido.createdby || pedido.createdBy || pedido.creadoPor)) ? String(pedido.createdby || pedido.createdBy || pedido.creadoPor) : '';
-                const lower = cb.toLowerCase();
-                if (lower === 'web') return 'Envios';
-                // Tratar 'admin' y valores ausentes/otros como Local
-                return 'Local';
-            } catch (e) {
-                return 'Local';
-            }
-        }
-
         function mostrarNotificacion(mensaje, tipo = 'info') {
             // Crear elemento de notificación
             const notificacion = document.createElement('div');
@@ -2078,18 +2059,18 @@
 
         function aplicarFiltroEntrega(pedido) {
             if (filtroEntrega === 'todas') return true;
-
-            // Derivar la entrega a partir de `createdby` (nuevo criterio)
-            const entregaDerivada = obtenerTipoEntrega(pedido);
-
-            const filtro = (filtroEntrega || '').toString().toLowerCase();
-
-            if (filtro === 'local') {
-                return entregaDerivada === 'Local';
-            } else if (filtro === 'envios') {
-                return entregaDerivada === 'Envios';
+            
+            // Usar el campo 'entrega' de Firebase
+            const entrega = pedido.entrega || '';
+            
+            if (filtroEntrega === 'Local') {
+                // Filtrar pedidos con entrega = "Local"
+                return entrega === 'Local';
+            } else if (filtroEntrega === 'Envios') {
+                // Filtrar pedidos de envío (campo entrega = "Envios")
+                return entrega === 'Envios';
             }
-
+            
             return false;
         }
 
