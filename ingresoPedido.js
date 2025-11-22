@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fetch('https://api.bluelytics.com.ar/v2/latest')
       .then(response => response.json())
       .then(data => {
-        cotizacionActual = data.blue.value_sell || data.blue.sell;
+        cotizacionActual = data.blue.value_avg || data.blue.avg;
         if (cotizacionActual) {
           cotizacionValorElement.textContent = `$${cotizacionActual.toLocaleString('es-AR')}`;
           cotizacionValorElement.style.color = '#28a745';
@@ -381,7 +381,7 @@ function getTipoCliente() {
       <td><input type="text" value="${item.codigo || ''}" class="codigo" maxlength="20" style="width:80px" readonly></td>
       <td><div class="nombre-display" style="padding:8px;min-width:220px;">${item.nombre || ''}</div></td>
       <td><input type="number" value="${item.cantidad}" class="cantidad" min="1" style="width:60px"></td>
-      <td><input type="text" value="${item.valorU}" class="valorU" min="0" step="1" style="width:80px"></td>
+        <td><input type="number" value="${item.valorU}" class="valorU" min="0" step="1" style="width:80px"></td>
       <td class="valorTotal">${(item.cantidad * item.valorU).toLocaleString('es-AR', {maximumFractionDigits:0})}</td>
       <td><button type="button" class="remove-btn" data-idx="${idx}" style="background:#d32f2f;color:#fff;border:none;border-radius:4px;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Eliminar"><span style="font-weight:bold;font-size:20px;line-height:1;">&times;</span></button></td>
     `;
@@ -1028,42 +1028,56 @@ function getTipoCliente() {
   itemsBody.addEventListener('input', function(e) {
     const row = e.target.closest('tr');
     if (!row) return;
-    
+
     const idx = parseInt(row.getAttribute('data-idx'));
     if (idx < 0 || idx >= items.length) return;
-    
+
     const target = e.target;
     let needsRecalculation = false;
-    
+
     // Actualizar solo el campo específico que cambió
     if (target.classList.contains('codigo')) {
       items[idx].codigo = target.value;
     } else if (target.classList.contains('cantidad')) {
-      const newCantidad = parseInt(target.value) || 1;
+      // Sanitizar: permitir sólo dígitos
+      target.value = (target.value + '').replace(/\D/g, '');
+      if (target.value === '') target.value = '1';
+      const newCantidad = Math.max(1, parseInt(target.value, 10) || 1);
+      // Reflejar valor normalizado en el input
+      if (String(newCantidad) !== target.value) target.value = String(newCantidad);
       if (items[idx].cantidad !== newCantidad) {
         items[idx].cantidad = newCantidad;
         needsRecalculation = true;
-        
+
         // Actualizar valorG si hay artículo válido
         if (items[idx].nombre && articulosPorNombre[items[idx].nombre]) {
           items[idx].valorG = (items[idx].valorU - items[idx].valorC) * items[idx].cantidad;
         }
-        
+
         // Actualizar valor total de la fila
         row.querySelector('.valorTotal').textContent = (items[idx].cantidad * items[idx].valorU).toLocaleString('es-AR', {maximumFractionDigits:0});
       }
     } else if (target.classList.contains('valorU')) {
-      const valorUraw = target.value.replace(/,/g, '');
-      const newValorU = parseInt(valorUraw) || 0;
+      // Sanitizar: permitir sólo dígitos (sin separadores ni símbolos)
+      target.value = (target.value + '').replace(/\D/g, '');
+      const newValorU = parseInt(target.value, 10) || 0;
+      // Reflejar valor normalizado en el input (vacío si 0 para mantener UX)
+      if (newValorU === 0) {
+        // mantener '0' visible o vacío según preferencia; dejamos '0' para consistencia
+        target.value = '0';
+      } else if (String(newValorU) !== target.value) {
+        target.value = String(newValorU);
+      }
+
       if (items[idx].valorU !== newValorU) {
         items[idx].valorU = newValorU;
         needsRecalculation = true;
-        
+
         // Actualizar valorG si hay artículo válido
         if (items[idx].nombre && articulosPorNombre[items[idx].nombre]) {
           items[idx].valorG = (items[idx].valorU - items[idx].valorC) * items[idx].cantidad;
         }
-        
+
         // Actualizar valor total de la fila
         row.querySelector('.valorTotal').textContent = (items[idx].cantidad * items[idx].valorU).toLocaleString('es-AR', {maximumFractionDigits:0});
       }
@@ -1651,7 +1665,7 @@ function getTipoCliente() {
       fetch('https://api.bluelytics.com.ar/v2/latest')
         .then(r => r.json())
         .then(d => {
-          let cotizacionCierre = (d.blue.value_sell || d.blue.sell) + 10;
+          let cotizacionCierre = (d.blue.value_sell || d.blue.sell);
           const costos = calcularCostos();
           // Determinar tipo de entrega
           let entrega = 'Local';
@@ -2362,6 +2376,47 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     };
   }
 
+  // --- ACTUALIZACIÓN DE STOCK EN TIEMPO REAL ---
+  /**
+   * Actualiza el stock de un artículo usando transacciones de Firebase para garantizar atomicidad.
+   * @param {string} codigo - Código del artículo
+   * @param {string} nombre - Nombre del artículo
+   * @param {number} cantidad - Cantidad a modificar
+   * @param {string} tipo - Tipo de movimiento: 'ENTRADA', 'SALIDA', 'RETIRO'
+   */
+  async function actualizarStock(codigo, nombre, cantidad, tipo) {
+    if (!codigo || !nombre || !cantidad) return;
+    
+    const stockRef = db.ref('stock/' + codigo);
+    
+    try {
+      await stockRef.transaction(function(currentData) {
+        let stockActual = 0;
+        
+        if (currentData !== null && currentData.stockActual !== undefined) {
+          stockActual = currentData.stockActual;
+        }
+        
+        // Calcular nuevo stock según tipo de movimiento
+        if (tipo === 'ENTRADA') {
+          stockActual += cantidad;
+        } else if (tipo === 'SALIDA' || tipo === 'RETIRO') {
+          stockActual -= cantidad;
+        }
+        
+        // Stock mínimo es 0
+        stockActual = Math.max(0, stockActual);
+        
+        return {
+          nombre: nombre,
+          stockActual: stockActual
+        };
+      });
+    } catch (error) {
+      console.error('Error actualizando stock:', error, { codigo, nombre, cantidad, tipo });
+    }
+  }
+
   // --- REGISTRO DE MOVIMIENTOS DE INVENTARIO ---
   function registrarMovimientosInventario(items, cotizacionCierre, pedidoId) {
     if (!Array.isArray(items) || !cotizacionCierre || !pedidoId) return;
@@ -2393,6 +2448,10 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
             pedidoId: pedidoId
           };
           db.ref('movimientos/' + id).set(movimiento)
+            .then(() => {
+              // Actualizar stock después de registrar el movimiento
+              actualizarStock(item.codigo, item.nombre, parseInt(item.cantidad, 10) || 0, 'SALIDA');
+            })
             .catch(err => {
               console.error('Error registrando movimiento de inventario:', err, movimiento);
             });
