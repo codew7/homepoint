@@ -1749,6 +1749,126 @@
 
   // (variables arriba)
 
+  // Cache de contadores de clientes (email -> cantidad)
+  const contadoresCache = new Map();
+
+  // Helper para convertir email en key válida de Firebase
+  function encodeEmail(email) {
+    if (!email) return '';
+    return email.replace(/\./g, '_dot_').replace(/@/g, '_at_');
+  }
+
+  // Función para actualizar estadísticas del cliente en Firebase
+  async function actualizarEstadisticasCliente(pedidoId, email, status) {
+    if (!email || status !== 'DESPACHADO/ENTREGADO') return;
+    
+    const statsRef = db.ref(`customerStats/${encodeEmail(email)}`);
+    
+    try {
+      await statsRef.transaction((current) => {
+        if (current === null) {
+          return {
+            totalEntregados: 1,
+            ultimoPedido: Date.now(),
+            pedidosIds: [pedidoId]
+          };
+        }
+        
+        // Solo incrementar si no existe ya este pedido
+        const pedidosIds = current.pedidosIds || [];
+        if (!pedidosIds.includes(pedidoId)) {
+          return {
+            totalEntregados: (current.totalEntregados || 0) + 1,
+            ultimoPedido: Date.now(),
+            pedidosIds: [...pedidosIds, pedidoId]
+          };
+        }
+        return current;
+      });
+      
+      // Actualizar cache
+      const snapshot = await statsRef.child('totalEntregados').once('value');
+      contadoresCache.set(email.toLowerCase(), snapshot.val() || 0);
+    } catch (error) {
+      console.error('Error al actualizar estadísticas del cliente:', error);
+    }
+  }
+
+  // Función para obtener contador de pedidos entregados (INSTANTÁNEO)
+  async function getContadorEntregados(email) {
+    if (!email) return 0;
+    
+    const emailLower = email.toLowerCase();
+    
+    // Si está en cache, retornar inmediatamente
+    if (contadoresCache.has(emailLower)) {
+      return contadoresCache.get(emailLower);
+    }
+    
+    // Si no está en cache, consultar Firebase
+    try {
+      const snapshot = await db.ref(`customerStats/${encodeEmail(email)}/totalEntregados`).once('value');
+      const cantidad = snapshot.val() || 0;
+      contadoresCache.set(emailLower, cantidad);
+      return cantidad;
+    } catch (error) {
+      console.error('Error al obtener contador:', error);
+      return 0;
+    }
+  }
+
+  // === SISTEMA DE CACHE LOCAL (LocalStorage) ===
+  function guardarEnCache() {
+    try {
+      const datos = {
+        pedidos: Array.from(pedidosMap.values()),
+        allPedidos: Array.from(allPedidosMap.values()),
+        timestamp: Date.now()
+      };
+      localStorage.setItem('pedidosCache', JSON.stringify(datos));
+      console.log('💾 Cache guardado en localStorage');
+    } catch (e) {
+      console.warn('⚠️ Error al guardar cache:', e);
+      // Si localStorage está lleno, limpiar cache viejo
+      try {
+        localStorage.removeItem('pedidosCache');
+      } catch (err) {
+        console.error('❌ No se pudo limpiar cache');
+      }
+    }
+  }
+
+  function cargarDesdeCache() {
+    try {
+      const cache = localStorage.getItem('pedidosCache');
+      if (!cache) return false;
+      
+      const datos = JSON.parse(cache);
+      const edadCache = Date.now() - datos.timestamp;
+      
+      // Si el cache tiene menos de 5 minutos, usarlo
+      if (edadCache < 5 * 60 * 1000) {
+        datos.pedidos.forEach(p => {
+          pedidosMap.set(p.id, p);
+        });
+        datos.allPedidos.forEach(p => {
+          allPedidosMap.set(p.id, p);
+        });
+        updateArraysFromMaps();
+        renderTabla();
+        console.log('📂 Datos cargados desde cache local');
+        return true;
+      } else {
+        console.log('🕐 Cache expirado (más de 5 minutos)');
+        localStorage.removeItem('pedidosCache');
+      }
+    } catch (e) {
+      console.warn('⚠️ Error al cargar cache:', e);
+      localStorage.removeItem('pedidosCache');
+    }
+    return false;
+  }
+
   function configurarEventListeners() {
     renderBotonesFiltro();
     agregarBotonDescargarTodo();
@@ -1789,11 +1909,20 @@
     descargandoTodo = false;
     pedidosMap.clear();
     allPedidosMap.clear();
+    
+    // Intentar cargar desde cache local primero
+    const cargadoDesdeCache = cargarDesdeCache();
+    if (cargadoDesdeCache) {
+      console.log('✅ Cargando desde cache, pero suscribiendo a cambios nuevos...');
+    }
 
     const ahora = Date.now();
-    const hace30dias = ahora - 30 * 24 * 60 * 60 * 1000;
-    // Cargar todos los pedidos de los últimos 30 días
-    listenerPedidos = db.ref('pedidos').orderByChild('timestamp').startAt(hace30dias);
+    const hace9dias = ahora - 9 * 24 * 60 * 60 * 1000;
+    // Cargar pedidos de los últimos 9 días, limitado a 150 pedidos más recientes
+    listenerPedidos = db.ref('pedidos')
+      .orderByChild('timestamp')
+      .startAt(hace9dias)
+      .limitToLast(150);
 
     childAddedHandler = (snap) => {
       const p = snap.val() || {};
@@ -1802,6 +1931,7 @@
       else pedidosMap.delete(p.id);
       allPedidosMap.set(p.id, p);
       updateArraysFromMaps();
+      guardarEnCache(); // Actualizar cache
       debouncedPoblarNotas();
       debouncedRenderTabla();
     };
@@ -1812,6 +1942,13 @@
       else pedidosMap.set(p.id, p);
       allPedidosMap.set(p.id, p);
       updateArraysFromMaps();
+      
+      // Actualizar estadísticas si se marcó como entregado
+      if (p.status === 'DESPACHADO/ENTREGADO' && p.cliente?.email) {
+        actualizarEstadisticasCliente(p.id, p.cliente.email, p.status);
+      }
+      
+      guardarEnCache(); // Actualizar cache
       debouncedPoblarNotas();
       debouncedRenderTabla();
     };
@@ -1820,6 +1957,7 @@
       pedidosMap.delete(id);
       allPedidosMap.delete(id);
       updateArraysFromMaps();
+      guardarEnCache(); // Actualizar cache
       debouncedRenderTabla();
     };
 
@@ -1828,8 +1966,8 @@
     listenerPedidos.on('child_removed', childRemovedHandler);
   }
 
-  function cargarPedidosTodos() {
-    // Para "Descargar Todo" hacer una descarga única (once) en vez de mantener un listener activo
+  async function cargarPedidosTodos() {
+    // Implementación con paginación para reducir consumo de Firebase
     if (listenerPedidos) {
       if (childAddedHandler) listenerPedidos.off('child_added', childAddedHandler);
       if (childChangedHandler) listenerPedidos.off('child_changed', childChangedHandler);
@@ -1840,19 +1978,61 @@
     pedidosMap.clear();
     allPedidosMap.clear();
 
-    db.ref('pedidos').once('value').then(snap => {
-      snap.forEach(child => {
-        const p = child.val() || {};
-        p.id = child.key;
-        allPedidosMap.set(p.id, p);
-        if (p.status !== 'CANCELADO') pedidosMap.set(p.id, p);
-      });
-      updateArraysFromMaps();
+    console.log('📥 Descargando todos los pedidos en lotes...');
+    
+    const BATCH_SIZE = 500;
+    let lastKey = null;
+    let hasMore = true;
+    let totalCargados = 0;
+
+    try {
+      while (hasMore) {
+        let query = db.ref('pedidos')
+          .orderByKey()
+          .limitToFirst(BATCH_SIZE + 1);
+        
+        if (lastKey) {
+          query = query.startAt(lastKey);
+        }
+        
+        const snap = await query.once('value');
+        const pedidos = [];
+        
+        snap.forEach(child => {
+          if (child.key !== lastKey) {
+            const p = child.val() || {};
+            p.id = child.key;
+            pedidos.push(p);
+          }
+        });
+        
+        if (pedidos.length <= BATCH_SIZE) {
+          hasMore = false;
+        } else {
+          pedidos.pop(); // Remover el extra usado para detectar más páginas
+          lastKey = pedidos[pedidos.length - 1].id;
+        }
+        
+        // Procesar lote actual
+        pedidos.forEach(p => {
+          allPedidosMap.set(p.id, p);
+          if (p.status !== 'CANCELADO') pedidosMap.set(p.id, p);
+        });
+        
+        totalCargados += pedidos.length;
+        console.log(`📦 Cargados ${totalCargados} pedidos...`);
+        
+        // Actualizar UI cada lote
+        updateArraysFromMaps();
+        if (typeof renderTabla === 'function') renderTabla();
+      }
+      
+      console.log(`✅ Descarga completa: ${totalCargados} pedidos totales`);
       debouncedPoblarNotas();
-      if (typeof renderTabla === 'function') renderTabla();
-    }).catch(err => {
-      console.error('Error al descargar todos los pedidos', err);
-    });
+      guardarEnCache(); // Guardar en localStorage
+    } catch (err) {
+      console.error('❌ Error al descargar todos los pedidos:', err);
+    }
   }
 
   // Pausar y reanudar listeners cuando la pestaña cambia de visibilidad
@@ -1932,13 +2112,26 @@
     }
   }
 
-  // Función para contar pedidos entregados por email
+  // Función para contar pedidos entregados por email (con cache)
   function contarPedidosEntregados(email) {
     if (!email) return 0;
-    return allPedidos.filter(p => 
-      p.cliente?.email?.toLowerCase() === email.toLowerCase() && 
+    
+    const emailLower = email.toLowerCase();
+    
+    // Si está en cache, usar ese valor
+    if (contadoresCache.has(emailLower)) {
+      return contadoresCache.get(emailLower);
+    }
+    
+    // Fallback: contar desde allPedidos (solo si no hay cache)
+    const cantidad = allPedidos.filter(p => 
+      p.cliente?.email?.toLowerCase() === emailLower && 
       p.status === 'DESPACHADO/ENTREGADO'
     ).length;
+    
+    // Guardar en cache para próximas consultas
+    contadoresCache.set(emailLower, cantidad);
+    return cantidad;
   }
 
   // Función para verificar si un cliente es recurrente (tiene al menos 1 pedido entregado)
@@ -1946,6 +2139,77 @@
     if (!email) return false;
     return contarPedidosEntregados(email) > 0;
   }
+
+  // ============================================
+  // SCRIPT DE MIGRACIÓN ÚNICA
+  // Ejecutar UNA SOLA VEZ para poblar customerStats
+  // ============================================
+  async function migrarEstadisticasClientes() {
+    console.log('🔄 Iniciando migración de estadísticas de clientes...');
+    
+    const snapshot = await db.ref('pedidos')
+      .orderByChild('status')
+      .equalTo('DESPACHADO/ENTREGADO')
+      .once('value');
+    
+    const stats = {};
+    let procesados = 0;
+    
+    snapshot.forEach(child => {
+      const p = child.val();
+      const email = p.cliente?.email;
+      
+      if (email) {
+        const key = encodeEmail(email);
+        if (!stats[key]) {
+          stats[key] = {
+            totalEntregados: 0,
+            pedidosIds: [],
+            emailOriginal: email
+          };
+        }
+        stats[key].totalEntregados++;
+        stats[key].pedidosIds.push(child.key);
+        procesados++;
+      }
+    });
+    
+    console.log(`📊 Procesados ${procesados} pedidos entregados`);
+    console.log(`👥 ${Object.keys(stats).length} clientes únicos encontrados`);
+    
+    // Guardar en Firebase
+    let guardados = 0;
+    for (const [emailKey, data] of Object.entries(stats)) {
+      try {
+        await db.ref(`customerStats/${emailKey}`).set({
+          totalEntregados: data.totalEntregados,
+          pedidosIds: data.pedidosIds,
+          ultimoPedido: Date.now(),
+          emailOriginal: data.emailOriginal
+        });
+        
+        // Actualizar cache
+        contadoresCache.set(data.emailOriginal.toLowerCase(), data.totalEntregados);
+        guardados++;
+        
+        if (guardados % 10 === 0) {
+          console.log(`💾 Guardados ${guardados}/${Object.keys(stats).length}...`);
+        }
+      } catch (error) {
+        console.error(`❌ Error al guardar stats de ${emailKey}:`, error);
+      }
+    }
+    
+    console.log(`✅ Migración completa: ${guardados} clientes procesados`);
+    console.log('🔄 Recargando tabla con nuevos contadores...');
+    renderTabla();
+    
+    alert(`✅ Migración completada:\n${procesados} pedidos procesados\n${guardados} clientes actualizados`);
+  }
+
+  // Para ejecutar la migración, descomentar la siguiente línea y recargar la página:
+  // Luego de ejecutar UNA VEZ, volver a comentar esta línea
+  migrarEstadisticasClientes();
 
   // Toggle del filtro de clientes recurrentes
   function toggleFiltroClientesRecurrentes() {
@@ -2407,15 +2671,24 @@
         // Agregar badge con contador de pedidos entregados DEBAJO del nombre
         const emailCliente = p.cliente?.email;
         if (emailCliente) {
-          const cantidadEntregados = contarPedidosEntregados(emailCliente);
-          if (cantidadEntregados > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'order-count-badge';
-            badge.innerHTML = `<i class="bi bi-box-seam-fill"></i>${cantidadEntregados}`;
-            badge.title = `${cantidadEntregados} pedido(s) entregado(s)`;
-            badge.style.marginTop = '5px';
-            nombreContainer.appendChild(badge);
-          }
+          // Crear contenedor para el badge (se llenará después)
+          const badgeContainer = document.createElement('span');
+          badgeContainer.id = `badge-${p.id}`;
+          badgeContainer.style.marginTop = '5px';
+          nombreContainer.appendChild(badgeContainer);
+          
+          // Cargar contador de forma asíncrona
+          getContadorEntregados(emailCliente).then(cantidadEntregados => {
+            if (cantidadEntregados > 0) {
+              const badge = document.createElement('span');
+              badge.className = 'order-count-badge';
+              badge.innerHTML = `<i class="bi bi-box-seam-fill"></i>${cantidadEntregados}`;
+              badge.title = `${cantidadEntregados} pedido(s) entregado(s)`;
+              badgeContainer.appendChild(badge);
+            }
+          }).catch(err => {
+            console.error('Error al cargar contador:', err);
+          });
         }
         
         nombreCell.appendChild(nombreContainer);
@@ -2528,21 +2801,27 @@
           ? `Actualización: ${notaFecha.toLocaleDateString('es-AR')} ${notaFecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
           : '';
 
-        function actualizarNota(nuevaNota) {
-          const ahora = Date.now();
-          db.ref(`pedidos/${p.id}`).update({ nota: nuevaNota, notaFecha: ahora })
-            .then(() => {
-              const fechaHora = new Date(ahora);
-              fechaLabel.textContent = (nuevaNota && nuevaNota.trim() !== '')
-                ? `Actualización: ${fechaHora.toLocaleDateString('es-AR')} ${fechaHora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
-                : '';
-            })
-            .catch(() => console.error('Error al guardar la nota'));
+        // Debounce para actualizar nota (esperar 1 segundo antes de guardar)
+        let timeoutNota = null;
+        function actualizarNotaDebounced(nuevaNota) {
+          if (timeoutNota) clearTimeout(timeoutNota);
+          
+          timeoutNota = setTimeout(() => {
+            const ahora = Date.now();
+            db.ref(`pedidos/${p.id}`).update({ nota: nuevaNota, notaFecha: ahora })
+              .then(() => {
+                const fechaHora = new Date(ahora);
+                fechaLabel.textContent = (nuevaNota && nuevaNota.trim() !== '')
+                  ? `Actualización: ${fechaHora.toLocaleDateString('es-AR')} ${fechaHora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
+                  : '';
+              })
+              .catch(() => console.error('Error al guardar la nota'));
+          }, 1000);
         }
 
-        // Cambio inmediato al seleccionar
+        // Cambio con debounce al seleccionar
         notaSelect.addEventListener('change', function() {
-          actualizarNota(this.value);
+          actualizarNotaDebounced(this.value);
         });
 
         notaCont.appendChild(notaSelect);
