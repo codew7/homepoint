@@ -80,15 +80,15 @@
       flex: 1;
     }
 
-    .pedido-id {
+    .pedido-nombre {
       font-weight: 600;
-      color: #4CAF50;
-      font-size: 14px;
+      color: #2c3e50;
+      font-size: 16px;
     }
 
-    .pedido-nombre {
-      color: #555;
-      font-size: 14px;
+    .pedido-id {
+      color: #999;
+      font-size: 12px;
       margin-top: 4px;
     }
 
@@ -156,19 +156,18 @@
       console.log('🔍 Iniciando carga de pedidos...');
       const pedidosRef = firebase.database().ref('pedidos');
       
-      // Optimización: solo pedidos DESPACHADO/ENTREGADO (reducir descarga)
-      pedidosRef.orderByChild('status').equalTo('DESPACHADO/ENTREGADO').once('value')
+      // Optimización: filtrar por createdBy='web' para descargar menos datos
+      pedidosRef.orderByChild('createdBy').equalTo('web').once('value')
         .then(snapshot => {
           console.log('📦 Snapshot recibido, procesando...');
           pedidosData = [];
           
           snapshot.forEach(child => {
             const pedido = child.val();
+            const status = (pedido.status || '').toUpperCase();
             
-            // Filtrar solo los creados desde web
-            const createdBy = (pedido.createdBy || pedido.createdby || pedido.createdBt || '').toString().toLowerCase();
-            
-            if (createdBy === 'web') {
+            // Filtrar solo DESPACHADO/ENTREGADO
+            if (status === 'DESPACHADO/ENTREGADO') {
               pedidosData.push({
                 id: child.key,
                 nombre: pedido.cliente?.nombre || 'Sin nombre',
@@ -217,8 +216,8 @@
         
         li.innerHTML = `
           <div class="pedido-info">
-            <div class="pedido-id">#${pedido.id}</div>
             <div class="pedido-nombre">${pedido.nombre}</div>
+            <div class="pedido-id">#${pedido.id}</div>
           </div>
           <div class="pedido-fecha">${fechaFormateada}</div>
         `;
