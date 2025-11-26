@@ -300,7 +300,7 @@
                         <th>Subtotal</th>
                         <th>Total Final</th>
                         <th>Alias</th>
-                        <th>Pago</th>
+                        <th>Entregado</th>
                         <th>Verificado</th>
                     </tr>
                 </thead>
@@ -310,7 +310,7 @@
         </div>
 
         <div id="noData" class="no-data" style="display: none;">
-            No se encontraron pedidos con transferencias despachados/entregados
+            No se encontraron pedidos con alias en los pagos
         </div>
     </div>
 
@@ -411,9 +411,6 @@
                     const alias = (pedido.pagos?.alias || '').toUpperCase();
                     if (alias === 'HOME.POINT' || alias === 'HOME.POINT.ENVIOS') return false;
                 }
-                // Verificar método de pago
-                const medioPago = pedido.pagos?.medioPago?.toLowerCase();
-                if (medioPago !== 'transferencia') return false;
                 // Filtrar por fecha
                 if (fechaDesde && new Date(pedido.fecha) < new Date(fechaDesde)) return false;
                 if (fechaHasta && new Date(pedido.fecha) > new Date(fechaHasta)) return false;
@@ -425,7 +422,7 @@
                     const totalFinalFormateado = formatearMoneda(pedido.pagos?.totalFinal || 0);
                     if (!totalFinal.includes(filtroTotalFinal) && !totalFinalFormateado.includes(filtroTotalFinal)) return false;
                 }
-                return true; // Mostrar todos los registros sin importar status
+                return true; // Mostrar todos los registros con alias, sin importar status
             });
             renderizarTabla();
         }
@@ -475,7 +472,7 @@
             const checkedItems = getCheckedItems();
             const isChecked = checkedItems[pedido.id] || false;
             // Determinar si el pedido está pago
-            const pagoCol = (pedido.status && pedido.status.toUpperCase() === 'DESPACHADO/ENTREGADO') ? 'PAGO' : '';
+            const pagoCol = (pedido.status && pedido.status.toUpperCase() === 'DESPACHADO/ENTREGADO') ? 'SI' : '';
             return `
                 <tr>
                     <td class="id-column">${pedido.id}</td>
@@ -532,9 +529,9 @@
         // Función para filtrar pedidos
         function filtrarPedidos(pedidos) {
             return Object.values(pedidos).filter(pedido => {
-                // Verificar método de pago
-                const medioPago = pedido.pagos?.medioPago?.toLowerCase();
-                return medioPago === 'transferencia'; // Mostrar todos los registros de transferencia
+                // Verificar que tenga algún valor en el campo alias
+                const alias = pedido.pagos?.alias;
+                return alias && alias.trim().length > 0; // Mostrar todos los registros que tengan alias
             });
         }
 
