@@ -1916,20 +1916,19 @@
       console.log('✅ Cargando desde cache, pero suscribiendo a cambios nuevos...');
     }
 
-    const ahora = Date.now();
-    const hace14dias = ahora - 10 * 24 * 60 * 60 * 1000;
-    // Cargar pedidos de los últimos 10 días, limitado a 200 pedidos más recientes
+    // Cargar todos los pedidos con createdby='web' (filtro en Firebase)
     listenerPedidos = db.ref('pedidos')
-      .orderByChild('timestamp')
-      .startAt(hace14dias)
-      .limitToLast(200);
+      .orderByChild('createdby')
+      .equalTo('web');
 
     childAddedHandler = (snap) => {
       const p = snap.val() || {};
       p.id = snap.key;
-      if (p.status !== 'CANCELADO') pedidosMap.set(p.id, p);
-      else pedidosMap.delete(p.id);
-      allPedidosMap.set(p.id, p);
+      // Filtrar solo pedidos con status ABIERTO o CERRADO
+      if (p.status === 'ABIERTO' || p.status === 'CERRADO') {
+        pedidosMap.set(p.id, p);
+        allPedidosMap.set(p.id, p);
+      }
       updateArraysFromMaps();
       guardarEnCache(); // Actualizar cache
       debouncedPoblarNotas();
@@ -1938,9 +1937,15 @@
     childChangedHandler = (snap) => {
       const p = snap.val() || {};
       p.id = snap.key;
-      if (p.status === 'CANCELADO') pedidosMap.delete(p.id);
-      else pedidosMap.set(p.id, p);
-      allPedidosMap.set(p.id, p);
+      // Solo mantener pedidos con status ABIERTO o CERRADO
+      if (p.status === 'ABIERTO' || p.status === 'CERRADO') {
+        pedidosMap.set(p.id, p);
+        allPedidosMap.set(p.id, p);
+      } else {
+        // Si el status cambió a otro valor, remover del mapa
+        pedidosMap.delete(p.id);
+        allPedidosMap.delete(p.id);
+      }
       updateArraysFromMaps();
       
       // Actualizar estadísticas si se marcó como entregado
@@ -1967,7 +1972,7 @@
   }
 
   async function cargarPedidosTodos() {
-    // Implementación con paginación para reducir consumo de Firebase
+    // Descargar todos los pedidos con createdby='web' y status ABIERTO o CERRADO
     if (listenerPedidos) {
       if (childAddedHandler) listenerPedidos.off('child_added', childAddedHandler);
       if (childChangedHandler) listenerPedidos.off('child_changed', childChangedHandler);
@@ -1978,56 +1983,34 @@
     pedidosMap.clear();
     allPedidosMap.clear();
 
-    console.log('📥 Descargando todos los pedidos en lotes...');
+    console.log('📥 Descargando todos los pedidos web con status ABIERTO o CERRADO...');
     
-    const BATCH_SIZE = 500;
-    let lastKey = null;
-    let hasMore = true;
-    let totalCargados = 0;
-
     try {
-      while (hasMore) {
-        let query = db.ref('pedidos')
-          .orderByKey()
-          .limitToFirst(BATCH_SIZE + 1);
-        
-        if (lastKey) {
-          query = query.startAt(lastKey);
-        }
-        
-        const snap = await query.once('value');
-        const pedidos = [];
-        
-        snap.forEach(child => {
-          if (child.key !== lastKey) {
-            const p = child.val() || {};
-            p.id = child.key;
-            pedidos.push(p);
-          }
-        });
-        
-        if (pedidos.length <= BATCH_SIZE) {
-          hasMore = false;
-        } else {
-          pedidos.pop(); // Remover el extra usado para detectar más páginas
-          lastKey = pedidos[pedidos.length - 1].id;
-        }
-        
-        // Procesar lote actual
-        pedidos.forEach(p => {
-          allPedidosMap.set(p.id, p);
-          if (p.status !== 'CANCELADO') pedidosMap.set(p.id, p);
-        });
-        
-        totalCargados += pedidos.length;
-        console.log(`📦 Cargados ${totalCargados} pedidos...`);
-        
-        // Actualizar UI cada lote
-        updateArraysFromMaps();
-        if (typeof renderTabla === 'function') renderTabla();
-      }
+      // Filtrar en Firebase por createdby='web'
+      const snap = await db.ref('pedidos')
+        .orderByChild('createdby')
+        .equalTo('web')
+        .once('value');
       
-      console.log(`✅ Descarga completa: ${totalCargados} pedidos totales`);
+      let totalCargados = 0;
+      
+      snap.forEach(child => {
+        const p = child.val() || {};
+        p.id = child.key;
+        
+        // Filtrar por status ABIERTO o CERRADO
+        if (p.status === 'ABIERTO' || p.status === 'CERRADO') {
+          allPedidosMap.set(p.id, p);
+          pedidosMap.set(p.id, p);
+          totalCargados++;
+        }
+      });
+      
+      console.log(`✅ Descarga completa: ${totalCargados} pedidos web con status ABIERTO/CERRADO`);
+      
+      // Actualizar UI
+      updateArraysFromMaps();
+      if (typeof renderTabla === 'function') renderTabla();
       debouncedPoblarNotas();
       guardarEnCache(); // Guardar en localStorage
     } catch (err) {
