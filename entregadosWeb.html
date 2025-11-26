@@ -152,19 +152,22 @@
     let pedidosData = [];
 
     function cargarPedidos() {
+      console.log('🔍 Iniciando carga de pedidos...');
       const pedidosRef = firebase.database().ref('pedidos');
       
-      // Query optimizada: solo pedidos con createdBy = web
-      pedidosRef.orderByChild('createdBy').equalTo('web').once('value')
+      // Optimización: solo pedidos DESPACHADO/ENTREGADO (reducir descarga)
+      pedidosRef.orderByChild('status').equalTo('DESPACHADO/ENTREGADO').once('value')
         .then(snapshot => {
+          console.log('📦 Snapshot recibido, procesando...');
           pedidosData = [];
           
           snapshot.forEach(child => {
             const pedido = child.val();
-            const status = pedido.status?.toUpperCase() || '';
             
-            // Filtrar solo ENTREGADO o DESPACHADO
-            if (status === 'DESPACHADO/ENTREGADO') {
+            // Filtrar solo los creados desde web
+            const createdBy = (pedido.createdBy || pedido.createdby || pedido.createdBt || '').toString().toLowerCase();
+            
+            if (createdBy === 'web') {
               pedidosData.push({
                 id: child.key,
                 nombre: pedido.cliente || 'Sin nombre',
@@ -174,6 +177,8 @@
             }
           });
 
+          console.log(`✅ Pedidos encontrados: ${pedidosData.length}`);
+          
           // Ordenar por fecha más reciente
           pedidosData.sort((a, b) => b.timestamp - a.timestamp);
           
@@ -181,7 +186,7 @@
           mostrarPedidos(pedidosData);
         })
         .catch(error => {
-          console.error('Error al cargar pedidos:', error);
+          console.error('❌ Error al cargar pedidos:', error);
           document.getElementById('loading').innerHTML = 'Error al cargar pedidos';
         });
     }
