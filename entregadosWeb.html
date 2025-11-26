@@ -156,18 +156,19 @@
       console.log('🔍 Iniciando carga de pedidos...');
       const pedidosRef = firebase.database().ref('pedidos');
       
-      // Optimización: filtrar por createdBy='web' para descargar menos datos
-      pedidosRef.orderByChild('createdBy').equalTo('web').once('value')
+      // Optimización: filtrar por status (campo indexado en Firebase)
+      pedidosRef.orderByChild('status').equalTo('DESPACHADO/ENTREGADO').once('value')
         .then(snapshot => {
           console.log('📦 Snapshot recibido, procesando...');
           pedidosData = [];
           
           snapshot.forEach(child => {
             const pedido = child.val();
-            const status = (pedido.status || '').toUpperCase();
             
-            // Filtrar solo DESPACHADO/ENTREGADO
-            if (status === 'DESPACHADO/ENTREGADO') {
+            // Filtrar solo los creados desde web
+            const createdBy = (pedido.createdBy || pedido.createdby || pedido.createdBt || '').toString().toLowerCase();
+            
+            if (createdBy === 'web') {
               pedidosData.push({
                 id: child.key,
                 nombre: pedido.cliente?.nombre || 'Sin nombre',

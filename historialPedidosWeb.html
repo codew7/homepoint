@@ -1917,12 +1917,12 @@
     }
 
     const ahora = Date.now();
-    const hace14dias = ahora - 14 * 24 * 60 * 60 * 1000;
-    // Cargar pedidos de los últimos 14 días, limitado a 150 pedidos más recientes
+    const hace14dias = ahora - 10 * 24 * 60 * 60 * 1000;
+    // Cargar pedidos de los últimos 10 días, limitado a 200 pedidos más recientes
     listenerPedidos = db.ref('pedidos')
       .orderByChild('timestamp')
       .startAt(hace14dias)
-      .limitToLast(150);
+      .limitToLast(200);
 
     childAddedHandler = (snap) => {
       const p = snap.val() || {};
@@ -2317,7 +2317,10 @@
     }
     
     // Filtrar pedidos que NO tengan CREATEDBY: 'admin'
-    pedidosFiltrados = pedidosFiltrados.filter(p => p.createdby !== 'admin');
+    pedidosFiltrados = pedidosFiltrados.filter(p => {
+      const createdBy = (p.createdBy || p.createdby || p.createdBt || '').toString().toLowerCase();
+      return createdBy !== 'admin';
+    });
     
     // Calcular estadísticas
     let abiertos = 0;
@@ -2507,7 +2510,8 @@
     pedidos
       .filter(p => {
         // Filtrar pedidos que NO tengan CREATEDBY: 'admin'
-        if (p.createdby === 'admin') return false;
+        const createdBy = (p.createdBy || p.createdby || p.createdBt || '').toString().toLowerCase();
+        if (createdBy === 'admin') return false;
         if (!statusSel) return true;
         let estado = 'ABIERTO';
         if (p.status === 'DESPACHADO/ENTREGADO') {
