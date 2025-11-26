@@ -504,10 +504,21 @@
                 return;
             }
 
-            // Ordenar por fecha (más nuevos primero)
+            // Ordenar: primero fechas vacías, luego más recientes a más antiguos
             filteredData.sort((a, b) => {
-                const fechaA = new Date(a.fecha || 0);
-                const fechaB = new Date(b.fecha || 0);
+                const fechaA = a.fecha && a.fecha.trim() !== '' ? new Date(a.fecha) : null;
+                const fechaB = b.fecha && b.fecha.trim() !== '' ? new Date(b.fecha) : null;
+                
+                // Si ambas fechas son nulas/vacías, mantener orden original
+                if (fechaA === null && fechaB === null) return 0;
+                
+                // Si solo A es nula/vacía, va primero (arriba)
+                if (fechaA === null) return -1;
+                
+                // Si solo B es nula/vacía, va primero (arriba)
+                if (fechaB === null) return 1;
+                
+                // Si ambas tienen fecha, ordenar descendente (más recientes primero)
                 return fechaB - fechaA;
             });
 
@@ -529,6 +540,10 @@
         // Función para filtrar pedidos
         function filtrarPedidos(pedidos) {
             return Object.values(pedidos).filter(pedido => {
+                // Excluir pedidos cancelados
+                if (pedido.status && pedido.status.toUpperCase() === 'CANCELADO') {
+                    return false;
+                }
                 // Verificar que tenga algún valor en el campo alias
                 const alias = pedido.pagos?.alias;
                 return alias && alias.trim().length > 0; // Mostrar todos los registros que tengan alias
@@ -549,23 +564,40 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
 
-                // Obtener datos de Firebase
-                const snapshot = await database.ref('pedidos').once('value');
-                const pedidos = snapshot.val();
+                // Calcular fecha de hace 45 días
+                const hace45Dias = new Date();
+                hace45Dias.setDate(hace45Dias.getDate() - 45);
+                const fechaLimite = hace45Dias.toISOString();
 
-                if (!pedidos) {
-                    mostrarError('No se encontraron datos de pedidos en la base de datos');
-                    return;
-                }
+                // Obtener pedidos de los últimos 45 días
+                const snapshotRecientes = await database.ref('pedidos')
+                    .orderByChild('fecha')
+                    .startAt(fechaLimite)
+                    .once('value');
+                
+                const pedidosRecientes = snapshotRecientes.val() || {};
 
-                // Asegurar que cada pedido tenga un campo id (usando la clave si no existe)
-                const pedidosConId = Object.entries(pedidos).reduce((acc, [key, pedido]) => {
-                    acc[key] = { ...pedido, id: pedido.id || key };
-                    return acc;
-                }, {});
+                // Obtener todos los pedidos para filtrar los que no tienen fecha
+                const snapshotTodos = await database.ref('pedidos').once('value');
+                const todosPedidos = snapshotTodos.val() || {};
+
+                // Combinar pedidos: los de últimos 45 días + los que no tienen fecha
+                const pedidosCombinados = {};
+                
+                // Agregar pedidos recientes
+                Object.entries(pedidosRecientes).forEach(([key, pedido]) => {
+                    pedidosCombinados[key] = { ...pedido, id: pedido.id || key };
+                });
+
+                // Agregar pedidos sin fecha
+                Object.entries(todosPedidos).forEach(([key, pedido]) => {
+                    if (!pedido.fecha || pedido.fecha.trim() === '') {
+                        pedidosCombinados[key] = { ...pedido, id: pedido.id || key };
+                    }
+                });
 
                 // Filtrar pedidos que cumplan los criterios
-                transferenciasData = filtrarPedidos(pedidosConId);
+                transferenciasData = filtrarPedidos(pedidosCombinados);
                 filteredData = [...transferenciasData];
 
                 // Poblar select de alias
