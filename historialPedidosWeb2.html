@@ -1630,6 +1630,20 @@
     
     <!-- Controles de paginación -->
     <div class="pagination-container">
+      <button class="pagination-btn" id="btnPrevPage" onclick="cambiarPagina(-1)">
+        <i class="bi bi-chevron-left"></i> Anterior
+      </button>
+      <div class="pagination-info">
+        <span class="pagination-page" id="paginaActual">Página 1</span>
+        <span id="totalPaginasInfo"></span>
+      </div>
+      <button class="pagination-btn" id="btnNextPage" onclick="cambiarPagina(1)">
+        Siguiente <i class="bi bi-chevron-right"></i>
+      </button>
+    </div>
+  </div>
+    <!-- Controles de paginación -->
+    <div class="pagination-container">
       <div class="pagination-controls">
         <button class="pagination-btn" id="btnPrevPage" onclick="cambiarPagina(-1)">
           <i class="bi bi-chevron-left"></i> Anterior
@@ -2630,7 +2644,7 @@
     
     tbody.innerHTML = '';
 
-    pedidos
+    const pedidosFiltrados = pedidos
       .filter(p => {
         // Filtrar pedidos que NO tengan CREATEDBY: 'admin' (redundante, ya filtrado en carga)
         const createdBy = (p.createdBy || p.createdby || p.createdBt || '').toString().toLowerCase();
@@ -2709,8 +2723,8 @@
         return provinciaCliente === filtroProvinciaSeleccionada;
       });
     
-    // Ordenar pedidos
-    const pedidosFiltradosOrdenados = pedidosFiltradosPrev.sort((a, b) => {
+    // Ordenar pedidos filtrados
+    const pedidosFiltradosOrdenados = pedidosFiltrados.sort((a, b) => {
         // Si vista prioritaria está activada, ordenar con lógica especial
         if (vistaPrioritaria) {
           const emailA = a.cliente?.email;
@@ -2754,9 +2768,8 @@
         return b.timestamp - a.timestamp;
       });
     
-    // Guardar pedidos filtrados para paginación
-    const pedidosFiltrados = pedidosFiltradosOrdenados;
-    const totalPaginas = Math.ceil(pedidosFiltrados.length / registrosPorPagina);
+    // Calcular total de páginas basado en pedidos filtrados y ordenados
+    const totalPaginas = Math.ceil(pedidosFiltradosOrdenados.length / registrosPorPagina);
     
     // Asegurar que la página actual sea válida
     if (paginaActual > totalPaginas && totalPaginas > 0) {
@@ -2771,7 +2784,7 @@
     const endIndex = startIndex + registrosPorPagina;
     
     // Aplicar paginación
-    pedidosFiltrados
+    pedidosFiltradosOrdenados
       .slice(startIndex, endIndex)
       .forEach(p => {
         const tr = document.createElement('tr');
@@ -3098,7 +3111,7 @@
       });
     
     // Actualizar controles de paginación
-    actualizarControlesPaginacion(pedidosFiltrados.length);
+    actualizarControlesPaginacion(pedidosFiltradosOrdenados.length);
   }
 
   // Función para actualizar los controles de paginación
