@@ -2395,11 +2395,15 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     
     try {
       await stockRef.transaction(function(currentData) {
-        let stockActual = 0;
-        
-        if (currentData !== null && currentData.stockActual !== undefined) {
-          stockActual = currentData.stockActual;
+        // Si no existe data previa, crear objeto base
+        if (currentData === null) {
+          currentData = {
+            nombre: nombre,
+            stockActual: 0
+          };
         }
+        
+        let stockActual = currentData.stockActual || 0;
         
         // Calcular nuevo stock según tipo de movimiento
         if (tipo === 'ENTRADA') {
@@ -2411,7 +2415,9 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
         // Stock mínimo es 0
         stockActual = Math.max(0, stockActual);
         
+        // Preservar todos los campos existentes y solo actualizar stockActual
         return {
+          ...currentData,
           nombre: nombre,
           stockActual: stockActual
         };
