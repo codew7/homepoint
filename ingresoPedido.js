@@ -55,6 +55,126 @@ document.addEventListener('DOMContentLoaded', function() {
   const messageDiv = document.getElementById('message');
 
   let items = [];
+  
+  // Variable para bloquear la interfaz durante procesos críticos de Firebase
+  let procesoCriticoEnEjecucion = false;
+  
+  // Prevenir cierre de ventana durante procesos críticos
+  window.addEventListener('beforeunload', function(e) {
+    if (procesoCriticoEnEjecucion) {
+      e.preventDefault();
+      e.returnValue = 'Hay un proceso de registro en curso. Si cierra la ventana, los datos pueden no guardarse correctamente.';
+      return e.returnValue;
+    }
+  });
+  
+  // Función para bloquear toda la interfaz durante procesos críticos
+  function bloquearInterfaz(mensaje = 'Guardando datos...') {
+    procesoCriticoEnEjecucion = true;
+    
+    // Crear overlay de bloqueo si no existe
+    let overlay = document.getElementById('overlayBloqueo');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'overlayBloqueo';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+      `;
+      
+      const contenido = document.createElement('div');
+      contenido.style.cssText = `
+        background: white;
+        padding: 30px 50px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      `;
+      
+      const spinner = document.createElement('div');
+      spinner.style.cssText = `
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px auto;
+      `;
+      
+      const texto = document.createElement('p');
+      texto.id = 'textoBloqueo';
+      texto.style.cssText = `
+        margin: 0;
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+      `;
+      texto.textContent = mensaje;
+      
+      const advertencia = document.createElement('p');
+      advertencia.style.cssText = `
+        margin: 10px 0 0 0;
+        font-size: 12px;
+        color: #e74c3c;
+      `;
+      advertencia.textContent = '⚠️ No cierre ni recargue esta ventana';
+      
+      contenido.appendChild(spinner);
+      contenido.appendChild(texto);
+      contenido.appendChild(advertencia);
+      overlay.appendChild(contenido);
+      
+      // Agregar animación de spinner
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+      
+      document.body.appendChild(overlay);
+    } else {
+      overlay.style.display = 'flex';
+      const textoBloqueo = document.getElementById('textoBloqueo');
+      if (textoBloqueo) textoBloqueo.textContent = mensaje;
+    }
+    
+    // Deshabilitar todos los controles del formulario
+    if (form) {
+      Array.from(form.elements).forEach(el => {
+        el.disabled = true;
+      });
+    }
+  }
+  
+  // Función para desbloquear la interfaz
+  function desbloquearInterfaz() {
+    procesoCriticoEnEjecucion = false;
+    
+    const overlay = document.getElementById('overlayBloqueo');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+    
+    // Rehabilitar controles del formulario
+    if (form) {
+      Array.from(form.elements).forEach(el => {
+        el.disabled = false;
+      });
+    }
+  }
 
   // === COTIZACIÓN DÓLAR ===
   const cotizacionValorElement = document.getElementById('cotizacionValor');
@@ -1362,12 +1482,18 @@ function getTipoCliente() {
               pedidoObj.fecha = pedidoAnterior.fecha;
             }
             
+            // BLOQUEAR INTERFAZ durante proceso crítico
+            bloquearInterfaz('Actualizando pedido y restaurando inventario...');
+            
             try {
               // Primero, esperar a que se completen los movimientos de inventario
               await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
               
               // Luego, actualizar el pedido
               await db.ref('pedidos/' + pedidoId).set(pedidoObj);
+              
+              // DESBLOQUEAR INTERFAZ después de completar proceso
+              desbloquearInterfaz();
               
               messageDiv.textContent = 'Pedido actualizado correctamente.';
               messageDiv.style.color = 'green';
@@ -1380,6 +1506,8 @@ function getTipoCliente() {
                 }
               }, 1200);
             } catch (err) {
+              // DESBLOQUEAR INTERFAZ en caso de error
+              desbloquearInterfaz();
               console.error('Error al actualizar pedido:', err);
               messageDiv.textContent = 'Error al actualizar el pedido.';
               messageDiv.style.color = 'red';
@@ -1389,16 +1517,23 @@ function getTipoCliente() {
 
           // Agregar campo fecha solo al crear el pedido
           pedidoObj.fecha = getFechaActual();
+          
+          // BLOQUEAR INTERFAZ durante proceso crítico
+          bloquearInterfaz('Registrando pedido y actualizando inventario...');
+          
           // Usar push para obtener el id generado
           const pedidoRef = db.ref('pedidos').push();
           pedidoRef.set(pedidoObj)
-            .then(() => {
+            .then(async () => {
               // Registrar movimientos de inventario usando el id generado
-              registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoRef.key);
+              await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoRef.key);
               // Actualizar historial de alias si se usó uno
               if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
                 cargarHistorialAlias();
               }
+              // DESBLOQUEAR INTERFAZ después de completar proceso
+              desbloquearInterfaz();
+              
               // Mostrar modal de impresión DESPUÉS de guardar exitosamente
               mostrarModalImprimirOrden(
                 function() { // Sí imprimir
@@ -1419,6 +1554,8 @@ function getTipoCliente() {
               );
             })
             .catch(err => {
+              // DESBLOQUEAR INTERFAZ en caso de error
+              desbloquearInterfaz();
               showPopup('Error al guardar el pedido.', '❌', false);
             });
         }
@@ -1713,14 +1850,22 @@ function getTipoCliente() {
             if (pedido && pedido.fecha) {
               pedidoObj.fecha = pedido.fecha;
             }
+            
+            // BLOQUEAR INTERFAZ durante proceso crítico
+            bloquearInterfaz('Guardando cambios y actualizando inventario...');
+            
             db.ref('pedidos/' + pedidoId).set(pedidoObj)
-              .then(() => {
+              .then(async () => {
                 // Registrar movimientos de inventario también en edición
-                registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
+                await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
                 // Actualizar historial de alias si se usó uno
                 if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
                   cargarHistorialAlias();
                 }
+                
+                // DESBLOQUEAR INTERFAZ después de completar proceso
+                desbloquearInterfaz();
+                
                 // Mostrar modal de impresión DESPUÉS de actualizar exitosamente
                 mostrarModalImprimirOrden(
                   function() { // Sí imprimir
@@ -1751,6 +1896,8 @@ function getTipoCliente() {
                 );
               })
               .catch(err => {
+                // DESBLOQUEAR INTERFAZ en caso de error
+                desbloquearInterfaz();
                 messageDiv.textContent = 'Error al actualizar el pedido.';
                 messageDiv.style.color = 'red';
               });
