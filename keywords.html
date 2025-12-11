@@ -122,6 +122,22 @@
             border: 2px solid #e9ecef;
         }
 
+        .product-image {
+            width: 180px;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            background: #f8f9fa;
+            display: none;
+            margin-top: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .product-image.show {
+            display: block;
+        }
+
         textarea {
             width: 100%;
             padding: 12px 16px;
@@ -314,6 +330,7 @@
         <div class="form-group">
             <label>Código Interno</label>
             <div id="codeDisplay" class="code-display">-</div>
+            <img id="productImage" class="product-image" src="" alt="Imagen del producto" />
         </div>
 
         <div class="form-group">
@@ -366,6 +383,14 @@
             RANGO: 'Lista!A2:Z'
         };
 
+        // Function to get first image URL from column B (index 1)
+        function getImageUrl(row) {
+            if (row[1]) {
+                return row[1].split(',')[0].trim();
+            }
+            return '';
+        }
+
         // State
         let articles = [];
         let selectedArticle = null;
@@ -379,6 +404,7 @@
         const newBtn = document.getElementById('newBtn');
         const existingKeywords = document.getElementById('existingKeywords');
         const messageDiv = document.getElementById('message');
+        const productImage = document.getElementById('productImage');
 
         // Fetch articles from Google Sheets
         async function fetchArticles() {
@@ -391,7 +417,8 @@
                 if (data.values) {
                     articles = data.values.map(row => ({
                         code: row[2] || '', // Column C
-                        name: row[3] || ''  // Column D
+                        name: row[3] || '', // Column D
+                        imageUrl: getImageUrl(row) // Column B
                     })).filter(article => article.name.trim() !== '');
                     
                     hideMessage();
@@ -413,7 +440,7 @@
                 dropdownList.innerHTML = '<div class="dropdown-item">No se encontraron artículos</div>';
             } else {
                 dropdownList.innerHTML = filtered.map(article => 
-                    `<div class="dropdown-item" data-code="${article.code}" data-name="${article.name}">
+                    `<div class="dropdown-item" data-code="${article.code}" data-name="${article.name}" data-imageurl="${article.imageUrl || ''}">
                         ${article.name} <span style="color: #999; font-size: 12px;">(${article.code})</span>
                     </div>`
                 ).join('');
@@ -423,10 +450,20 @@
         }
 
         // Select article
-        async function selectArticle(code, name) {
-            selectedArticle = { code, name };
+        async function selectArticle(code, name, imageUrl = '') {
+            selectedArticle = { code, name, imageUrl };
             articleSearch.value = name;
             codeDisplay.textContent = code;
+            
+            // Display product image
+            if (imageUrl) {
+                productImage.src = imageUrl;
+                productImage.classList.add('show');
+            } else {
+                productImage.src = '';
+                productImage.classList.remove('show');
+            }
+            
             dropdownList.classList.remove('active');
             saveBtn.disabled = false;
             keywordsInput.value = '';
@@ -613,6 +650,8 @@
             saveBtn.disabled = true;
             existingKeywords.innerHTML = '<div class="loading">Selecciona un artículo</div>';
             dropdownList.classList.remove('active');
+            productImage.src = '';
+            productImage.classList.remove('show');
             hideMessage();
         }
 
@@ -630,7 +669,7 @@
         dropdownList.addEventListener('click', (e) => {
             const item = e.target.closest('.dropdown-item');
             if (item && item.dataset.code) {
-                selectArticle(item.dataset.code, item.dataset.name);
+                selectArticle(item.dataset.code, item.dataset.name, item.dataset.imageurl || '');
             }
         });
 
