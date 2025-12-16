@@ -642,6 +642,115 @@
   </main>
   <!-- Firebase scripts duplicados eliminados -->
   <script>
+    // Variable para bloquear la interfaz durante procesos críticos de Firebase
+    let procesoCriticoEnEjecucion = false;
+    
+    // Prevenir cierre de ventana durante procesos críticos
+    window.addEventListener('beforeunload', function(e) {
+      if (procesoCriticoEnEjecucion) {
+        e.preventDefault();
+        e.returnValue = 'Hay un proceso de registro en curso. Si cierra la ventana, los datos pueden no guardarse correctamente.';
+        return e.returnValue;
+      }
+    });
+    
+    // Función para bloquear toda la interfaz durante procesos críticos
+    function bloquearInterfaz(mensaje = 'Guardando datos...') {
+      procesoCriticoEnEjecucion = true;
+      
+      // Crear overlay de bloqueo si no existe
+      let overlay = document.getElementById('overlayBloqueo');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'overlayBloqueo';
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.7);
+          z-index: 999999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+        `;
+        
+        const contenido = document.createElement('div');
+        contenido.style.cssText = `
+          background: white;
+          padding: 30px 50px;
+          border-radius: 10px;
+          text-align: center;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        `;
+        
+        const spinner = document.createElement('div');
+        spinner.style.cssText = `
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #6c4eb6;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 15px;
+        `;
+        
+        const texto = document.createElement('p');
+        texto.id = 'overlayTexto';
+        texto.style.cssText = `
+          font-size: 1.2rem;
+          font-weight: 600;
+          color: #333;
+          margin: 0;
+        `;
+        texto.textContent = mensaje;
+        
+        contenido.appendChild(spinner);
+        contenido.appendChild(texto);
+        overlay.appendChild(contenido);
+        document.body.appendChild(overlay);
+        
+        // Agregar animación de spinner
+        if (!document.getElementById('spinnerStyle')) {
+          const style = document.createElement('style');
+          style.id = 'spinnerStyle';
+          style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+          document.head.appendChild(style);
+        }
+      } else {
+        overlay.style.display = 'flex';
+        const texto = document.getElementById('overlayTexto');
+        if (texto) texto.textContent = mensaje;
+      }
+      
+      // Deshabilitar todos los controles interactivos
+      document.querySelectorAll('input, select, button, textarea').forEach(el => {
+        el.disabled = true;
+      });
+    }
+    
+    // Función para desbloquear la interfaz
+    function desbloquearInterfaz() {
+      procesoCriticoEnEjecucion = false;
+      
+      const overlay = document.getElementById('overlayBloqueo');
+      if (overlay) {
+        overlay.style.display = 'none';
+      }
+      
+      // Habilitar todos los controles interactivos
+      document.querySelectorAll('input, select, button, textarea').forEach(el => {
+        el.disabled = false;
+      });
+      
+      // Volver a deshabilitar el botón de editar que debe permanecer deshabilitado
+      document.querySelectorAll('.btn-accion[title="Modificar"]').forEach(btn => {
+        btn.disabled = true;
+      });
+    }
+    
     // Función para inicializar la funcionalidad de inventario
     function inicializarInventario() {
       // Event listeners para los botones de logout
@@ -729,7 +838,16 @@
       };
       
       try {
+        // BLOQUEAR INTERFAZ durante proceso crítico
+        const mensajeBloqueo = tipo === 'ENTRADA' ? 'Registrando ingreso de stock...' : 'Registrando retiro de stock...';
+        bloquearInterfaz(mensajeBloqueo);
+        
+        // Esperar a que se complete el registro completo (movimiento + stock)
         await registrarMovimiento(mov);
+        
+        // DESBLOQUEAR INTERFAZ después de completar proceso
+        desbloquearInterfaz();
+        
         const mensaje = tipo === 'ENTRADA' ? 'Stock agregado exitosamente!' : 'Stock retirado exitosamente!';
         mostrarFeedback(mensaje, 'success');
         document.getElementById('formIngreso').reset();
@@ -738,6 +856,9 @@
         $('#producto').val(null).trigger('change');
         document.getElementById('imgArticulo').style.display = 'none';
       } catch (e) {
+        // DESBLOQUEAR INTERFAZ en caso de error
+        desbloquearInterfaz();
+        console.error('Error al procesar movimiento:', e);
         mostrarFeedback('Error al registrar movimiento', 'error');
       }
     }
@@ -890,18 +1011,25 @@
      * @param {string} tipo - Tipo de movimiento: 'ENTRADA', 'SALIDA', 'RETIRO'
      */
     async function actualizarStock(codigo, nombre, cantidad, tipo) {
-      if (!codigo || !nombre || !cantidad) return;
+      if (!codigo || !nombre || !cantidad) {
+        console.warn('actualizarStock: Parámetros inválidos', { codigo, nombre, cantidad, tipo });
+        return;
+      }
+      
+      console.log(`📦 Actualizando stock: ${codigo} (${tipo}) ${tipo === 'ENTRADA' ? '+' : '-'}${cantidad}`);
       
       const stockRef = db.ref('stock/' + codigo);
       
       try {
-        await stockRef.transaction(function(currentData) {
+        const resultado = await stockRef.transaction(function(currentData) {
           let stockActual = 0;
           let ultimaEntrada = currentData?.ultimaEntrada || null;
           
           if (currentData !== null && currentData.stockActual !== undefined) {
             stockActual = currentData.stockActual;
           }
+          
+          console.log(`  Stock actual antes: ${stockActual}`);
           
           // Calcular nuevo stock según tipo de movimiento
           if (tipo === 'ENTRADA') {
@@ -916,6 +1044,8 @@
           // Stock mínimo es 0
           stockActual = Math.max(0, stockActual);
           
+          console.log(`  Stock nuevo: ${stockActual}`);
+          
           const nuevosDatos = {
             nombre: nombre,
             stockActual: stockActual
@@ -928,17 +1058,40 @@
           
           return nuevosDatos;
         });
+        
+        if (resultado.committed) {
+          console.log(`✅ Stock actualizado exitosamente: ${codigo}`);
+        } else {
+          console.warn(`⚠️ Transacción abortada para: ${codigo}`);
+        }
+        
       } catch (error) {
-        console.error('Error actualizando stock:', error, { codigo, nombre, cantidad, tipo });
+        console.error('❌ Error actualizando stock:', error, { codigo, nombre, cantidad, tipo });
+        throw error; // Re-lanzar el error para que sea capturado por el llamador
       }
     }
 
     // Registrar movimiento en Firebase
     async function registrarMovimiento(mov) {
-      const ref = db.ref('movimientos').push();
-      await ref.set(mov);
-      // Actualizar stock después de registrar el movimiento
-      await actualizarStock(mov.codigo, mov.nombre, mov.cantidad, mov.tipo);
+      console.log('📝 Iniciando registrarMovimiento:', mov);
+      
+      try {
+        // 1. Primero registrar el movimiento en la base de datos
+        const ref = db.ref('movimientos').push();
+        console.log('  Guardando movimiento en Firebase...');
+        await ref.set(mov);
+        console.log('  ✅ Movimiento guardado con ID:', ref.key);
+        
+        // 2. Luego actualizar el stock (DEBE esperar a que termine)
+        console.log('  Actualizando stock...');
+        await actualizarStock(mov.codigo, mov.nombre, mov.cantidad, mov.tipo);
+        console.log('  ✅ Stock actualizado');
+        
+        console.log('✅ registrarMovimiento completado exitosamente');
+      } catch (error) {
+        console.error('❌ Error en registrarMovimiento:', error);
+        throw error; // Re-lanzar el error para que sea manejado por el llamador
+      }
     }
 
     // Cargar movimientos desde Firebase (solo del día o todos)
