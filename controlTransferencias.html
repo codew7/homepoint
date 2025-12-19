@@ -71,9 +71,9 @@
 
         .filters-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr auto auto;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto auto;
             gap: 15px;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             align-items: end;
         }
@@ -281,6 +281,12 @@
                     <label class="filter-label">Buscar Total Final</label>
                     <input type="text" id="filtroTotalFinal" class="filter-input" placeholder="Ej: 10000 o parte del monto">
                 </div>
+                <div class="filter-group">
+                    <label class="filter-label">Entrega</label>
+                    <select id="filtroEntrega" class="filter-input">
+                        <option value="">Todas las entregas</option>
+                    </select>
+                </div>
                 <div>
                     <button type="button" id="limpiarFiltros" class="clear-filters">Limpiar Filtros</button>
                 </div>
@@ -413,11 +419,12 @@
             const fechaHasta = document.getElementById('fechaHasta').value;
             const filtroAlias = document.getElementById('filtroAlias').value;
             const filtroTotalFinal = document.getElementById('filtroTotalFinal').value.trim();
+            const filtroEntrega = document.getElementById('filtroEntrega').value;
             filteredData = transferenciasData.filter(pedido => {
                 // Ocultar alias HOME.POINT y HOME.POINT.ENVIOS por defecto
                 if (!mostrarTodos) {
                     const alias = (pedido.pagos?.alias || '').toUpperCase();
-                    if (alias === 'HOME.POINT' || alias === 'HOME.POINT.ENVIOS') return false;
+                    if (alias === 'HOME.POINT' || alias === 'HOME.POINT.ENVIOS' || alias === 'HOMEPOINT' || alias === 'HOMEPOINT.2') return false;
                 }
                 // Filtrar por fecha
                 if (fechaDesde && new Date(pedido.fecha) < new Date(fechaDesde)) return false;
@@ -430,6 +437,8 @@
                     const totalFinalFormateado = formatearMoneda(pedido.pagos?.totalFinal || 0);
                     if (!totalFinal.includes(filtroTotalFinal) && !totalFinalFormateado.includes(filtroTotalFinal)) return false;
                 }
+                // Filtrar por entrega
+                if (filtroEntrega && pedido.entrega !== filtroEntrega) return false;
                 return true; // Mostrar todos los registros con alias, sin importar status
             });
             renderizarTabla();
@@ -441,6 +450,7 @@
             document.getElementById('fechaHasta').value = '';
             document.getElementById('filtroAlias').value = '';
             document.getElementById('filtroTotalFinal').value = '';
+            document.getElementById('filtroEntrega').value = '';
             mostrarTodos = false;
             filteredData = [...transferenciasData];
             renderizarTabla();
@@ -472,6 +482,35 @@
                 option.value = alias;
                 option.textContent = alias;
                 selectAlias.appendChild(option);
+            });
+        }
+
+        // Función para poblar el select de entregas
+        function poblarSelectEntregas() {
+            // Obtener todas las entregas únicas
+            const entregasSet = new Set();
+            transferenciasData.forEach(pedido => {
+                const entrega = pedido.entrega;
+                if (entrega && entrega.trim()) {
+                    entregasSet.add(entrega.trim());
+                }
+            });
+
+            // Convertir a array y ordenar
+            const entregasUnicas = Array.from(entregasSet).sort();
+
+            // Poblar el select
+            const selectEntrega = document.getElementById('filtroEntrega');
+            
+            // Limpiar opciones existentes (excepto la primera)
+            selectEntrega.innerHTML = '<option value="">Todas las entregas</option>';
+            
+            // Agregar opciones de entrega
+            entregasUnicas.forEach(entrega => {
+                const option = document.createElement('option');
+                option.value = entrega;
+                option.textContent = entrega;
+                selectEntrega.appendChild(option);
             });
         }
 
@@ -581,12 +620,12 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
 
-                // Calcular fecha de hace 45 días
-                const hace45Dias = new Date();
-                hace45Dias.setDate(hace45Dias.getDate() - 45);
-                const fechaLimite = hace45Dias.toISOString();
+                // Calcular fecha de hace 30 días
+                const hace30Dias = new Date();
+                hace30Dias.setDate(hace30Dias.getDate() - 30);
+                const fechaLimite = hace30Dias.toISOString();
 
-                // Obtener pedidos de los últimos 45 días
+                // Obtener pedidos de los últimos 30 días
                 const snapshotRecientes = await database.ref('pedidos')
                     .orderByChild('fecha')
                     .startAt(fechaLimite)
@@ -617,8 +656,9 @@
                 transferenciasData = filtrarPedidos(pedidosCombinados);
                 filteredData = [...transferenciasData];
 
-                // Poblar select de alias
+                // Poblar select de alias y entregas
                 poblarSelectAlias();
+                poblarSelectEntregas();
 
                 // Ocultar loading
                 document.getElementById('loading').style.display = 'none';
@@ -641,6 +681,7 @@
             const fechaHasta = document.getElementById('fechaHasta');
             const filtroAlias = document.getElementById('filtroAlias');
             const filtroTotalFinal = document.getElementById('filtroTotalFinal');
+            const filtroEntrega = document.getElementById('filtroEntrega');
             const limpiarBtn = document.getElementById('limpiarFiltros');
             const verTodosBtn = document.getElementById('verTodosBtn');
 
@@ -649,6 +690,7 @@
             fechaHasta.addEventListener('change', aplicarFiltros);
             filtroAlias.addEventListener('change', aplicarFiltros);
             filtroTotalFinal.addEventListener('input', aplicarFiltros);
+            filtroEntrega.addEventListener('change', aplicarFiltros);
             limpiarBtn.addEventListener('click', limpiarFiltros);
             verTodosBtn.addEventListener('click', function() {
                 mostrarTodos = !mostrarTodos;
