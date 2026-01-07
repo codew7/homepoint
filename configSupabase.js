@@ -11,7 +11,7 @@ const SUPABASE_CONFIG = {
     
     // Anon/Public Key de Supabase (segura para uso en frontend)
     // La encontrarás en: Settings > API > Project API keys > anon public
-    SUPABASE_ANON_KEY: 'sb_publishable_mlBrGDU2Cf93wc41bNsO2g_veEp9mep',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5Z3pyanZibmtxbWVxYWtuaXl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NDM3NjAsImV4cCI6MjA4MzMxOTc2MH0.IaaYcZMFr1YA7xDQ5ktdx_ChAeeOXyW1gQylhz_Pxgs',
     
     // Service Role Key (solo para operaciones administrativas del backend)
     // ⚠️ NUNCA expongas esta clave en el frontend
