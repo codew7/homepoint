@@ -1,6 +1,30 @@
-// Script para ingresoPedido.html: manejo de formulario, artículos dinámicos y registro en Firebase
+// Script para ingresoPedido.html: manejo de formulario, artículos dinámicos y registro en Supabase
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+  // === INICIALIZACIÓN DE SUPABASE ===
+  console.log('🚀 Iniciando aplicación con Supabase...');
+  
+  // Inicializar la capa de abstracción de Supabase
+  if (typeof inicializarSupabaseDB === 'function') {
+    window.supabaseDB = inicializarSupabaseDB();
+    
+    if (window.supabaseDB) {
+      console.log('✓ Supabase DB inicializado correctamente');
+      
+      // Inicializar migración (carga inicial de datos)
+      const migracionOk = await inicializarMigracionSupabase();
+      if (!migracionOk) {
+        console.warn('⚠️ Algunos datos no se cargaron correctamente desde Supabase');
+      }
+    } else {
+      console.error('❌ Error inicializando Supabase DB');
+      console.error('Verifica que configSupabase.js tenga las credenciales correctas');
+    }
+  } else {
+    console.error('❌ Función inicializarSupabaseDB no encontrada');
+    console.error('Asegúrate de que supabaseDB.js se cargó correctamente');
+  }
+  
   // === BLOQUEO DE CONTROLES HASTA CARGA DE ARTÍCULOS ===
   // Elementos a bloquear: inputs, selects, botones, tabla de artículos
   let bloqueables = [];
@@ -1432,17 +1456,11 @@ function getTipoCliente() {
           entrega = 'Envios';
         }
 
-        // Obtener fecha de creación solo al crear el pedido
-        function getFechaActual() {
-          const now = new Date();
-          const pad = n => n.toString().padStart(2, '0');
-          return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-        }
-
         // Calcular gananciaSelec: suma de valorG de los artículos seleccionados
         const gananciaSelec = items
           .filter(it => it.seleccionado && it.seleccionado.toUpperCase() === 'SI')
           .reduce((acc, it) => acc + (parseInt(it.valorG) || 0), 0);
+        
         const pedidoObj = {
           timestamp: Date.now(),
           locked: true,
@@ -1469,102 +1487,75 @@ function getTipoCliente() {
           nota,
           vendedor,
         };
-        // Guardar en Firebase
-        if (pedidoId) {
-          db.ref('pedidos/' + pedidoId).once('value').then(async snap => {
-            const pedidoAnterior = snap.val();
-            // CONSERVAR lastOrderUpdate si existe
-            if (pedidoAnterior && pedidoAnterior.lastOrderUpdate) {
-              pedidoObj.lastOrderUpdate = pedidoAnterior.lastOrderUpdate;
-            }
-            // CONSERVAR fecha original si existe
-            if (pedidoAnterior && pedidoAnterior.fecha) {
-              pedidoObj.fecha = pedidoAnterior.fecha;
-            }
-            
-            // BLOQUEAR INTERFAZ durante proceso crítico
-            bloquearInterfaz('Actualizando pedido y restaurando inventario...');
-            
-            try {
-              // Primero, esperar a que se completen los movimientos de inventario
-              await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
-              
-              // Luego, actualizar el pedido
-              await db.ref('pedidos/' + pedidoId).set(pedidoObj);
-              
-              // DESBLOQUEAR INTERFAZ después de completar proceso
-              desbloquearInterfaz();
-              
-              messageDiv.textContent = 'Pedido actualizado correctamente.';
-              messageDiv.style.color = 'green';
-              setTimeout(() => {
-                if (window.opener && !window.opener.closed) {
-                  window.opener.location.reload();
-                  window.close();
-                } else {
-                  window.location.href = 'ingresoPedido.html';
-                }
-              }, 1200);
-            } catch (err) {
-              // DESBLOQUEAR INTERFAZ en caso de error
-              desbloquearInterfaz();
-              console.error('Error al actualizar pedido:', err);
-              messageDiv.textContent = 'Error al actualizar el pedido.';
-              messageDiv.style.color = 'red';
-            }
-          });
-        } else {
-
-          // Agregar campo fecha solo al crear el pedido
-          pedidoObj.fecha = getFechaActual();
-          
+        
+        // === GUARDAR EN SUPABASE CON TRANSACCIÓN ATÓMICA ===
+        try {
           // BLOQUEAR INTERFAZ durante proceso crítico
-          bloquearInterfaz('Registrando pedido y actualizando inventario...');
+          bloquearInterfaz(pedidoId ? 'Actualizando pedido en Supabase...' : 'Registrando pedido en Supabase...');
           
-          // Usar push para obtener el id generado
-          const pedidoRef = db.ref('pedidos').push();
-          pedidoRef.set(pedidoObj)
-            .then(async () => {
-              // Registrar movimientos de inventario usando el id generado
-              await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoRef.key);
-              // Actualizar historial de alias si se usó uno
-              if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
-                cargarHistorialAlias();
+          // Convertir a formato Supabase
+          const pedidoSupabase = convertirPedidoAFormatoSupabase(pedidoObj);
+          
+          // Guardar usando transacción atómica (incluye items, movimientos y stock)
+          const resultado = await guardarPedidoSupabase(pedidoSupabase, items, pedidoId);
+          
+          if (!resultado.success) {
+            throw new Error(resultado.mensaje || 'Error guardando pedido');
+          }
+          
+          // Actualizar historial de alias si se usó uno
+          if (alias && alias.trim() !== '') {
+            cargarHistorialAlias();
+          }
+          
+          // DESBLOQUEAR INTERFAZ después de completar proceso
+          desbloquearInterfaz();
+          
+          messageDiv.textContent = pedidoId ? 'Pedido actualizado correctamente en Supabase.' : 'Pedido registrado correctamente en Supabase.';
+          messageDiv.style.color = 'green';
+          
+          if (pedidoId) {
+            // Modo edición
+            setTimeout(() => {
+              if (window.opener && !window.opener.closed) {
+                window.opener.location.reload();
+                window.close();
+              } else {
+                window.location.href = 'ingresoPedidoSB.html';
               }
-              // DESBLOQUEAR INTERFAZ después de completar proceso
-              desbloquearInterfaz();
-              
-              // Mostrar modal de impresión DESPUÉS de guardar exitosamente
-              mostrarModalImprimirOrden(
-                function() { // Sí imprimir
-                  generarReciboYImprimir();
-                  showPopup('Pedido ingresado', '✅', true);
-                  form.reset();
-                  items = [];
-                  renderItems();
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                },
-                function() { // No imprimir
-                  showPopup('Pedido ingresado', '✅', true);
-                  form.reset();
-                  items = [];
-                  renderItems();
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-              );
-            })
-            .catch(err => {
-              // DESBLOQUEAR INTERFAZ en caso de error
-              desbloquearInterfaz();
-              showPopup('Error al guardar el pedido.', '❌', false);
-            });
+            }, 1200);
+          } else {
+            // Modo creación - Mostrar modal de impresión
+            mostrarModalImprimirOrden(
+              function() { // Sí imprimir
+                generarReciboYImprimir();
+                showPopup('Pedido ingresado exitosamente en Supabase', '✅', true);
+                form.reset();
+                items = [];
+                renderItems();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              },
+              function() { // No imprimir
+                showPopup('Pedido ingresado exitosamente en Supabase', '✅', true);
+                form.reset();
+                items = [];
+                renderItems();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            );
+          }
+        } catch (err) {
+          // DESBLOQUEAR INTERFAZ en caso de error
+          desbloquearInterfaz();
+          console.error('Error al guardar pedido en Supabase:', err);
+          showPopup('Error al guardar el pedido: ' + (err.message || 'Error desconocido'), '❌', false);
         }
       })
       .catch(err => {
         if (err && err.message === 'cotizacion') {
           showPopup('No se pudo obtener la cotización del dólar blue.', '❌', false);
         } else {
-          showPopup('Ocurrió un error inesperado al guardar el pedido.', '❌', false);
+          showPopup('Ocurrió un error inesperado: ' + (err.message || 'Error desconocido'), '❌', false);
         }
       });
   }
@@ -1636,36 +1627,40 @@ function getTipoCliente() {
   }
 
   // === SOPORTE EDICIÓN DE PEDIDOS ===
-  // Si hay un parámetro id en la URL, cargar el pedido y rellenar el formulario para editar
+  // Si hay un parámetro id en la URL, cargar el pedido desde Supabase
   const urlParams = new URLSearchParams(window.location.search);
   const pedidoId = urlParams.get('id');
   if (pedidoId) {
-    db.ref('pedidos/' + pedidoId).once('value').then(snap => {
-      const pedido = snap.val();
-      if (!pedido) return;
+    cargarPedidoSupabase(pedidoId).then(pedido => {
+      if (!pedido) {
+        showPopup('Pedido no encontrado', '❌', false);
+        return;
+      }
+      
       // Rellenar datos del cliente
       form.nombre.value = pedido.cliente?.nombre || '';
       form.telefono.value = pedido.cliente?.telefono || '';
       form.direccion.value = pedido.cliente?.direccion || '';
       form.dni.value = pedido.cliente?.dni || '';
       form.email.value = pedido.cliente?.email || '';
+      
       // Rellenar tipo de cliente si existe
       if (pedido.cliente?.tipoCliente) {
         const radio = document.querySelector(`input[name="tipoCliente"][value="${pedido.cliente.tipoCliente}"]`);
         if (radio) {
           radio.checked = true;
-          tipoCliente = pedido.cliente.tipoCliente; // <-- ACTUALIZAR VARIABLE INTERNA
           // Forzar actualización de valores de artículos según tipoCliente
           items.forEach((item, idx) => {
             if (item.nombre && articulosPorNombre[item.nombre]) {
               const art = articulosPorNombre[item.nombre];
-              let valorRaw = tipoCliente === 'consumidor final' ? (art[4] || '0') : (art[6] || '0');
+              let valorRaw = pedido.cliente.tipoCliente === 'consumidor final' ? (art[4] || '0') : (art[6] || '0');
               valorRaw = valorRaw.replace(/\$/g, '').replace(/[.,]/g, '');
               items[idx].valorU = parseInt(valorRaw) || 0;
             }
           });
         }
       }
+      
       // Rellenar items
       items = (pedido.items || []).map(it => ({
         codigo: it.codigo || '',
@@ -1675,18 +1670,19 @@ function getTipoCliente() {
         valorU: it.valorU || 0,
         valorC: typeof it.valorC !== 'undefined' ? it.valorC : 0,
         categoria: typeof it.categoria !== 'undefined' ? it.categoria : '',
-        seleccionado: typeof it.seleccionado !== 'undefined' ? it.seleccionado : (it.nombre && articulosPorNombre[it.nombre] ? articulosPorNombre[it.nombre][8] || '' : ''),
-        valorG: typeof it.valorG !== 'undefined' ? it.valorG : (typeof it.valorU !== 'undefined' && typeof it.valorC !== 'undefined' ? it.valorU - it.valorC : 0)
+        seleccionado: typeof it.seleccionado !== 'undefined' ? it.seleccionado : '',
+        valorG: typeof it.valorG !== 'undefined' ? it.valorG : 0
       }));
       renderItems();
+      
       // Rellenar pagos
       form.medioPago.value = pedido.pagos?.medioPago || '';
       form.recargo.value = pedido.pagos?.recargo ? Number(String(pedido.pagos.recargo).replace(/\D/g, '')).toLocaleString('es-AR').replace(/,/g, '.') : '';
       form.descuento.value = pedido.pagos?.descuento ? Number(String(pedido.pagos.descuento).replace(/\D/g, '')).toLocaleString('es-AR').replace(/,/g, '.') : '';
       form.envio.value = pedido.pagos?.envio ? Number(String(pedido.pagos.envio).replace(/\D/g, '')).toLocaleString('es-AR').replace(/,/g, '.') : '';
-      // Mostrar subtotal y total como enteros con separador de miles
       form.subtotal.value = pedido.pagos?.subtotal ? parseInt((pedido.pagos.subtotal + '').replace(/\D/g, ''), 10).toLocaleString('es-AR').replace(/,/g, '.') : '';
       form.totalFinal.value = pedido.pagos?.totalFinal ? parseInt((pedido.pagos.totalFinal + '').replace(/\D/g, ''), 10).toLocaleString('es-AR').replace(/,/g, '.') : '';
+      
       // Autocompletar nota y vendedor si existen
       if (form.nota) form.nota.value = pedido.nota || '';
       if (form.vendedor) form.vendedor.value = pedido.vendedor || '';
@@ -1694,20 +1690,6 @@ function getTipoCliente() {
 
       // --- SOLO LECTURA SI STATUS ES CANCELADO ---
       if (pedido.status === 'CANCELADO') {
-        // Eliminar movimientos de inventario asociados a este pedido cancelado
-        if (pedidoId) {
-          db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value', function(snapshot) {
-            const updates = {};
-            snapshot.forEach(child => {
-              updates[child.key] = null;
-            });
-            if (Object.keys(updates).length > 0) {
-              db.ref('movimientos').update(updates).catch(err => {
-                console.error('Error eliminando movimientos por cancelación:', err, updates);
-              });
-            }
-          });
-        }
         // Deshabilitar todos los campos del formulario
         Array.from(form.elements).forEach(el => {
           el.disabled = true;
@@ -1844,64 +1826,68 @@ function getTipoCliente() {
             vendedor,
             lastOrderUpdate: contrasena
           };
-          // CONSERVAR fecha original si existe
-          db.ref('pedidos/' + pedidoId).once('value').then(snap => {
-            const pedido = snap.val();
-            if (pedido && pedido.fecha) {
-              pedidoObj.fecha = pedido.fecha;
-            }
-            
-            // BLOQUEAR INTERFAZ durante proceso crítico
-            bloquearInterfaz('Guardando cambios y actualizando inventario...');
-            
-            db.ref('pedidos/' + pedidoId).set(pedidoObj)
-              .then(async () => {
-                // Registrar movimientos de inventario también en edición
-                await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
-                // Actualizar historial de alias si se usó uno
-                if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
-                  cargarHistorialAlias();
+          
+          // === ACTUALIZAR EN SUPABASE CON TRANSACCIÓN ATÓMICA ===
+          (async function() {
+            try {
+              // BLOQUEAR INTERFAZ durante proceso crítico
+              bloquearInterfaz('Guardando cambios en Supabase...');
+              
+              // Convertir a formato Supabase
+              const pedidoSupabase = convertirPedidoAFormatoSupabase(pedidoObj);
+              
+              // Actualizar usando transacción atómica
+              const resultado = await guardarPedidoSupabase(pedidoSupabase, items, pedidoId);
+              
+              if (!resultado.success) {
+                throw new Error(resultado.mensaje || 'Error actualizando pedido');
+              }
+              
+              // Actualizar historial de alias si se usó uno
+              if (alias && alias.trim() !== '') {
+                cargarHistorialAlias();
+              }
+              
+              // DESBLOQUEAR INTERFAZ después de completar proceso
+              desbloquearInterfaz();
+              
+              // Mostrar modal de impresión DESPUÉS de actualizar exitosamente
+              mostrarModalImprimirOrden(
+                function() { // Sí imprimir
+                  generarReciboYImprimir();
+                  messageDiv.textContent = 'Pedido actualizado correctamente en Supabase.';
+                  messageDiv.style.color = 'green';
+                  setTimeout(() => {
+                    if (window.opener && !window.opener.closed) {
+                      window.opener.location.reload();
+                      window.close();
+                    } else {
+                      window.location.href = 'ingresoPedidoSB.html';
+                    }
+                  }, 1200);
+                },
+                function() { // No imprimir
+                  messageDiv.textContent = 'Pedido actualizado correctamente en Supabase.';
+                  messageDiv.style.color = 'green';
+                  setTimeout(() => {
+                    if (window.opener && !window.opener.closed) {
+                      window.opener.location.reload();
+                      window.close();
+                    } else {
+                      window.location.href = 'ingresoPedidoSB.html';
+                    }
+                  }, 1200);
                 }
-                
-                // DESBLOQUEAR INTERFAZ después de completar proceso
-                desbloquearInterfaz();
-                
-                // Mostrar modal de impresión DESPUÉS de actualizar exitosamente
-                mostrarModalImprimirOrden(
-                  function() { // Sí imprimir
-                    generarReciboYImprimir();
-                    messageDiv.textContent = 'Pedido actualizado correctamente.';
-                    messageDiv.style.color = 'green';
-                    setTimeout(() => {
-                      if (window.opener && !window.opener.closed) {
-                        window.opener.location.reload();
-                        window.close();
-                      } else {
-                        window.location.href = 'ingresoPedido.html';
-                      }
-                    }, 1200);
-                  },
-                  function() { // No imprimir
-                    messageDiv.textContent = 'Pedido actualizado correctamente.';
-                    messageDiv.style.color = 'green';
-                    setTimeout(() => {
-                      if (window.opener && !window.opener.closed) {
-                        window.opener.location.reload();
-                        window.close();
-                      } else {
-                        window.location.href = 'ingresoPedido.html';
-                      }
-                    }, 1200);
-                  }
-                );
-              })
-              .catch(err => {
-                // DESBLOQUEAR INTERFAZ en caso de error
-                desbloquearInterfaz();
-                messageDiv.textContent = 'Error al actualizar el pedido.';
-                messageDiv.style.color = 'red';
-              });
-          });
+              );
+            } catch (err) {
+              // DESBLOQUEAR INTERFAZ en caso de error
+              desbloquearInterfaz();
+              console.error('Error al actualizar pedido en Supabase:', err);
+              messageDiv.textContent = 'Error al actualizar el pedido: ' + (err.message || 'Error desconocido');
+              messageDiv.style.color = 'red';
+              showPopup('Error al actualizar: ' + (err.message || 'Error desconocido'), '❌', false);
+            }
+          })();
         })
         .catch(() => {
           messageDiv.textContent = 'No se pudo obtener la cotización del dólar blue.';
@@ -2043,23 +2029,15 @@ if (!datalistClientes) {
 }
 form.nombre.setAttribute('list', 'clientesDatalist');
 
-// Cargar clientes desde Firebase
+// Cargar clientes desde Supabase
 function cargarClientes() {
-  db.ref('clientes').once('value').then(snap => {
-    clientesRegistrados = [];
-    clientesPorNombre = {};
-    datalistClientes.innerHTML = '';
-    snap.forEach(child => {
-      const cli = child.val();
-      if (cli && cli.nombre) {
-        clientesRegistrados.push(cli);
-        clientesPorNombre[cli.nombre.toLowerCase()] = cli;
-        const opt = document.createElement('option');
-        opt.value = cli.nombre;
-        datalistClientes.appendChild(opt);
-      }
+  if (typeof cargarClientesSupabase === 'function') {
+    cargarClientesSupabase().catch(err => {
+      console.error('Error cargando clientes desde Supabase:', err);
     });
-  });
+  } else {
+    console.warn('Función cargarClientesSupabase no disponible');
+  }
 }
 cargarClientes();
 
@@ -2080,44 +2058,15 @@ if (aliasField) {
   aliasField.setAttribute('list', 'aliasDatalist');
 }
 
-// Cargar historial de alias desde Firebase
+// Cargar historial de alias desde Supabase
 function cargarHistorialAlias() {
-  db.ref('pedidos').orderByChild('timestamp').limitToLast(200).once('value').then(snap => {
-    const aliasSet = new Set(); // Para evitar duplicados
-    const pedidos = [];
-    
-    // Convertir snapshot a array y ordenar por timestamp descendente
-    snap.forEach(child => {
-      const pedido = child.val();
-      if (pedido && pedido.pagos && pedido.pagos.alias && pedido.pagos.alias.trim() !== '') {
-        pedidos.push({
-          alias: pedido.pagos.alias.trim().toUpperCase(),
-          timestamp: pedido.timestamp || 0
-        });
-      }
+  if (typeof cargarHistorialAliasSupabase === 'function') {
+    cargarHistorialAliasSupabase().catch(err => {
+      console.error('Error cargando historial de alias:', err);
     });
-    
-    // Ordenar por timestamp descendente y tomar solo los 10 más recientes únicos
-    pedidos.sort((a, b) => b.timestamp - a.timestamp);
-    
-    aliasHistorial = [];
-    pedidos.forEach(pedido => {
-      if (aliasSet.size < 10 && !aliasSet.has(pedido.alias)) {
-        aliasSet.add(pedido.alias);
-        aliasHistorial.push(pedido.alias);
-      }
-    });
-    
-    // Actualizar datalist
-    datalistAlias.innerHTML = '';
-    aliasHistorial.forEach(alias => {
-      const option = document.createElement('option');
-      option.value = alias;
-      datalistAlias.appendChild(option);
-    });
-  }).catch(err => {
-    console.error('Error cargando historial de alias:', err);
-  });
+  } else {
+    console.warn('Función cargarHistorialAliasSupabase no disponible');
+  }
 }
 
 // Cargar historial de alias al inicializar
@@ -2252,21 +2201,40 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
       });
       return;
     }
-    // Guardar en Firebase
-    db.ref('clientes').push({ nombre, telefono: this.telefono.value.trim(), direccion: this.direccion.value.trim(), dni: this.dni.value.trim(), email: this.email.value.trim(), tipoCliente, registro: 'Local' })
-      .then(() => {
-        cargarClientes();
+    
+    // === GUARDAR EN SUPABASE ===
+    (async function() {
+      try {
+        const clienteData = {
+          nombre,
+          telefono: this.telefono.value.trim(),
+          direccion: this.direccion.value.trim(),
+          dni: this.dni.value.trim(),
+          email: this.email.value.trim(),
+          tipoCliente: tipoCliente,
+        };
+        
+        await guardarClienteSupabase(clienteData);
+        
+        // Rellenar formulario con datos guardados
         form.nombre.value = nombre;
-        form.telefono.value = this.telefono.value.trim();
-        form.direccion.value = this.direccion.value.trim();
-        form.dni.value = this.dni.value.trim();
-        form.email.value = this.email.value.trim();
+        form.telefono.value = clienteData.telefono;
+        form.direccion.value = clienteData.direccion;
+        form.dni.value = clienteData.dni;
+        form.email.value = clienteData.email;
+        
         if (tipoCliente) {
           const radio = document.querySelector(`input[name="tipoCliente"][value="${tipoCliente}"]`);
           if (radio) radio.checked = true;
         }
+        
+        showPopup('Cliente guardado correctamente en Supabase', '✅', true);
         modal.remove();
-      });
+      } catch (err) {
+        console.error('Error guardando cliente:', err);
+        showPopup('Error al guardar cliente: ' + (err.message || 'Error desconocido'), '❌', false);
+      }
+    }.bind(this))();
   };
   // Soporte Enter/Escape
   function keyHandler(e) {

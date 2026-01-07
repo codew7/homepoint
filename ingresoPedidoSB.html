@@ -84,27 +84,51 @@
       font-size: 14px;
     }
   </style>
-  <!-- Firebase SDKs (solo una vez, última versión) -->
+  <!-- Firebase SDKs (solo una vez, última versión) - MANTENIDO PARA COMPATIBILIDAD -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="configSB.js"></script>
+  
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="configSupabase.js"></script>
+  
   <!-- Agregar jQuery y Select2 JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <script>
-    // Inicializar Firebase solo una vez
+    // Inicializar Firebase solo una vez (mantener para compatibilidad temporal)
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
     const db = firebase.database();
+    
+    // Inicializar Supabase
+    if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.SUPABASE_URL && SUPABASE_CONFIG.SUPABASE_ANON_KEY) {
+      window.supabase = supabase.createClient(
+        SUPABASE_CONFIG.SUPABASE_URL,
+        SUPABASE_CONFIG.SUPABASE_ANON_KEY
+      );
+      console.log('✓ Cliente de Supabase inicializado');
+    } else {
+      console.warn('⚠️ Configuración de Supabase no encontrada. Completa configSupabase.js');
+    }
+    
+    // Autenticación con Firebase (temporal)
     firebase.auth().onAuthStateChanged(function(user) {
       if (!user) {
         window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.pathname);
       }
     });
   </script>
+  
+  <!-- Capa de abstracción de Supabase -->
+  <script src="supabaseDB.js"></script>
+  
+  <!-- Funciones de migración -->
+  <script src="ingresoPedidoSupabase.js"></script>
 </head>
 <body>
 
