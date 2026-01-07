@@ -18,12 +18,8 @@ const SUPABASE_CONFIG = {
     // SUPABASE_SERVICE_ROLE_KEY: 'TU_SERVICE_ROLE_KEY_AQUI',
 };
 
-// Configuración de Google Sheets (mantener existente)
-const GOOGLE_SHEETS_CONFIG = {
-    API_KEY: 'AIzaSyD9h4SH9laGhvh-NRhDjYgbCThVEbM8HTo', // testing key
-    SPREADSHEET_ID: '1cD50d0-oSTogEe9tYo9ABUSP1ONCy3SAV92zsYYIG84',
-    RANGO: 'Lista!A2:Z'
-};
+// NOTA: GOOGLE_SHEETS_CONFIG ya está definido en configSB.js
+// No es necesario duplicarlo aquí
 
 // =====================================================
 // INSTRUCCIONES PARA CONFIGURAR SUPABASE

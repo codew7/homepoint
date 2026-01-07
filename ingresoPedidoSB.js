@@ -1351,7 +1351,7 @@ function getTipoCliente() {
   });
 
   // Extraer la lógica de ingreso de pedido a una función reutilizable
-  function ingresarPedido() {
+  async function ingresarPedido() {
     // Validar campos obligatorios
     const nombre = form.nombre.value.trim();
     const telefono = form.telefono.value.trim();
