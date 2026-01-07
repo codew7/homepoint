@@ -276,9 +276,22 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   // Cargar artículos al iniciar
+  console.log('🔄 Iniciando carga de artículos desde Google Sheets...');
+  console.log('  GOOGLE_SHEETS_CONFIG:', typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? '✓ Definido' : '❌ NO definido');
+  
+  if (typeof GOOGLE_SHEETS_CONFIG === 'undefined') {
+    console.error('❌ ERROR: GOOGLE_SHEETS_CONFIG no está definido. Verifica que configSB.js se haya cargado correctamente.');
+    setControlesBloqueados(true);
+    return;
+  }
+  
   fetch(`https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`)
-    .then(response => response.json())
+    .then(response => {
+      console.log('📥 Respuesta recibida de Google Sheets:', response.status);
+      return response.json();
+    })
     .then(data => {
+      console.log('📦 Datos de Google Sheets:', data.values ? data.values.length + ' artículos' : 'Sin datos');
       const items = data.values || [];
       articulosDisponibles = items.filter(item => item[4]?.toLowerCase() !== 'no disponible');
       articulosDisponibles.forEach(item => {
@@ -302,10 +315,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       // Mantener tipoCliente como solo lectura
       radiosTipoCliente.forEach(radio => radio.disabled = true);
       
+      console.log('✅ Artículos cargados exitosamente:', articulosDisponibles.length, 'artículos disponibles');
+      console.log('✅ Controles desbloqueados');
+      
       // Inicializar buscador de artículos después de cargar
       initializeSearchArticulos();
     })
-    .catch(() => {
+    .catch((error) => {
+      console.error('❌ ERROR cargando artículos de Google Sheets:', error);
       // Si falla la carga, mantener controles deshabilitados
       setControlesBloqueados(true);
       radiosTipoCliente.forEach(radio => radio.disabled = true);
@@ -1490,14 +1507,20 @@ function getTipoCliente() {
         
         // === GUARDAR EN SUPABASE CON TRANSACCIÓN ATÓMICA ===
         try {
+          console.log('💾 Guardando pedido en Supabase...');
+          console.log('  Items a guardar:', items.length);
+          console.log('  Es edición:', !!pedidoId);
+          
           // BLOQUEAR INTERFAZ durante proceso crítico
           bloquearInterfaz(pedidoId ? 'Actualizando pedido en Supabase...' : 'Registrando pedido en Supabase...');
           
           // Convertir a formato Supabase
           const pedidoSupabase = convertirPedidoAFormatoSupabase(pedidoObj);
+          console.log('  Pedido convertido a formato Supabase');
           
           // Guardar usando transacción atómica (incluye items, movimientos y stock)
           const resultado = await guardarPedidoSupabase(pedidoSupabase, items, pedidoId);
+          console.log('  Resultado:', resultado);
           
           if (!resultado.success) {
             throw new Error(resultado.mensaje || 'Error guardando pedido');
