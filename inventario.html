@@ -551,6 +551,63 @@
       margin: 0;
     }
 
+    /* Estilos para el indicador de stock */
+    #stockDisplay {
+      transition: all 0.3s ease;
+      animation: fadeInScale 0.4s ease-out;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-size: 0.95rem;
+    }
+
+    #stockDisplay.stock-alto {
+      background: rgba(56, 176, 0, 0.1) !important;
+      border-color: rgba(56, 176, 0, 0.3) !important;
+      color: #38b000 !important;
+    }
+
+    #stockDisplay.stock-bajo {
+      background: rgba(255, 152, 0, 0.1) !important;
+      border-color: rgba(255, 152, 0, 0.3) !important;
+      color: #ff9800 !important;
+    }
+
+    #stockDisplay.stock-agotado {
+      background: rgba(220, 53, 69, 0.1) !important;
+      border-color: rgba(220, 53, 69, 0.3) !important;
+      color: #dc3545 !important;
+    }
+
+    #stockDisplay.stock-cargando {
+      background: rgba(255, 212, 59, 0.1) !important;
+      border-color: rgba(255, 212, 59, 0.3) !important;
+      color: #b68900 !important;
+    }
+
+    @keyframes fadeInScale {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    /* Animación de pulso para el stock bajo */
+    #stockDisplay.stock-bajo {
+      animation: fadeInScale 0.4s ease-out, pulseLow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseLow {
+      0%, 100% { 
+        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.1);
+      }
+      50% { 
+        box-shadow: 0 2px 12px rgba(255, 152, 0, 0.3);
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -598,6 +655,9 @@
         <div class="form-group" style="grid-column:3;grid-row:1/span 3;justify-self:center;align-self:center;">
           <label style="visibility:hidden;">Imagen</label>
           <img id="imgArticulo" src="" alt="Imagen artículo" style="width:180px;height:180px;object-fit:cover;border-radius:16px;border:1.5px solid var(--border);background:#fff;display:none;" />
+          <div id="stockDisplay" style="margin-top:10px;padding:8px;border-radius:8px;text-align:center;font-weight:bold;display:none;border:1px solid;">
+            <i class="bi bi-box-seam"></i> Stock: <span id="stockCantidad">-</span>
+          </div>
         </div>
         <div class="form-group" style="grid-column:1;grid-row:2;">
           <label for="codigo">Código</label>
@@ -845,16 +905,20 @@
         // Esperar a que se complete el registro completo (movimiento + stock)
         await registrarMovimiento(mov);
         
+        // Actualizar el stock mostrado si el artículo sigue seleccionado
+        if (codigo && document.getElementById('codigo').value === codigo) {
+          await cargarStockDisponible(codigo);
+        }
+        
         // DESBLOQUEAR INTERFAZ después de completar proceso
         desbloquearInterfaz();
         
         const mensaje = tipo === 'ENTRADA' ? 'Stock agregado exitosamente!' : 'Stock retirado exitosamente!';
         mostrarFeedback(mensaje, 'success');
-        document.getElementById('formIngreso').reset();
-        document.getElementById('codigo').value = '';
-        // Limpiar Select2 y imagen
-        $('#producto').val(null).trigger('change');
-        document.getElementById('imgArticulo').style.display = 'none';
+        
+        // Solo limpiar cantidad, mantener producto seleccionado para facilitar múltiples operaciones
+        document.getElementById('cantidad').value = '';
+        document.getElementById('cantidad').focus();
       } catch (e) {
         // DESBLOQUEAR INTERFAZ en caso de error
         desbloquearInterfaz();
@@ -897,7 +961,8 @@
       // Event listener para cuando se selecciona un producto
       $select.on('select2:select', function(e) {
         const opt = e.target.options[e.target.selectedIndex];
-        document.getElementById('codigo').value = opt.getAttribute('data-codigo') || '';
+        const codigo = opt.getAttribute('data-codigo') || '';
+        document.getElementById('codigo').value = codigo;
         document.getElementById('valorUSD').value = opt.getAttribute('data-valorusd') || '';
         const imgUrl = opt.getAttribute('data-imgurl') || '';
         const img = document.getElementById('imgArticulo');
@@ -907,6 +972,11 @@
         } else {
           img.src = 'no-disponible.png';
           img.style.display = 'block';
+        }
+        
+        // Cargar y mostrar stock disponible
+        if (codigo) {
+          cargarStockDisponible(codigo);
         }
         
         // Enfocar automáticamente el campo cantidad después de seleccionar un producto
@@ -920,6 +990,7 @@
         document.getElementById('codigo').value = '';
         document.getElementById('valorUSD').value = '';
         document.getElementById('imgArticulo').style.display = 'none';
+        document.getElementById('stockDisplay').style.display = 'none';
       });
 
       // Event listener para abrir Select2 con la tecla TAB
@@ -963,6 +1034,46 @@
     }
     function mostrarLoadingTabla(msg = 'Cargando movimientos...') {
       document.getElementById('tablaContainer').innerHTML = `<div class="loading">${msg}</div>`;
+    }
+
+    // Función para cargar y mostrar el stock disponible de un artículo
+    async function cargarStockDisponible(codigo) {
+      const stockDisplay = document.getElementById('stockDisplay');
+      const stockCantidad = document.getElementById('stockCantidad');
+      
+      // Limpiar estilos inline para que las clases CSS funcionen
+      stockDisplay.style.background = '';
+      stockDisplay.style.borderColor = '';
+      stockDisplay.style.color = '';
+      
+      // Mostrar estado de carga
+      stockDisplay.style.display = 'block';
+      stockDisplay.className = 'stock-cargando';
+      stockCantidad.textContent = 'Cargando...';
+      
+      try {
+        const stockRef = db.ref('stock/' + codigo);
+        const snapshot = await stockRef.once('value');
+        const stockData = snapshot.val();
+        
+        const stockActual = stockData?.stockActual || 0;
+        stockCantidad.textContent = stockActual;
+        
+        // Aplicar clase CSS según el stock disponible
+        stockDisplay.className = '';
+        if (stockActual > 10) {
+          stockDisplay.className = 'stock-alto';
+        } else if (stockActual > 0) {
+          stockDisplay.className = 'stock-bajo';
+        } else {
+          stockDisplay.className = 'stock-agotado';
+        }
+        
+      } catch (error) {
+        console.error('Error al cargar stock disponible:', error);
+        stockCantidad.textContent = 'Error';
+        stockDisplay.className = 'stock-agotado';
+      }
     }
 
     // Cargar productos desde Google Sheets
