@@ -1527,9 +1527,9 @@ function getTipoCliente() {
             .then(async () => {
               // Registrar movimientos de inventario usando el id generado
               await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoRef.key);
-              // Actualizar historial de alias si se usó uno
+              // Guardar alias en localStorage si se usó uno
               if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
-                cargarHistorialAlias();
+                guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
               }
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
@@ -1858,9 +1858,9 @@ function getTipoCliente() {
               .then(async () => {
                 // Registrar movimientos de inventario también en edición
                 await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
-                // Actualizar historial de alias si se usó uno
+                // Guardar alias en localStorage si se usó uno
                 if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
-                  cargarHistorialAlias();
+                  guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
                 }
                 
                 // DESBLOQUEAR INTERFAZ después de completar proceso
@@ -2063,7 +2063,7 @@ function cargarClientes() {
 }
 cargarClientes();
 
-// === ALIAS: Autocompletar con historial ===
+// === ALIAS: Autocompletar con historial desde localStorage ===
 let aliasHistorial = [];
 
 // Crear datalist para autocompletar alias
@@ -2080,33 +2080,15 @@ if (aliasField) {
   aliasField.setAttribute('list', 'aliasDatalist');
 }
 
-// Cargar historial de alias desde Firebase
-function cargarHistorialAlias() {
-  db.ref('pedidos').orderByChild('timestamp').limitToLast(200).once('value').then(snap => {
-    const aliasSet = new Set(); // Para evitar duplicados
-    const pedidos = [];
-    
-    // Convertir snapshot a array y ordenar por timestamp descendente
-    snap.forEach(child => {
-      const pedido = child.val();
-      if (pedido && pedido.pagos && pedido.pagos.alias && pedido.pagos.alias.trim() !== '') {
-        pedidos.push({
-          alias: pedido.pagos.alias.trim().toUpperCase(),
-          timestamp: pedido.timestamp || 0
-        });
-      }
-    });
-    
-    // Ordenar por timestamp descendente y tomar solo los 10 más recientes únicos
-    pedidos.sort((a, b) => b.timestamp - a.timestamp);
-    
-    aliasHistorial = [];
-    pedidos.forEach(pedido => {
-      if (aliasSet.size < 10 && !aliasSet.has(pedido.alias)) {
-        aliasSet.add(pedido.alias);
-        aliasHistorial.push(pedido.alias);
-      }
-    });
+// Cargar historial de alias desde localStorage
+function cargarHistorialAliasDesdeLocalStorage() {
+  try {
+    const aliasGuardados = localStorage.getItem('historialAlias');
+    if (aliasGuardados) {
+      aliasHistorial = JSON.parse(aliasGuardados);
+    } else {
+      aliasHistorial = [];
+    }
     
     // Actualizar datalist
     datalistAlias.innerHTML = '';
@@ -2115,13 +2097,56 @@ function cargarHistorialAlias() {
       option.value = alias;
       datalistAlias.appendChild(option);
     });
-  }).catch(err => {
-    console.error('Error cargando historial de alias:', err);
-  });
+  } catch (error) {
+    console.error('Error cargando historial de alias desde localStorage:', error);
+    aliasHistorial = [];
+  }
+}
+
+// Guardar alias en localStorage
+function guardarAliasEnLocalStorage(nuevoAlias) {
+  try {
+    if (!nuevoAlias || nuevoAlias.trim() === '') return;
+    
+    const aliasLimpio = nuevoAlias.trim().toUpperCase();
+    
+    // Cargar historial actual
+    let historial = [];
+    const aliasGuardados = localStorage.getItem('historialAlias');
+    if (aliasGuardados) {
+      historial = JSON.parse(aliasGuardados);
+    }
+    
+    // Remover el alias si ya existe para evitar duplicados
+    historial = historial.filter(alias => alias !== aliasLimpio);
+    
+    // Agregar el nuevo alias al principio
+    historial.unshift(aliasLimpio);
+    
+    // Mantener solo los últimos 15 alias
+    if (historial.length > 15) {
+      historial = historial.slice(0, 15);
+    }
+    
+    // Guardar en localStorage
+    localStorage.setItem('historialAlias', JSON.stringify(historial));
+    
+    // Actualizar el historial en memoria y el datalist
+    aliasHistorial = historial;
+    datalistAlias.innerHTML = '';
+    aliasHistorial.forEach(alias => {
+      const option = document.createElement('option');
+      option.value = alias;
+      datalistAlias.appendChild(option);
+    });
+    
+  } catch (error) {
+    console.error('Error guardando alias en localStorage:', error);
+  }
 }
 
 // Cargar historial de alias al inicializar
-cargarHistorialAlias();
+cargarHistorialAliasDesdeLocalStorage();
 
 // Al salir del input nombre, validar si existe
 form.nombre.addEventListener('blur', function() {
