@@ -891,6 +891,7 @@
         let filtroTipoCliente = '';
         let pedidosPorEmail = {};
         let pedidosPorTelefono = {};
+        let pedidosPorNombre = {};
         let clientesSeleccionados = new Set();
 
         // Lista de provincias argentinas
@@ -942,6 +943,7 @@
             db.ref('pedidos').once('value').then(pedidosSnapshot => {
                 pedidosPorEmail = {};
                 pedidosPorTelefono = {};
+                pedidosPorNombre = {};
                 
                 if (pedidosSnapshot.exists()) {
                     pedidosSnapshot.forEach(child => {
@@ -970,6 +972,18 @@
                                     ...pedido
                                 });
                             }
+                            
+                            // Indexar por nombre si existe
+                            if (pedido.cliente.nombre && pedido.cliente.nombre.trim() !== '') {
+                                const nombre = pedido.cliente.nombre.trim();
+                                if (!pedidosPorNombre[nombre]) {
+                                    pedidosPorNombre[nombre] = [];
+                                }
+                                pedidosPorNombre[nombre].push({
+                                    id: child.key,
+                                    ...pedido
+                                });
+                            }
                         }
                     });
                 }
@@ -984,9 +998,10 @@
                             cliente.id = child.key;
                             
                             // Agregar contador de pedidos
-                            // Priorizar email, si no hay email usar teléfono
+                            // Priorizar email, si no hay email usar teléfono, si no hay teléfono usar nombre
                             const emailCliente = (cliente.email || '').toLowerCase().trim();
                             const telefonoCliente = (cliente.telefono || '').trim();
+                            const nombreCliente = (cliente.nombre || '').trim();
                             
                             let pedidosCount = 0;
                             if (emailCliente && pedidosPorEmail[emailCliente]) {
@@ -997,6 +1012,10 @@
                                 pedidosCount = pedidosPorTelefono[telefonoCliente].length;
                                 cliente.criterioUsado = 'telefono';
                                 cliente.valorCriterio = telefonoCliente;
+                            } else if (nombreCliente && pedidosPorNombre[nombreCliente]) {
+                                pedidosCount = pedidosPorNombre[nombreCliente].length;
+                                cliente.criterioUsado = 'nombre';
+                                cliente.valorCriterio = nombreCliente;
                             } else {
                                 cliente.criterioUsado = 'ninguno';
                                 cliente.valorCriterio = '';
@@ -1540,6 +1559,8 @@
                 pedidos = pedidosPorEmail[emailKey] || [];
             } else if (criterio === 'telefono') {
                 pedidos = pedidosPorTelefono[valor] || [];
+            } else if (criterio === 'nombre') {
+                pedidos = pedidosPorNombre[valor] || [];
             }
             
             const modal = document.getElementById('modalReportePedidos');
