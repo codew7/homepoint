@@ -2796,11 +2796,11 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     if (form.vendedor) form.vendedor.value = '';
     if (form.alias) form.alias.value = '';
     
-    // Restablecer tipo de cliente a "consumidor final" por defecto
+    // Restablecer tipo de cliente a "mayorista" por defecto
     const radioConsumidorFinal = document.querySelector('input[name="tipoCliente"][value="mayorista"]');
     if (radioConsumidorFinal) {
       radioConsumidorFinal.checked = true;
-      tipoCliente = 'consumidor final';
+      tipoCliente = 'mayorista';
     }
     
     // Limpiar array de items
@@ -2815,9 +2815,6 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     // Limpiar URL para quitar parámetro ?id= si existe
     const newUrl = window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
-    
-    // Mostrar mensaje de confirmación
-    showPopup('✅ Formulario restablecido. Listo para nuevo pedido.', '✅', true);
     
     // Enfocar en el campo de nombre
     if (form.nombre) {
