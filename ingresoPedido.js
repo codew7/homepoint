@@ -2561,42 +2561,70 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
    * @param {string} tipo - Tipo de movimiento: 'ENTRADA', 'SALIDA', 'RETIRO'
    */
   async function actualizarStock(codigo, nombre, cantidad, tipo) {
-    if (!codigo || !nombre || !cantidad) return;
+    if (!codigo || !nombre || !cantidad) {
+      console.warn('⚠️ Parámetros inválidos en actualizarStock:', { codigo, nombre, cantidad, tipo });
+      return false;
+    }
     
     const stockRef = db.ref('stock/' + codigo);
+    const maxReintentos = 3;
+    let intentos = 0;
     
-    try {
-      await stockRef.transaction(function(currentData) {
-        // Si no existe data previa, crear objeto base
-        if (currentData === null) {
-          currentData = {
+    while (intentos < maxReintentos) {
+      try {
+        const resultado = await stockRef.transaction(function(currentData) {
+          // Si no existe data previa, crear objeto base
+          if (currentData === null) {
+            currentData = {
+              nombre: nombre,
+              stockActual: 0
+            };
+          }
+          
+          let stockActual = currentData.stockActual || 0;
+          
+          // Calcular nuevo stock según tipo de movimiento
+          if (tipo === 'ENTRADA') {
+            stockActual += cantidad;
+          } else if (tipo === 'SALIDA' || tipo === 'RETIRO') {
+            stockActual -= cantidad;
+          }
+          
+          // Stock mínimo es 0
+          stockActual = Math.max(0, stockActual);
+          
+          // Preservar todos los campos existentes y solo actualizar stockActual
+          return {
+            ...currentData,
             nombre: nombre,
-            stockActual: 0
+            stockActual: stockActual
           };
+        });
+        
+        // Si la transacción fue exitosa
+        if (resultado.committed) {
+          console.log(`✓ Stock actualizado correctamente: ${codigo} (${tipo}) ${cantidad}`);
+          return true;
+        } else {
+          console.warn(`⚠️ Transacción abortada para ${codigo}. Intento ${intentos + 1}/${maxReintentos}`);
         }
         
-        let stockActual = currentData.stockActual || 0;
-        
-        // Calcular nuevo stock según tipo de movimiento
-        if (tipo === 'ENTRADA') {
-          stockActual += cantidad;
-        } else if (tipo === 'SALIDA' || tipo === 'RETIRO') {
-          stockActual -= cantidad;
-        }
-        
-        // Stock mínimo es 0
-        stockActual = Math.max(0, stockActual);
-        
-        // Preservar todos los campos existentes y solo actualizar stockActual
-        return {
-          ...currentData,
-          nombre: nombre,
-          stockActual: stockActual
-        };
-      });
-    } catch (error) {
-      console.error('Error actualizando stock:', error, { codigo, nombre, cantidad, tipo });
+      } catch (error) {
+        console.error(`❌ Error en transacción (intento ${intentos + 1}/${maxReintentos}):`, error, { codigo, nombre, cantidad, tipo });
+      }
+      
+      intentos++;
+      
+      // Espera exponencial entre reintentos
+      if (intentos < maxReintentos) {
+        const tiempoEspera = Math.pow(2, intentos) * 100; // 200ms, 400ms, 800ms
+        console.log(`⏳ Reintentando en ${tiempoEspera}ms...`);
+        await new Promise(resolve => setTimeout(resolve, tiempoEspera));
+      }
     }
+    
+    console.error(`❌ Fallo después de ${maxReintentos} intentos para ${codigo}`);
+    return false;
   }
 
   // --- REGISTRO DE MOVIMIENTOS DE INVENTARIO ---
@@ -2606,13 +2634,16 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     console.log('Items a procesar:', items.length);
     
     if (!Array.isArray(items) || !cotizacionCierre || !pedidoId) {
-      console.error('Parámetros inválidos:', { items: Array.isArray(items), cotizacionCierre, pedidoId });
-      return;
+      console.error('❌ Parámetros inválidos:', { items: Array.isArray(items), cotizacionCierre, pedidoId });
+      throw new Error('Parámetros inválidos en registrarMovimientosInventario');
     }
+    
+    // Array para acumular errores
+    const errores = [];
     
     try {
       // 1. Obtener movimientos previos de este pedido
-      console.log('Buscando movimientos previos para pedidoId:', pedidoId);
+      console.log('🔍 Buscando movimientos previos para pedidoId:', pedidoId);
       const snapshot = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
       const movimientosPrevios = [];
       
@@ -2623,14 +2654,14 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
         });
       });
       
-      console.log(`Encontrados ${movimientosPrevios.length} movimientos previos`);
+      console.log(`📋 Encontrados ${movimientosPrevios.length} movimientos previos`);
       
       // 2. Restaurar el stock de los movimientos previos de tipo SALIDA
       if (movimientosPrevios.length > 0) {
-        console.log(`Restaurando stock de ${movimientosPrevios.length} movimientos previos del pedido ${pedidoId}`);
+        console.log(`🔄 Restaurando stock de ${movimientosPrevios.length} movimientos previos del pedido ${pedidoId}`);
         
         for (const mov of movimientosPrevios) {
-          console.log(`Movimiento previo: ${mov.codigo} - ${mov.tipo} - Cantidad: ${mov.cantidad}`);
+          console.log(`  📦 Movimiento previo: ${mov.codigo} - ${mov.tipo} - Cantidad: ${mov.cantidad}`);
           
           if (mov.tipo === 'SALIDA') {
             const codigo = mov.codigo;
@@ -2638,13 +2669,17 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
             const cantidad = mov.cantidad || 0;
             
             // Restaurar stock sumando la cantidad (inversión de SALIDA)
-            console.log(`Restaurando stock: ${codigo} +${cantidad}`);
-            await actualizarStock(codigo, nombre, cantidad, 'ENTRADA');
-            console.log(`✓ Stock restaurado: ${codigo} +${cantidad}`);
+            console.log(`  ⬆️ Restaurando stock: ${codigo} +${cantidad}`);
+            const exitoso = await actualizarStock(codigo, nombre, cantidad, 'ENTRADA');
+            
+            if (!exitoso) {
+              errores.push(`Error restaurando stock de ${mov.codigo}`);
+              console.warn(`  ⚠️ Error restaurando stock: ${mov.codigo}`);
+            }
           }
         }
       } else {
-        console.log('No hay movimientos previos para restaurar (pedido nuevo)');
+        console.log('ℹ️ No hay movimientos previos para restaurar (pedido nuevo)');
       }
       
       // 3. Eliminar movimientos previos
@@ -2653,17 +2688,20 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
         movimientosPrevios.forEach(mov => {
           updates[mov.key] = null;
         });
-        console.log('Eliminando movimientos previos...');
+        console.log('🗑️ Eliminando movimientos previos...');
         await db.ref('movimientos').update(updates);
         console.log(`✓ Eliminados ${movimientosPrevios.length} movimientos previos del pedido ${pedidoId}`);
       }
       
       // 4. Registrar los nuevos movimientos
-      console.log(`Registrando ${items.length} nuevos movimientos...`);
+      console.log(`📝 Registrando ${items.length} nuevos movimientos...`);
+      let exitosos = 0;
+      
       for (const item of items) {
         try {
           if (!item || !item.codigo || !item.nombre || !item.cantidad || !item.valorU) {
-            console.warn('Item inválido, saltando:', item);
+            console.warn('⚠️ Item inválido, saltando:', item);
+            errores.push(`Item inválido: ${item?.nombre || 'sin nombre'}`);
             continue;
           }
           
@@ -2682,23 +2720,48 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
           };
           
           // Registrar movimiento
-          console.log(`Registrando movimiento: ${item.codigo} -${item.cantidad}`);
+          console.log(`  📦 Registrando movimiento: ${item.codigo} -${item.cantidad}`);
           await db.ref('movimientos/' + id).set(movimiento);
           
           // Actualizar stock después de registrar el movimiento
-          await actualizarStock(item.codigo, item.nombre, parseInt(item.cantidad, 10) || 0, 'SALIDA');
-          console.log(`✓ Movimiento registrado y stock actualizado: ${item.codigo} -${item.cantidad}`);
+          const exitoso = await actualizarStock(item.codigo, item.nombre, parseInt(item.cantidad, 10) || 0, 'SALIDA');
+          
+          if (!exitoso) {
+            errores.push(`Error actualizando stock de ${item.codigo}`);
+            console.warn(`  ⚠️ Error actualizando stock: ${item.codigo}`);
+          } else {
+            exitosos++;
+          }
           
         } catch (err) {
-          console.error('Error registrando movimiento de inventario:', err, item);
+          console.error('❌ Error registrando movimiento de inventario:', err, item);
+          errores.push(`Error en item ${item.codigo}: ${err.message}`);
         }
       }
       
-      console.log(`✓ Proceso completado: ${items.length} nuevos movimientos registrados para el pedido ${pedidoId}`);
+      // Reporte final
+      console.log(`✅ Proceso completado: ${exitosos}/${items.length} movimientos exitosos para el pedido ${pedidoId}`);
+      
+      if (errores.length > 0) {
+        console.warn('⚠️ Se encontraron errores durante el proceso:');
+        errores.forEach((error, idx) => {
+          console.warn(`  ${idx + 1}. ${error}`);
+        });
+        
+        // Mostrar notificación al usuario si hay errores
+        const mensajeErrores = errores.length === 1 
+          ? '⚠️ Hubo 1 error durante la actualización de stock.' 
+          : `⚠️ Hubo ${errores.length} errores durante la actualización de stock.`;
+        
+        showPopup(mensajeErrores + '\nRevise la consola para más detalles.', '⚠️', true);
+      }
+      
       console.log('===== FIN registrarMovimientosInventario =====');
       
     } catch (error) {
-      console.error('❌ Error en registrarMovimientosInventario:', error);
+      console.error('❌ Error crítico en registrarMovimientosInventario:', error);
+      showPopup('Error crítico al procesar inventario. Contacte al administrador.', '❌', false);
+      throw error;
     }
   }
 });
