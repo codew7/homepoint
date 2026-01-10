@@ -2764,4 +2764,75 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
       throw error;
     }
   }
+
+  // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===
+  function restablecerFormulario() {
+    // Confirmar con el usuario si hay datos
+    const hayDatos = items.length > 0 || 
+                     form.nombre.value.trim() !== '' || 
+                     form.telefono.value.trim() !== '' ||
+                     form.direccion.value.trim() !== '';
+    
+    if (hayDatos) {
+      const confirmar = confirm('¿Está seguro de que desea crear un nuevo pedido? Se perderán los datos actuales.');
+      if (!confirmar) return;
+    }
+    
+    // Limpiar campos del formulario
+    form.nombre.value = '';
+    form.telefono.value = '';
+    form.direccion.value = '';
+    form.dni.value = '';
+    form.email.value = '';
+    form.medioPago.value = '';
+    form.recargo.value = '';
+    form.descuento.value = '';
+    form.descuentoPorcentaje.value = '';
+    form.envio.value = '';
+    form.subtotal.value = '';
+    form.totalFinal.value = '';
+    
+    if (form.nota) form.nota.value = '';
+    if (form.vendedor) form.vendedor.value = '';
+    if (form.alias) form.alias.value = '';
+    
+    // Restablecer tipo de cliente a "consumidor final" por defecto
+    const radioConsumidorFinal = document.querySelector('input[name="tipoCliente"][value="mayorista"]');
+    if (radioConsumidorFinal) {
+      radioConsumidorFinal.checked = true;
+      tipoCliente = 'consumidor final';
+    }
+    
+    // Limpiar array de items
+    items = [];
+    renderItems();
+    
+    // Limpiar buscador de artículos
+    if (searchInput) searchInput.value = '';
+    if (searchQuantity) searchQuantity.value = '1';
+    if (searchResults) searchResults.innerHTML = '';
+    
+    // Limpiar URL para quitar parámetro ?id= si existe
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, newUrl);
+    
+    // Mostrar mensaje de confirmación
+    showPopup('✅ Formulario restablecido. Listo para nuevo pedido.', '✅', true);
+    
+    // Enfocar en el campo de nombre
+    if (form.nombre) {
+      setTimeout(() => form.nombre.focus(), 100);
+    }
+    
+    console.log('✅ Formulario restablecido correctamente');
+  }
+
+  // === MANEJADOR DEL BOTÓN NUEVO ===
+  const btnNuevo = document.getElementById('nuevoBtn');
+  if (btnNuevo) {
+    btnNuevo.addEventListener('click', function(e) {
+      e.preventDefault();
+      restablecerFormulario();
+    });
+  }
 });
