@@ -1036,7 +1036,12 @@
       document.getElementById('tablaContainer').innerHTML = `<div class="loading">${msg}</div>`;
     }
 
-    // Función para cargar y mostrar el stock disponible de un artículo
+    // Función para cargar y mostrar el stock disponible de un artículo (desde Google Sheets)
+    // Cache local para evitar llamadas repetidas a la API
+    let stockCache = null;
+    let stockCacheTimestamp = 0;
+    const STOCK_CACHE_DURATION = 60000; // 1 minuto de cache
+    
     async function cargarStockDisponible(codigo) {
       const stockDisplay = document.getElementById('stockDisplay');
       const stockCantidad = document.getElementById('stockCantidad');
@@ -1052,11 +1057,30 @@
       stockCantidad.textContent = 'Cargando...';
       
       try {
-        const stockRef = db.ref('stock/' + codigo);
-        const snapshot = await stockRef.once('value');
-        const stockData = snapshot.val();
+        // Verificar si tenemos cache válido
+        const ahora = Date.now();
+        if (!stockCache || (ahora - stockCacheTimestamp) > STOCK_CACHE_DURATION) {
+          // Consultar Google Sheets
+          const response = await fetch(SHEETS_URL);
+          const data = await response.json();
+          const rows = data.values || [];
+          
+          // Crear mapa de stock por código (columna 2 = código, columna 10 = stock)
+          stockCache = {};
+          for (let i = 1; i < rows.length; i++) { // Empezar desde 1 para saltar header
+            const row = rows[i];
+            const codigoProducto = row[2] || '';
+            const stockActual = Number(row[10]) || 0;
+            if (codigoProducto) {
+              stockCache[codigoProducto] = stockActual;
+            }
+          }
+          stockCacheTimestamp = ahora;
+          console.log('Stock cargado desde Google Sheets:', Object.keys(stockCache).length, 'productos');
+        }
         
-        const stockActual = stockData?.stockActual || 0;
+        // Buscar el stock del código solicitado
+        const stockActual = stockCache[codigo] || 0;
         stockCantidad.textContent = stockActual;
         
         // Aplicar clase CSS según el stock disponible
@@ -1070,7 +1094,7 @@
         }
         
       } catch (error) {
-        console.error('Error al cargar stock disponible:', error);
+        console.error('Error al cargar stock disponible desde Google Sheets:', error);
         stockCantidad.textContent = 'Error';
         stockDisplay.className = 'stock-agotado';
       }
@@ -1113,90 +1137,16 @@
       }
     }
 
-    // === ACTUALIZACIÓN DE STOCK EN TIEMPO REAL ===
-    /**
-     * Actualiza el stock de un artículo usando transacciones de Firebase para garantizar atomicidad.
-     * @param {string} codigo - Código del artículo
-     * @param {string} nombre - Nombre del artículo
-     * @param {number} cantidad - Cantidad a modificar
-     * @param {string} tipo - Tipo de movimiento: 'ENTRADA', 'SALIDA', 'RETIRO'
-     */
-    async function actualizarStock(codigo, nombre, cantidad, tipo) {
-      if (!codigo || !nombre || !cantidad) {
-        console.warn('actualizarStock: Parámetros inválidos', { codigo, nombre, cantidad, tipo });
-        return;
-      }
-      
-      console.log(`📦 Actualizando stock: ${codigo} (${tipo}) ${tipo === 'ENTRADA' ? '+' : '-'}${cantidad}`);
-      
-      const stockRef = db.ref('stock/' + codigo);
-      
-      try {
-        const resultado = await stockRef.transaction(function(currentData) {
-          let stockActual = 0;
-          let ultimaEntrada = currentData?.ultimaEntrada || null;
-          
-          if (currentData !== null && currentData.stockActual !== undefined) {
-            stockActual = currentData.stockActual;
-          }
-          
-          console.log(`  Stock actual antes: ${stockActual}`);
-          
-          // Calcular nuevo stock según tipo de movimiento
-          if (tipo === 'ENTRADA') {
-            stockActual += cantidad;
-            // Actualizar fecha de última entrada (solo fecha, formato YYYY-MM-DD)
-            const ahora = new Date();
-            ultimaEntrada = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
-          } else if (tipo === 'SALIDA' || tipo === 'RETIRO') {
-            stockActual -= cantidad;
-          }
-          
-          // Stock mínimo es 0
-          stockActual = Math.max(0, stockActual);
-          
-          console.log(`  Stock nuevo: ${stockActual}`);
-          
-          const nuevosDatos = {
-            nombre: nombre,
-            stockActual: stockActual
-          };
-          
-          // Solo incluir ultimaEntrada si existe (para ENTRADA o si ya estaba guardado)
-          if (ultimaEntrada !== null) {
-            nuevosDatos.ultimaEntrada = ultimaEntrada;
-          }
-          
-          return nuevosDatos;
-        });
-        
-        if (resultado.committed) {
-          console.log(`✅ Stock actualizado exitosamente: ${codigo}`);
-        } else {
-          console.warn(`⚠️ Transacción abortada para: ${codigo}`);
-        }
-        
-      } catch (error) {
-        console.error('❌ Error actualizando stock:', error, { codigo, nombre, cantidad, tipo });
-        throw error; // Re-lanzar el error para que sea capturado por el llamador
-      }
-    }
-
-    // Registrar movimiento en Firebase
+    // Registrar movimiento en Firebase (solo en nodo 'movimientos', sin actualizar nodo 'stock')
     async function registrarMovimiento(mov) {
       console.log('📝 Iniciando registrarMovimiento:', mov);
       
       try {
-        // 1. Primero registrar el movimiento en la base de datos
+        // Registrar el movimiento en la base de datos (solo en nodo 'movimientos')
         const ref = db.ref('movimientos').push();
         console.log('  Guardando movimiento en Firebase...');
         await ref.set(mov);
         console.log('  ✅ Movimiento guardado con ID:', ref.key);
-        
-        // 2. Luego actualizar el stock (DEBE esperar a que termine)
-        console.log('  Actualizando stock...');
-        await actualizarStock(mov.codigo, mov.nombre, mov.cantidad, mov.tipo);
-        console.log('  ✅ Stock actualizado');
         
         console.log('✅ registrarMovimiento completado exitosamente');
       } catch (error) {
