@@ -456,22 +456,6 @@
       border-radius: 4px;
     }
     
-    .confirm-input {
-      width: 100%;
-      padding: 12px;
-      border: 2px solid #dee2e6;
-      border-radius: 8px;
-      font-size: 1rem;
-      margin-bottom: 1rem;
-      text-align: center;
-      text-transform: uppercase;
-    }
-    
-    .confirm-input:focus {
-      outline: none;
-      border-color: var(--danger);
-    }
-    
     .confirm-buttons {
       display: flex;
       gap: 1rem;
@@ -496,6 +480,161 @@
         width: 100%;
         justify-content: center;
       }
+    }
+    
+    /* ===== ESTILOS PARA ELIMINACIÓN MASIVA ===== */
+    .section-divider {
+      display: flex;
+      align-items: center;
+      margin: 2rem 0;
+      gap: 1rem;
+    }
+    
+    .section-divider::before,
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+    
+    .section-divider span {
+      color: #888;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    
+    .mass-delete-section {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    
+    .mass-delete-section h3 {
+      margin: 0 0 1rem 0;
+      color: var(--text);
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .mass-delete-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .mass-delete-controls .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      border-radius: 6px;
+    }
+    
+    .mass-delete-controls .search-input {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    
+    .mass-delete-controls .search-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    
+    .articulos-list-container {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      background: white;
+    }
+    
+    .articulos-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .articulos-list li {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.2s;
+    }
+    
+    .articulos-list li:last-child {
+      border-bottom: none;
+    }
+    
+    .articulos-list li:hover {
+      background: #f8f9fa;
+    }
+    
+    .articulos-list li.selected {
+      background: #fff3cd;
+    }
+    
+    .articulos-list input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin-right: 12px;
+      cursor: pointer;
+      accent-color: var(--danger);
+    }
+    
+    .articulos-list .articulo-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+    }
+    
+    .articulos-list .articulo-codigo {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    
+    .articulos-list .articulo-nombre {
+      color: #666;
+      font-size: 0.85rem;
+    }
+    
+    .selection-count {
+      background: var(--danger);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    
+    .mass-delete-footer {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    
+    .mass-delete-footer .selection-info {
+      color: #666;
+      font-size: 0.9rem;
+    }
+    
+    .no-results {
+      text-align: center;
+      padding: 2rem;
+      color: #888;
     }
   </style>
 </head>
@@ -588,6 +727,39 @@
     </div>
     
     <div id="feedback" class="feedback"></div>
+    
+    <!-- Sección de Eliminación Masiva -->
+    <div class="section-divider">
+      <span>O eliminar múltiples artículos</span>
+    </div>
+    
+    <div class="mass-delete-section">
+      <h3><i class="bi bi-list-check"></i> Eliminación Masiva de Movimientos</h3>
+      
+      <div class="mass-delete-controls">
+        <input type="text" id="searchArticulos" class="search-input" placeholder="Buscar artículo...">
+        <button class="btn btn-sm btn-secondary" onclick="seleccionarTodos()">
+          <i class="bi bi-check-all"></i> Todos
+        </button>
+        <button class="btn btn-sm btn-secondary" onclick="deseleccionarTodos()">
+          <i class="bi bi-x-lg"></i> Ninguno
+        </button>
+        <span class="selection-count" id="selectionCount">0 seleccionados</span>
+      </div>
+      
+      <div class="articulos-list-container">
+        <ul class="articulos-list" id="articulosList">
+          <li class="no-results">Cargando artículos...</li>
+        </ul>
+      </div>
+      
+      <div class="mass-delete-footer">
+        <span class="selection-info" id="selectionInfo">Selecciona los artículos cuyos movimientos deseas eliminar</span>
+        <button id="btnEliminarMasivo" class="btn btn-danger" onclick="mostrarConfirmacionMasiva()" disabled>
+          <i class="bi bi-trash3"></i> Eliminar Movimientos Seleccionados
+        </button>
+      </div>
+    </div>
   </div>
   
   <!-- Loading Overlay -->
@@ -604,14 +776,35 @@
         Estás a punto de eliminar <strong id="confirmCount">0</strong> movimientos del artículo 
         <span class="confirm-code" id="confirmCodigo"></span>.
         <br><br>
-        Para confirmar, escribe el código del artículo:
+        <strong>Esta acción no se puede deshacer.</strong>
       </p>
-      <input type="text" id="confirmInput" class="confirm-input" placeholder="Escribe el código aquí" autocomplete="off">
       <div class="confirm-buttons">
         <button class="btn btn-secondary" onclick="cerrarConfirmacion()">
           <i class="bi bi-x-lg"></i> Cancelar
         </button>
-        <button id="btnConfirmarEliminar" class="btn btn-danger" onclick="ejecutarEliminacion()" disabled>
+        <button id="btnConfirmarEliminar" class="btn btn-danger" onclick="ejecutarEliminacion()">
+          <i class="bi bi-trash3"></i> Confirmar Eliminación
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal de Confirmación Masiva -->
+  <div id="confirmModalMasivo" class="confirm-modal">
+    <div class="confirm-box">
+      <h3><i class="bi bi-exclamation-triangle-fill"></i> Confirmar Eliminación Masiva</h3>
+      <p>
+        Estás a punto de eliminar <strong>TODOS</strong> los movimientos de 
+        <strong id="confirmCountArticulos">0</strong> artículos seleccionados.
+        <br><br>
+        <strong>Esta acción no se puede deshacer.</strong>
+      </p>
+      <div id="listaArticulosConfirm" style="max-height: 150px; overflow-y: auto; text-align: left; background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+      <div class="confirm-buttons">
+        <button class="btn btn-secondary" onclick="cerrarConfirmacionMasiva()">
+          <i class="bi bi-x-lg"></i> Cancelar
+        </button>
+        <button id="btnConfirmarEliminarMasivo" class="btn btn-danger" onclick="ejecutarEliminacionMasiva()">
           <i class="bi bi-trash3"></i> Confirmar Eliminación
         </button>
       </div>
@@ -784,18 +977,33 @@
     }
 
     function configurarEventListeners() {
-      // Validación del input de confirmación
-      document.getElementById('confirmInput').addEventListener('input', function() {
-        const valor = this.value.trim().toUpperCase();
-        const codigoEsperado = codigoSeleccionado.toUpperCase();
-        const btnConfirmar = document.getElementById('btnConfirmarEliminar');
-        btnConfirmar.disabled = valor !== codigoEsperado;
-      });
-      
-      // Cerrar modal con Escape
+      // Manejar teclas globales
       document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          cerrarConfirmacion();
+        const modalVisible = document.getElementById('confirmModal').classList.contains('visible');
+        
+        // Si el modal está visible
+        if (modalVisible) {
+          // Cerrar modal con Escape
+          if (e.key === 'Escape') {
+            cerrarConfirmacion();
+          }
+          // Confirmar con Enter
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            ejecutarEliminacion();
+          }
+        } else {
+          // Tab para enfocar en la lista desplegable (solo si no hay otro elemento enfocado importante)
+          if (e.key === 'Tab' && !e.shiftKey) {
+            const activeElement = document.activeElement;
+            const isSelect2Open = document.querySelector('.select2-container--open');
+            
+            // Si no está en un input o el select2 no está abierto
+            if (!isSelect2Open && activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA') {
+              e.preventDefault();
+              $('#producto').select2('open');
+            }
+          }
         }
       });
     }
@@ -937,31 +1145,20 @@
       
       document.getElementById('confirmCount').textContent = movimientosArticulo.length;
       document.getElementById('confirmCodigo').textContent = codigoSeleccionado;
-      document.getElementById('confirmInput').value = '';
-      document.getElementById('btnConfirmarEliminar').disabled = true;
       
       document.getElementById('confirmModal').classList.add('visible');
       
+      // Enfocar el botón de confirmar para que Enter funcione inmediatamente
       setTimeout(() => {
-        document.getElementById('confirmInput').focus();
+        document.getElementById('btnConfirmarEliminar').focus();
       }, 100);
     }
 
     function cerrarConfirmacion() {
       document.getElementById('confirmModal').classList.remove('visible');
-      document.getElementById('confirmInput').value = '';
     }
 
     async function ejecutarEliminacion() {
-      const inputValue = document.getElementById('confirmInput').value.trim().toUpperCase();
-      const codigoEsperado = codigoSeleccionado.toUpperCase();
-      
-      // Doble verificación de seguridad
-      if (inputValue !== codigoEsperado) {
-        mostrarFeedback('El código ingresado no coincide', 'error');
-        return;
-      }
-      
       if (movimientosArticulo.length === 0) {
         cerrarConfirmacion();
         mostrarFeedback('No hay movimientos para eliminar', 'error');
@@ -1043,6 +1240,276 @@
         feedback.classList.remove('visible');
       }, 10000);
     }
+    
+    // ========== FUNCIONES PARA ELIMINACIÓN MASIVA ==========
+    let articulosSeleccionados = new Set();
+    
+    function renderizarListaArticulos(filtro = '') {
+      const lista = document.getElementById('articulosList');
+      const filtroLower = filtro.toLowerCase();
+      
+      const productosFiltrados = productos.filter(p => 
+        p.codigo.toLowerCase().includes(filtroLower) || 
+        p.nombre.toLowerCase().includes(filtroLower)
+      );
+      
+      if (productosFiltrados.length === 0) {
+        lista.innerHTML = '<li class="no-results">No se encontraron artículos</li>';
+        return;
+      }
+      
+      let html = '';
+      productosFiltrados.forEach(prod => {
+        const isSelected = articulosSeleccionados.has(prod.codigo);
+        html += `
+          <li class="${isSelected ? 'selected' : ''}" data-codigo="${prod.codigo}">
+            <input type="checkbox" 
+                   id="chk_${prod.codigo}" 
+                   ${isSelected ? 'checked' : ''} 
+                   onchange="toggleArticulo('${prod.codigo}', '${prod.nombre.replace(/'/g, "\\'")}')">
+            <label class="articulo-info" for="chk_${prod.codigo}">
+              <span class="articulo-codigo">${prod.codigo}</span>
+              <span class="articulo-nombre">${prod.nombre}</span>
+            </label>
+          </li>
+        `;
+      });
+      
+      lista.innerHTML = html;
+    }
+    
+    function toggleArticulo(codigo, nombre) {
+      if (articulosSeleccionados.has(codigo)) {
+        articulosSeleccionados.delete(codigo);
+      } else {
+        articulosSeleccionados.add(codigo);
+      }
+      
+      actualizarContadorSeleccion();
+      actualizarEstadoItemLista(codigo);
+    }
+    
+    function actualizarEstadoItemLista(codigo) {
+      const li = document.querySelector(`li[data-codigo="${codigo}"]`);
+      if (li) {
+        if (articulosSeleccionados.has(codigo)) {
+          li.classList.add('selected');
+        } else {
+          li.classList.remove('selected');
+        }
+      }
+    }
+    
+    function actualizarContadorSeleccion() {
+      const count = articulosSeleccionados.size;
+      document.getElementById('selectionCount').textContent = `${count} seleccionado${count !== 1 ? 's' : ''}`;
+      document.getElementById('btnEliminarMasivo').disabled = count === 0;
+      
+      if (count === 0) {
+        document.getElementById('selectionInfo').textContent = 'Selecciona los artículos cuyos movimientos deseas eliminar';
+      } else {
+        document.getElementById('selectionInfo').textContent = `${count} artículo${count !== 1 ? 's' : ''} seleccionado${count !== 1 ? 's' : ''} para eliminar sus movimientos`;
+      }
+    }
+    
+    function seleccionarTodos() {
+      const filtro = document.getElementById('searchArticulos').value.toLowerCase();
+      const productosFiltrados = productos.filter(p => 
+        p.codigo.toLowerCase().includes(filtro) || 
+        p.nombre.toLowerCase().includes(filtro)
+      );
+      
+      productosFiltrados.forEach(p => {
+        articulosSeleccionados.add(p.codigo);
+      });
+      
+      renderizarListaArticulos(filtro);
+      actualizarContadorSeleccion();
+    }
+    
+    function deseleccionarTodos() {
+      articulosSeleccionados.clear();
+      renderizarListaArticulos(document.getElementById('searchArticulos').value);
+      actualizarContadorSeleccion();
+    }
+    
+    function mostrarConfirmacionMasiva() {
+      if (articulosSeleccionados.size === 0) {
+        mostrarFeedback('No hay artículos seleccionados', 'error');
+        return;
+      }
+      
+      document.getElementById('confirmCountArticulos').textContent = articulosSeleccionados.size;
+      
+      // Mostrar lista de artículos a eliminar
+      let listaHtml = '<ul style="margin: 0; padding-left: 20px; max-height: 120px; overflow-y: auto;">';
+      const codigosArray = Array.from(articulosSeleccionados);
+      codigosArray.forEach(codigo => {
+        const prod = productos.find(p => p.codigo === codigo);
+        const nombre = prod ? prod.nombre : 'Desconocido';
+        listaHtml += `<li><strong>${codigo}</strong> - ${nombre}</li>`;
+      });
+      listaHtml += '</ul>';
+      document.getElementById('listaArticulosConfirm').innerHTML = listaHtml;
+      
+      document.getElementById('confirmModalMasivo').classList.add('visible');
+      
+      setTimeout(() => {
+        document.getElementById('btnConfirmarEliminarMasivo').focus();
+      }, 100);
+    }
+    
+    function cerrarConfirmacionMasiva() {
+      document.getElementById('confirmModalMasivo').classList.remove('visible');
+    }
+    
+    async function ejecutarEliminacionMasiva() {
+      if (articulosSeleccionados.size === 0) {
+        cerrarConfirmacionMasiva();
+        mostrarFeedback('No hay artículos seleccionados', 'error');
+        return;
+      }
+      
+      cerrarConfirmacionMasiva();
+      
+      const codigosAEliminar = Array.from(articulosSeleccionados);
+      const totalArticulos = codigosAEliminar.length;
+      
+      mostrarLoading(`Buscando movimientos de ${totalArticulos} artículos...`);
+      
+      try {
+        // Recopilar todos los movimientos a eliminar
+        const todosLosMovimientos = [];
+        const registrosReset = [];
+        
+        for (const codigo of codigosAEliminar) {
+          const snapshot = await db.ref('movimientos')
+            .orderByChild('codigo')
+            .equalTo(codigo)
+            .once('value');
+          
+          if (snapshot.exists()) {
+            snapshot.forEach(child => {
+              todosLosMovimientos.push({
+                id: child.key,
+                codigo: codigo
+              });
+            });
+          }
+          
+          // Preparar registro RESET para este artículo
+          const prod = productos.find(p => p.codigo === codigo);
+          registrosReset.push({
+            cantidad: 0,
+            codigo: codigo,
+            nombre: prod ? prod.nombre : 'Desconocido',
+            timestamp: Date.now(),
+            tipo: 'RESET'
+          });
+        }
+        
+        if (todosLosMovimientos.length === 0) {
+          ocultarLoading();
+          mostrarFeedback('No se encontraron movimientos para los artículos seleccionados', 'error');
+          return;
+        }
+        
+        mostrarLoading(`Eliminando ${todosLosMovimientos.length} movimientos de ${totalArticulos} artículos...`);
+        
+        // Crear objeto de actualizaciones para eliminación masiva
+        const updates = {};
+        todosLosMovimientos.forEach(mov => {
+          updates[`movimientos/${mov.id}`] = null;
+        });
+        
+        // Ejecutar eliminación atómica
+        await db.ref().update(updates);
+        
+        console.log(`✅ Eliminados ${todosLosMovimientos.length} movimientos de ${totalArticulos} artículos`);
+        
+        // Crear registros RESET para cada artículo
+        mostrarLoading('Creando registros iniciales...');
+        
+        for (const registro of registrosReset) {
+          await db.ref('movimientos').push(registro);
+        }
+        
+        console.log(`✅ Creados ${registrosReset.length} registros RESET`);
+        
+        ocultarLoading();
+        
+        // Limpiar selección
+        articulosSeleccionados.clear();
+        renderizarListaArticulos(document.getElementById('searchArticulos').value);
+        actualizarContadorSeleccion();
+        
+        mostrarFeedback(`✅ Se eliminaron ${todosLosMovimientos.length} movimientos de ${totalArticulos} artículos correctamente`, 'success');
+        
+      } catch (error) {
+        console.error('❌ Error en eliminación masiva:', error);
+        ocultarLoading();
+        mostrarFeedback('Error al eliminar movimientos: ' + error.message, 'error');
+      }
+    }
+    
+    // Configurar event listeners adicionales para eliminación masiva
+    document.addEventListener('DOMContentLoaded', function() {
+      // Búsqueda en lista de artículos
+      const searchInput = document.getElementById('searchArticulos');
+      if (searchInput) {
+        searchInput.addEventListener('input', function() {
+          renderizarListaArticulos(this.value);
+        });
+      }
+    });
+    
+    // Modificar configurarEventListeners para incluir modal masivo
+    const originalConfigurarEventListeners = configurarEventListeners;
+    configurarEventListeners = function() {
+      // Manejar teclas globales
+      document.addEventListener('keydown', function(e) {
+        const modalVisible = document.getElementById('confirmModal').classList.contains('visible');
+        const modalMasivoVisible = document.getElementById('confirmModalMasivo').classList.contains('visible');
+        
+        // Si el modal individual está visible
+        if (modalVisible) {
+          if (e.key === 'Escape') {
+            cerrarConfirmacion();
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            ejecutarEliminacion();
+          }
+        } 
+        // Si el modal masivo está visible
+        else if (modalMasivoVisible) {
+          if (e.key === 'Escape') {
+            cerrarConfirmacionMasiva();
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            ejecutarEliminacionMasiva();
+          }
+        } 
+        // Si no hay modal visible
+        else {
+          if (e.key === 'Tab' && !e.shiftKey) {
+            const activeElement = document.activeElement;
+            const isSelect2Open = document.querySelector('.select2-container--open');
+            
+            if (!isSelect2Open && activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA') {
+              e.preventDefault();
+              $('#producto').select2('open');
+            }
+          }
+        }
+      });
+      
+      // Renderizar lista de artículos después de cargar productos
+      setTimeout(() => {
+        renderizarListaArticulos();
+      }, 500);
+    };
   </script>
 </body>
 </html>
