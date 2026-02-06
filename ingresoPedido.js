@@ -876,7 +876,7 @@ function getTipoCliente() {
       return codigo.includes(query) || 
              nombre.includes(query) || 
              codigosBarras.includes(query);
-    }).slice(0, 50); // Limitar a 50 resultados
+    }).slice(0, 50).reverse(); // Limitar a 50 resultados e invertir orden
     
     if (results.length === 0) {
       searchResults.innerHTML = '<div class="search-no-results">No se encontraron resultados</div>';
