@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Códigos de Barras</title>
+    <link rel="icon" href="faviconnegro.png" type="image/png">
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+    <!-- Barcode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #f5f5f7;
+            --card: #ffffff;
+            --border: #e5e5ea;
+            --text: #1d1d1f;
+            --text-secondary: #86868b;
+            --accent: #007aff;
+            --accent-hover: #0056cc;
+            --success: #34c759;
+            --success-bg: #e8f9ed;
+            --warning: #ff9500;
+            --warning-bg: #fff8eb;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            background: rgba(255,255,255,0.85);
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text);
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 8px;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .stats-bar span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stats-bar .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-total { background: var(--accent); }
+        .dot-con { background: var(--success); }
+        .dot-sin { background: var(--warning); }
+
+        .search-container {
+            padding: 12px 16px;
+            position: sticky;
+            top: 76px;
+            z-index: 99;
+            background: var(--bg);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 14px 10px 38px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 0.95rem;
+            background: var(--card);
+            outline: none;
+            transition: border-color 0.2s;
+            -webkit-appearance: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
+        }
+
+        .search-wrapper {
+            position: relative;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .list-container {
+            padding: 0 16px 100px;
+        }
+
+        .article-card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: box-shadow 0.2s;
+        }
+
+        .article-card:active {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .article-img {
+            width: 52px;
+            height: 52px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: var(--bg);
+            flex-shrink: 0;
+            border: 1px solid var(--border);
+        }
+
+        .article-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .article-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .article-code {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .barcode-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .barcode-input {
+            flex: 1;
+            min-width: 0;
+            padding: 7px 10px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+            background: var(--bg);
+            outline: none;
+            transition: border-color 0.2s, background 0.2s;
+            color: var(--text);
+        }
+
+        .scan-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            border: 1.5px solid var(--accent);
+            background: rgba(0,122,255,0.08);
+            color: var(--accent);
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .scan-btn:active {
+            background: var(--accent);
+            color: #fff;
+            transform: scale(0.92);
+        }
+
+        /* Scanner Modal */
+        .scanner-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .scanner-overlay.active {
+            display: flex;
+        }
+
+        .scanner-header {
+            width: 100%;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .scanner-header .scanner-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            flex: 1;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 10px;
+        }
+
+        .scanner-close-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .scanner-close-btn:active {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .scanner-body {
+            flex: 1;
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+        }
+
+        #scannerReader {
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        #scannerReader video {
+            border-radius: 16px;
+        }
+
+        .scanner-hint {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.82rem;
+            text-align: center;
+            margin-top: 20px;
+            padding: 0 20px;
+        }
+
+        .scanner-result {
+            margin-top: 16px;
+            padding: 10px 18px;
+            background: rgba(52,199,89,0.15);
+            border: 1px solid var(--success);
+            border-radius: 10px;
+            color: var(--success);
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+            display: none;
+            text-align: center;
+        }
+
+        .scanner-result.show {
+            display: block;
+        }
+
+        /* html5-qrcode overrides */
+        #scannerReader img[alt="Info icon"],
+        #scannerReader span { display: none !important; }
+        #scannerReader #html5-qrcode-anchor-scan-type-change { display: none !important; }
+        #scannerReader video { object-fit: cover; }
+
+        .barcode-input:focus {
+            border-color: var(--accent);
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(0,122,255,0.1);
+        }
+
+        .barcode-input.saved {
+            border-color: var(--success);
+            background: var(--success-bg);
+        }
+
+        .barcode-input.empty {
+            border-color: var(--warning);
+            background: var(--warning-bg);
+        }
+
+        .save-indicator {
+            font-size: 0.7rem;
+            color: var(--success);
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+        }
+
+        .save-indicator.show {
+            opacity: 1;
+        }
+
+        .loading-overlay {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+            gap: 12px;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--text);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            z-index: 200;
+            transition: transform 0.3s ease;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            padding: 0 16px 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .filter-btn {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .scroll-top-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            font-size: 1.2rem;
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 150;
+            transition: opacity 0.2s;
+        }
+
+        .scroll-top-btn.visible {
+            display: flex;
+        }
+
+        @media (min-width: 600px) {
+            .list-container {
+                max-width: 640px;
+                margin: 0 auto;
+            }
+            .search-container, .filter-bar {
+                max-width: 640px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Códigos de Barras</h1>
+        <div class="stats-bar" id="statsBar">
+            <span><span class="dot dot-total"></span> <span id="statTotal">0</span> artículos</span>
+            <span><span class="dot dot-con"></span> <span id="statCon">0</span> con código</span>
+            <span><span class="dot dot-sin"></span> <span id="statSin">0</span> sin código</span>
+        </div>
+    </header>
+
+    <div class="search-container">
+        <div class="search-wrapper">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" class="search-input" id="searchInput" placeholder="Buscar por nombre, código o código de barras...">
+        </div>
+    </div>
+
+    <div class="filter-bar" id="filterBar">
+        <button class="filter-btn active" data-filter="all">Todos</button>
+        <button class="filter-btn" data-filter="con">Con código</button>
+        <button class="filter-btn" data-filter="sin">Sin código</button>
+    </div>
+
+    <div class="list-container" id="listContainer">
+        <div class="loading-overlay" id="loading">
+            <div class="spinner"></div>
+            <span>Cargando artículos...</span>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#8593;</button>
+
+    <!-- Scanner Modal -->
+    <div class="scanner-overlay" id="scannerOverlay">
+        <div class="scanner-header">
+            <div style="width:36px"></div>
+            <div class="scanner-title" id="scannerTitle">Escanear código</div>
+            <button class="scanner-close-btn" id="scannerCloseBtn">&times;</button>
+        </div>
+        <div class="scanner-body">
+            <div id="scannerReader"></div>
+            <div class="scanner-result" id="scannerResult"></div>
+            <div class="scanner-hint">Apuntá la cámara al código de barras</div>
+        </div>
+    </div>
+
+<script>
+    // ============ CONFIG ============
+    const firebaseConfig = {
+        apiKey: "AIzaSyCyBB6ICFF0cH8nRATrHLYlhPzyQ8jmbgw",
+        authDomain: "admin-homepoint.firebaseapp.com",
+        databaseURL: "https://admin-homepoint-default-rtdb.firebaseio.com",
+        projectId: "admin-homepoint",
+        storageBucket: "admin-homepoint.firebasestorage.app",
+        messagingSenderId: "790057437566",
+        appId: "1:790057437566:web:2a1f83267ec2cc91decb2f"
+    };
+
+    const SHEETS_API_KEY = 'AIzaSyD9h4SH9laGhvh-NRhDjYgbCThVEbM8HTo';
+    const SPREADSHEET_ID = '1cD50d0-oSTogEe9tYo9ABUSP1ONCy3SAV92zsYYIG84';
+    const RANGO = 'Lista!B2:D';
+
+    // ============ FIREBASE INIT ============
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const codigosRef = db.ref('codigosBarras');
+
+    // ============ STATE ============
+    let articulos = [];
+    let firebaseData = {};  // codigo -> { key, codigoBarras }
+    let currentFilter = 'all';
+    let saveTimers = {};
+
+    // ============ FETCH GOOGLE SHEETS ============
+    async function fetchSheets() {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(RANGO)}?key=${SHEETS_API_KEY}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Error al cargar Google Sheets');
+        const data = await res.json();
+        return (data.values || []).map(row => ({
+            imagen: (row[0] || '').trim(),
+            codigo: (row[1] || '').trim(),
+            nombre: (row[2] || '').trim()
+        })).filter(a => a.codigo);
+    }
+
+    // ============ FETCH FIREBASE ============
+    function fetchFirebase() {
+        return new Promise((resolve) => {
+            codigosRef.once('value', snap => {
+                const val = snap.val() || {};
+                const map = {};
+                Object.entries(val).forEach(([key, entry]) => {
+                    if (entry.codigo) {
+                        map[entry.codigo] = {
+                            key,
+                            codigoBarras: entry.codigoBarras || ''
+                        };
+                    }
+                });
+                resolve(map);
+            });
+        });
+    }
+
+    // ============ SAVE TO FIREBASE ============
+    function saveBarcode(codigo, nombre, codigoBarras) {
+        const now = new Date();
+        const timestamp = now.toLocaleDateString('es-AR') + ', ' + now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        if (firebaseData[codigo]) {
+            // Update existing
+            const key = firebaseData[codigo].key;
+            return codigosRef.child(key).update({
+                codigoBarras,
+                timestamp
+            });
+        } else {
+            // Create new
+            const newRef = codigosRef.push();
+            firebaseData[codigo] = { key: newRef.key, codigoBarras };
+            return newRef.set({
+                articulo: nombre,
+                codigo,
+                codigoBarras,
+                timestamp
+            });
+        }
+    }
+
+    // ============ RENDER ============
+    function renderList() {
+        const container = document.getElementById('listContainer');
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+
+        let filtered = articulos.filter(a => {
+            const barcode = (firebaseData[a.codigo]?.codigoBarras || '').toLowerCase();
+            const matchSearch = !query ||
+                a.nombre.toLowerCase().includes(query) ||
+                a.codigo.toLowerCase().includes(query) ||
+                barcode.includes(query);
+
+            const hasBarcode = !!firebaseData[a.codigo]?.codigoBarras;
+            const matchFilter = currentFilter === 'all' ||
+                (currentFilter === 'con' && hasBarcode) ||
+                (currentFilter === 'sin' && !hasBarcode);
+
+            return matchSearch && matchFilter;
+        });
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="empty-state">No se encontraron artículos</div>';
+            return;
+        }
+
+        container.innerHTML = filtered.map(a => {
+            const fb = firebaseData[a.codigo];
+            const barcode = fb?.codigoBarras || '';
+            const statusClass = barcode ? 'saved' : 'empty';
+            const imgSrc = a.imagen || '';
+
+            return `
+                <div class="article-card" data-codigo="${a.codigo}">
+                    <img class="article-img" 
+                         src="${imgSrc}" 
+                         alt="" 
+                         loading="lazy"
+                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect fill=%22%23f0f0f0%22 width=%2252%22 height=%2252%22/><text x=%2226%22 y=%2230%22 text-anchor=%22middle%22 fill=%22%23ccc%22 font-size=%2212%22>Sin img</text></svg>'">
+                    <div class="article-info">
+                        <div class="article-name">${escapeHtml(a.nombre)}</div>
+                        <div class="article-code">Cód: ${escapeHtml(a.codigo)}</div>
+                        <div class="barcode-field">
+                            <input type="text" 
+                                   class="barcode-input ${statusClass}" 
+                                   value="${escapeHtml(barcode)}" 
+                                   placeholder="Código de barras"
+                                   data-codigo="${a.codigo}"
+                                   data-nombre="${escapeHtml(a.nombre)}"
+                                   inputmode="numeric">
+                            <button class="scan-btn" 
+                                    data-codigo="${a.codigo}" 
+                                    data-nombre="${escapeHtml(a.nombre)}" 
+                                    title="Escanear código de barras">+</button>
+                        </div>
+                    </div>
+                    <span class="save-indicator" id="indicator-${a.codigo}">&#10003;</span>
+                </div>`;
+        }).join('');
+
+        // Attach events
+        container.querySelectorAll('.barcode-input').forEach(input => {
+            input.addEventListener('input', handleBarcodeInput);
+            input.addEventListener('focus', () => input.select());
+        });
+        container.querySelectorAll('.scan-btn').forEach(btn => {
+            btn.addEventListener('click', () => openScanner(btn.dataset.codigo, btn.dataset.nombre));
+        });
+    }
+
+    function handleBarcodeInput(e) {
+        const input = e.target;
+        const codigo = input.dataset.codigo;
+        const nombre = input.dataset.nombre;
+        const value = input.value.trim();
+
+        input.classList.remove('saved', 'empty');
+        input.classList.add(value ? 'saved' : 'empty');
+
+        // Debounce save
+        if (saveTimers[codigo]) clearTimeout(saveTimers[codigo]);
+        saveTimers[codigo] = setTimeout(async () => {
+            try {
+                await saveBarcode(codigo, nombre, value);
+                firebaseData[codigo] = firebaseData[codigo] || {};
+                firebaseData[codigo].codigoBarras = value;
+                showIndicator(codigo);
+                updateStats();
+                showToast('Código guardado');
+            } catch (err) {
+                showToast('Error al guardar');
+                console.error(err);
+            }
+        }, 600);
+    }
+
+    function showIndicator(codigo) {
+        const el = document.getElementById('indicator-' + codigo);
+        if (el) {
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 1500);
+        }
+    }
+
+    function updateStats() {
+        const total = articulos.length;
+        let con = 0;
+        articulos.forEach(a => {
+            if (firebaseData[a.codigo]?.codigoBarras) con++;
+        });
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statCon').textContent = con;
+        document.getElementById('statSin').textContent = total - con;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    // ============ SCANNER ============
+    let html5QrCode = null;
+    let scannerTarget = null; // { codigo, nombre }
+
+    function openScanner(codigo, nombre) {
+        scannerTarget = { codigo, nombre };
+        const overlay = document.getElementById('scannerOverlay');
+        const resultEl = document.getElementById('scannerResult');
+        const titleEl = document.getElementById('scannerTitle');
+
+        titleEl.textContent = nombre.length > 30 ? nombre.substring(0, 30) + '…' : nombre;
+        resultEl.classList.remove('show');
+        resultEl.textContent = '';
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        startScanner();
+    }
+
+    function closeScanner() {
+        const overlay = document.getElementById('scannerOverlay');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        stopScanner();
+        scannerTarget = null;
+    }
+
+    async function startScanner() {
+        try {
+            html5QrCode = new Html5Qrcode('scannerReader');
+
+            const cameras = await Html5Qrcode.getCameras();
+            if (!cameras || cameras.length === 0) {
+                showToast('No se detectó cámara');
+                closeScanner();
+                return;
+            }
+
+            // Prefer back camera
+            const backCam = cameras.find(c => /back|rear|environment/i.test(c.label));
+            const cameraId = backCam ? backCam.id : cameras[cameras.length - 1].id;
+
+            await html5QrCode.start(
+                cameraId,
+                {
+                    fps: 15,
+                    qrbox: { width: 280, height: 120 },
+                    aspectRatio: 1.0,
+                    formatsToSupport: [
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.UPC_A,
+                        Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.CODE_128,
+                        Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.ITF,
+                        Html5QrcodeSupportedFormats.QR_CODE
+                    ]
+                },
+                onScanSuccess,
+                () => {} // ignore scan errors
+            );
+        } catch (err) {
+            console.error('Scanner error:', err);
+            showToast('Error al acceder a la cámara');
+            closeScanner();
+        }
+    }
+
+    async function stopScanner() {
+        if (html5QrCode) {
+            try {
+                await html5QrCode.stop();
+                html5QrCode.clear();
+            } catch (e) { /* ignore */ }
+            html5QrCode = null;
+        }
+    }
+
+    async function onScanSuccess(decodedText) {
+        if (!scannerTarget) return;
+        const { codigo, nombre } = scannerTarget;
+
+        // Stop scanning immediately to prevent duplicates
+        await stopScanner();
+
+        // Show result in modal
+        const resultEl = document.getElementById('scannerResult');
+        resultEl.textContent = decodedText;
+        resultEl.classList.add('show');
+
+        // Build new value: append comma-separated if existing
+        const existing = (firebaseData[codigo]?.codigoBarras || '').trim();
+        const newValue = existing ? existing + ', ' + decodedText : decodedText;
+
+        // Save to Firebase
+        try {
+            await saveBarcode(codigo, nombre, newValue);
+            firebaseData[codigo] = firebaseData[codigo] || {};
+            firebaseData[codigo].codigoBarras = newValue;
+            updateStats();
+
+            // Update the input in the list if visible
+            const input = document.querySelector(`.barcode-input[data-codigo="${codigo}"]`);
+            if (input) {
+                input.value = newValue;
+                input.classList.remove('empty');
+                input.classList.add('saved');
+            }
+            showIndicator(codigo);
+            showToast('✓ Código escaneado y guardado');
+        } catch (err) {
+            showToast('Error al guardar');
+            console.error(err);
+        }
+
+        // Auto-close after brief delay
+        setTimeout(() => closeScanner(), 1200);
+    }
+
+    // Close scanner events
+    document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
+    document.getElementById('scannerOverlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeScanner();
+    });
+
+    // ============ FILTERS ============
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter;
+            renderList();
+        });
+    });
+
+    // ============ SEARCH ============
+    let searchTimer;
+    document.getElementById('searchInput').addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(renderList, 250);
+    });
+
+    // ============ SCROLL TOP BTN ============
+    window.addEventListener('scroll', () => {
+        document.getElementById('scrollTopBtn').classList.toggle('visible', window.scrollY > 400);
+    });
+
+    // ============ INIT ============
+    async function init() {
+        try {
+            const [sheetsData, fbData] = await Promise.all([fetchSheets(), fetchFirebase()]);
+            articulos = sheetsData;
+            firebaseData = fbData;
+            document.getElementById('loading').remove();
+            updateStats();
+            renderList();
+        } catch (err) {
+            document.getElementById('loading').innerHTML =
+                `<div class="empty-state">Error al cargar datos<br><small>${err.message}</small></div>`;
+            console.error(err);
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
