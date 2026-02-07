@@ -553,11 +553,17 @@
         const res = await fetch(url);
         if (!res.ok) throw new Error('Error al cargar Google Sheets');
         const data = await res.json();
-        return (data.values || []).map(row => ({
-            imagen: (row[0] || '').trim(),
-            codigo: (row[1] || '').trim(),
-            nombre: (row[2] || '').trim()
-        })).filter(a => a.codigo);
+        const items = (data.values || []).map(row => {
+            const imgRaw = (row[0] || '').trim();
+            const firstImg = imgRaw.split(',')[0].trim();
+            return {
+                imagen: firstImg,
+                codigo: (row[1] || '').trim(),
+                nombre: (row[2] || '').trim()
+            };
+        }).filter(a => a.codigo);
+        items.reverse();
+        return items;
     }
 
     // ============ FETCH FIREBASE ============
@@ -652,7 +658,9 @@
                                    placeholder="Código de barras"
                                    data-codigo="${a.codigo}"
                                    data-nombre="${escapeHtml(a.nombre)}"
-                                   inputmode="numeric">
+                                   data-original="${escapeHtml(barcode)}"
+                                   inputmode="numeric"
+                                   readonly>
                             <button class="scan-btn" 
                                     data-codigo="${a.codigo}" 
                                     data-nombre="${escapeHtml(a.nombre)}" 
@@ -665,12 +673,34 @@
 
         // Attach events
         container.querySelectorAll('.barcode-input').forEach(input => {
+            input.addEventListener('click', handleManualEditRequest);
             input.addEventListener('input', handleBarcodeInput);
-            input.addEventListener('focus', () => input.select());
         });
         container.querySelectorAll('.scan-btn').forEach(btn => {
             btn.addEventListener('click', () => openScanner(btn.dataset.codigo, btn.dataset.nombre));
         });
+    }
+
+    function handleManualEditRequest(e) {
+        const input = e.target;
+        if (!input.readOnly) return;
+
+        const current = input.value.trim();
+        const msg = current
+            ? `El código actual es:\n${current}\n\n¿Deseas modificarlo manualmente?`
+            : '¿Deseas ingresar un código de barras manualmente?';
+
+        if (confirm(msg)) {
+            input.readOnly = false;
+            input.focus();
+            input.select();
+            // Re-lock on blur if unchanged
+            const onBlur = () => {
+                input.readOnly = true;
+                input.removeEventListener('blur', onBlur);
+            };
+            input.addEventListener('blur', onBlur);
+        }
     }
 
     function handleBarcodeInput(e) {
@@ -689,6 +719,7 @@
                 await saveBarcode(codigo, nombre, value);
                 firebaseData[codigo] = firebaseData[codigo] || {};
                 firebaseData[codigo].codigoBarras = value;
+                input.dataset.original = value;
                 showIndicator(codigo);
                 updateStats();
                 showToast('Código guardado');
