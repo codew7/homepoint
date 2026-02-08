@@ -689,7 +689,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
       </svg>
-      HP Imágenes
+      HomePoint Imágenes
     </a>
     <div class="header-actions">
       <div class="mode-indicator test-mode" id="modeIndicator" title="Click para cambiar modo">
@@ -761,9 +761,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Descargar todas
     </button>
-    <button class="btn btn-secondary" id="btnDownloadZip">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Descargar ZIP
+    <button class="btn btn-secondary" id="btnSaveDrive">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M12 2L2 19h20L12 2z"/><path d="M7.5 12h9"/><path d="M2 19l5-8.5"/><path d="M22 19l-5-8.5"/></svg>
+      Guardar en Drive
     </button>
     <span id="batchCount" style="font-size:0.8rem;color:var(--text-muted)">0 listas</span>
   </div>
@@ -802,7 +802,8 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- ======================== EXTERNAL LIBS (CDN) ======================== -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Google Identity Services (GIS) for Google Drive upload -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <!-- ======================== APPLICATION JS ======================== -->
   <script>
@@ -861,7 +862,7 @@
       emptyState: $('#emptyState'),
       batchBar: $('#batchBar'),
       btnDownloadAll: $('#btnDownloadAll'),
-      btnDownloadZip: $('#btnDownloadZip'),
+      btnSaveDrive: $('#btnSaveDrive'),
       batchCount: $('#batchCount'),
       cropModal: $('#cropModal'),
       cropCanvas: $('#cropCanvas'),
@@ -1028,7 +1029,7 @@
       formData.append('result.target_size', `${OUTPUT_SIZE} ${OUTPUT_SIZE}`);
       formData.append('result.vertical_alignment', 'middle');
       formData.append('result.margin', '9%');
-      formData.append('output.format', 'jpg');
+      formData.append('output.format', 'jpeg');
 
       // Modo test (gratis, con marca de agua) o producción
       if (testMode) {
@@ -1228,8 +1229,10 @@
     // ═══════════════════════════════════════════════════════════
     function downloadImage(item) {
       const dataUrl = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
+      const isJpeg = dataUrl.startsWith('data:image/jpeg');
+      const ext = isJpeg ? '.jpg' : '.png';
       const link = document.createElement('a');
-      link.download = `${item.customName}.png`;
+      link.download = `${item.customName}${ext}`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -1248,49 +1251,243 @@
       showToast(`Descargando ${doneItems.length} imagen(es)`, 'success');
     }
 
-    async function downloadAllZip() {
+    // ═══════════════════════════════════════════════════════════
+    // SEQUENTIAL NAMING
+    // Cuando el usuario edita un nombre, todas las imágenes
+    // reciben el mismo nombre base con sufijos: '', 'A', 'B'...
+    // ═══════════════════════════════════════════════════════════
+    function getSequentialSuffix(index) {
+      // 0 → '', 1 → 'A', 2 → 'B', ..., 26 → 'AA', etc.
+      if (index === 0) return '';
+      let suffix = '';
+      let n = index;
+      while (n > 0) {
+        n--; // make 0-indexed for A=0
+        suffix = String.fromCharCode(65 + (n % 26)) + suffix;
+        n = Math.floor(n / 26);
+      }
+      return suffix;
+    }
+
+    function applySequentialNames(baseName) {
+      // Strip extension if user typed one (e.g., "10040.jpg" → "10040")
+      const nameWithoutExt = baseName.replace(/\.(jpg|jpeg|png|webp|bmp|gif)$/i, '');
+
+      imageQueue.forEach((item, index) => {
+        const suffix = getSequentialSuffix(index);
+        item.customName = nameWithoutExt + suffix;
+
+        // Update the input field in the card if it exists
+        const card = dom.imageGrid.querySelector(`[data-id="${item.id}"]`);
+        if (card) {
+          const input = card.querySelector('.image-card-name-input');
+          if (input && input !== document.activeElement) {
+            input.value = item.customName;
+          }
+        }
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // GOOGLE DRIVE INTEGRATION
+    // ═══════════════════════════════════════════════════════════
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ CONFIGURACIÓN DE GOOGLE DRIVE API                       │
+    // │                                                         │
+    // │ Para habilitar la subida a Google Drive:                 │
+    // │                                                         │
+    // │ 1. Ir a https://console.cloud.google.com/                │
+    // │ 2. Crear un proyecto nuevo o usar uno existente         │
+    // │ 3. Habilitar la "Google Drive API"                      │
+    // │ 4. Ir a "Credenciales" → "Crear credenciales"          │
+    // │    → "ID de cliente OAuth 2.0"                          │
+    // │ 5. Tipo de aplicación: "Aplicación web"                 │
+    // │ 6. Orígenes autorizados de JavaScript:                  │
+    // │    - https://codew7.github.io                           │
+    // │    - http://localhost (para desarrollo)                 │
+    // │ 7. Copiar el Client ID y pegarlo abajo                  │
+    // │ 8. En la pantalla de consentimiento OAuth:              │
+    // │    - Agregar el scope:                                  │
+    // │      https://www.googleapis.com/auth/drive.file         │
+    // │    - Agregar usuarios de prueba si está en modo test    │
+    // │                                                         │
+    // │ NOTA: La API Key NO es necesaria para este flujo.       │
+    // │ Solo necesitas el Client ID de OAuth 2.0.               │
+    // └──────────────────────────────────────────────────────────┘
+    //
+    // ══════════ PLACEHOLDERS — COMPLETAR CON TUS DATOS ══════════
+    const GOOGLE_CLIENT_ID     = 'TU_CLIENT_ID_AQUI.apps.googleusercontent.com';  // ← Client ID de OAuth 2.0
+    const GOOGLE_DRIVE_SCOPE   = 'https://www.googleapis.com/auth/drive.file';     // Scope para subir archivos
+    const GOOGLE_DRIVE_FOLDER  = '';  // ← ID de carpeta de Drive (vacío = raíz). Para obtenerlo, abre la carpeta en Drive y copia el ID de la URL
+    const GOOGLE_UPLOAD_URL    = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+    // ════════════════════════════════════════════════════════════
+
+    let googleAccessToken = null;
+
+    /**
+     * Inicia sesión con Google y obtiene un access token
+     * usando Google Identity Services (GIS) — nuevo flujo OAuth
+     */
+    async function googleSignIn() {
+      if (GOOGLE_CLIENT_ID === 'TU_CLIENT_ID_AQUI.apps.googleusercontent.com') {
+        showToast('Configura el Client ID de Google en el código fuente. Ver instrucciones en el archivo.', 'error');
+        return null;
+      }
+
+      return new Promise((resolve) => {
+        try {
+          const tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: GOOGLE_DRIVE_SCOPE,
+            callback: (tokenResponse) => {
+              if (tokenResponse.error) {
+                console.error('[GDrive] Auth error:', tokenResponse);
+                showToast('Error al autenticar con Google', 'error');
+                resolve(null);
+                return;
+              }
+              googleAccessToken = tokenResponse.access_token;
+              console.log('[GDrive] Authenticated successfully');
+              resolve(googleAccessToken);
+            },
+          });
+          tokenClient.requestAccessToken();
+        } catch (err) {
+          console.error('[GDrive] GIS not loaded:', err);
+          showToast('Google Identity Services no cargado. Verifica tu conexión.', 'error');
+          resolve(null);
+        }
+      });
+    }
+
+    /**
+     * Sube un archivo (blob) a Google Drive
+     * @param {Blob} fileBlob - El archivo a subir
+     * @param {string} fileName - Nombre del archivo
+     * @param {string} mimeType - Tipo MIME (e.g. 'image/png')
+     * @returns {Object|null} - Metadata del archivo subido o null si falló
+     */
+    async function uploadFileToDrive(fileBlob, fileName, mimeType) {
+      if (!googleAccessToken) return null;
+
+      // Metadata del archivo
+      const metadata = {
+        name: fileName,
+        mimeType: mimeType
+      };
+
+      // Si se especificó una carpeta destino
+      if (GOOGLE_DRIVE_FOLDER) {
+        metadata.parents = [GOOGLE_DRIVE_FOLDER];
+      }
+
+      // Crear multipart request body
+      const boundary = 'hp_images_boundary_' + Date.now();
+      const delimiter = '\r\n--' + boundary + '\r\n';
+      const closeDelimiter = '\r\n--' + boundary + '--';
+
+      // Convertir blob a base64
+      const base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(fileBlob);
+      });
+
+      const multipartBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(metadata) +
+        delimiter +
+        'Content-Type: ' + mimeType + '\r\n' +
+        'Content-Transfer-Encoding: base64\r\n\r\n' +
+        base64Data +
+        closeDelimiter;
+
+      const response = await fetch(GOOGLE_UPLOAD_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + googleAccessToken,
+          'Content-Type': 'multipart/related; boundary=' + boundary
+        },
+        body: multipartBody
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        console.error('[GDrive] Upload failed:', err);
+        throw new Error(err.error?.message || `HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    /**
+     * Guarda todas las imágenes procesadas en Google Drive
+     */
+    async function saveAllToDrive() {
       const doneItems = imageQueue.filter(i => i.status === 'done');
       if (doneItems.length === 0) {
-        showToast('No hay imágenes listas para descargar', 'info');
+        showToast('No hay imágenes listas para guardar', 'info');
         return;
       }
 
-      if (typeof JSZip === 'undefined') {
-        showToast('Librería JSZip no disponible. Usa la descarga individual.', 'error');
-        return;
+      // Autenticar si no hay token
+      if (!googleAccessToken) {
+        showToast('Iniciando sesión con Google...', 'info');
+        const token = await googleSignIn();
+        if (!token) return;
       }
 
-      showToast('Creando archivo ZIP...', 'info');
+      showToast(`Subiendo ${doneItems.length} imagen(es) a Google Drive...`, 'info');
+      showGlobalProgress(true);
 
-      try {
-        const zip = new JSZip();
-        const folder = zip.folder('productos');
+      let uploaded = 0;
+      let failed = 0;
 
-        for (const item of doneItems) {
+      for (const item of doneItems) {
+        try {
           const dataUrl = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
-          const base64 = dataUrl.split(',')[1];
-          folder.file(`${item.customName}.png`, base64, { base64: true });
+          const mimeType = dataUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
+          const ext = mimeType === 'image/jpeg' ? '.jpg' : '.png';
+          const blob = dataUrlToBlob(dataUrl);
+
+          await uploadFileToDrive(blob, item.customName + ext, mimeType);
+          uploaded++;
+          console.log(`[GDrive] Uploaded: ${item.customName}`);
+        } catch (err) {
+          console.error(`[GDrive] Failed to upload ${item.customName}:`, err);
+          failed++;
+
+          // Si es error de auth (401), re-autenticar y reintentar
+          if (err.message?.includes('401')) {
+            googleAccessToken = null;
+            const token = await googleSignIn();
+            if (!token) break;
+            // Retry this item
+            try {
+              const dataUrl = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
+              const blob = dataUrlToBlob(dataUrl);
+              const mimeType = dataUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
+              const ext = mimeType === 'image/jpeg' ? '.jpg' : '.png';
+              await uploadFileToDrive(blob, item.customName + ext, mimeType);
+              uploaded++;
+              failed--;
+            } catch (e2) {
+              console.error(`[GDrive] Retry failed:`, e2);
+            }
+          }
         }
 
-        const blob = await zip.generateAsync({
-          type: 'blob',
-          compression: 'DEFLATE',
-          compressionOptions: { level: 6 }
-        });
+        updateGlobalProgress(Math.round(((uploaded + failed) / doneItems.length) * 100));
+      }
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = `productos_${new Date().toISOString().slice(0, 10)}.zip`;
-        link.href = url;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      showGlobalProgress(false);
 
-        showToast(`ZIP descargado con ${doneItems.length} imagen(es)`, 'success');
-      } catch (err) {
-        console.error('ZIP error:', err);
-        showToast('Error al crear el archivo ZIP', 'error');
+      if (failed === 0) {
+        showToast(`${uploaded} imagen(es) guardadas en Google Drive`, 'success');
+      } else {
+        showToast(`${uploaded} subidas, ${failed} fallidas`, failed > 0 ? 'error' : 'success');
       }
     }
 
@@ -1401,47 +1598,51 @@
       showToast('Recorte aplicado correctamente', 'success');
     }
 
-    // Crop modal drag/pan
+    // Crop modal: mouse drag/pan + multitouch pinch-zoom & rotate
     function setupCropInteraction() {
       const container = dom.cropContainer;
 
-      function getPos(e) {
-        if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        return { x: e.clientX, y: e.clientY };
-      }
+      // ── State for touch gestures ──
+      let touchState = {
+        active: false,        // Are we in a multi-touch gesture?
+        initialDist: 0,       // Initial distance between two fingers
+        initialAngle: 0,      // Initial angle between two fingers
+        initialZoom: 1,       // Zoom when gesture started
+        initialRotation: 0,   // Rotation when gesture started
+        initialPanX: 0,
+        initialPanY: 0,
+        initialMidX: 0,
+        initialMidY: 0
+      };
 
-      function onStart(e) {
+      // ── Mouse: drag to pan ──
+      function onMouseDown(e) {
         e.preventDefault();
-        const pos = getPos(e);
         cropState.dragging = true;
-        cropState.lastX = pos.x;
-        cropState.lastY = pos.y;
+        cropState.lastX = e.clientX;
+        cropState.lastY = e.clientY;
       }
 
-      function onMove(e) {
+      function onMouseMove(e) {
         if (!cropState.dragging) return;
         e.preventDefault();
-        const pos = getPos(e);
-        cropState.panX += pos.x - cropState.lastX;
-        cropState.panY += pos.y - cropState.lastY;
-        cropState.lastX = pos.x;
-        cropState.lastY = pos.y;
+        cropState.panX += e.clientX - cropState.lastX;
+        cropState.panY += e.clientY - cropState.lastY;
+        cropState.lastX = e.clientX;
+        cropState.lastY = e.clientY;
         drawCropCanvas();
       }
 
-      function onEnd() {
+      function onMouseUp() {
         cropState.dragging = false;
       }
 
-      container.addEventListener('mousedown', onStart);
-      container.addEventListener('mousemove', onMove);
-      container.addEventListener('mouseup', onEnd);
-      container.addEventListener('mouseleave', onEnd);
-      container.addEventListener('touchstart', onStart, { passive: false });
-      container.addEventListener('touchmove', onMove, { passive: false });
-      container.addEventListener('touchend', onEnd);
+      container.addEventListener('mousedown', onMouseDown);
+      container.addEventListener('mousemove', onMouseMove);
+      container.addEventListener('mouseup', onMouseUp);
+      container.addEventListener('mouseleave', onMouseUp);
 
-      // Mouse wheel zoom
+      // ── Mouse wheel: zoom ──
       container.addEventListener('wheel', (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -1449,6 +1650,113 @@
         dom.cropZoom.value = cropState.zoom;
         drawCropCanvas();
       }, { passive: false });
+
+      // ── Helper: distance & angle between two touch points ──
+      function getTouchDist(t1, t2) {
+        const dx = t2.clientX - t1.clientX;
+        const dy = t2.clientY - t1.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      function getTouchAngle(t1, t2) {
+        return Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * (180 / Math.PI);
+      }
+
+      function getTouchMid(t1, t2) {
+        return {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2
+        };
+      }
+
+      // ── Touch events ──
+      container.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+
+        if (e.touches.length === 1) {
+          // Single finger → pan
+          cropState.dragging = true;
+          cropState.lastX = e.touches[0].clientX;
+          cropState.lastY = e.touches[0].clientY;
+          touchState.active = false;
+
+        } else if (e.touches.length === 2) {
+          // Two fingers → pinch zoom + rotate + pan
+          cropState.dragging = false;
+          touchState.active = true;
+          touchState.initialDist = getTouchDist(e.touches[0], e.touches[1]);
+          touchState.initialAngle = getTouchAngle(e.touches[0], e.touches[1]);
+          touchState.initialZoom = cropState.zoom;
+          touchState.initialRotation = cropState.rotation;
+          const mid = getTouchMid(e.touches[0], e.touches[1]);
+          touchState.initialMidX = mid.x;
+          touchState.initialMidY = mid.y;
+          touchState.initialPanX = cropState.panX;
+          touchState.initialPanY = cropState.panY;
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+
+        if (e.touches.length === 1 && cropState.dragging && !touchState.active) {
+          // Single finger → pan
+          const t = e.touches[0];
+          cropState.panX += t.clientX - cropState.lastX;
+          cropState.panY += t.clientY - cropState.lastY;
+          cropState.lastX = t.clientX;
+          cropState.lastY = t.clientY;
+          drawCropCanvas();
+
+        } else if (e.touches.length === 2 && touchState.active) {
+          // Two fingers → simultaneous zoom + rotate + pan
+          const t0 = e.touches[0];
+          const t1 = e.touches[1];
+
+          // Zoom: ratio of current distance to initial distance
+          const currentDist = getTouchDist(t0, t1);
+          const zoomRatio = currentDist / touchState.initialDist;
+          cropState.zoom = Math.max(0.5, Math.min(3, touchState.initialZoom * zoomRatio));
+          dom.cropZoom.value = cropState.zoom;
+
+          // Rotation: delta angle from initial
+          const currentAngle = getTouchAngle(t0, t1);
+          let angleDelta = currentAngle - touchState.initialAngle;
+          // Normalize to -180..180
+          if (angleDelta > 180) angleDelta -= 360;
+          if (angleDelta < -180) angleDelta += 360;
+          cropState.rotation = touchState.initialRotation + angleDelta;
+          // Clamp to -180..180
+          cropState.rotation = Math.max(-180, Math.min(180, cropState.rotation));
+          dom.cropRotation.value = Math.round(cropState.rotation);
+
+          // Pan: midpoint shift
+          const mid = getTouchMid(t0, t1);
+          cropState.panX = touchState.initialPanX + (mid.x - touchState.initialMidX);
+          cropState.panY = touchState.initialPanY + (mid.y - touchState.initialMidY);
+
+          drawCropCanvas();
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          touchState.active = false;
+        }
+        if (e.touches.length === 0) {
+          cropState.dragging = false;
+        } else if (e.touches.length === 1 && !touchState.active) {
+          // Transition from 2→1 finger: restart single-finger pan from current position
+          cropState.dragging = true;
+          cropState.lastX = e.touches[0].clientX;
+          cropState.lastY = e.touches[0].clientY;
+        }
+      });
+
+      container.addEventListener('touchcancel', () => {
+        cropState.dragging = false;
+        touchState.active = false;
+      });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1590,10 +1898,11 @@
         </div>
       `;
 
-      // Name input handler
+      // Name input handler — propaga nombre secuencial a toda la cola
       const nameInput = card.querySelector('.image-card-name-input');
       nameInput.addEventListener('input', (e) => {
-        item.customName = e.target.value || item.originalName;
+        const rawValue = e.target.value || item.originalName;
+        applySequentialNames(rawValue);
         saveToSession();
       });
 
@@ -1806,7 +2115,7 @@
         showToast('Cola limpiada', 'info');
       });
       dom.btnDownloadAll.addEventListener('click', downloadAllIndividual);
-      dom.btnDownloadZip.addEventListener('click', downloadAllZip);
+      dom.btnSaveDrive.addEventListener('click', saveAllToDrive);
 
       // Crop modal
       setupCropInteraction();
