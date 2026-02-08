@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Procesador profesional de fotos de productos. Elimina fondos, recorta y redimensiona automáticamente." />
+  <title>HP Imágenes — Procesador de Productos</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='96' fill='%236366f1'/><path d='M160 180a96 96 0 1 1 192 0 96 96 0 0 1-192 0zm-32 180h256a32 32 0 0 1 32 32v16a64 64 0 0 1-64 64H192a64 64 0 0 1-64-64v-16a32 32 0 0 1 32-32z' fill='white'/></svg>" />
+
+  <!-- ========================= ESTILOS ========================= -->
+  <style>
+    /* ── CSS Reset & Variables ────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Light theme */
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f1f5f9;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-light: #e0e7ff;
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05);
+      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --checkerboard: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='10' height='10' fill='%23e2e8f0'/%3E%3Crect x='10' y='10' width='10' height='10' fill='%23e2e8f0'/%3E%3Crect x='10' width='10' height='10' fill='%23fff'/%3E%3Crect y='10' width='10' height='10' fill='%23fff'/%3E%3C/svg%3E");
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border: #334155;
+      --accent-light: #312e81;
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.4);
+      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.5);
+      --checkerboard: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='10' height='10' fill='%23334155'/%3E%3Crect x='10' y='10' width='10' height='10' fill='%23334155'/%3E%3Crect x='10' width='10' height='10' fill='%231e293b'/%3E%3Crect y='10' width='10' height='10' fill='%231e293b'/%3E%3C/svg%3E");
+    }
+
+    /* ── Base ─────────────────────────────────────────────────── */
+    html { font-size: 16px; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100dvh;
+      line-height: 1.5;
+      transition: background 0.3s, color 0.3s;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ───────────────────────────────────────────────── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-sm);
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .header-brand svg { width: 28px; height: 28px; }
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* ── Buttons ──────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.625rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      white-space: nowrap;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 2px 8px var(--accent-glow);
+    }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-danger:hover { background: var(--danger-hover); }
+    .btn-icon {
+      padding: 0.5rem;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-icon:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .btn-icon svg { width: 20px; height: 20px; }
+    .btn-sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+    .btn-lg { padding: 0.75rem 1.75rem; font-size: 1rem; }
+
+    /* ── Main container ──────────────────────────────────────── */
+    .app-container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1rem;
+      padding-bottom: 6rem;
+    }
+
+    /* ── Upload Zone ──────────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: var(--bg-secondary);
+      position: relative;
+      overflow: hidden;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+    .upload-zone.drag-over { transform: scale(1.01); }
+    .upload-zone-icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 1rem;
+      color: var(--accent);
+      opacity: 0.8;
+    }
+    .upload-zone h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.375rem;
+      color: var(--text-primary);
+    }
+    .upload-zone p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+    }
+    .upload-zone .btn-row {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .upload-zone input { display: none; }
+
+    /* ── Queue / Processing list ──────────────────────────────── */
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin: 1.5rem 0 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 100px;
+    }
+
+    /* ── Image Card ───────────────────────────────────────────── */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .image-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.3s ease;
+      animation: cardIn 0.35s ease-out;
+    }
+    .image-card:hover { box-shadow: var(--shadow-md); }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .image-card-preview {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      background: var(--checkerboard);
+      background-size: 20px 20px;
+    }
+    .image-card-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .image-card-preview .before-after-toggle {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      z-index: 5;
+    }
+    .image-card-status {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 100px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .status-pending { background: var(--warning); color: #000; }
+    .status-processing { background: var(--accent); color: white; }
+    .status-done { background: var(--success); color: white; }
+    .status-error { background: var(--danger); color: white; }
+
+    /* Processing overlay */
+    .processing-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      z-index: 4;
+      backdrop-filter: blur(4px);
+    }
+    .processing-overlay .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .processing-overlay span {
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Progress bar */
+    .progress-bar-container {
+      height: 3px;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #818cf8);
+      transition: width 0.3s ease;
+      border-radius: 0 2px 2px 0;
+    }
+
+    .image-card-body { padding: 0.75rem; }
+    .image-card-name-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .image-card-name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .image-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .image-card-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .image-card-actions .btn { flex: 1; }
+
+    /* ── Crop Modal ───────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      animation: fadeIn 0.2s ease;
+      backdrop-filter: blur(4px);
+    }
+    .modal-backdrop.hidden { display: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-xl);
+      max-width: 600px;
+      width: 100%;
+      max-height: 90dvh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-xl);
+      animation: modalIn 0.3s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 { font-size: 1rem; }
+    .modal-body { padding: 1.25rem; }
+    .modal-footer {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .crop-canvas-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1/1;
+      background: var(--checkerboard);
+      background-size: 20px 20px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      cursor: move;
+      touch-action: none;
+    }
+    .crop-canvas-container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .crop-controls {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      align-items: center;
+    }
+    .crop-controls label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+    .crop-controls input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .crop-controls input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 2px 6px var(--accent-glow);
+    }
+
+    /* ── Batch bar (sticky bottom) ───────────────────────────── */
+    .batch-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 90;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      flex-wrap: wrap;
+    }
+    .batch-bar.visible { transform: translateY(0); }
+
+    /* ── Toast / notifications ───────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      top: 4.5rem;
+      right: 1rem;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      pointer-events: auto;
+      animation: toastIn 0.35s ease, toastOut 0.3s ease 3.5s forwards;
+      max-width: 340px;
+    }
+    .toast.success { border-left: 3px solid var(--success); }
+    .toast.error { border-left: 3px solid var(--danger); }
+    .toast.info { border-left: 3px solid var(--accent); }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toastOut { to { opacity: 0; transform: translateX(40px); } }
+
+    /* ── Install PWA banner ──────────────────────────────────── */
+    .install-banner {
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      color: white;
+      padding: 0.875rem 1.25rem;
+      border-radius: var(--radius-lg);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      box-shadow: var(--shadow-md);
+      animation: cardIn 0.5s ease;
+    }
+    .install-banner.hidden { display: none; }
+    .install-banner p { font-size: 0.85rem; font-weight: 600; }
+    .install-banner .btn { background: white; color: var(--accent); }
+
+    /* ── Empty state ─────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+    .empty-state svg { width: 64px; height: 64px; margin-bottom: 1rem; opacity: 0.4; }
+    .empty-state h4 { font-size: 1rem; margin-bottom: 0.25rem; color: var(--text-secondary); }
+    .empty-state p { font-size: 0.85rem; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .header { padding: 0.5rem 0.75rem; }
+      .header-brand { font-size: 0.95rem; }
+      .app-container { padding: 0.75rem; padding-bottom: 5rem; }
+      .upload-zone { padding: 1.75rem 1rem; }
+      .upload-zone-icon { width: 44px; height: 44px; }
+      .image-grid { grid-template-columns: 1fr; }
+      .modal { border-radius: var(--radius-lg); }
+      .btn-lg { padding: 0.625rem 1.25rem; font-size: 0.9rem; }
+    }
+
+    @media (min-width: 481px) and (max-width: 768px) {
+      .image-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* ── Utils ────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+    .gap-sm { gap: 0.5rem; }
+
+    /* ── Scrollbar styling ───────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ── Global progress (top of page) ───────────────────────── */
+    .global-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      z-index: 200;
+      background: transparent;
+      pointer-events: none;
+    }
+    .global-progress .bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #818cf8, var(--accent));
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease infinite;
+      transition: width 0.3s;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── Theme toggle switch ─────────────────────────────────── */
+    .theme-toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      border-radius: 100px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+    .theme-toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      transition: transform 0.3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    [data-theme="dark"] .theme-toggle::after { transform: translateX(20px); }
+
+    /* ── Loading screen ──────────────────────────────────────── */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      transition: opacity 0.5s ease;
+    }
+    .loading-screen.fade-out { opacity: 0; pointer-events: none; }
+    .loading-logo {
+      width: 64px;
+      height: 64px;
+      color: var(--accent);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    .loading-screen p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .loading-dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ======================== LOADING SCREEN ======================== -->
+  <div class="loading-screen" id="loadingScreen">
+    <svg class="loading-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+    </svg>
+    <p>Cargando procesador<span class="loading-dots"></span></p>
+  </div>
+
+  <!-- ======================== GLOBAL PROGRESS ======================== -->
+  <div class="global-progress hidden" id="globalProgress">
+    <div class="bar" style="width:0%"></div>
+  </div>
+
+  <!-- ======================== HEADER ======================== -->
+  <header class="header">
+    <a href="imagenes.html" class="header-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+      </svg>
+      HP Imágenes
+    </a>
+    <div class="header-actions">
+      <button class="btn-icon" id="btnInstallPwa" title="Instalar App" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <div class="theme-toggle" id="themeToggle" title="Cambiar tema"></div>
+    </div>
+  </header>
+
+  <!-- ======================== INSTALL BANNER ======================== -->
+  <div class="app-container">
+    <div class="install-banner hidden" id="installBanner">
+      <p>📱 Instala esta app para usarla sin conexión</p>
+      <button class="btn btn-sm" id="btnInstallBanner">Instalar</button>
+    </div>
+
+    <!-- ======================== UPLOAD ZONE ======================== -->
+    <div class="upload-zone" id="uploadZone">
+      <svg class="upload-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <h3>Subir fotos de productos</h3>
+      <p>Arrastra imágenes aquí o selecciona una opción</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnCamera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Cámara
+        </button>
+        <button class="btn btn-secondary" id="btnGallery">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Galería
+        </button>
+      </div>
+      <input type="file" id="fileInputCamera" accept="image/*" capture="environment" multiple />
+      <input type="file" id="fileInputGallery" accept="image/*" multiple />
+    </div>
+
+    <!-- ======================== QUEUE ======================== -->
+    <div class="section-title hidden" id="queueHeader">
+      <span>Cola de procesamiento <span class="badge" id="queueCount">0</span></span>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-primary btn-sm" id="btnProcessAll">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Procesar todas
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btnClearAll">Limpiar</button>
+      </div>
+    </div>
+
+    <div class="image-grid" id="imageGrid"></div>
+
+    <!-- ======================== EMPTY STATE ======================== -->
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <h4>Sin imágenes aún</h4>
+      <p>Captura o sube fotos de productos para comenzar</p>
+    </div>
+  </div>
+
+  <!-- ======================== BATCH BAR ======================== -->
+  <div class="batch-bar" id="batchBar">
+    <button class="btn btn-primary" id="btnDownloadAll">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Descargar todas
+    </button>
+    <button class="btn btn-secondary" id="btnDownloadZip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Descargar ZIP
+    </button>
+    <span id="batchCount" style="font-size:0.8rem;color:var(--text-muted)">0 listas</span>
+  </div>
+
+  <!-- ======================== CROP MODAL ======================== -->
+  <div class="modal-backdrop hidden" id="cropModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>✂️ Ajustar recorte</h3>
+        <button class="btn-icon" id="cropModalClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="crop-canvas-container" id="cropContainer">
+          <canvas id="cropCanvas"></canvas>
+        </div>
+        <div class="crop-controls">
+          <label>Zoom</label>
+          <input type="range" id="cropZoom" min="0.5" max="3" step="0.05" value="1" />
+        </div>
+        <div class="crop-controls">
+          <label>Rotación</label>
+          <input type="range" id="cropRotation" min="-180" max="180" step="1" value="0" />
+          <button class="btn btn-secondary btn-sm" id="cropRotReset">0°</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cropCancel">Cancelar</button>
+        <button class="btn btn-primary" id="cropApply">Aplicar recorte</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== TOAST CONTAINER ======================== -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ======================== EXTERNAL LIBS (CDN) ======================== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- ======================== APPLICATION JS ======================== -->
+  <script>
+  (() => {
+    'use strict';
+
+    // ═══════════════════════════════════════════════════════════
+    // CONSTANTS & STATE
+    // ═══════════════════════════════════════════════════════════
+    const OUTPUT_SIZE = 1080;
+    const JPEG_QUALITY = 0.92;
+    const SESSION_KEY = 'hp_images_session';
+
+    let imageQueue = [];    // Array of ImageItem objects
+    let nextId = 1;
+    let bgRemovalModule = null;
+    let bgRemovalLoading = false;
+    let deferredInstallPrompt = null;
+
+    // Crop modal state
+    let cropState = {
+      imageId: null,
+      img: null,
+      zoom: 1,
+      rotation: 0,
+      panX: 0,
+      panY: 0,
+      dragging: false,
+      lastX: 0,
+      lastY: 0
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // DOM REFERENCES
+    // ═══════════════════════════════════════════════════════════
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    const dom = {
+      loadingScreen: $('#loadingScreen'),
+      globalProgress: $('#globalProgress'),
+      uploadZone: $('#uploadZone'),
+      fileInputCamera: $('#fileInputCamera'),
+      fileInputGallery: $('#fileInputGallery'),
+      btnCamera: $('#btnCamera'),
+      btnGallery: $('#btnGallery'),
+      queueHeader: $('#queueHeader'),
+      queueCount: $('#queueCount'),
+      btnProcessAll: $('#btnProcessAll'),
+      btnClearAll: $('#btnClearAll'),
+      imageGrid: $('#imageGrid'),
+      emptyState: $('#emptyState'),
+      batchBar: $('#batchBar'),
+      btnDownloadAll: $('#btnDownloadAll'),
+      btnDownloadZip: $('#btnDownloadZip'),
+      batchCount: $('#batchCount'),
+      cropModal: $('#cropModal'),
+      cropCanvas: $('#cropCanvas'),
+      cropContainer: $('#cropContainer'),
+      cropZoom: $('#cropZoom'),
+      cropRotation: $('#cropRotation'),
+      cropRotReset: $('#cropRotReset'),
+      cropModalClose: $('#cropModalClose'),
+      cropCancel: $('#cropCancel'),
+      cropApply: $('#cropApply'),
+      themeToggle: $('#themeToggle'),
+      toastContainer: $('#toastContainer'),
+      installBanner: $('#installBanner'),
+      btnInstallBanner: $('#btnInstallBanner'),
+      btnInstallPwa: $('#btnInstallPwa')
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // IMAGE ITEM CLASS
+    // ═══════════════════════════════════════════════════════════
+    class ImageItem {
+      constructor(file, dataUrl) {
+        this.id = nextId++;
+        this.file = file;
+        this.originalName = file ? file.name.replace(/\.[^/.]+$/, '') : `imagen_${this.id}`;
+        this.customName = this.originalName;
+        this.originalDataUrl = dataUrl;
+        this.processedDataUrl = null;
+        this.finalDataUrl = null;
+        this.status = 'pending'; // pending | processing | done | error
+        this.progress = 0;
+        this.error = null;
+        this.showOriginal = false;
+        this.fileSize = file ? file.size : dataUrl.length;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // THEME MANAGEMENT
+    // ═══════════════════════════════════════════════════════════
+    function initTheme() {
+      const savedTheme = localStorage.getItem('hp_theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('hp_theme', next);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // TOAST NOTIFICATIONS
+    // ═══════════════════════════════════════════════════════════
+    function showToast(message, type = 'info') {
+      const icons = {
+        success: '✅',
+        error: '❌',
+        info: 'ℹ️'
+      };
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span>${icons[type] || ''} ${message}</span>`;
+      dom.toastContainer.appendChild(toast);
+      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FILE HANDLING
+    // ═══════════════════════════════════════════════════════════
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleFiles(files) {
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/gif'];
+      const validFiles = Array.from(files).filter(f => validTypes.includes(f.type));
+
+      if (validFiles.length === 0) {
+        showToast('No se encontraron archivos de imagen válidos', 'error');
+        return;
+      }
+
+      for (const file of validFiles) {
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          const item = new ImageItem(file, dataUrl);
+          imageQueue.push(item);
+        } catch (err) {
+          console.error('Error reading file:', err);
+          showToast(`Error al leer ${file.name}`, 'error');
+        }
+      }
+
+      showToast(`${validFiles.length} imagen(es) añadida(s) a la cola`, 'success');
+      updateUI();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BACKGROUND REMOVAL — @imgly/background-removal
+    // ═══════════════════════════════════════════════════════════
+    async function loadBgRemovalLib() {
+      if (bgRemovalModule) return bgRemovalModule;
+      if (bgRemovalLoading) {
+        // Wait for it to finish loading
+        while (bgRemovalLoading) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+        return bgRemovalModule;
+      }
+
+      bgRemovalLoading = true;
+      try {
+        // Dynamic import from CDN (ESM)
+        bgRemovalModule = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/index.js');
+        bgRemovalLoading = false;
+        return bgRemovalModule;
+      } catch (err) {
+        bgRemovalLoading = false;
+        console.error('Error loading bg removal lib:', err);
+        throw new Error('No se pudo cargar la librería de eliminación de fondo. Verifica tu conexión a internet.');
+      }
+    }
+
+    async function removeBackground(imageDataUrl, onProgress) {
+      const lib = await loadBgRemovalLib();
+      // Convert dataURL to blob
+      const response = await fetch(imageDataUrl);
+      const blob = await response.blob();
+
+      const resultBlob = await lib.removeBackground(blob, {
+        progress: (key, current, total) => {
+          if (onProgress && total > 0) {
+            onProgress(Math.round((current / total) * 100));
+          }
+        },
+        output: { format: 'image/png', quality: 1 }
+      });
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(resultBlob);
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // IMAGE PROCESSING: RESIZE & SQUARE CROP
+    // ═══════════════════════════════════════════════════════════
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    async function autoSquareCrop(dataUrl) {
+      const img = await loadImage(dataUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = OUTPUT_SIZE;
+      canvas.height = OUTPUT_SIZE;
+      const ctx = canvas.getContext('2d');
+
+      // Transparent background
+      ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+      // Find bounding box of non-transparent pixels
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(img, 0, 0);
+
+      const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
+      const { data, width, height } = imageData;
+
+      let minX = width, minY = height, maxX = 0, maxY = 0;
+      let hasContent = false;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const alpha = data[(y * width + x) * 4 + 3];
+          if (alpha > 10) {
+            hasContent = true;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (!hasContent) {
+        // No content found, just center the whole image
+        const scale = Math.min(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (OUTPUT_SIZE - w) / 2, (OUTPUT_SIZE - h) / 2, w, h);
+      } else {
+        // Add padding (5% of the bounding box)
+        const contentW = maxX - minX;
+        const contentH = maxY - minY;
+        const padding = Math.max(contentW, contentH) * 0.05;
+
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX = Math.min(width, maxX + padding);
+        maxY = Math.min(height, maxY + padding);
+
+        const cropW = maxX - minX;
+        const cropH = maxY - minY;
+
+        // Scale to fit within OUTPUT_SIZE keeping aspect ratio
+        const scale = Math.min(OUTPUT_SIZE / cropW, OUTPUT_SIZE / cropH) * 0.9; // 90% to give margin
+        const drawW = cropW * scale;
+        const drawH = cropH * scale;
+
+        ctx.drawImage(img, minX, minY, cropW, cropH,
+          (OUTPUT_SIZE - drawW) / 2,
+          (OUTPUT_SIZE - drawH) / 2,
+          drawW, drawH
+        );
+      }
+
+      return canvas.toDataURL('image/png');
+    }
+
+    // For images where bg wasn't removed (fallback center crop)
+    async function centerCropSquare(dataUrl) {
+      const img = await loadImage(dataUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = OUTPUT_SIZE;
+      canvas.height = OUTPUT_SIZE;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+      const scale = Math.min(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (OUTPUT_SIZE - w) / 2, (OUTPUT_SIZE - h) / 2, w, h);
+
+      return canvas.toDataURL('image/png');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PROCESS A SINGLE IMAGE
+    // ═══════════════════════════════════════════════════════════
+    async function processImage(item) {
+      item.status = 'processing';
+      item.progress = 0;
+      updateCardUI(item);
+
+      try {
+        // Step 1: Remove background (0-80%)
+        item.progress = 5;
+        updateCardUI(item);
+
+        const noBgDataUrl = await removeBackground(item.originalDataUrl, (p) => {
+          item.progress = Math.min(80, Math.round(p * 0.8));
+          updateCardUI(item);
+        });
+
+        item.processedDataUrl = noBgDataUrl;
+
+        // Step 2: Auto square crop (80-95%)
+        item.progress = 85;
+        updateCardUI(item);
+
+        const finalDataUrl = await autoSquareCrop(noBgDataUrl);
+        item.finalDataUrl = finalDataUrl;
+
+        // Step 3: Done
+        item.progress = 100;
+        item.status = 'done';
+        updateCardUI(item);
+        saveToSession();
+
+        return true;
+      } catch (err) {
+        console.error('Processing error:', err);
+        item.status = 'error';
+        item.error = err.message || 'Error desconocido';
+
+        // Fallback: at least do a center crop
+        try {
+          item.finalDataUrl = await centerCropSquare(item.originalDataUrl);
+          item.status = 'done';
+          showToast(`${item.customName}: Fondo no eliminado, se aplicó recorte básico`, 'info');
+        } catch (e) {
+          showToast(`Error procesando ${item.customName}: ${item.error}`, 'error');
+        }
+
+        updateCardUI(item);
+        return false;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BATCH PROCESSING
+    // ═══════════════════════════════════════════════════════════
+    async function processAll() {
+      const pending = imageQueue.filter(i => i.status === 'pending' || i.status === 'error');
+      if (pending.length === 0) {
+        showToast('No hay imágenes pendientes de procesar', 'info');
+        return;
+      }
+
+      dom.btnProcessAll.disabled = true;
+      showGlobalProgress(true);
+
+      let processed = 0;
+      for (const item of pending) {
+        await processImage(item);
+        processed++;
+        updateGlobalProgress(Math.round((processed / pending.length) * 100));
+      }
+
+      dom.btnProcessAll.disabled = false;
+      showGlobalProgress(false);
+
+      const doneCount = imageQueue.filter(i => i.status === 'done').length;
+      showToast(`Procesamiento completado: ${doneCount} imagen(es) listas`, 'success');
+      updateUI();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // DOWNLOAD FUNCTIONS
+    // ═══════════════════════════════════════════════════════════
+    function downloadImage(item) {
+      const dataUrl = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
+      const link = document.createElement('a');
+      link.download = `${item.customName}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function downloadAllIndividual() {
+      const doneItems = imageQueue.filter(i => i.status === 'done');
+      if (doneItems.length === 0) {
+        showToast('No hay imágenes listas para descargar', 'info');
+        return;
+      }
+      doneItems.forEach((item, i) => {
+        setTimeout(() => downloadImage(item), i * 300);
+      });
+      showToast(`Descargando ${doneItems.length} imagen(es)`, 'success');
+    }
+
+    async function downloadAllZip() {
+      const doneItems = imageQueue.filter(i => i.status === 'done');
+      if (doneItems.length === 0) {
+        showToast('No hay imágenes listas para descargar', 'info');
+        return;
+      }
+
+      if (typeof JSZip === 'undefined') {
+        showToast('Librería JSZip no disponible. Usa la descarga individual.', 'error');
+        return;
+      }
+
+      showToast('Creando archivo ZIP...', 'info');
+
+      try {
+        const zip = new JSZip();
+        const folder = zip.folder('productos');
+
+        for (const item of doneItems) {
+          const dataUrl = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
+          const base64 = dataUrl.split(',')[1];
+          folder.file(`${item.customName}.png`, base64, { base64: true });
+        }
+
+        const blob = await zip.generateAsync({
+          type: 'blob',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 6 }
+        });
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `productos_${new Date().toISOString().slice(0, 10)}.zip`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showToast(`ZIP descargado con ${doneItems.length} imagen(es)`, 'success');
+      } catch (err) {
+        console.error('ZIP error:', err);
+        showToast('Error al crear el archivo ZIP', 'error');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CROP MODAL
+    // ═══════════════════════════════════════════════════════════
+    async function openCropModal(itemId) {
+      const item = imageQueue.find(i => i.id === itemId);
+      if (!item) return;
+
+      const dataUrl = item.processedDataUrl || item.originalDataUrl;
+      const img = await loadImage(dataUrl);
+
+      cropState = {
+        imageId: itemId,
+        img: img,
+        zoom: 1,
+        rotation: 0,
+        panX: 0,
+        panY: 0,
+        dragging: false,
+        lastX: 0,
+        lastY: 0
+      };
+
+      dom.cropZoom.value = 1;
+      dom.cropRotation.value = 0;
+      dom.cropModal.classList.remove('hidden');
+      drawCropCanvas();
+    }
+
+    function closeCropModal() {
+      dom.cropModal.classList.add('hidden');
+      cropState.imageId = null;
+    }
+
+    function drawCropCanvas() {
+      const canvas = dom.cropCanvas;
+      const container = dom.cropContainer;
+      const size = container.clientWidth;
+      canvas.width = size;
+      canvas.height = size;
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, size, size);
+
+      // Draw checkerboard (handled by CSS bg)
+
+      if (!cropState.img) return;
+
+      const img = cropState.img;
+      const zoom = cropState.zoom;
+      const rotation = cropState.rotation * (Math.PI / 180);
+
+      ctx.save();
+      ctx.translate(size / 2 + cropState.panX, size / 2 + cropState.panY);
+      ctx.rotate(rotation);
+
+      const scale = Math.min(size / img.width, size / img.height) * zoom;
+      const w = img.width * scale;
+      const h = img.height * scale;
+
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+
+      // Draw crop guide (square outline)
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      const margin = size * 0.05;
+      ctx.strokeRect(margin, margin, size - margin * 2, size - margin * 2);
+      ctx.setLineDash([]);
+    }
+
+    function applyCrop() {
+      const item = imageQueue.find(i => i.id === cropState.imageId);
+      if (!item) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = OUTPUT_SIZE;
+      canvas.height = OUTPUT_SIZE;
+      const ctx = canvas.getContext('2d');
+
+      const img = cropState.img;
+      const zoom = cropState.zoom;
+      const rotation = cropState.rotation * (Math.PI / 180);
+
+      ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      ctx.save();
+      ctx.translate(OUTPUT_SIZE / 2 + cropState.panX * (OUTPUT_SIZE / dom.cropCanvas.width),
+                    OUTPUT_SIZE / 2 + cropState.panY * (OUTPUT_SIZE / dom.cropCanvas.height));
+      ctx.rotate(rotation);
+
+      const scale = Math.min(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height) * zoom;
+      const w = img.width * scale;
+      const h = img.height * scale;
+
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+
+      item.finalDataUrl = canvas.toDataURL('image/png');
+      item.status = 'done';
+      updateCardUI(item);
+      saveToSession();
+      closeCropModal();
+      showToast('Recorte aplicado correctamente', 'success');
+    }
+
+    // Crop modal drag/pan
+    function setupCropInteraction() {
+      const container = dom.cropContainer;
+
+      function getPos(e) {
+        if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        return { x: e.clientX, y: e.clientY };
+      }
+
+      function onStart(e) {
+        e.preventDefault();
+        const pos = getPos(e);
+        cropState.dragging = true;
+        cropState.lastX = pos.x;
+        cropState.lastY = pos.y;
+      }
+
+      function onMove(e) {
+        if (!cropState.dragging) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        cropState.panX += pos.x - cropState.lastX;
+        cropState.panY += pos.y - cropState.lastY;
+        cropState.lastX = pos.x;
+        cropState.lastY = pos.y;
+        drawCropCanvas();
+      }
+
+      function onEnd() {
+        cropState.dragging = false;
+      }
+
+      container.addEventListener('mousedown', onStart);
+      container.addEventListener('mousemove', onMove);
+      container.addEventListener('mouseup', onEnd);
+      container.addEventListener('mouseleave', onEnd);
+      container.addEventListener('touchstart', onStart, { passive: false });
+      container.addEventListener('touchmove', onMove, { passive: false });
+      container.addEventListener('touchend', onEnd);
+
+      // Mouse wheel zoom
+      container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        cropState.zoom = Math.max(0.5, Math.min(3, cropState.zoom + delta));
+        dom.cropZoom.value = cropState.zoom;
+        drawCropCanvas();
+      }, { passive: false });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SESSION STORAGE
+    // ═══════════════════════════════════════════════════════════
+    function saveToSession() {
+      try {
+        const data = imageQueue.map(item => ({
+          id: item.id,
+          customName: item.customName,
+          originalName: item.originalName,
+          status: item.status,
+          finalDataUrl: item.finalDataUrl,
+          originalDataUrl: item.originalDataUrl?.substring(0, 100) + '...' // truncate for storage
+        }));
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+      } catch (e) {
+        // sessionStorage may be full
+        console.warn('Could not save to session storage:', e);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // UI RENDERING
+    // ═══════════════════════════════════════════════════════════
+    function updateUI() {
+      const total = imageQueue.length;
+      const doneCount = imageQueue.filter(i => i.status === 'done').length;
+
+      // Queue header
+      if (total > 0) {
+        dom.queueHeader.classList.remove('hidden');
+        dom.emptyState.classList.add('hidden');
+      } else {
+        dom.queueHeader.classList.add('hidden');
+        dom.emptyState.classList.remove('hidden');
+      }
+      dom.queueCount.textContent = total;
+
+      // Batch bar
+      if (doneCount > 0) {
+        dom.batchBar.classList.add('visible');
+        dom.batchCount.textContent = `${doneCount} lista${doneCount !== 1 ? 's' : ''}`;
+      } else {
+        dom.batchBar.classList.remove('visible');
+      }
+
+      // Render cards
+      renderCards();
+    }
+
+    function renderCards() {
+      // Only re-render if cards changed
+      const existingIds = new Set(Array.from(dom.imageGrid.children).map(c => parseInt(c.dataset.id)));
+      const currentIds = new Set(imageQueue.map(i => i.id));
+
+      // Remove cards no longer in queue
+      for (const child of Array.from(dom.imageGrid.children)) {
+        if (!currentIds.has(parseInt(child.dataset.id))) {
+          child.remove();
+        }
+      }
+
+      // Add/update cards
+      for (const item of imageQueue) {
+        if (!existingIds.has(item.id)) {
+          dom.imageGrid.appendChild(createCard(item));
+        }
+      }
+    }
+
+    function createCard(item) {
+      const card = document.createElement('div');
+      card.className = 'image-card';
+      card.dataset.id = item.id;
+
+      const displayUrl = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
+      const statusClass = `status-${item.status}`;
+      const statusText = {
+        pending: 'Pendiente',
+        processing: 'Procesando...',
+        done: 'Listo',
+        error: 'Error'
+      }[item.status];
+
+      card.innerHTML = `
+        <div class="image-card-preview">
+          <img src="${displayUrl}" alt="${item.customName}" />
+          ${item.status === 'processing' ? `
+            <div class="processing-overlay">
+              <div class="spinner"></div>
+              <span>Eliminando fondo...</span>
+            </div>
+          ` : ''}
+          ${item.status === 'done' ? `
+            <button class="btn btn-secondary btn-sm before-after-toggle" data-id="${item.id}" title="Ver original/procesada">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            </button>
+          ` : ''}
+          <span class="image-card-status ${statusClass}">${statusText}</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" style="width:${item.progress}%"></div>
+        </div>
+        <div class="image-card-body">
+          <input type="text" class="image-card-name-input" value="${item.customName}" 
+                 placeholder="Nombre del producto" data-id="${item.id}" />
+          <div class="image-card-meta">
+            <span>${item.file ? formatFileSize(item.file.size) : ''}</span>
+            <span>•</span>
+            <span>1080×1080 PNG</span>
+          </div>
+          <div class="image-card-actions">
+            ${item.status === 'pending' ? `
+              <button class="btn btn-primary btn-sm" onclick="app.processOne(${item.id})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Procesar
+              </button>
+            ` : ''}
+            ${item.status === 'done' ? `
+              <button class="btn btn-secondary btn-sm" onclick="app.openCrop(${item.id})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>
+                Recortar
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="app.download(${item.id})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar
+              </button>
+            ` : ''}
+            ${item.status === 'error' ? `
+              <button class="btn btn-primary btn-sm" onclick="app.processOne(${item.id})">
+                Reintentar
+              </button>
+            ` : ''}
+            <button class="btn btn-danger btn-sm" onclick="app.removeItem(${item.id})" style="flex:0;padding:0.4rem 0.5rem" title="Eliminar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Name input handler
+      const nameInput = card.querySelector('.image-card-name-input');
+      nameInput.addEventListener('input', (e) => {
+        item.customName = e.target.value || item.originalName;
+        saveToSession();
+      });
+
+      // Before/after toggle
+      const toggleBtn = card.querySelector('.before-after-toggle');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          item.showOriginal = !item.showOriginal;
+          const img = card.querySelector('.image-card-preview img');
+          if (item.showOriginal) {
+            img.src = item.originalDataUrl;
+            toggleBtn.title = 'Ver procesada';
+          } else {
+            img.src = item.finalDataUrl || item.processedDataUrl || item.originalDataUrl;
+            toggleBtn.title = 'Ver original';
+          }
+        });
+      }
+
+      return card;
+    }
+
+    function updateCardUI(item) {
+      const card = dom.imageGrid.querySelector(`[data-id="${item.id}"]`);
+      if (!card) return;
+
+      // Update progress bar
+      const progressBar = card.querySelector('.progress-bar');
+      if (progressBar) progressBar.style.width = `${item.progress}%`;
+
+      // Update status badge
+      const statusEl = card.querySelector('.image-card-status');
+      if (statusEl) {
+        statusEl.className = `image-card-status status-${item.status}`;
+        const statusText = {
+          pending: 'Pendiente',
+          processing: 'Procesando...',
+          done: 'Listo',
+          error: 'Error'
+        }[item.status];
+        statusEl.textContent = statusText;
+      }
+
+      // Update overlay
+      const preview = card.querySelector('.image-card-preview');
+      const existingOverlay = preview.querySelector('.processing-overlay');
+
+      if (item.status === 'processing' && !existingOverlay) {
+        const overlay = document.createElement('div');
+        overlay.className = 'processing-overlay';
+        overlay.innerHTML = `<div class="spinner"></div><span>Eliminando fondo... ${item.progress}%</span>`;
+        preview.appendChild(overlay);
+      } else if (item.status === 'processing' && existingOverlay) {
+        existingOverlay.querySelector('span').textContent = `Eliminando fondo... ${item.progress}%`;
+      } else if (existingOverlay) {
+        existingOverlay.remove();
+      }
+
+      // When done, re-create card to update buttons and image
+      if (item.status === 'done' || item.status === 'error') {
+        const newCard = createCard(item);
+        card.replaceWith(newCard);
+        updateUI();
+      }
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function showGlobalProgress(visible) {
+      dom.globalProgress.classList.toggle('hidden', !visible);
+    }
+
+    function updateGlobalProgress(percent) {
+      dom.globalProgress.querySelector('.bar').style.width = `${percent}%`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PUBLIC API (for inline event handlers)
+    // ═══════════════════════════════════════════════════════════
+    window.app = {
+      processOne: async (id) => {
+        const item = imageQueue.find(i => i.id === id);
+        if (!item) return;
+        showGlobalProgress(true);
+        await processImage(item);
+        showGlobalProgress(false);
+        updateUI();
+      },
+
+      download: (id) => {
+        const item = imageQueue.find(i => i.id === id);
+        if (item) downloadImage(item);
+      },
+
+      removeItem: (id) => {
+        imageQueue = imageQueue.filter(i => i.id !== id);
+        const card = dom.imageGrid.querySelector(`[data-id="${id}"]`);
+        if (card) {
+          card.style.animation = 'none';
+          card.style.transition = 'all 0.3s ease';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.9)';
+          setTimeout(() => {
+            card.remove();
+            updateUI();
+          }, 300);
+        }
+        saveToSession();
+      },
+
+      openCrop: (id) => openCropModal(id)
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // DRAG & DROP
+    // ═══════════════════════════════════════════════════════════
+    function setupDragDrop() {
+      const zone = dom.uploadZone;
+
+      ['dragenter', 'dragover'].forEach(evt => {
+        zone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          zone.classList.add('drag-over');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(evt => {
+        zone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+        });
+      });
+
+      zone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) handleFiles(files);
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PWA INSTALL
+    // ═══════════════════════════════════════════════════════════
+    function setupPWA() {
+      // Service Worker registration
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[PWA] SW registered:', reg.scope))
+          .catch(err => console.warn('[PWA] SW registration failed:', err));
+      }
+
+      // Install prompt
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        dom.installBanner.classList.remove('hidden');
+        dom.btnInstallPwa.style.display = '';
+      });
+
+      dom.btnInstallBanner.addEventListener('click', installPwa);
+      dom.btnInstallPwa.addEventListener('click', installPwa);
+
+      window.addEventListener('appinstalled', () => {
+        dom.installBanner.classList.add('hidden');
+        dom.btnInstallPwa.style.display = 'none';
+        showToast('¡App instalada correctamente!', 'success');
+      });
+    }
+
+    async function installPwa() {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      const result = await deferredInstallPrompt.userChoice;
+      if (result.outcome === 'accepted') {
+        showToast('¡Instalando la app!', 'success');
+      }
+      deferredInstallPrompt = null;
+      dom.installBanner.classList.add('hidden');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // INITIALIZATION
+    // ═══════════════════════════════════════════════════════════
+    function init() {
+      // Theme
+      initTheme();
+      dom.themeToggle.addEventListener('click', toggleTheme);
+
+      // File inputs
+      dom.btnCamera.addEventListener('click', () => dom.fileInputCamera.click());
+      dom.btnGallery.addEventListener('click', () => dom.fileInputGallery.click());
+      dom.fileInputCamera.addEventListener('change', (e) => { handleFiles(e.target.files); e.target.value = ''; });
+      dom.fileInputGallery.addEventListener('change', (e) => { handleFiles(e.target.files); e.target.value = ''; });
+
+      // Drag & drop
+      setupDragDrop();
+
+      // Batch actions
+      dom.btnProcessAll.addEventListener('click', processAll);
+      dom.btnClearAll.addEventListener('click', () => {
+        imageQueue = [];
+        dom.imageGrid.innerHTML = '';
+        updateUI();
+        showToast('Cola limpiada', 'info');
+      });
+      dom.btnDownloadAll.addEventListener('click', downloadAllIndividual);
+      dom.btnDownloadZip.addEventListener('click', downloadAllZip);
+
+      // Crop modal
+      setupCropInteraction();
+      dom.cropZoom.addEventListener('input', (e) => {
+        cropState.zoom = parseFloat(e.target.value);
+        drawCropCanvas();
+      });
+      dom.cropRotation.addEventListener('input', (e) => {
+        cropState.rotation = parseInt(e.target.value);
+        drawCropCanvas();
+      });
+      dom.cropRotReset.addEventListener('click', () => {
+        cropState.rotation = 0;
+        dom.cropRotation.value = 0;
+        drawCropCanvas();
+      });
+      dom.cropModalClose.addEventListener('click', closeCropModal);
+      dom.cropCancel.addEventListener('click', closeCropModal);
+      dom.cropApply.addEventListener('click', applyCrop);
+
+      // Close modal on backdrop click
+      dom.cropModal.addEventListener('click', (e) => {
+        if (e.target === dom.cropModal) closeCropModal();
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeCropModal();
+      });
+
+      // PWA
+      setupPWA();
+
+      // Preload bg removal lib in background
+      setTimeout(() => {
+        loadBgRemovalLib().catch(() => {});
+      }, 2000);
+
+      // Hide loading screen
+      setTimeout(() => {
+        dom.loadingScreen.classList.add('fade-out');
+        setTimeout(() => dom.loadingScreen.remove(), 600);
+      }, 800);
+
+      // Initial UI
+      updateUI();
+
+      console.log('%c[HP Imágenes] App initialized 🚀', 'color: #6366f1; font-weight: bold;');
+    }
+
+    // Start
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+
+  })();
+  </script>
+
+</body>
+</html>
