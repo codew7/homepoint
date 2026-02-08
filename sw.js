@@ -3,7 +3,7 @@
 // Estrategia: Cache First con Network Fallback
 // ============================================================
 
-const CACHE_NAME = 'hp-imagenes-v2';
+const CACHE_NAME = 'hp-imagenes-v3';
 const ASSETS_TO_CACHE = [
   './imagenes.html',
   './manifest.json'

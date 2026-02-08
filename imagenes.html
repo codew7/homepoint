@@ -780,7 +780,7 @@
 
     let imageQueue = [];    // Array of ImageItem objects
     let nextId = 1;
-    let bgRemovalModule = null;
+    let bgRemovalPipeline = null;
     let bgRemovalLoading = false;
     let deferredInstallPrompt = null;
 
@@ -927,79 +927,85 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // BACKGROUND REMOVAL — @imgly/background-removal
+    // BACKGROUND REMOVAL — @huggingface/transformers.js
+    // Uses the dedicated "background-removal" pipeline with
+    // the briaai/RMBG-1.4 model (ONNX, runs 100% in-browser).
     // ═══════════════════════════════════════════════════════════
-    const BG_REMOVAL_CDN = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.12/dist/';
+    const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+    const BG_MODEL = 'briaai/RMBG-1.4';
 
     async function loadBgRemovalLib() {
-      if (bgRemovalModule) return bgRemovalModule;
+      if (bgRemovalPipeline) return bgRemovalPipeline;
       if (bgRemovalLoading) {
+        // Wait for the other caller to finish loading
         while (bgRemovalLoading) {
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 300));
         }
-        return bgRemovalModule;
+        return bgRemovalPipeline;
       }
 
       bgRemovalLoading = true;
       try {
-        console.log('[BG Removal] Loading library from CDN...');
-        bgRemovalModule = await import(BG_REMOVAL_CDN + 'index.js');
-        console.log('[BG Removal] Library loaded successfully. Available exports:', Object.keys(bgRemovalModule));
+        console.log('[BG Removal] Importing @huggingface/transformers from CDN...');
+        const { pipeline, env } = await import(TRANSFORMERS_CDN);
+
+        // Allow remote model downloads from Hugging Face Hub
+        env.allowRemoteModels = true;
+        // Use CDN for ONNX WASM backends
+        env.backends.onnx.wasm.wasmPaths = TRANSFORMERS_CDN + '/dist/';
+
+        console.log('[BG Removal] Creating background-removal pipeline with model:', BG_MODEL);
+        bgRemovalPipeline = await pipeline('background-removal', BG_MODEL, {
+          dtype: 'q8',          // quantized for faster download & inference
+        });
+
+        console.log('[BG Removal] Pipeline ready!');
         bgRemovalLoading = false;
-        return bgRemovalModule;
+        return bgRemovalPipeline;
       } catch (err) {
         bgRemovalLoading = false;
-        console.error('[BG Removal] Failed to load library:', err);
-        throw new Error('No se pudo cargar la librería de eliminación de fondo. Verifica tu conexión a internet.');
+        console.error('[BG Removal] Failed to load pipeline:', err);
+        throw new Error('No se pudo cargar el modelo de eliminación de fondo. Verifica tu conexión a internet.');
       }
     }
 
     async function removeBackground(imageDataUrl, onProgress) {
-      const lib = await loadBgRemovalLib();
+      if (onProgress) onProgress(5);
 
-      // Determine which function to call (the lib exports removeBackground or default)
-      const removeBgFn = lib.removeBackground || lib.default?.removeBackground || lib.default;
-      if (typeof removeBgFn !== 'function') {
-        console.error('[BG Removal] Available exports:', Object.keys(lib));
-        throw new Error('La función removeBackground no está disponible en la librería.');
-      }
+      // 1. Load / reuse the pipeline
+      const segmenter = await loadBgRemovalLib();
+      if (onProgress) onProgress(30);
 
-      // Convert dataURL to blob for the library
+      console.log('[BG Removal] Running inference...');
+
+      // 2. Convert dataURL → Blob so transformers.js can consume it
       const response = await fetch(imageDataUrl);
       const inputBlob = await response.blob();
+      if (onProgress) onProgress(40);
 
-      console.log('[BG Removal] Starting background removal, blob size:', inputBlob.size);
-      if (onProgress) onProgress(10);
+      // 3. Run the background-removal pipeline
+      //    Returns an array of RawImage objects (RGBA, 4 channels)
+      const results = await segmenter(inputBlob);
+      if (onProgress) onProgress(90);
 
-      const config = {
-        publicPath: BG_REMOVAL_CDN,
-        progress: (key, current, total) => {
-          if (onProgress && total > 0) {
-            const pct = Math.round((current / total) * 100);
-            console.log(`[BG Removal] ${key}: ${pct}%`);
-            onProgress(pct);
-          }
-        },
-        output: {
-          format: 'image/png',
-          quality: 1
-        }
-      };
+      // 4. Draw result onto a canvas and export as data URL
+      const rawImage = results[0]; // RawImage { data, width, height, channels }
+      console.log('[BG Removal] Result:', rawImage.width, 'x', rawImage.height, ', channels:', rawImage.channels);
 
-      try {
-        const resultBlob = await removeBgFn(inputBlob, config);
-        console.log('[BG Removal] Success! Result blob size:', resultBlob.size);
+      const canvas = document.createElement('canvas');
+      canvas.width = rawImage.width;
+      canvas.height = rawImage.height;
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.createImageData(rawImage.width, rawImage.height);
 
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(resultBlob);
-        });
-      } catch (err) {
-        console.error('[BG Removal] Processing failed:', err);
-        throw err;
-      }
+      // RawImage.data is a Uint8ClampedArray with RGBA pixels
+      imageData.data.set(rawImage.data);
+      ctx.putImageData(imageData, 0, 0);
+
+      if (onProgress) onProgress(100);
+      console.log('[BG Removal] Done!');
+
+      return canvas.toDataURL('image/png');
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1813,10 +1819,13 @@
       // PWA
       setupPWA();
 
-      // Preload bg removal lib in background
+      // Preload bg removal model in background (heavy download ~40MB first time)
       setTimeout(() => {
-        loadBgRemovalLib().catch(() => {});
-      }, 2000);
+        console.log('[Init] Preloading background removal model...');
+        loadBgRemovalLib().catch((err) => {
+          console.warn('[Init] Preload failed (will retry on first use):', err.message);
+        });
+      }, 3000);
 
       // Hide loading screen
       setTimeout(() => {
