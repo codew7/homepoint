@@ -3,12 +3,10 @@
 // Estrategia: Cache First con Network Fallback
 // ============================================================
 
-const CACHE_NAME = 'hp-imagenes-v1';
+const CACHE_NAME = 'hp-imagenes-v2';
 const ASSETS_TO_CACHE = [
   './imagenes.html',
-  './manifest.json',
-  'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/index.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+  './manifest.json'
 ];
 
 // Instalación: cachear recursos esenciales
