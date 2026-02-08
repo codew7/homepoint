@@ -596,6 +596,40 @@
     }
     [data-theme="dark"] .theme-toggle::after { transform: translateX(20px); }
 
+    /* ── API Mode indicator ───────────────────────────────────── */
+    .mode-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.25rem 0.625rem;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .mode-indicator.test-mode {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+    }
+    .mode-indicator.prod-mode {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+    }
+    .mode-indicator:hover { opacity: 0.8; }
+    .mode-indicator .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
     /* ── Loading screen ──────────────────────────────────────── */
     .loading-screen {
       position: fixed;
@@ -658,6 +692,10 @@
       HP Imágenes
     </a>
     <div class="header-actions">
+      <div class="mode-indicator test-mode" id="modeIndicator" title="Click para cambiar modo">
+        <span class="dot"></span>
+        <span id="modeLabel">TEST</span>
+      </div>
       <button class="btn-icon" id="btnInstallPwa" title="Instalar App" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
@@ -778,10 +816,14 @@
     const JPEG_QUALITY = 0.92;
     const SESSION_KEY = 'hp_images_session';
 
+    // ── Pixian.ai API Configuration ──
+    const PIXIAN_API_URL = 'https://api.pixian.ai/api/v2/remove-background';
+    const PIXIAN_API_ID = 'pxivyl7z7z4g7cb';
+    const PIXIAN_API_SECRET = 'p16smfglgf7gbh3sl85vmihhrn9c8k251vhjq2t2g9d4etflutpv';
+
     let imageQueue = [];    // Array of ImageItem objects
     let nextId = 1;
-    let bgRemovalPipeline = null;
-    let bgRemovalLoading = false;
+    let testMode = true;    // true = gratis con marca de agua, false = producción
     let deferredInstallPrompt = null;
 
     // Crop modal state
@@ -831,6 +873,8 @@
       cropCancel: $('#cropCancel'),
       cropApply: $('#cropApply'),
       themeToggle: $('#themeToggle'),
+      modeIndicator: $('#modeIndicator'),
+      modeLabel: $('#modeLabel'),
       toastContainer: $('#toastContainer'),
       installBanner: $('#installBanner'),
       btnInstallBanner: $('#btnInstallBanner'),
@@ -872,6 +916,43 @@
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('hp_theme', next);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // API MODE TOGGLE (TEST / PRODUCTION)
+    // ═══════════════════════════════════════════════════════════
+    function initModeToggle() {
+      const saved = localStorage.getItem('hp_api_mode');
+      testMode = saved !== 'production'; // default test
+      updateModeUI();
+
+      dom.modeIndicator.addEventListener('click', () => {
+        if (testMode) {
+          // Switching to production — confirm
+          if (confirm('¿Cambiar a modo PRODUCCIÓN?\\n\\nEn modo producción se consumen créditos de tu cuenta Pixian.ai.\\nLas imágenes NO tendrán marca de agua.')) {
+            testMode = false;
+            localStorage.setItem('hp_api_mode', 'production');
+            showToast('Modo Producción activado — se consumirán créditos', 'info');
+          }
+        } else {
+          testMode = true;
+          localStorage.setItem('hp_api_mode', 'test');
+          showToast('Modo Test activado — imágenes con marca de agua', 'info');
+        }
+        updateModeUI();
+      });
+    }
+
+    function updateModeUI() {
+      if (testMode) {
+        dom.modeIndicator.className = 'mode-indicator test-mode';
+        dom.modeLabel.textContent = 'TEST';
+        dom.modeIndicator.title = 'Modo Test — gratis con marca de agua. Click para cambiar.';
+      } else {
+        dom.modeIndicator.className = 'mode-indicator prod-mode';
+        dom.modeLabel.textContent = 'PROD';
+        dom.modeIndicator.title = 'Modo Producción — sin marca de agua, consume créditos. Click para cambiar.';
+      }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -927,89 +1008,75 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // BACKGROUND REMOVAL — @huggingface/transformers.js
-    // Uses the dedicated "background-removal" pipeline with
-    // the briaai/RMBG-1.4 model (ONNX, runs 100% in-browser).
+    // PIXIAN.AI API — Background Removal
+    // La API hace todo en una llamada: elimina fondo,
+    // aplica fondo blanco, recorta al objeto, centra
+    // y redimensiona a 1080x1080px.
     // ═══════════════════════════════════════════════════════════
-    const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
-    const BG_MODEL = 'briaai/RMBG-1.4';
 
-    async function loadBgRemovalLib() {
-      if (bgRemovalPipeline) return bgRemovalPipeline;
-      if (bgRemovalLoading) {
-        // Wait for the other caller to finish loading
-        while (bgRemovalLoading) {
-          await new Promise(r => setTimeout(r, 300));
+    /**
+     * Envía la imagen a Pixian.ai API y retorna el resultado
+     * procesado como dataURL (fondo blanco, 1080x1080, centrado)
+     */
+    async function removeBackgroundPixian(imageBlob) {
+      const formData = new FormData();
+      formData.append('image', imageBlob);
+
+      // Resultado: fondo blanco, recortado al objeto, 1080x1080, centrado
+      formData.append('background.color', '#FFFFFF');
+      formData.append('result.crop_to_foreground', 'true');
+      formData.append('result.target_size', `${OUTPUT_SIZE} ${OUTPUT_SIZE}`);
+      formData.append('result.vertical_alignment', 'middle');
+      formData.append('result.margin', '5%');
+      formData.append('output.format', 'png');
+
+      // Modo test (gratis, con marca de agua) o producción
+      if (testMode) {
+        formData.append('test', 'true');
+      }
+
+      const authHeader = 'Basic ' + btoa(PIXIAN_API_ID + ':' + PIXIAN_API_SECRET);
+
+      console.log(`[Pixian] Sending request (mode: ${testMode ? 'TEST' : 'PRODUCTION'})...`);
+
+      const response = await fetch(PIXIAN_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        let errorMsg = `HTTP ${response.status}`;
+        try {
+          const errJson = await response.json();
+          errorMsg = errJson.error?.message || errorMsg;
+          console.error('[Pixian] API Error:', errJson);
+        } catch (e) {
+          const errText = await response.text().catch(() => '');
+          console.error('[Pixian] API Error (raw):', errText);
         }
-        return bgRemovalPipeline;
+        throw new Error(`Pixian API: ${errorMsg}`);
       }
 
-      bgRemovalLoading = true;
-      try {
-        console.log('[BG Removal] Importing @huggingface/transformers from CDN...');
-        const { pipeline, env } = await import(TRANSFORMERS_CDN);
+      // Headers útiles
+      const creditsCharged = response.headers.get('X-Credits-Charged');
+      const creditsCalc = response.headers.get('X-Credits-Calculated');
+      const resultSize = response.headers.get('X-Result-Size');
+      console.log(`[Pixian] Success! Result size: ${resultSize}, Credits: ${creditsCharged || creditsCalc || 'N/A'}`);
 
-        // Allow remote model downloads from Hugging Face Hub
-        env.allowRemoteModels = true;
-        // Use CDN for ONNX WASM backends
-        env.backends.onnx.wasm.wasmPaths = TRANSFORMERS_CDN + '/dist/';
-
-        console.log('[BG Removal] Creating background-removal pipeline with model:', BG_MODEL);
-        bgRemovalPipeline = await pipeline('background-removal', BG_MODEL, {
-          dtype: 'q8',          // quantized for faster download & inference
-        });
-
-        console.log('[BG Removal] Pipeline ready!');
-        bgRemovalLoading = false;
-        return bgRemovalPipeline;
-      } catch (err) {
-        bgRemovalLoading = false;
-        console.error('[BG Removal] Failed to load pipeline:', err);
-        throw new Error('No se pudo cargar el modelo de eliminación de fondo. Verifica tu conexión a internet.');
-      }
-    }
-
-    async function removeBackground(imageDataUrl, onProgress) {
-      if (onProgress) onProgress(5);
-
-      // 1. Load / reuse the pipeline
-      const segmenter = await loadBgRemovalLib();
-      if (onProgress) onProgress(30);
-
-      console.log('[BG Removal] Running inference...');
-
-      // 2. Convert dataURL → Blob so transformers.js can consume it
-      const response = await fetch(imageDataUrl);
-      const inputBlob = await response.blob();
-      if (onProgress) onProgress(40);
-
-      // 3. Run the background-removal pipeline
-      //    Returns an array of RawImage objects (RGBA, 4 channels)
-      const results = await segmenter(inputBlob);
-      if (onProgress) onProgress(90);
-
-      // 4. Draw result onto a canvas and export as data URL
-      const rawImage = results[0]; // RawImage { data, width, height, channels }
-      console.log('[BG Removal] Result:', rawImage.width, 'x', rawImage.height, ', channels:', rawImage.channels);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = rawImage.width;
-      canvas.height = rawImage.height;
-      const ctx = canvas.getContext('2d');
-      const imageData = ctx.createImageData(rawImage.width, rawImage.height);
-
-      // RawImage.data is a Uint8ClampedArray with RGBA pixels
-      imageData.data.set(rawImage.data);
-      ctx.putImageData(imageData, 0, 0);
-
-      if (onProgress) onProgress(100);
-      console.log('[BG Removal] Done!');
-
-      return canvas.toDataURL('image/png');
+      const resultBlob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(resultBlob);
+      });
     }
 
     // ═══════════════════════════════════════════════════════════
-    // IMAGE PROCESSING: RESIZE & SQUARE CROP
+    // IMAGE PROCESSING HELPERS
     // ═══════════════════════════════════════════════════════════
     function loadImage(src) {
       return new Promise((resolve, reject) => {
@@ -1021,79 +1088,24 @@
       });
     }
 
-    async function autoSquareCrop(dataUrl) {
-      const img = await loadImage(dataUrl);
-      const canvas = document.createElement('canvas');
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
-      const ctx = canvas.getContext('2d');
-
-      // White background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-
-      // Find bounding box of non-transparent pixels
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = img.width;
-      tempCanvas.height = img.height;
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCtx.drawImage(img, 0, 0);
-
-      const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
-      const { data, width, height } = imageData;
-
-      let minX = width, minY = height, maxX = 0, maxY = 0;
-      let hasContent = false;
-
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const alpha = data[(y * width + x) * 4 + 3];
-          if (alpha > 10) {
-            hasContent = true;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
+    /**
+     * Convierte un dataURL a Blob
+     */
+    function dataUrlToBlob(dataUrl) {
+      const parts = dataUrl.split(',');
+      const mime = parts[0].match(/:(.*?);/)[1];
+      const binary = atob(parts[1]);
+      const array = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i);
       }
-
-      if (!hasContent) {
-        // No content found, just center the whole image
-        const scale = Math.min(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (OUTPUT_SIZE - w) / 2, (OUTPUT_SIZE - h) / 2, w, h);
-      } else {
-        // Add padding (5% of the bounding box)
-        const contentW = maxX - minX;
-        const contentH = maxY - minY;
-        const padding = Math.max(contentW, contentH) * 0.05;
-
-        minX = Math.max(0, minX - padding);
-        minY = Math.max(0, minY - padding);
-        maxX = Math.min(width, maxX + padding);
-        maxY = Math.min(height, maxY + padding);
-
-        const cropW = maxX - minX;
-        const cropH = maxY - minY;
-
-        // Scale to fit within OUTPUT_SIZE keeping aspect ratio
-        const scale = Math.min(OUTPUT_SIZE / cropW, OUTPUT_SIZE / cropH) * 0.9; // 90% to give margin
-        const drawW = cropW * scale;
-        const drawH = cropH * scale;
-
-        ctx.drawImage(img, minX, minY, cropW, cropH,
-          (OUTPUT_SIZE - drawW) / 2,
-          (OUTPUT_SIZE - drawH) / 2,
-          drawW, drawH
-        );
-      }
-
-      return canvas.toDataURL('image/png');
+      return new Blob([array], { type: mime });
     }
 
-    // For images where bg wasn't removed (fallback center crop)
+    /**
+     * Fallback: centro la imagen en un cuadrado blanco 1080x1080
+     * (se usa si la API falla)
+     */
     async function centerCropSquare(dataUrl) {
       const img = await loadImage(dataUrl);
       const canvas = document.createElement('canvas');
@@ -1104,7 +1116,7 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-      const scale = Math.min(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height);
+      const scale = Math.min(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height) * 0.9;
       const w = img.width * scale;
       const h = img.height * scale;
       ctx.drawImage(img, (OUTPUT_SIZE - w) / 2, (OUTPUT_SIZE - h) / 2, w, h);
@@ -1122,28 +1134,35 @@
       updateCardUI(item);
 
       try {
-        // Step 1: Remove background (0-80%)
-        item.progress = 2;
-        item.processingStep = 'Cargando modelo de IA...';
+        // Step 1: Preparar imagen
+        item.progress = 10;
+        item.processingStep = 'Preparando imagen...';
         updateCardUI(item);
 
-        const noBgDataUrl = await removeBackground(item.originalDataUrl, (p) => {
-          item.progress = Math.min(80, Math.round(p * 0.8));
-          if (p < 30) item.processingStep = 'Descargando modelo...';
-          else if (p < 70) item.processingStep = 'Analizando imagen...';
-          else item.processingStep = 'Eliminando fondo...';
-          updateCardUI(item);
-        });
+        const imageBlob = item.file || dataUrlToBlob(item.originalDataUrl);
 
-        item.processedDataUrl = noBgDataUrl;
-
-        // Step 2: Auto square crop with white bg (80-95%)
-        item.progress = 85;
-        item.processingStep = 'Recortando y centrando...';
+        // Step 2: Enviar a Pixian API
+        item.progress = 20;
+        item.processingStep = 'Enviando a Pixian.ai...';
         updateCardUI(item);
 
-        const finalDataUrl = await autoSquareCrop(noBgDataUrl);
-        item.finalDataUrl = finalDataUrl;
+        // Simulamos progreso mientras esperamos la respuesta
+        const progressInterval = setInterval(() => {
+          if (item.progress < 85) {
+            item.progress += 3;
+            if (item.progress < 40) item.processingStep = 'Analizando imagen...';
+            else if (item.progress < 60) item.processingStep = 'Eliminando fondo...';
+            else if (item.progress < 80) item.processingStep = 'Aplicando fondo blanco...';
+            else item.processingStep = 'Recortando y centrando...';
+            updateCardUI(item);
+          }
+        }, 800);
+
+        const resultDataUrl = await removeBackgroundPixian(imageBlob);
+        clearInterval(progressInterval);
+
+        item.processedDataUrl = resultDataUrl;
+        item.finalDataUrl = resultDataUrl;
 
         // Step 3: Done
         item.progress = 100;
@@ -1151,22 +1170,24 @@
         item.processingStep = '';
         updateCardUI(item);
         saveToSession();
-        showToast(`✅ ${item.customName}: procesada correctamente`, 'success');
+
+        const modeTag = testMode ? ' (modo test)' : '';
+        showToast(`${item.customName}: procesada correctamente${modeTag}`, 'success');
 
         return true;
       } catch (err) {
-        console.error('[Process] Error processing image:', err);
+        console.error('[Process] Error:', err);
         item.status = 'error';
         item.error = err.message || 'Error desconocido';
         item.processingStep = '';
 
-        // Fallback: at least do a center crop with white bg
+        // Fallback: al menos centrar en cuadrado blanco sin remover fondo
         try {
           item.finalDataUrl = await centerCropSquare(item.originalDataUrl);
           item.status = 'done';
-          showToast(`⚠️ ${item.customName}: Fondo no eliminado, se aplicó recorte con fondo blanco`, 'info');
+          showToast(`${item.customName}: Fondo no eliminado, se aplicó recorte con fondo blanco`, 'info');
         } catch (e) {
-          showToast(`❌ Error procesando ${item.customName}: ${item.error}`, 'error');
+          showToast(`Error procesando ${item.customName}: ${item.error}`, 'error');
         }
 
         updateCardUI(item);
@@ -1819,13 +1840,8 @@
       // PWA
       setupPWA();
 
-      // Preload bg removal model in background (heavy download ~40MB first time)
-      setTimeout(() => {
-        console.log('[Init] Preloading background removal model...');
-        loadBgRemovalLib().catch((err) => {
-          console.warn('[Init] Preload failed (will retry on first use):', err.message);
-        });
-      }, 3000);
+      // Mode toggle (test / production)
+      initModeToggle();
 
       // Hide loading screen
       setTimeout(() => {
