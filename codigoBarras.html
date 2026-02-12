@@ -130,13 +130,14 @@
         .article-card {
             background: var(--card);
             border-radius: var(--radius);
-            padding: 14px;
-            margin-bottom: 10px;
+            padding: 10px;
+            margin-bottom: 8px;
             box-shadow: var(--shadow);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             transition: box-shadow 0.2s;
+            position: relative;
         }
 
         .article-card:active {
@@ -348,11 +349,15 @@
         }
 
         .save-indicator {
+            position: absolute;
+            top: 6px;
+            right: 8px;
             font-size: 0.7rem;
             color: var(--success);
             opacity: 0;
             transition: opacity 0.3s;
             white-space: nowrap;
+            pointer-events: none;
         }
 
         .save-indicator.show {
@@ -1094,7 +1099,7 @@
 
         pendingDeleteData = { codigo, nombre };
         document.getElementById('deleteModalMsg').innerHTML =
-            `Artículo: <strong>${escapeHtml(nombre)}</strong><br><br>Para confirmar, ingresá el código del artículo:`;
+            `Artículo: <strong>${escapeHtml(nombre)}</strong><br>Código: <span class="modal-code">${escapeHtml(codigo)}</span><br><br>Para confirmar, ingresá el código del artículo:`;
         const deleteInput = document.getElementById('deleteModalInput');
         deleteInput.value = '';
         deleteInput.classList.remove('error');
@@ -1170,6 +1175,48 @@
         document.getElementById('scrollTopBtn').classList.toggle('visible', window.scrollY > 400);
     });
 
+    // ============ REAL-TIME LISTENER ============
+    function startRealtimeListener() {
+        codigosRef.on('value', snap => {
+            const val = snap.val() || {};
+            const newMap = {};
+            Object.entries(val).forEach(([key, entry]) => {
+                if (entry.codigo) {
+                    newMap[entry.codigo] = {
+                        key,
+                        codigoBarras: entry.codigoBarras || ''
+                    };
+                }
+            });
+            firebaseData = newMap;
+            updateStats();
+
+            // Update visible inputs without full re-render to preserve focus
+            document.querySelectorAll('.barcode-input').forEach(input => {
+                // Skip if user is actively editing this input
+                if (document.activeElement === input && !input.readOnly) return;
+
+                const codigo = input.dataset.codigo;
+                const newBarcode = firebaseData[codigo]?.codigoBarras || '';
+                if (input.value !== newBarcode) {
+                    input.value = newBarcode;
+                    input.dataset.original = newBarcode;
+                    input.classList.remove('saved', 'empty');
+                    input.classList.add(newBarcode ? 'saved' : 'empty');
+                }
+
+                // Update delete button visibility
+                const card = input.closest('.article-card');
+                if (card) {
+                    const deleteBtn = card.querySelector('.delete-btn');
+                    if (deleteBtn) {
+                        deleteBtn.classList.toggle('hidden', !newBarcode);
+                    }
+                }
+            });
+        });
+    }
+
     // ============ INIT ============
     async function init() {
         try {
@@ -1179,6 +1226,7 @@
             document.getElementById('loading').remove();
             updateStats();
             renderList();
+            startRealtimeListener();
         } catch (err) {
             document.getElementById('loading').innerHTML =
                 `<div class="empty-state">Error al cargar datos<br><small>${err.message}</small></div>`;
