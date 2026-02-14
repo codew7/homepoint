@@ -654,13 +654,11 @@
 
     /* === COLUMNAS === */
     .col-indicador { width: 3%; min-width: 40px; }
-    .col-nombre { width: 18%; min-width: 150px; text-align: left; }
-    .col-fecha { width: 12%; min-width: 120px; }
-    .col-entrega { width: 10%; min-width: 90px; }
-    .col-estado { width: 10%; min-width: 90px; }
-    .col-unidades { width: 8%; min-width: 60px; }
-    .col-nota { width: 22%; min-width: 180px; }
-    .col-eliminar { width: 14%; min-width: 120px; }
+    .col-nombre { width: 22%; min-width: 150px; text-align: left; }
+    .col-fecha { width: 14%; min-width: 120px; }
+    .col-estado { width: 12%; min-width: 90px; }
+    .col-nota { width: 28%; min-width: 180px; }
+    .col-eliminar { width: 18%; min-width: 120px; }
 
     /* === ELEMENTOS ESPECIALES === */
     .dot {
@@ -828,26 +826,7 @@
       color: #0277bd;
     }
 
-    /* === BADGE CONTADOR PEDIDOS === */
-    .order-count-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-      color: white;
-      border-radius: 12px;
-      padding: 0.25rem 0.6rem;
-      font-size: 0.75rem;
-      font-weight: 700;
- 
-      box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
-      min-width: 28px;
-    }
 
-    .order-count-badge i {
-      font-size: 0.7rem;
-      margin-right: 0.25rem;
-    }
 
     /* === BOTÓN DASHBOARD === */
     .btn-dashboard {
@@ -1581,9 +1560,7 @@
               <th class="col-indicador"><i class="bi bi-bell-fill"></i></th>
               <th class="col-nombre">Nombre</th>
               <th class="col-fecha">Fecha</th>
-              <th class="col-entrega">Entrega</th>
               <th class="col-estado">Estado</th>
-              <th class="col-unidades">Unid.</th>
               <th class="col-nota">Nota</th>
               <th class="col-eliminar">Acciones</th>
             </tr>
@@ -1812,77 +1789,7 @@
     }
   }
 
-  // (variables arriba)
-
-  // Cache de contadores de clientes (email -> cantidad)
-  const contadoresCache = new Map();
-
-  // Helper para convertir email en key válida de Firebase
-  function encodeEmail(email) {
-    if (!email) return '';
-    return email.replace(/\./g, '_dot_').replace(/@/g, '_at_');
-  }
-
-  // Función para actualizar estadísticas del cliente en Firebase
-  async function actualizarEstadisticasCliente(pedidoId, email, status) {
-    if (!email || status !== 'DESPACHADO/ENTREGADO') return;
-    
-    const statsRef = db.ref(`customerStats/${encodeEmail(email)}`);
-    
-    try {
-      await statsRef.transaction((current) => {
-        if (current === null) {
-          return {
-            totalEntregados: 1,
-            ultimoPedido: Date.now(),
-            pedidosIds: [pedidoId]
-          };
-        }
-        
-        // Solo incrementar si no existe ya este pedido
-        const pedidosIds = current.pedidosIds || [];
-        if (!pedidosIds.includes(pedidoId)) {
-          return {
-            totalEntregados: (current.totalEntregados || 0) + 1,
-            ultimoPedido: Date.now(),
-            pedidosIds: [...pedidosIds, pedidoId]
-          };
-        }
-        return current;
-      });
-      
-      // Actualizar cache
-      const snapshot = await statsRef.child('totalEntregados').once('value');
-      contadoresCache.set(email.toLowerCase(), snapshot.val() || 0);
-    } catch (error) {
-      console.error('Error al actualizar estadísticas del cliente:', error);
-    }
-  }
-
-  // Función para obtener contador de pedidos entregados (INSTANTÁNEO)
-  async function getContadorEntregados(email) {
-    if (!email) return 0;
-    
-    const emailLower = email.toLowerCase();
-    
-    // Si está en cache, retornar inmediatamente
-    if (contadoresCache.has(emailLower)) {
-      return contadoresCache.get(emailLower);
-    }
-    
-    // Si no está en cache, consultar Firebase
-    try {
-      const snapshot = await db.ref(`customerStats/${encodeEmail(email)}/totalEntregados`).once('value');
-      const cantidad = snapshot.val() || 0;
-      contadoresCache.set(emailLower, cantidad);
-      return cantidad;
-    } catch (error) {
-      console.error('Error al obtener contador:', error);
-      return 0;
-    }
-  }
-
-  // === CACHE ELIMINADO PARA MEJORAR RENDIMIENTO ===
+  // === VARIABLES GLOBALES ===
 
   function configurarEventListeners() {
     renderBotonesFiltro();
@@ -1969,12 +1876,6 @@
         allPedidosMap.delete(p.id);
       }
       updateArraysFromMaps();
-      
-      // Actualizar estadísticas si se marcó como entregado
-      if (p.status === 'DESPACHADO/ENTREGADO' && p.cliente?.email) {
-        actualizarEstadisticasCliente(p.id, p.cliente.email, p.status);
-      }
-      
       debouncedPoblarNotas();
       debouncedRenderTabla();
     };
@@ -2119,104 +2020,17 @@
     }
   }
 
-  // Función para contar pedidos entregados por email (con cache)
-  function contarPedidosEntregados(email) {
-    if (!email) return 0;
-    
-    const emailLower = email.toLowerCase();
-    
-    // Si está en cache, usar ese valor
-    if (contadoresCache.has(emailLower)) {
-      return contadoresCache.get(emailLower);
-    }
-    
-    // Fallback: contar desde allPedidos (solo si no hay cache)
-    const cantidad = allPedidos.filter(p => 
-      p.cliente?.email?.toLowerCase() === emailLower && 
-      p.status === 'DESPACHADO/ENTREGADO'
-    ).length;
-    
-    // Guardar en cache para próximas consultas
-    contadoresCache.set(emailLower, cantidad);
-    return cantidad;
-  }
-
   // Función para verificar si un cliente es recurrente (tiene al menos 1 pedido entregado)
   function esClienteRecurrente(email) {
     if (!email) return false;
-    return contarPedidosEntregados(email) > 0;
+    const emailLower = email.toLowerCase();
+    return allPedidos.some(p => 
+      p.cliente?.email?.toLowerCase() === emailLower && 
+      p.status === 'DESPACHADO/ENTREGADO'
+    );
   }
 
-  // ============================================
-  // SCRIPT DE MIGRACIÓN ÚNICA
-  // Ejecutar UNA SOLA VEZ para poblar customerStats
-  // ============================================
-  async function migrarEstadisticasClientes() {
-    console.log('🔄 Iniciando migración de estadísticas de clientes...');
-    
-    const snapshot = await db.ref('pedidos')
-      .orderByChild('status')
-      .equalTo('DESPACHADO/ENTREGADO')
-      .once('value');
-    
-    const stats = {};
-    let procesados = 0;
-    
-    snapshot.forEach(child => {
-      const p = child.val();
-      const email = p.cliente?.email;
-      
-      if (email) {
-        const key = encodeEmail(email);
-        if (!stats[key]) {
-          stats[key] = {
-            totalEntregados: 0,
-            pedidosIds: [],
-            emailOriginal: email
-          };
-        }
-        stats[key].totalEntregados++;
-        stats[key].pedidosIds.push(child.key);
-        procesados++;
-      }
-    });
-    
-    console.log(`📊 Procesados ${procesados} pedidos entregados`);
-    console.log(`👥 ${Object.keys(stats).length} clientes únicos encontrados`);
-    
-    // Guardar en Firebase
-    let guardados = 0;
-    for (const [emailKey, data] of Object.entries(stats)) {
-      try {
-        await db.ref(`customerStats/${emailKey}`).set({
-          totalEntregados: data.totalEntregados,
-          pedidosIds: data.pedidosIds,
-          ultimoPedido: Date.now(),
-          emailOriginal: data.emailOriginal
-        });
-        
-        // Actualizar cache
-        contadoresCache.set(data.emailOriginal.toLowerCase(), data.totalEntregados);
-        guardados++;
-        
-        if (guardados % 10 === 0) {
-          console.log(`💾 Guardados ${guardados}/${Object.keys(stats).length}...`);
-        }
-      } catch (error) {
-        console.error(`❌ Error al guardar stats de ${emailKey}:`, error);
-      }
-    }
-    
-    console.log(`✅ Migración completa: ${guardados} clientes procesados`);
-    console.log('🔄 Recargando tabla con nuevos contadores...');
-    renderTabla();
-    
-    alert(`✅ Migración completada:\n${procesados} pedidos procesados\n${guardados} clientes actualizados`);
-  }
 
-  // Para ejecutar la migración, descomentar la siguiente línea y recargar la página:
-  // Luego de ejecutar UNA VEZ, volver a comentar esta línea
-  // migrarEstadisticasClientes();
 
   // Toggle del filtro de clientes recurrentes
   function toggleFiltroClientesRecurrentes() {
@@ -2678,29 +2492,6 @@
         };
         nombreContainer.appendChild(nombreSpan);
         
-        // Agregar badge con contador de pedidos entregados DEBAJO del nombre
-        const emailCliente = p.cliente?.email;
-        if (emailCliente) {
-          // Crear contenedor para el badge (se llenará después)
-          const badgeContainer = document.createElement('span');
-          badgeContainer.id = `badge-${p.id}`;
-          badgeContainer.style.marginTop = '5px';
-          nombreContainer.appendChild(badgeContainer);
-          
-          // Cargar contador de forma asíncrona
-          getContadorEntregados(emailCliente).then(cantidadEntregados => {
-            if (cantidadEntregados > 0) {
-              const badge = document.createElement('span');
-              badge.className = 'order-count-badge';
-              badge.innerHTML = `<i class="bi bi-box-seam-fill"></i>${cantidadEntregados}`;
-              badge.title = `${cantidadEntregados} pedido(s) entregado(s)`;
-              badgeContainer.appendChild(badge);
-            }
-          }).catch(err => {
-            console.error('Error al cargar contador:', err);
-          });
-        }
-        
         nombreCell.appendChild(nombreContainer);
 
         /* --- 4. Fecha corta --- */
@@ -2711,30 +2502,7 @@
           fecha.toLocaleDateString('es-AR') + ' ' +
           fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 
-
-        /* --- 6. ENTREGA --- */
-        let tipoEntrega = '';
-        const provincia = p.cliente?.provincia ? p.cliente.provincia.trim() : '';
-        if (p.tipoEntrega === 'Showroom') {
-          tipoEntrega = 'Retiro';
-        } else if (!provincia) {
-          tipoEntrega = 'Retiro';
-        } else if (p.tipoEntrega !== 'Showroom') {
-          if (provincia !== 'Gran Buenos Aires' && provincia !== 'CABA') {
-            tipoEntrega = 'Envio';
-          } else if (provincia === 'Gran Buenos Aires' || provincia === 'CABA') {
-            tipoEntrega = 'N/A';
-          } else {
-            tipoEntrega = 'Envio';
-          }
-        } else {
-          tipoEntrega = 'Retiro';
-        }
-  const entregaCell = tr.insertCell();
-  entregaCell.className = 'col-entrega';
-  entregaCell.textContent = tipoEntrega;
-
-        /* --- 7. Estado --- */
+        /* --- 5. Estado --- */
         let estado = 'ABIERTO';
         if (p.status === 'DESPACHADO/ENTREGADO') {
           estado = 'DESPACHADO/ENTREGADO';
@@ -2749,16 +2517,7 @@
   estadoCell.className = 'col-estado';
   estadoCell.textContent = estado;
 
-  /* --- Unidades totales --- */
-  const unidadesCell = tr.insertCell();
-  unidadesCell.className = 'col-unidades';
-  let totalUnidades = 0;
-  if (Array.isArray(p.items)) {
-    totalUnidades = p.items.reduce((sum, item) => sum + (parseInt(item.cantidad) || 0), 0);
-  }
-  unidadesCell.textContent = totalUnidades;
-
-        /* --- 8. Nota --- */
+        /* --- 6. Nota --- */
         const notaCell = tr.insertCell();
         notaCell.className = 'col-nota';
         // Contenedor para nota y fecha
@@ -2838,7 +2597,7 @@
         notaCont.appendChild(fechaLabel);
         notaCell.appendChild(notaCont);
 
-        /* --- 9. Acciones (llamada, compartir y eliminar) --- */
+        /* --- 7. Acciones (llamada, compartir y eliminar) --- */
         const acciones = tr.insertCell();
         acciones.className = 'col-eliminar';
         
