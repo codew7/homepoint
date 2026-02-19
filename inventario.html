@@ -641,9 +641,11 @@
   <main>
     <!-- SECCIÓN 1: Ingreso de Stock -->
     <section class="ingreso-section fade-in">
-      <form class="ingreso-form" id="formIngreso" style="display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto auto;gap:1rem;align-items:center;">
+      <form class="ingreso-form" id="formIngreso" style="display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto;gap:1rem;align-items:center;">
+        <input type="hidden" id="codigo" />
+        <input type="hidden" id="valorUSD" />
         <div class="form-group" style="grid-column:1;grid-row:1;">
-          <label for="producto">Articulo</label>
+          <label for="producto">Artículo</label>
           <select id="producto" required>
             <option value="">Cargando productos...</option>
           </select>
@@ -652,25 +654,17 @@
           <label for="cantidad">Cantidad</label>
           <input type="number" id="cantidad" min="1" required placeholder="Cantidad" />
         </div>
-        <div class="form-group" style="grid-column:3;grid-row:1/span 3;justify-self:center;align-self:center;">
+        <div class="form-group" style="grid-column:3;grid-row:1/span 2;justify-self:center;align-self:center;">
           <label style="visibility:hidden;">Imagen</label>
           <img id="imgArticulo" src="" alt="Imagen artículo" style="width:180px;height:180px;object-fit:cover;border-radius:16px;border:1.5px solid var(--border);background:#fff;display:none;" />
           <div id="stockDisplay" style="margin-top:10px;padding:8px;border-radius:8px;text-align:center;font-weight:bold;display:none;border:1px solid;">
             <i class="bi bi-box-seam"></i> Stock: <span id="stockCantidad">-</span>
           </div>
         </div>
-        <div class="form-group" style="grid-column:1;grid-row:2;">
-          <label for="codigo">Código</label>
-          <input type="text" id="codigo" readonly placeholder="Código" />
-        </div>
-        <div class="form-group" style="grid-column:2;grid-row:2;">
-          <label for="valorUSD">Costo</label>
-          <input type="text" id="valorUSD" min="0" step="0.01" placeholder="Valor costo" inputmode="numeric" pattern="[0-9.,]*" />
-        </div>
-        <div style="grid-column:1;grid-row:3;justify-self:stretch;">
+        <div style="grid-column:1;grid-row:2;justify-self:stretch;">
           <button type="submit" class="btn-agregar" id="btnAgregar" style="width:100%;">➕ Agregar Stock</button>
         </div>
-        <div style="grid-column:2;grid-row:3;justify-self:stretch;">
+        <div style="grid-column:2;grid-row:2;justify-self:stretch;">
           <button type="button" class="btn-quitar" id="btnQuitar" style="width:100%;">➖ Quitar Stock</button>
         </div>
       </form>
@@ -695,7 +689,7 @@
         </div>
       </div>
       <div id="tablaContainer">
-        <div class="loading">Cargando movimientos...</div>
+        <div class="loading">Presiona "Cargar Todos" para ver el historial de movimientos.</div>
       </div>
       <div class="paginacion" id="paginacion"></div>
     </section>
@@ -826,7 +820,7 @@
 
       // Resto de la funcionalidad de inventario
       cargarProductos();
-      cargarMovimientos(false); // Solo movimientos del día por defecto
+      // No se cargan movimientos al inicio: el usuario debe presionar "Cargar Todos"
       configurarEventListeners();
     }
 
@@ -850,10 +844,6 @@
           this.value = 1;
         }
       });
-      document.getElementById('valorUSD').addEventListener('input', function() {
-        if (this.value < 0) this.value = 0;
-      });
-
       // Manejo de formulario de ingreso
       document.getElementById('formIngreso').addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -902,9 +892,13 @@
         const mensajeBloqueo = tipo === 'ENTRADA' ? 'Registrando ingreso de stock...' : 'Registrando retiro de stock...';
         bloquearInterfaz(mensajeBloqueo);
         
-        // Esperar a que se complete el registro completo (movimiento + stock)
-        await registrarMovimiento(mov);
-        
+        // Registrar movimiento y obtener el key generado
+        const newId = await registrarMovimiento(mov);
+
+        // Agregar al array local para mostrar en tiempo real sin releer Firebase
+        movimientos.unshift({ ...mov, _id: newId });
+        filtrarMovimientos();
+
         // Actualizar el stock mostrado si el artículo sigue seleccionado
         if (codigo && document.getElementById('codigo').value === codigo) {
           await cargarStockDisponible(codigo);
@@ -1139,19 +1133,13 @@
 
     // Registrar movimiento en Firebase (solo en nodo 'movimientos', sin actualizar nodo 'stock')
     async function registrarMovimiento(mov) {
-      console.log('📝 Iniciando registrarMovimiento:', mov);
-      
       try {
-        // Registrar el movimiento en la base de datos (solo en nodo 'movimientos')
         const ref = db.ref('movimientos').push();
-        console.log('  Guardando movimiento en Firebase...');
         await ref.set(mov);
-        console.log('  ✅ Movimiento guardado con ID:', ref.key);
-        
-        console.log('✅ registrarMovimiento completado exitosamente');
+        return ref.key; // Retornar el key para actualizar el array local
       } catch (error) {
         console.error('❌ Error en registrarMovimiento:', error);
-        throw error; // Re-lanzar el error para que sea manejado por el llamador
+        throw error;
       }
     }
 
@@ -1216,7 +1204,6 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Código</th>
             <th>Nombre</th>
             <th>Cantidad</th>
             <th>Tipo</th>
@@ -1241,7 +1228,6 @@
         
         html += `<tr>
           <td>${formatearFecha(mov.timestamp)}</td>
-          <td>${mov.codigo}</td>
           <td>${mov.nombre}</td>
           <td>${mov.cantidad}</td>
           <td class="${tipoClass}">${tipoTexto}</td>
@@ -1296,6 +1282,9 @@
     window.eliminarMovimiento = function(id) {
       if (!confirm('¿Seguro que deseas eliminar este movimiento?')) return;
       db.ref('movimientos/' + id).remove();
+      // Sincronizar array local para que la tabla se actualice sin releer Firebase
+      movimientos = movimientos.filter(m => m._id !== id);
+      filtrarMovimientos();
       mostrarFeedback('Movimiento eliminado','success');
     }
 

@@ -24,15 +24,31 @@
   </script>
   <!-- Fin Firebase Auth Check -->
   <script>
-    // firebase.initializeApp(firebaseConfig); // Eliminado: ya está inicializado arriba
-    // const db = firebase.database(); // Eliminado: ya está declarado arriba
     let pedidosCache = {};
     document.addEventListener('DOMContentLoaded', function() {
-      const tbody = document.getElementById('pedidosBody');
-      db.ref('pedidos').orderByChild('createdby').equalTo('admin').on('value', snap => {
-        pedidosCache = snap.val() || {};
-        renderPedidos();
-      });
+      // Calcular fecha de hoy en Argentina (UTC-3) antes de armar la query
+      const now = new Date();
+      const argentinaTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+      const fechaHoy = argentinaTime.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      // Query optimizada: solo descarga registros del día de hoy desde Firebase.
+      // orderByChild('fecha') con startAt/endAt limita los datos en el servidor.
+      // createdby = admin se filtra en cliente (no requiere descarga extra).
+      db.ref('pedidos')
+        .orderByChild('fecha')
+        .startAt(fechaHoy)
+        .endAt(fechaHoy + '\uf8ff')
+        .on('value', snap => {
+          pedidosCache = {};
+          snap.forEach(child => {
+            const val = child.val();
+            if (val.createdby === 'admin') {
+              pedidosCache[child.key] = val;
+            }
+          });
+          renderPedidos();
+        });
+
       // Permitir aplicar filtros con Enter en los campos de filtro
       document.getElementById('filtroNombre').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') aplicarFiltros();
@@ -40,32 +56,17 @@
       document.getElementById('filtroTipoCliente').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') aplicarFiltros();
       });
-
     });
+
     function renderPedidos() {
       const tbody = document.getElementById('pedidosBody');
       let pedidos = pedidosCache;
       const filtroNombre = document.getElementById('filtroNombre').value.trim().toLowerCase();
       const filtroTipo = document.getElementById('filtroTipoCliente').value;
-      
-      // Obtener fechas de los últimos 2 días en Argentina (UTC-3)
-      const now = new Date();
-      const argentinaTime = new Date(now.getTime() - (3 * 60 * 60 * 1000)); // UTC-3
-      const fechaHoy = argentinaTime.toISOString().split('T')[0]; // YYYY-MM-DD
-      const ayer = new Date(argentinaTime.getTime() - (24 * 60 * 60 * 1000));
-      const fechaAyer = ayer.toISOString().split('T')[0];
 
+      // Los registros ya vienen filtrados por fecha de hoy y createdby = admin desde Firebase
       let keys = Object.keys(pedidos).reverse();
 
-      // Filtrar solo pedidos de los últimos 2 días
-      keys = keys.filter(id => {
-        const fechaPedido = pedidos[id].fecha || '';
-        if (!fechaPedido) return false;
-        // Extraer solo la fecha (YYYY-MM-DD) del string completo
-        const fechaSoloPedido = fechaPedido.split(' ')[0];
-        return fechaSoloPedido === fechaHoy || fechaSoloPedido === fechaAyer;
-      });
-      
       if (filtroNombre) {
         keys = keys.filter(id => (pedidos[id].cliente?.nombre || '').toLowerCase().includes(filtroNombre));
       }
@@ -76,9 +77,7 @@
         tbody.innerHTML = '<tr><td colspan="6">No hay pedidos del día de hoy que coincidan con los filtros.</td></tr>';
         return;
       }
-      
-  // Ya no se limita a 20, se muestran todos los de los últimos 2 días
-      
+
       tbody.innerHTML = '';
       keys.forEach(id => {
         const p = pedidos[id];
@@ -120,20 +119,13 @@
     }
     
     function imprimirPedido(id) {
-      // Obtener datos del pedido desde Firebase
-      db.ref('pedidos/' + id).once('value').then(snap => {
-        const pedido = snap.val();
-        if (!pedido) {
-          alert('Pedido no encontrado');
-          return;
-        }
-        
-        // Generar recibo e imprimir
-        generarReciboYImprimir(pedido);
-      }).catch(err => {
-        console.error('Error al cargar pedido:', err);
-        alert('Error al cargar el pedido');
-      });
+      // Usar caché local: el pedido ya fue descargado, no se hace otro fetch a Firebase
+      const pedido = pedidosCache[id];
+      if (!pedido) {
+        alert('Pedido no encontrado');
+        return;
+      }
+      generarReciboYImprimir(pedido);
     }
     
     function generarReciboYImprimir(pedido) {
@@ -221,10 +213,6 @@
       const w = window.open('', '_blank', 'width=600,height=800');
       w.document.write(reciboHtml);
       w.document.close();
-    }
-    
-    function verPedido(id) {
-      window.open(`ingresoPedido.html?id=${id}`, '_blank');
     }
     
     // === ACTUALIZACIÓN DE STOCK EN TIEMPO REAL ===
