@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Top Ventas — Dashboard Firebase Backup</title>
+  <style>
+    /* ─── Reset & Variables ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --surface-alt: #f8f9fb;
+      --border: #e1e4e8;
+      --border-light: #eef0f3;
+      --text: #1a1d21;
+      --text-secondary: #5a6068;
+      --text-muted: #8b929a;
+      --primary: #2563eb;
+      --primary-light: #dbeafe;
+      --primary-hover: #1d4ed8;
+      --success: #059669;
+      --success-light: #d1fae5;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --info: #7c3aed;
+      --info-light: #ede9fe;
+      --accent: #0891b2;
+      --accent-light: #cffafe;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,.1), 0 4px 8px rgba(0,0,0,.06);
+      --transition: 200ms cubic-bezier(.4,0,.2,1);
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    .app-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      color: #fff;
+      padding: 28px 32px 24px;
+      box-shadow: var(--shadow-md);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .app-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -.3px; }
+    .app-header p { font-size: 13px; opacity: .8; margin-top: 4px; }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-stats {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .header-stat {
+      text-align: center;
+      background: rgba(255,255,255,.12);
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      backdrop-filter: blur(4px);
+    }
+    .header-stat .val {
+      font-size: 20px;
+      font-weight: 700;
+      display: block;
+    }
+    .header-stat .lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      opacity: .75;
+    }
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,.85);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 14px;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: var(--radius-sm);
+      transition: all var(--transition);
+      margin-top: 8px;
+    }
+    .nav-link:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* ─── Drop Zone ──────────────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 56px 32px;
+      text-align: center;
+      background: var(--surface);
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+      margin-bottom: 24px;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+    .drop-zone .icon { font-size: 44px; margin-bottom: 12px; }
+    .drop-zone h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+    .drop-zone p { font-size: 13px; color: var(--text-secondary); }
+    .drop-zone input[type=file] { display: none; }
+    .drop-zone .btn-file {
+      display: inline-block; margin-top: 14px; padding: 10px 28px;
+      background: var(--primary); color: #fff; border: none;
+      border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: background var(--transition);
+    }
+    .drop-zone .btn-file:hover { background: var(--primary-hover); }
+
+    /* ─── Loading Overlay ────────────────────────────────────────── */
+    .loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(255,255,255,.85);
+      display: none; align-items: center; justify-content: center;
+      z-index: 200; flex-direction: column; gap: 14px;
+    }
+    .loading-overlay.visible { display: flex; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Filters ────────────────────────────────────────────────── */
+    .filters-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .filters-card.visible { display: block; }
+    .filters-title {
+      font-size: 13px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      color: var(--text-muted); margin-bottom: 14px;
+    }
+    .filters-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+    .filter-group label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: var(--text-secondary); margin-bottom: 5px;
+    }
+    .filter-group input,
+    .filter-group select {
+      width: 100%; padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px; font-family: inherit;
+      color: var(--text); background: var(--surface);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+    }
+    .filter-group input:focus,
+    .filter-group select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    .filter-group input::placeholder { color: var(--text-muted); }
+    .filter-actions { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+
+    .btn {
+      padding: 9px 18px; border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: background var(--transition), transform 80ms;
+      font-family: inherit;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline {
+      background: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { background: var(--surface-alt); }
+
+    /* ─── Dashboard Content ──────────────────────────────────────── */
+    .dashboard-content { display: none; }
+    .dashboard-content.visible { display: block; }
+
+    /* ─── KPI Cards ──────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow var(--transition), transform var(--transition);
+    }
+    .kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .kpi-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0;
+      width: 4px; height: 100%;
+    }
+    .kpi-card:nth-child(1)::before { background: var(--primary); }
+    .kpi-card:nth-child(2)::before { background: var(--success); }
+    .kpi-card:nth-child(3)::before { background: var(--warning); }
+    .kpi-card:nth-child(4)::before { background: var(--info); }
+
+    .kpi-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .kpi-card:nth-child(1) .kpi-value { color: var(--primary); }
+    .kpi-card:nth-child(2) .kpi-value { color: var(--success); }
+    .kpi-card:nth-child(3) .kpi-value { color: var(--warning); }
+    .kpi-card:nth-child(4) .kpi-value { color: var(--info); }
+
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--text-muted);
+    }
+
+    /* ─── Section Cards (Charts & Comparisons) ───────────────────── */
+    .section-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-card h3 .icon { font-size: 18px; }
+
+    /* ─── Empty state (removed comparison styles) ──────────────────*/
+
+    /* ─── Bar Chart ──────────────────────────────────────────────── */
+    .bar-chart { display: flex; flex-direction: column; gap: 8px; }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 30px 90px 1fr 80px 60px;
+      gap: 10px;
+      align-items: center;
+      font-size: 13px;
+      padding: 4px 0;
+    }
+    .bar-rank {
+      font-weight: 800;
+      color: var(--text-muted);
+      text-align: center;
+      font-size: 12px;
+    }
+    .bar-rank.top3 { color: var(--warning); font-size: 14px; }
+    .bar-code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 11px; font-weight: 600; color: var(--primary);
+      background: var(--primary-light); padding: 2px 7px;
+      border-radius: 4px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .bar-track {
+      height: 32px;
+      background: var(--surface-alt);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      display: flex;
+      align-items: center;
+      padding-left: 10px;
+      min-width: 0;
+      transition: width .6s cubic-bezier(.25,.8,.25,1);
+    }
+    .bar-fill-label {
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-units {
+      font-weight: 700;
+      text-align: right;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .bar-pct {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: right;
+      font-weight: 600;
+    }
+
+    /* Top 3 special colors */
+    .bar-row:nth-child(1) .bar-fill { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .bar-row:nth-child(2) .bar-fill { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
+    .bar-row:nth-child(3) .bar-fill { background: linear-gradient(90deg, #06b6d4, #0891b2); }
+
+    /* ─── Items Table ────────────────────────────────────────────── */
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin-top: 4px;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .items-table thead th {
+      text-align: left;
+      padding: 10px 12px;
+      background: var(--surface-alt);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      transition: color var(--transition);
+    }
+    .items-table thead th:hover { color: var(--primary); }
+    .items-table thead th.sorted-asc::after { content: ' ▲'; font-size: 9px; }
+    .items-table thead th.sorted-desc::after { content: ' ▼'; font-size: 9px; }
+
+    .items-table tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: middle;
+    }
+    .items-table tbody tr:hover { background: var(--surface-alt); }
+    .items-table tbody tr:nth-child(even) { background: rgba(0,0,0,.01); }
+    .items-table tbody tr:nth-child(even):hover { background: var(--surface-alt); }
+
+    .rank-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 50%;
+      font-size: 11px; font-weight: 800;
+    }
+    .rank-1 { background: #fef3c7; color: #b45309; }
+    .rank-2 { background: #ede9fe; color: #6d28d9; }
+    .rank-3 { background: #cffafe; color: #0e7490; }
+    .rank-default { background: var(--surface-alt); color: var(--text-muted); }
+
+    .item-code {
+      font-family: 'Consolas','Courier New', monospace;
+      font-size: 12px; color: var(--primary);
+      background: var(--primary-light);
+      padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    }
+    .item-category {
+      font-size: 11px; color: var(--text-muted);
+      background: #f1f3f5; padding: 2px 7px; border-radius: 3px;
+    }
+    .badge-canal {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 8px; border-radius: 12px;
+      font-size: 10px; font-weight: 700;
+    }
+    .badge-local { background: var(--primary-light); color: var(--primary); }
+    .badge-web { background: var(--success-light); color: var(--success); }
+    .badge-mix { background: #f3f4f6; color: var(--text-secondary); }
+
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    .mini-bar-container {
+      width: 70px; height: 6px;
+      background: var(--surface-alt);
+      border-radius: 3px; overflow: hidden;
+      display: inline-block; vertical-align: middle;
+      margin-left: 6px;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 3px;
+      transition: width .4s ease;
+    }
+
+    /* ─── Pagination ─────────────────────────────────────────────── */
+    .pagination {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      margin-top: 28px;
+    }
+    .pagination.visible { display: flex; flex-wrap: wrap; }
+    .page-btn {
+      min-width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all var(--transition);
+      font-family: inherit; color: var(--text);
+    }
+    .page-btn:hover { background: var(--surface-alt); border-color: var(--primary); }
+    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .page-btn:disabled { opacity: .4; cursor: default; pointer-events: none; }
+
+    /* ─── Results Bar ────────────────────────────────────────────── */
+    .results-bar {
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .results-bar.visible { display: flex; flex-wrap: wrap; gap: 10px; }
+    .results-bar .count { font-weight: 600; color: var(--text); }
+
+    /* ─── Animation ──────────────────────────────────────────────── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in {
+      animation: fadeInUp .4s ease both;
+    }
+    .animate-in:nth-child(1) { animation-delay: .05s; }
+    .animate-in:nth-child(2) { animation-delay: .1s; }
+    .animate-in:nth-child(3) { animation-delay: .15s; }
+    .animate-in:nth-child(4) { animation-delay: .2s; }
+
+    /* ─── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+      .filters-grid { grid-template-columns: repeat(3, 1fr); }
+      .filter-actions { grid-column: span 3; justify-content: flex-start; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .bar-row { grid-template-columns: 26px 70px 1fr 65px 50px; gap: 6px; }
+    }
+
+    @media (max-width: 600px) {
+      .app-header { padding: 18px 16px; }
+      .container { padding: 16px 10px 40px; }
+      .filters-grid { grid-template-columns: 1fr; }
+      .filter-actions { grid-column: span 1; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .bar-row {
+        grid-template-columns: 24px 60px 1fr 55px 44px;
+        font-size: 11px; gap: 4px;
+      }
+      .section-card { padding: 16px; }
+      .items-table { font-size: 12px; }
+      .items-table thead th, .items-table tbody td { padding: 6px 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <span style="font-size:14px;color:var(--text-secondary)">Procesando archivo JSON…</span>
+</div>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="header-row">
+    <div>
+      <h1>📊 Top Ventas — Dashboard</h1>
+      <p id="headerSubtitle">Carga un archivo de backup JSON para analizar los artículos más vendidos</p>
+      <a href="consultas.html" class="nav-link">← Volver a Consultas</a>
+    </div>
+    <div class="header-stats" id="headerStats" style="display:none">
+      <div class="header-stat"><span class="val" id="statPedidos">0</span><span class="lbl">Pedidos</span></div>
+      <div class="header-stat"><span class="val" id="statProductos">0</span><span class="lbl">Productos</span></div>
+      <div class="header-stat"><span class="val" id="statUnidades">0</span><span class="lbl">Unidades</span></div>
+      <div class="header-stat"><span class="val" id="statRevenue">$0</span><span class="lbl">Ingresos</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📊</div>
+    <h2>Arrastra tu archivo de backup aquí</h2>
+    <p>o haz clic para seleccionarlo — acepta el archivo JSON de pedidos</p>
+    <button class="btn-file" id="btnSelectFile">Seleccionar archivo</button>
+    <input type="file" id="fileInput" accept=".json">
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-card" id="filtersCard">
+    <div class="filters-title">🔍 Filtros del Dashboard</div>
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label for="filterCreatedBy">Canal (createdBy)</label>
+        <select id="filterCreatedBy">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterDateFrom">Fecha desde</label>
+        <input type="date" id="filterDateFrom">
+      </div>
+      <div class="filter-group">
+        <label for="filterDateTo">Fecha hasta</label>
+        <input type="date" id="filterDateTo">
+      </div>
+      <div class="filter-group">
+        <label for="filterSearch">Buscar artículo</label>
+        <input type="text" id="filterSearch" placeholder="Nombre o código…">
+      </div>
+      <div class="filter-group">
+        <label for="filterCategoria">Categoría</label>
+        <select id="filterCategoria">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" id="btnApply">Aplicar</button>
+        <button class="btn btn-outline" id="btnClear">Limpiar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Content (hidden until data loads) -->
+  <div class="dashboard-content" id="dashboardContent">
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card animate-in">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-value" id="kpiProductos">0</div>
+        <div class="kpi-label">Productos únicos</div>
+      </div>
+      <div class="kpi-card animate-in">
+        <div class="kpi-icon">🏷️</div>
+        <div class="kpi-value" id="kpiUnidades">0</div>
+        <div class="kpi-label">Unidades vendidas</div>
+      </div>
+      <div class="kpi-card animate-in">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-value" id="kpiRevenue">$0</div>
+        <div class="kpi-label">Ingresos</div>
+      </div>
+      <div class="kpi-card animate-in">
+        <div class="kpi-icon">📈</div>
+        <div class="kpi-value" id="kpiPromedio">0</div>
+        <div class="kpi-label">Promedio unid/producto</div>
+      </div>
+    </div>
+
+    <!-- Top 20 Bar Chart -->
+    <div class="section-card">
+      <h3><span class="icon">🏆</span> Top 20 Artículos más Vendidos</h3>
+      <div class="bar-chart" id="barChart"></div>
+    </div>
+
+    <!-- Results Bar -->
+    <div class="results-bar" id="resultsBar">
+      <span><span class="count" id="resultCount">0</span> artículos en el ranking</span>
+    </div>
+
+    <!-- Full Table -->
+    <div class="section-card">
+      <h3><span class="icon">📋</span> Ranking Completo de Artículos</h3>
+      <div class="table-wrapper">
+        <table class="items-table" id="rankingTable">
+          <thead>
+            <tr>
+              <th class="text-center" style="width:50px" data-sort="rank">#</th>
+              <th style="width:100px" data-sort="code">Código</th>
+              <th data-sort="name">Artículo</th>
+              <th class="text-center" style="width:100px" data-sort="units">Unidades ▼</th>
+              <th class="text-right" style="width:110px" data-sort="revenue">Ingresos</th>
+              <th class="text-center" style="width:90px" data-sort="orders">Pedidos</th>
+            </tr>
+          </thead>
+          <tbody id="rankingBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+let allPedidos = [];          // Parsed pedidos (only DESPACHADO/ENTREGADO)
+let aggregatedItems = [];     // Aggregated item stats after filtering
+let filteredAggregated = [];  // After search filter
+let currentPage = 1;
+let currentSort = { key: 'units', dir: 'desc' };
+const PAGE_SIZE = 50;
+let allCategories = new Set();
+let allCreatedByValues = new Set();
+
+const $ = (s) => document.getElementById(s);
+
+// DOM Refs
+const dropZone       = $('dropZone');
+const fileInput      = $('fileInput');
+const filtersCard    = $('filtersCard');
+const loadingOverlay = $('loadingOverlay');
+const dashboardContent = $('dashboardContent');
+const paginationEl   = $('pagination');
+
+// ═══════════════════════════════════════════════════════════════
+// File Loading (same pattern as consultas.html)
+// ═══════════════════════════════════════════════════════════════
+$('btnSelectFile').addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  if (!file.name.endsWith('.json')) {
+    alert('Por favor selecciona un archivo .json');
+    return;
+  }
+  loadingOverlay.classList.add('visible');
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const raw = JSON.parse(e.target.result);
+      const pedidosObj = raw.pedidos || raw;
+      parsePedidos(pedidosObj);
+    } catch (err) {
+      alert('Error al leer el archivo JSON:\n' + err.message);
+    } finally {
+      loadingOverlay.classList.remove('visible');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Parse Pedidos
+// ═══════════════════════════════════════════════════════════════
+function parsePedidos(obj) {
+  allPedidos = [];
+  allCategories = new Set();
+  allCreatedByValues = new Set();
+
+  Object.entries(obj).forEach(([key, p]) => {
+    if (p.status !== 'DESPACHADO/ENTREGADO') return;
+
+    const items = Array.isArray(p.items) ? p.items : (p.items ? Object.values(p.items) : []);
+    const createdBy = (p.createdBy || p.createdby || '').trim();
+    const timestamp = p.timestamp || 0;
+
+    // Always add createdBy value, even if empty
+    allCreatedByValues.add(createdBy || 'Sin dato');
+
+    items.forEach(it => {
+      const cat = (it.categoria || '').trim();
+      if (cat) allCategories.add(cat);
+    });
+
+    allPedidos.push({
+      key,
+      items,
+      createdBy: createdBy || 'Sin dato',
+      timestamp,
+      _raw: p
+    });
+  });
+
+  // Count pedidos by createdBy
+  const createdByCounts = {};
+  allPedidos.forEach(p => {
+    const val = p.createdBy;
+    createdByCounts[val] = (createdByCounts[val] || 0) + 1;
+  });
+
+  // Populate createdBy filter with counts
+  const createdBySelect = $('filterCreatedBy');
+  const totalPedidos = allPedidos.length;
+  createdBySelect.innerHTML = `<option value="">Todos (${totalPedidos})</option>`;
+  [...allCreatedByValues].sort().forEach(val => {
+    const opt = document.createElement('option');
+    opt.value = val;
+    const count = createdByCounts[val] || 0;
+    opt.textContent = `${val} (${count})`;
+    createdBySelect.appendChild(opt);
+  });
+
+  // Debug log
+  console.log('📊 Valores de createdBy encontrados:', [...allCreatedByValues]);
+  console.log('📋 Conteo por canal:', createdByCounts);
+
+  // Populate category filter
+  const catSelect = $('filterCategoria');
+  catSelect.innerHTML = '<option value="">Todas</option>';
+  [...allCategories].sort().forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    catSelect.appendChild(opt);
+  });
+
+  // Show UI
+  dropZone.style.display = 'none';
+  filtersCard.classList.add('visible');
+  dashboardContent.classList.add('visible');
+  $('headerStats').style.display = 'flex';
+  $('headerSubtitle').textContent = `Archivo cargado — ${allPedidos.length.toLocaleString()} pedidos analizados`;
+  $('statPedidos').textContent = allPedidos.length.toLocaleString();
+
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Aggregation & Filtering
+// ═══════════════════════════════════════════════════════════════
+function normalize(str) {
+  return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function applyFilters() {
+  const createdByFilter = $('filterCreatedBy').value.trim();
+  const dateFrom    = $('filterDateFrom').value;
+  const dateTo      = $('filterDateTo').value;
+  const searchQ     = normalize($('filterSearch').value.trim());
+  const catFilter   = $('filterCategoria').value;
+
+  const dateFromTs  = dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : 0;
+  const dateToTs    = dateTo   ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
+
+  // Step 1: Filter pedidos
+  const filteredPedidos = allPedidos.filter(p => {
+    if (createdByFilter && p.createdBy !== createdByFilter) {
+      return false;
+    }
+    if (p.timestamp < dateFromTs || p.timestamp > dateToTs) return false;
+    return true;
+  });
+
+  // Debug log
+  if (createdByFilter) {
+    console.log(`🔍 Filtrado por createdBy="${createdByFilter}" → ${filteredPedidos.length} pedidos`);
+  }
+
+  // Step 2: Aggregate items
+  const itemMap = {};
+
+  filteredPedidos.forEach(p => {
+    const canal = p.createdBy;
+    p.items.forEach(it => {
+      const code = (it.codigo || '').trim();
+      const name = (it.nombre || '').trim();
+      const groupKey = code || normalize(name);
+      if (!groupKey) return;
+
+      const qty = parseInt(it.cantidad) || 0;
+      const price = parseFloat(it.valorU || it.valorUSD) || 0;
+      const cat = (it.categoria || '').trim();
+
+      if (!itemMap[groupKey]) {
+        itemMap[groupKey] = {
+          code,
+          name,
+          category: cat,
+          units: 0,
+          revenue: 0,
+          orderCount: 0,
+          orderKeys: new Set(),
+          canales: {}  // Dynamic map of canal -> units
+        };
+      }
+
+      const entry = itemMap[groupKey];
+      entry.units += qty;
+      entry.revenue += qty * price;
+      if (!entry.orderKeys.has(p.key)) {
+        entry.orderKeys.add(p.key);
+        entry.orderCount++;
+      }
+      // Keep the most descriptive name/code
+      if (!entry.code && code) entry.code = code;
+      if (name.length > entry.name.length) entry.name = name;
+      if (!entry.category && cat) entry.category = cat;
+
+      // Canal counters (dynamic)
+      if (!entry.canales[canal]) entry.canales[canal] = 0;
+      entry.canales[canal] += qty;
+    });
+  });
+
+  aggregatedItems = Object.values(itemMap);
+
+  // Step 3: Apply search & category filter
+  filteredAggregated = aggregatedItems.filter(item => {
+    if (catFilter && item.category !== catFilter) return false;
+    if (searchQ) {
+      const matchName = normalize(item.name).includes(searchQ);
+      const matchCode = normalize(item.code).includes(searchQ);
+      if (!matchName && !matchCode) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  sortItems();
+
+  // Update header stats
+  const totalUnits = filteredAggregated.reduce((s, i) => s + i.units, 0);
+  const totalRevenue = filteredAggregated.reduce((s, i) => s + i.revenue, 0);
+  $('statProductos').textContent = filteredAggregated.length.toLocaleString();
+  $('statUnidades').textContent = totalUnits.toLocaleString();
+  $('statRevenue').textContent = '$' + totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  
+  // Update subtitle with active filters
+  let subtitle = `Archivo cargado — ${allPedidos.length.toLocaleString()} pedidos`;
+  const activeFilters = [];
+  if (createdByFilter) activeFilters.push(`Canal: ${createdByFilter}`);
+  if (dateFrom || dateTo) activeFilters.push('Rango de fechas');
+  if (searchQ) activeFilters.push('Búsqueda');
+  if (catFilter) activeFilters.push(`Categoría: ${catFilter}`);
+  if (activeFilters.length > 0) {
+    subtitle += ` • Filtros: ${activeFilters.join(', ')}`;
+  }
+  $('headerSubtitle').textContent = subtitle;
+
+  // Render
+  currentPage = 1;
+  renderKPIs();
+  renderBarChart();
+  renderTable();
+}
+
+function sortItems() {
+  const { key, dir } = currentSort;
+  filteredAggregated.sort((a, b) => {
+    let va, vb;
+    switch (key) {
+      case 'rank':
+      case 'units':    va = a.units;    vb = b.units;    break;
+      case 'revenue':  va = a.revenue;  vb = b.revenue;  break;
+      case 'orders':   va = a.orderCount; vb = b.orderCount; break;
+      case 'name':     return dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+      case 'code':     return dir === 'asc' ? a.code.localeCompare(b.code) : b.code.localeCompare(a.code);
+      case 'category': return dir === 'asc' ? (a.category || '').localeCompare(b.category || '') : (b.category || '').localeCompare(a.category || '');
+      case 'canal': {
+        // Get dominant canal for each item
+        const getDominantCanal = (item) => {
+          let maxCanal = 'Sin dato';
+          let maxUnits = 0;
+          Object.entries(item.canales || {}).forEach(([canal, units]) => {
+            if (units > maxUnits) {
+              maxUnits = units;
+              maxCanal = canal;
+            }
+          });
+          return maxCanal;
+        };
+        const ca = getDominantCanal(a);
+        const cb = getDominantCanal(b);
+        return dir === 'asc' ? ca.localeCompare(cb) : cb.localeCompare(ca);
+      }
+      default: va = a.units; vb = b.units;
+    }
+    return dir === 'asc' ? va - vb : vb - va;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KPI Rendering
+// ═══════════════════════════════════════════════════════════════
+function renderKPIs() {
+  const totalProducts = filteredAggregated.length;
+  const totalUnits = filteredAggregated.reduce((s, i) => s + i.units, 0);
+  const totalRevenue = filteredAggregated.reduce((s, i) => s + i.revenue, 0);
+  const avg = totalProducts > 0 ? (totalUnits / totalProducts).toFixed(1) : '0';
+
+  $('kpiProductos').textContent = totalProducts.toLocaleString();
+  $('kpiUnidades').textContent = totalUnits.toLocaleString();
+  $('kpiRevenue').textContent = '$' + totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  $('kpiPromedio').textContent = avg;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Bar Chart Rendering
+// ═══════════════════════════════════════════════════════════════
+function esc(str) {
+  const el = document.createElement('span');
+  el.textContent = str;
+  return el.innerHTML;
+}
+
+function renderBarChart() {
+  const top20 = filteredAggregated.slice(0, 20);
+  const maxUnits = top20.length > 0 ? top20[0].units : 1;
+  const totalUnits = filteredAggregated.reduce((s, i) => s + i.units, 0);
+
+  if (top20.length === 0) {
+    $('barChart').innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);">Sin datos para mostrar</div>';
+    return;
+  }
+
+  const html = top20.map((item, i) => {
+    const pct = maxUnits > 0 ? (item.units / maxUnits * 100) : 0;
+    const pctTotal = totalUnits > 0 ? (item.units / totalUnits * 100).toFixed(1) : '0.0';
+    const isTop3 = i < 3;
+    const displayCode = item.code || '—';
+    const displayName = item.name || '—';
+
+    return `
+      <div class="bar-row">
+        <span class="bar-rank${isTop3 ? ' top3' : ''}">${i + 1}</span>
+        <span class="bar-code" title="${esc(displayCode)}">${esc(displayCode)}</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${pct}%">
+            <span class="bar-fill-label">${esc(displayName)}</span>
+          </div>
+        </div>
+        <span class="bar-units">${item.units.toLocaleString()}</span>
+        <span class="bar-pct">${pctTotal}%</span>
+      </div>`;
+  }).join('');
+
+  $('barChart').innerHTML = html;
+
+  // Animate bars
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.bar-fill').forEach(bar => {
+      const w = bar.style.width;
+      bar.style.width = '0%';
+      requestAnimationFrame(() => { bar.style.width = w; });
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Table Rendering
+// ═══════════════════════════════════════════════════════════════
+function renderTable() {
+  const total = filteredAggregated.length;
+  $('resultCount').textContent = total.toLocaleString();
+  $('resultsBar').classList.toggle('visible', total > 0);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filteredAggregated.slice(start, start + PAGE_SIZE);
+  const maxUnits = filteredAggregated.length > 0 ? filteredAggregated[0].units : 1;
+
+  if (pageItems.length === 0) {
+    $('rankingBody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">Sin artículos para mostrar</td></tr>`;
+    paginationEl.classList.remove('visible');
+    return;
+  }
+
+  const html = pageItems.map((item, i) => {
+    const globalRank = start + i + 1;
+    const rankClass = globalRank === 1 ? 'rank-1' : globalRank === 2 ? 'rank-2' : globalRank === 3 ? 'rank-3' : 'rank-default';
+    const barPct = maxUnits > 0 ? (item.units / maxUnits * 100) : 0;
+
+    // Determine dominant canal (dynamic)
+    let canalBadge;
+    const canales = item.canales || {};
+    const canalesEntries = Object.entries(canales);
+    
+    if (canalesEntries.length === 0) {
+      canalBadge = `<span class="badge-canal badge-mix">— Sin dato</span>`;
+    } else if (canalesEntries.length === 1) {
+      const [canal, units] = canalesEntries[0];
+      const icon = canal === 'admin' ? '👤' : canal === 'web' ? '🌐' : '📋';
+      canalBadge = `<span class="badge-canal badge-local" title="${esc(canal)}: ${units} unidades">${icon} ${esc(canal)}</span>`;
+    } else {
+      // Multiple canales - show dominant one
+      let dominantCanal = '';
+      let maxUnits = 0;
+      const tooltipParts = [];
+      canalesEntries.forEach(([canal, units]) => {
+        tooltipParts.push(`${canal}: ${units}`);
+        if (units > maxUnits) {
+          maxUnits = units;
+          dominantCanal = canal;
+        }
+      });
+      canalBadge = `<span class="badge-canal badge-mix" title="${tooltipParts.join(' / ')}">🔀 ${esc(dominantCanal)} (+${canalesEntries.length - 1})</span>`;
+    }
+
+    return `
+      <tr>
+        <td class="text-center"><span class="rank-badge ${rankClass}">${globalRank}</span></td>
+        <td>${item.code ? `<span class="item-code">${esc(item.code)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${esc(item.name || '—')}</td>
+        <td class="text-center">
+          <strong>${item.units.toLocaleString()}</strong>
+          <div class="mini-bar-container"><div class="mini-bar-fill" style="width:${barPct}%"></div></div>
+        </td>
+        <td class="text-right"><strong>$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+        <td class="text-center">${item.orderCount.toLocaleString()}</td>
+      </tr>`;
+  }).join('');
+
+  $('rankingBody').innerHTML = html;
+  renderPagination(totalPages);
+
+  // Update column sort indicators
+  document.querySelectorAll('#rankingTable thead th').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (th.dataset.sort === currentSort.key) {
+      th.classList.add(currentSort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
+}
+
+function renderPagination(totalPages) {
+  if (totalPages <= 1) { paginationEl.classList.remove('visible'); return; }
+  paginationEl.classList.add('visible');
+
+  let html = `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>◀</button>`;
+
+  const maxButtons = 7;
+  let startP = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+  let endP   = Math.min(totalPages, startP + maxButtons - 1);
+  if (endP - startP < maxButtons - 1) startP = Math.max(1, endP - maxButtons + 1);
+
+  if (startP > 1) {
+    html += `<button class="page-btn" onclick="goPage(1)">1</button>`;
+    if (startP > 2) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
+  }
+  for (let i = startP; i <= endP; i++) {
+    html += `<button class="page-btn${i === currentPage ? ' active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (endP < totalPages) {
+    if (endP < totalPages - 1) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
+    html += `<button class="page-btn" onclick="goPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>▶</button>`;
+  paginationEl.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Interactions
+// ═══════════════════════════════════════════════════════════════
+function goPage(n) {
+  const totalPages = Math.ceil(filteredAggregated.length / PAGE_SIZE);
+  if (n < 1 || n > totalPages) return;
+  currentPage = n;
+  renderTable();
+  const tableEl = document.querySelector('#rankingTable');
+  if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Column sorting
+document.querySelectorAll('#rankingTable thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (currentSort.key === key) {
+      currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+    } else {
+      currentSort.key = key;
+      currentSort.dir = (key === 'name' || key === 'code' || key === 'category' || key === 'canal') ? 'asc' : 'desc';
+    }
+    sortItems();
+    currentPage = 1;
+    renderTable();
+  });
+});
+
+// Filter buttons
+$('btnApply').addEventListener('click', applyFilters);
+$('btnClear').addEventListener('click', () => {
+  $('filterCreatedBy').value = '';
+  $('filterDateFrom').value = '';
+  $('filterDateTo').value = '';
+  $('filterSearch').value = '';
+  $('filterCategoria').value = '';
+  applyFilters();
+});
+
+// Live search with debounce
+let _debounce;
+$('filterSearch').addEventListener('input', () => {
+  clearTimeout(_debounce);
+  _debounce = setTimeout(applyFilters, 300);
+});
+$('filterSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
+
+// Instant filter on select change
+$('filterCreatedBy').addEventListener('change', applyFilters);
+$('filterCategoria').addEventListener('change', applyFilters);
+$('filterDateFrom').addEventListener('change', applyFilters);
+$('filterDateTo').addEventListener('change', applyFilters);
+</script>
+</body>
+</html>

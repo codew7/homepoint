@@ -935,6 +935,13 @@
         placeholder: 'Selecciona un producto...',
         allowClear: true,
         width: '100%',
+        matcher: function(params, data) {
+          if (!params.term || params.term.trim() === '') return data;
+          const term = params.term.trim().toLowerCase();
+          const nombre = (data.text || '').toLowerCase();
+          const codigo = ($(data.element).attr('data-codigo') || '').toLowerCase();
+          return (nombre.includes(term) || codigo.includes(term)) ? data : null;
+        },
         language: {
           noResults: function() {
             return "No se encontraron productos";
@@ -1095,39 +1102,83 @@
     }
 
     // Cargar productos desde Google Sheets
+    // Optimizaciones:
+    //   1. Cache en localStorage (TTL 10 min) → evita el fetch en cada recarga
+    //   2. Rellena stockCache con los mismos datos → elimina el segundo fetch a Sheets
+    //   3. Construye el HTML como string y lo asigna una sola vez → evita O(n²) en DOM
+    const PRODUCTOS_CACHE_KEY = 'inv_productos_v1';
+    const PRODUCTOS_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
     async function cargarProductos() {
+      const select = document.getElementById('producto');
       try {
-        const res = await fetch(SHEETS_URL);
-        const data = await res.json();
-        let rows = data.values || [];
-        let productosArr = [];
-        // En cargarProductos, obtener la imagen de la columna 1 (índice 1), tomar solo la primera url
-        for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
-          let codigo = row[2] || '';
-          let nombre = row[3] || '';
-          let valorUSD = row[8] ? String(row[8]).trim() : '';
-          let imgUrl = '';
-          if (row[1]) {
-            imgUrl = row[1].split(',')[0].trim();
+        let productosArr = null;
+        let nuevoStockCache = null;
+
+        // 1. Intentar usar caché de localStorage
+        try {
+          const cached = localStorage.getItem(PRODUCTOS_CACHE_KEY);
+          if (cached) {
+            const { data, stockData, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < PRODUCTOS_CACHE_TTL) {
+              productosArr = data;
+              nuevoStockCache = stockData;
+            }
           }
-          if (codigo && nombre) {
-            productosArr.push({ codigo, nombre, valorUSD, imgUrl });
+        } catch (_) { /* ignorar errores de localStorage */ }
+
+        // 2. Si no hay caché válido, hacer fetch y construir ambos caches en una sola pasada
+        if (!productosArr) {
+          const res = await fetch(SHEETS_URL);
+          const data = await res.json();
+          const rows = data.values || [];
+          productosArr = [];
+          nuevoStockCache = {};
+
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const codigo = row[2] || '';
+            const nombre = row[3] || '';
+            const valorUSD = row[8] ? String(row[8]).trim() : '';
+            const imgUrl = row[1] ? row[1].split(',')[0].trim() : '';
+            if (codigo && nombre) {
+              productosArr.push({ codigo, nombre, valorUSD, imgUrl });
+            }
+            // Aprovechar la misma pasada para construir el mapa de stock (col 10)
+            if (codigo) {
+              nuevoStockCache[codigo] = Number(row[10]) || 0;
+            }
           }
+
+          // Guardar en localStorage para próximas cargas
+          try {
+            localStorage.setItem(PRODUCTOS_CACHE_KEY, JSON.stringify({
+              data: productosArr,
+              stockData: nuevoStockCache,
+              timestamp: Date.now()
+            }));
+          } catch (_) { /* ignorar si localStorage está lleno */ }
         }
+
+        // Rellenar stockCache global para que cargarStockDisponible no necesite otro fetch
+        if (nuevoStockCache && !stockCache) {
+          stockCache = nuevoStockCache;
+          stockCacheTimestamp = Date.now();
+        }
+
         productos = productosArr;
-        // Ordenar productos alfabéticamente por nombre
         productos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
-        const select = document.getElementById('producto');
-        select.innerHTML = '<option value="">Selecciona un producto...</option>';
-        productos.forEach(prod => {
-          select.innerHTML += `<option value="${prod.codigo}" data-nombre="${prod.nombre}" data-codigo="${prod.codigo}" data-valorusd="${prod.valorUSD}" data-imgurl="${prod.imgUrl}">${prod.nombre}</option>`;
-        });
-        
-        // Inicializar Select2 después de cargar los productos
+
+        // 3. Construir todo el HTML como un string y asignarlo una sola vez al DOM
+        let optionsHtml = '<option value="">Selecciona un producto...</option>';
+        for (const prod of productos) {
+          optionsHtml += `<option value="${prod.codigo}" data-nombre="${prod.nombre}" data-codigo="${prod.codigo}" data-valorusd="${prod.valorUSD}" data-imgurl="${prod.imgUrl}">${prod.nombre}</option>`;
+        }
+        select.innerHTML = optionsHtml;
+
         inicializarSelect2();
       } catch (e) {
-        document.getElementById('producto').innerHTML = '<option value="">Error al cargar productos</option>';
+        select.innerHTML = '<option value="">Error al cargar productos</option>';
       }
     }
 
