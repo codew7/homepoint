@@ -28,6 +28,8 @@
             --success-bg: #e8f9ed;
             --warning: #ff9500;
             --warning-bg: #fff8eb;
+            --danger: #ff3b30;
+            --danger-bg: #fff2f2;
             --shadow: 0 1px 3px rgba(0,0,0,0.08);
             --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
             --radius: 12px;
@@ -144,6 +146,21 @@
             box-shadow: var(--shadow-lg);
         }
 
+        .article-card.sin-stock {
+            background: var(--danger-bg);
+        }
+
+        .stock-badge {
+            display: inline-block;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--danger);
+            background: rgba(255, 59, 48, 0.1);
+            border-radius: 4px;
+            padding: 1px 6px;
+            flex-shrink: 0;
+        }
+
         .article-img {
             width: 52px;
             height: 52px;
@@ -170,10 +187,16 @@
             overflow: hidden;
         }
 
+        .article-code-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 2px;
+        }
+
         .article-code {
             font-size: 0.75rem;
             color: var(--text-secondary);
-            margin-top: 2px;
             font-variant-numeric: tabular-nums;
         }
 
@@ -644,6 +667,7 @@
         <button class="filter-btn active" data-filter="all">Todos</button>
         <button class="filter-btn" data-filter="con">Con código</button>
         <button class="filter-btn" data-filter="sin">Sin código</button>
+        <button class="filter-btn" data-filter="pendiente">Sin cód. en stock</button>
     </div>
 
     <div class="list-container" id="listContainer">
@@ -709,7 +733,7 @@
 
     const SHEETS_API_KEY = 'AIzaSyD9h4SH9laGhvh-NRhDjYgbCThVEbM8HTo';
     const SPREADSHEET_ID = '1cD50d0-oSTogEe9tYo9ABUSP1ONCy3SAV92zsYYIG84';
-    const RANGO = 'Lista!B2:D';
+    const RANGO = 'Lista!B2:K';
 
     // ============ FIREBASE INIT ============
     firebase.initializeApp(firebaseConfig);
@@ -731,10 +755,12 @@
         const items = (data.values || []).map(row => {
             const imgRaw = (row[0] || '').trim();
             const firstImg = imgRaw.split(',')[0].trim();
+            const stockRaw = (row[9] || '').trim();
             return {
                 imagen: firstImg,
                 codigo: (row[1] || '').trim(),
-                nombre: (row[2] || '').trim()
+                nombre: (row[2] || '').trim(),
+                stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
             };
         }).filter(a => a.codigo);
         items.reverse();
@@ -798,9 +824,11 @@
                 barcode.includes(query);
 
             const hasBarcode = !!firebaseData[a.codigo]?.codigoBarras;
+            const tieneStock = a.stock === null || !Number.isFinite(a.stock) || a.stock > 0;
             const matchFilter = currentFilter === 'all' ||
                 (currentFilter === 'con' && hasBarcode) ||
-                (currentFilter === 'sin' && !hasBarcode);
+                (currentFilter === 'sin' && !hasBarcode) ||
+                (currentFilter === 'pendiente' && !hasBarcode && tieneStock);
 
             return matchSearch && matchFilter;
         });
@@ -815,17 +843,21 @@
             const barcode = fb?.codigoBarras || '';
             const statusClass = barcode ? 'saved' : 'empty';
             const imgSrc = a.imagen || '';
+            const sinStock = a.stock !== null && Number.isFinite(a.stock) && a.stock <= 0;
 
             return `
-                <div class="article-card" data-codigo="${a.codigo}">
-                    <img class="article-img" 
-                         src="${imgSrc}" 
-                         alt="" 
+                <div class="article-card ${sinStock ? 'sin-stock' : ''}" data-codigo="${a.codigo}">
+                    <img class="article-img"
+                         src="${imgSrc}"
+                         alt=""
                          loading="lazy"
                          onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect fill=%22%23f0f0f0%22 width=%2252%22 height=%2252%22/><text x=%2226%22 y=%2230%22 text-anchor=%22middle%22 fill=%22%23ccc%22 font-size=%2212%22>Sin img</text></svg>'">
                     <div class="article-info">
                         <div class="article-name">${escapeHtml(a.nombre)}</div>
-                        <div class="article-code">Cód: ${escapeHtml(a.codigo)}</div>
+                        <div class="article-code-row">
+                            <div class="article-code">Cód: ${escapeHtml(a.codigo)}</div>
+                            ${sinStock ? '<span class="stock-badge">Sin stock</span>' : ''}
+                        </div>
                         <div class="barcode-field">
                             <input type="text" 
                                    class="barcode-input ${statusClass}" 
