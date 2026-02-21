@@ -652,10 +652,10 @@
             width: 44px;
             height: 44px;
             border-radius: 50%;
-            background: var(--card);
-            color: var(--text-secondary);
-            border: 1.5px solid var(--border);
-            box-shadow: var(--shadow-lg);
+            background: rgba(0,122,255,0.1);
+            color: var(--accent);
+            border: 1.5px solid rgba(0,122,255,0.28);
+            box-shadow: 0 2px 10px rgba(0,122,255,0.15);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -772,6 +772,77 @@
         #lookupModal .custom-modal p {
             margin-bottom: 14px;
         }
+
+        /* ======= IMAGE LIGHTBOX ======= */
+        .article-img {
+            cursor: zoom-in;
+        }
+
+        .img-lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            cursor: zoom-out;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.22s ease, visibility 0.22s ease;
+        }
+
+        .img-lightbox.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .img-lightbox img {
+            max-width: min(88vw, 480px);
+            max-height: 80vh;
+            border-radius: 14px;
+            object-fit: contain;
+            box-shadow: 0 16px 56px rgba(0,0,0,0.55);
+            cursor: default;
+            transform: scale(0.92);
+            transition: transform 0.22s ease;
+            pointer-events: none;
+        }
+
+        .img-lightbox.active img {
+            transform: scale(1);
+        }
+
+        /* ======= NO-BARCODE BUTTON ======= */
+        .no-barcode-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            border: 1.5px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            padding: 0;
+        }
+
+        .no-barcode-btn:active {
+            background: var(--text-secondary);
+            color: #fff;
+            border-color: var(--text-secondary);
+            transform: scale(0.92);
+        }
+
+        .no-barcode-btn.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -794,9 +865,9 @@
 
     <div class="filter-bar" id="filterBar">
         <button class="filter-btn active" data-filter="all">Todos</button>
-        <button class="filter-btn" data-filter="con">C/código</button>
-        <button class="filter-btn" data-filter="sin">S/código</button>
-        <button class="filter-btn" data-filter="pendiente">S/código+Stock</button>
+        <button class="filter-btn" data-filter="con">C/cód.</button>
+        <button class="filter-btn" data-filter="sin">S/cód.</button>
+        <button class="filter-btn" data-filter="pendiente">Pendiente</button>
     </div>
 
     <div class="list-container" id="listContainer">
@@ -858,6 +929,11 @@
                 <button class="custom-modal-btn danger" id="deleteModalConfirm">Borrar</button>
             </div>
         </div>
+    </div>
+
+    <!-- Image Lightbox -->
+    <div class="img-lightbox" id="imgLightbox">
+        <img id="imgLightboxImg" src="" alt="">
     </div>
 
     <!-- Lookup Barcode Modal -->
@@ -1024,7 +1100,8 @@
                          src="${imgSrc}"
                          alt=""
                          loading="lazy"
-                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect fill=%22%23f0f0f0%22 width=%2252%22 height=%2252%22/><text x=%2226%22 y=%2230%22 text-anchor=%22middle%22 fill=%22%23ccc%22 font-size=%2212%22>Sin img</text></svg>'">
+                         data-src="${imgSrc}"
+                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect fill=%22%23f0f0f0%22 width=%2252%22 height=%2252%22/><text x=%2226%22 y=%2230%22 text-anchor=%22middle%22 fill=%22%23ccc%22 font-size=%2212%22>Sin img</text></svg>';this.dataset.broken='1'">
                     <div class="article-info">
                         <div class="article-name">${escapeHtml(a.nombre)}</div>
                         <div class="article-code-row">
@@ -1032,22 +1109,31 @@
                             ${sinStock ? '<span class="stock-badge">Sin stock</span>' : ''}
                         </div>
                         <div class="barcode-field">
-                            <input type="text" 
-                                   class="barcode-input ${statusClass}" 
-                                   value="${escapeHtml(barcode)}" 
+                            <input type="text"
+                                   class="barcode-input ${statusClass}"
+                                   value="${escapeHtml(barcode)}"
                                    placeholder="Código de barras"
                                    data-codigo="${a.codigo}"
                                    data-nombre="${escapeHtml(a.nombre)}"
                                    data-original="${escapeHtml(barcode)}"
                                    inputmode="numeric"
                                    readonly>
-                            <button class="scan-btn" 
-                                    data-codigo="${a.codigo}" 
-                                    data-nombre="${escapeHtml(a.nombre)}" 
+                            <button class="scan-btn"
+                                    data-codigo="${a.codigo}"
+                                    data-nombre="${escapeHtml(a.nombre)}"
                                     title="Escanear código de barras">+</button>
-                            <button class="delete-btn ${barcode ? '' : 'hidden'}" 
-                                    data-codigo="${a.codigo}" 
-                                    data-nombre="${escapeHtml(a.nombre)}" 
+                            <button class="no-barcode-btn ${barcode ? 'hidden' : ''}"
+                                    data-codigo="${a.codigo}"
+                                    data-nombre="${escapeHtml(a.nombre)}"
+                                    title="Marcar sin código de barras">
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                                    <circle cx="7" cy="7" r="5.5"/>
+                                    <line x1="3.1" y1="10.9" x2="10.9" y2="3.1"/>
+                                </svg>
+                            </button>
+                            <button class="delete-btn ${barcode ? '' : 'hidden'}"
+                                    data-codigo="${a.codigo}"
+                                    data-nombre="${escapeHtml(a.nombre)}"
                                     title="Borrar código de barras">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                             </button>
@@ -1067,8 +1153,17 @@
         container.querySelectorAll('.scan-btn').forEach(btn => {
             btn.addEventListener('click', () => openScanner(btn.dataset.codigo, btn.dataset.nombre));
         });
+        container.querySelectorAll('.no-barcode-btn').forEach(btn => {
+            btn.addEventListener('click', () => handleNoBarcodeRequest(btn.dataset.codigo, btn.dataset.nombre));
+        });
         container.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', () => handleDeleteRequest(btn.dataset.codigo, btn.dataset.nombre));
+        });
+        container.querySelectorAll('.article-img').forEach(img => {
+            img.addEventListener('click', () => {
+                if (!img.dataset.src || img.dataset.broken === '1') return;
+                openLightbox(img.dataset.src);
+            });
         });
     }
 
@@ -1495,6 +1590,50 @@
         }
     });
 
+    // ============ NO-BARCODE MARKER ============
+    async function handleNoBarcodeRequest(codigo, nombre) {
+        try {
+            await saveBarcode(codigo, nombre, '.');
+            firebaseData[codigo] = firebaseData[codigo] || {};
+            firebaseData[codigo].codigoBarras = '.';
+            updateStats();
+
+            const card = document.querySelector(`.article-card[data-codigo="${codigo}"]`);
+            if (card) {
+                const input = card.querySelector('.barcode-input');
+                if (input) {
+                    input.value = '.';
+                    input.classList.remove('empty');
+                    input.classList.add('saved');
+                    input.dataset.original = '.';
+                }
+                card.querySelector('.no-barcode-btn')?.classList.add('hidden');
+                card.querySelector('.delete-btn')?.classList.remove('hidden');
+            }
+            showIndicator(codigo);
+            showToast('Marcado sin código de barras');
+        } catch (err) {
+            showToast('Error al guardar');
+            console.error(err);
+        }
+    }
+
+    // ============ IMAGE LIGHTBOX ============
+    function openLightbox(src) {
+        if (!src || src.startsWith('data:')) return;
+        const lightbox = document.getElementById('imgLightbox');
+        document.getElementById('imgLightboxImg').src = src;
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        document.getElementById('imgLightbox').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    document.getElementById('imgLightbox').addEventListener('click', closeLightbox);
+
     // ============ DELETE BARCODE ============
     let pendingDeleteData = null;
 
@@ -1610,13 +1749,11 @@
                     input.classList.add(newBarcode ? 'saved' : 'empty');
                 }
 
-                // Update delete button visibility
+                // Update action button visibility
                 const card = input.closest('.article-card');
                 if (card) {
-                    const deleteBtn = card.querySelector('.delete-btn');
-                    if (deleteBtn) {
-                        deleteBtn.classList.toggle('hidden', !newBarcode);
-                    }
+                    card.querySelector('.delete-btn')?.classList.toggle('hidden', !newBarcode);
+                    card.querySelector('.no-barcode-btn')?.classList.toggle('hidden', !!newBarcode);
                 }
             });
         });
