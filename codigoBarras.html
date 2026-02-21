@@ -643,6 +643,135 @@
                 margin-right: auto;
             }
         }
+
+        /* ======= VERIFICAR CÓDIGO DE BARRAS ======= */
+        .lookup-fab {
+            position: fixed;
+            bottom: 24px;
+            left: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--card);
+            color: var(--text-secondary);
+            border: 1.5px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 150;
+            transition: all 0.2s;
+        }
+
+        .lookup-fab:active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            transform: scale(0.92);
+        }
+
+        .lookup-status-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 14px;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .lookup-status-icon.found {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .lookup-status-icon.not-found {
+            background: var(--warning-bg);
+            color: var(--warning);
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .autocomplete-wrapper {
+            position: relative;
+            text-align: left;
+            margin-bottom: 4px;
+        }
+
+        .autocomplete-wrapper .custom-modal-input {
+            margin-bottom: 0;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: var(--shadow-lg);
+            z-index: 20;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .autocomplete-dropdown.open {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.12s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item:active {
+            background: var(--bg);
+        }
+
+        .autocomplete-item-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.3;
+        }
+
+        .autocomplete-item-meta {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .autocomplete-no-results {
+            padding: 14px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        #lookupModal .custom-modal {
+            max-width: 360px;
+        }
+
+        #lookupModal .custom-modal p {
+            margin-bottom: 14px;
+        }
     </style>
 </head>
 <body>
@@ -665,9 +794,9 @@
 
     <div class="filter-bar" id="filterBar">
         <button class="filter-btn active" data-filter="all">Todos</button>
-        <button class="filter-btn" data-filter="con">Con código</button>
-        <button class="filter-btn" data-filter="sin">Sin código</button>
-        <button class="filter-btn" data-filter="pendiente">Sin cód. en stock</button>
+        <button class="filter-btn" data-filter="con">C/código</button>
+        <button class="filter-btn" data-filter="sin">S/código</button>
+        <button class="filter-btn" data-filter="pendiente">S/código+Stock</button>
     </div>
 
     <div class="list-container" id="listContainer">
@@ -679,6 +808,18 @@
 
     <div class="toast" id="toast"></div>
     <button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#8593;</button>
+
+    <!-- Lookup Barcode FAB -->
+    <button class="lookup-fab" id="lookupFab" title="Verificar código de barras">
+        <svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="0" y="0" width="2.5" height="16" rx="1"/>
+            <rect x="4.5" y="0" width="1.2" height="16" rx="0.6"/>
+            <rect x="7.5" y="0" width="2.5" height="16" rx="1"/>
+            <rect x="11.5" y="0" width="1.5" height="16" rx="0.75"/>
+            <rect x="15" y="0" width="2.5" height="16" rx="1"/>
+            <rect x="19.2" y="0" width="1.2" height="16" rx="0.6"/>
+        </svg>
+    </button>
 
     <!-- Scanner Modal -->
     <div class="scanner-overlay" id="scannerOverlay">
@@ -719,6 +860,35 @@
         </div>
     </div>
 
+    <!-- Lookup Barcode Modal -->
+    <div class="custom-modal-overlay" id="lookupModal">
+        <div class="custom-modal">
+            <!-- Panel: código encontrado -->
+            <div id="lookupFoundPanel">
+                <div class="lookup-status-icon found">&#10003;</div>
+                <h3>Código encontrado</h3>
+                <p id="lookupFoundMsg"></p>
+                <div class="custom-modal-buttons">
+                    <button class="custom-modal-btn confirm" id="lookupFoundClose">Entendido</button>
+                </div>
+            </div>
+            <!-- Panel: código no registrado -->
+            <div id="lookupNotFoundPanel" style="display:none">
+                <div class="lookup-status-icon not-found">?</div>
+                <h3>Código no registrado</h3>
+                <p>El código <span class="modal-code" id="lookupBarcodeDisplay"></span> no está asignado a ningún artículo.<br><br>Seleccioná el artículo al que deseas asignarlo:</p>
+                <div class="autocomplete-wrapper">
+                    <input type="text" id="lookupArticleSearch" class="custom-modal-input" placeholder="Buscar por nombre o código..." autocomplete="off">
+                    <div class="autocomplete-dropdown" id="lookupDropdown"></div>
+                </div>
+                <div class="custom-modal-buttons" style="margin-top:12px">
+                    <button class="custom-modal-btn cancel" id="lookupNotFoundCancel">Cancelar</button>
+                    <button class="custom-modal-btn confirm" id="lookupNotFoundAssign" disabled>Asignar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <script>
     // ============ CONFIG ============
     const firebaseConfig = {
@@ -745,6 +915,9 @@
     let firebaseData = {};  // codigo -> { key, codigoBarras }
     let currentFilter = 'all';
     let saveTimers = {};
+    let scannerMode = 'assign'; // 'assign' | 'lookup'
+    let lookupScannedBarcode = null;
+    let lookupSelectedArticulo = null;
 
     // ============ FETCH GOOGLE SHEETS ============
     async function fetchSheets() {
@@ -996,11 +1169,27 @@
         setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
+    // ============ LOOKUP: buscar código de barras existente ============
+    function findArticleByBarcode(barcode) {
+        const target = barcode.trim();
+        if (!target) return null;
+        for (const [codigo, fbEntry] of Object.entries(firebaseData)) {
+            if (!fbEntry.codigoBarras) continue;
+            const codes = fbEntry.codigoBarras.split(',').map(c => c.trim());
+            if (codes.some(c => c && c === target)) {
+                const articulo = articulos.find(a => a.codigo === codigo);
+                return { codigo, codigoBarras: fbEntry.codigoBarras, articulo };
+            }
+        }
+        return null;
+    }
+
     // ============ SCANNER ============
     let html5QrCode = null;
     let scannerTarget = null; // { codigo, nombre }
 
     function openScanner(codigo, nombre) {
+        scannerMode = 'assign';
         scannerTarget = { codigo, nombre };
         const overlay = document.getElementById('scannerOverlay');
         const resultEl = document.getElementById('scannerResult');
@@ -1076,6 +1265,14 @@
     }
 
     async function onScanSuccess(decodedText) {
+        if (scannerMode === 'lookup') {
+            await onLookupScanSuccess(decodedText);
+        } else {
+            await onAssignScanSuccess(decodedText);
+        }
+    }
+
+    async function onAssignScanSuccess(decodedText) {
         if (!scannerTarget) return;
         const { codigo, nombre } = scannerTarget;
 
@@ -1116,10 +1313,186 @@
         setTimeout(() => closeScanner(), 1200);
     }
 
+    async function onLookupScanSuccess(decodedText) {
+        await stopScanner();
+
+        const resultEl = document.getElementById('scannerResult');
+        resultEl.textContent = decodedText;
+        resultEl.classList.add('show');
+
+        const match = findArticleByBarcode(decodedText);
+
+        setTimeout(() => {
+            closeScanner();
+            showLookupModal(decodedText, match);
+        }, 800);
+    }
+
+    function openLookupScanner() {
+        scannerMode = 'lookup';
+        scannerTarget = null;
+        const overlay = document.getElementById('scannerOverlay');
+        const resultEl = document.getElementById('scannerResult');
+        const titleEl = document.getElementById('scannerTitle');
+
+        titleEl.textContent = 'Verificar código de barras';
+        resultEl.classList.remove('show');
+        resultEl.textContent = '';
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        startScanner();
+    }
+
     // Close scanner events
     document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
     document.getElementById('scannerOverlay').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeScanner();
+    });
+    document.getElementById('lookupFab').addEventListener('click', openLookupScanner);
+
+    // ============ LOOKUP MODAL ============
+    function showLookupModal(barcode, match) {
+        lookupScannedBarcode = barcode;
+        lookupSelectedArticulo = null;
+
+        const overlay = document.getElementById('lookupModal');
+        const foundPanel = document.getElementById('lookupFoundPanel');
+        const notFoundPanel = document.getElementById('lookupNotFoundPanel');
+
+        if (match) {
+            foundPanel.style.display = '';
+            notFoundPanel.style.display = 'none';
+
+            const nombre = match.articulo?.nombre || '—';
+            const codigo = match.codigo;
+            document.getElementById('lookupFoundMsg').innerHTML =
+                `El código <span class="modal-code">${escapeHtml(barcode)}</span> ya está registrado en:<br><br>` +
+                `<strong>${escapeHtml(nombre)}</strong><br>` +
+                `<small style="color:var(--text-secondary);font-size:0.78rem">Cód: ${escapeHtml(codigo)}</small>`;
+        } else {
+            foundPanel.style.display = 'none';
+            notFoundPanel.style.display = '';
+
+            document.getElementById('lookupBarcodeDisplay').textContent = barcode;
+            document.getElementById('lookupArticleSearch').value = '';
+            const dropdown = document.getElementById('lookupDropdown');
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('open');
+            document.getElementById('lookupNotFoundAssign').disabled = true;
+        }
+
+        overlay.classList.add('active');
+    }
+
+    function closeLookupModal() {
+        document.getElementById('lookupModal').classList.remove('active');
+        const dropdown = document.getElementById('lookupDropdown');
+        if (dropdown) {
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('open');
+        }
+        lookupScannedBarcode = null;
+        lookupSelectedArticulo = null;
+    }
+
+    document.getElementById('lookupFoundClose').addEventListener('click', closeLookupModal);
+    document.getElementById('lookupNotFoundCancel').addEventListener('click', closeLookupModal);
+    document.getElementById('lookupModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeLookupModal();
+    });
+
+    document.getElementById('lookupArticleSearch').addEventListener('input', function () {
+        const query = this.value.trim().toLowerCase();
+        const dropdown = document.getElementById('lookupDropdown');
+        lookupSelectedArticulo = null;
+        document.getElementById('lookupNotFoundAssign').disabled = true;
+
+        if (!query) {
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('open');
+            return;
+        }
+
+        const results = articulos.filter(a =>
+            a.nombre.toLowerCase().includes(query) ||
+            a.codigo.toLowerCase().includes(query)
+        ).slice(0, 8);
+
+        if (results.length === 0) {
+            dropdown.innerHTML = '<div class="autocomplete-no-results">Sin resultados</div>';
+            dropdown.classList.add('open');
+            return;
+        }
+
+        dropdown.innerHTML = results.map(a => {
+            const existingCodes = (firebaseData[a.codigo]?.codigoBarras || '').trim();
+            const codesDisplay = existingCodes.length > 32
+                ? existingCodes.substring(0, 32) + '…'
+                : existingCodes;
+            const metaText = existingCodes
+                ? `Cód: ${escapeHtml(a.codigo)} · CB: ${escapeHtml(codesDisplay)}`
+                : `Cód: ${escapeHtml(a.codigo)} · Sin código de barras`;
+            return `<div class="autocomplete-item" data-codigo="${escapeHtml(a.codigo)}" data-nombre="${escapeHtml(a.nombre)}">
+                <div class="autocomplete-item-name">${escapeHtml(a.nombre)}</div>
+                <div class="autocomplete-item-meta">${metaText}</div>
+            </div>`;
+        }).join('');
+
+        dropdown.classList.add('open');
+
+        dropdown.querySelectorAll('.autocomplete-item[data-codigo]').forEach(item => {
+            item.addEventListener('click', () => {
+                lookupSelectedArticulo = {
+                    codigo: item.dataset.codigo,
+                    nombre: item.dataset.nombre
+                };
+                document.getElementById('lookupArticleSearch').value = item.dataset.nombre;
+                dropdown.innerHTML = '';
+                dropdown.classList.remove('open');
+                document.getElementById('lookupNotFoundAssign').disabled = false;
+            });
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('lookupDropdown');
+        const wrapper = document.querySelector('.autocomplete-wrapper');
+        if (dropdown && wrapper && !wrapper.contains(e.target)) {
+            dropdown.classList.remove('open');
+        }
+    });
+
+    document.getElementById('lookupNotFoundAssign').addEventListener('click', async () => {
+        if (!lookupSelectedArticulo || !lookupScannedBarcode) return;
+
+        const { codigo, nombre } = lookupSelectedArticulo;
+        const existing = (firebaseData[codigo]?.codigoBarras || '').trim();
+        const newValue = existing ? existing + ', ' + lookupScannedBarcode : lookupScannedBarcode;
+
+        try {
+            await saveBarcode(codigo, nombre, newValue);
+            firebaseData[codigo] = firebaseData[codigo] || {};
+            firebaseData[codigo].codigoBarras = newValue;
+            updateStats();
+
+            // Update visible input if the article is rendered in the list
+            const input = document.querySelector(`.barcode-input[data-codigo="${codigo}"]`);
+            if (input) {
+                input.value = newValue;
+                input.classList.remove('empty');
+                input.classList.add('saved');
+                input.dataset.original = newValue;
+                const card = input.closest('.article-card');
+                if (card) card.querySelector('.delete-btn')?.classList.remove('hidden');
+            }
+            showIndicator(codigo);
+            closeLookupModal();
+            showToast('Código de barras asignado');
+        } catch (err) {
+            showToast('Error al asignar');
+            console.error(err);
+        }
     });
 
     // ============ DELETE BARCODE ============
