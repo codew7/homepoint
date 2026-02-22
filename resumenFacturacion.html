@@ -1188,10 +1188,13 @@
     <script src="config.js"></script>
 
     <script>
-        // Inicializar Firebase
+        // Inicializar Firebase (se mantiene para Auth y Gastos)
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        
+
+        // URL del Apps Script que sirve el backup de pedidos desde Google Drive
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwGFDp59AZ_BXuhB176uuG3SzXQnTECD1c75bY_nZmCTTw1tBSQIZp4vpETF1almeSdtQ/exec';
+
         // Variables globales
         let datosFacturacion = {};
         let gananciaChart = null;
@@ -1200,8 +1203,11 @@
         let temporalidad = 'mensual'; // Temporalidad: 'mensual', 'semanal', 'diario'
         let periodoLabels = []; // Almacena las etiquetas de los períodos actuales
         let pedidosProcesados = []; // Almacena los pedidos procesados para drill-down
-        
-        // Variables para gastos
+
+        // Cache de pedidos descargados del JSON de Drive (evita re-descargar al cambiar filtros)
+        let pedidosCache = null;
+
+        // Variables para gastos (siguen en Firebase)
         let gastosData = [];
         let gastosAgrupados = {};
         
@@ -1449,18 +1455,32 @@
                 gananciaPercentMayorista: new Array(numPeriodos).fill(0)
             };
 
-            // Cargar pedidos desde Firebase
-            db.ref('pedidos').once('value')
-                .then(snapshot => {
-                    if (snapshot.exists()) {
-                        procesarPedidos(snapshot.val(), year);
+            // Cargar pedidos desde Google Drive JSON (via Apps Script)
+            const cargarPedidos = pedidosCache
+                ? Promise.resolve(pedidosCache)
+                : fetch(APPS_SCRIPT_URL)
+                    .then(res => {
+                        if (!res.ok) throw new Error('Error al descargar JSON de Drive');
+                        return res.json();
+                    })
+                    .then(data => {
+                        pedidosCache = data;
+                        return data;
+                    });
+
+            cargarPedidos
+                .then(data => {
+                    const pedidos = data.pedidos || data;
+                    if (pedidos && Object.keys(pedidos).length > 0) {
+                        procesarPedidos(pedidos, year);
                         mostrarDatos();
                     } else {
                         mostrarSinDatos();
                     }
                 })
                 .catch(error => {
-                    console.error('Error al cargar datos:', error);
+                    console.error('Error al cargar datos desde Drive:', error);
+                    mostrarNotificacion('Error al cargar datos desde Google Drive', 'error');
                     mostrarSinDatos();
                 });
         }
@@ -3215,7 +3235,10 @@
         });
 
         // Event Listeners
-        actualizarBtn.addEventListener('click', cargarDatos);
+        actualizarBtn.addEventListener('click', () => {
+            pedidosCache = null;
+            cargarDatos();
+        });
         
         yearSelect.addEventListener('change', () => {
             cargarDatos();

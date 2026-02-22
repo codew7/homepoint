@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Variable para bloquear la interfaz durante procesos críticos de Firebase
   let procesoCriticoEnEjecucion = false;
+  let enviandoPedido = false; // Guard contra doble clic en submit
   
   // Prevenir cierre de ventana durante procesos críticos
   window.addEventListener('beforeunload', function(e) {
@@ -1328,6 +1329,9 @@ function getTipoCliente() {
 
   // Extraer la lógica de ingreso de pedido a una función reutilizable
   function ingresarPedido() {
+    if (enviandoPedido) return;
+    enviandoPedido = true;
+
     // Validar campos obligatorios
     const nombre = form.nombre.value.trim();
     const telefono = form.telefono.value.trim();
@@ -1341,27 +1345,27 @@ function getTipoCliente() {
 
     if (!nombre) {
       showPopup('Debe completar el campo Nombre de cliente.', '❗', false);
-      return;
+      enviandoPedido = false; return;
     }
     if (!tipoCliente) {
       showPopup('Debe seleccionar el Tipo de Cliente.', '❗', false);
-      return;
+      enviandoPedido = false; return;
     }
     if (!medioPago) {
       showPopup('Debe seleccionar el Medio de Pago.', '❗', false);
-      return;
+      enviandoPedido = false; return;
     }
     // Validar ALIAS si el medio de pago es Transferencia o Parcial
     if (medioPago === 'Transferencia' || medioPago === 'Parcial') {
       const alias = form.alias ? form.alias.value.trim().toUpperCase() : '';
       if (!alias) {
         showPopup('Debe completar el campo ALIAS para transferencias y pagos parciales.', '❗', false);
-        return;
+        enviandoPedido = false; return;
       }
     }
     if (!vendedor) {
       showPopup('Debe completar el campo Vendedor.', '❗', false);
-      return;
+      enviandoPedido = false; return;
     }
 
     // Procesar y guardar subtotal y total como enteros (solo dígitos)
@@ -1378,13 +1382,13 @@ function getTipoCliente() {
 
     if (items.length === 0) {
       showPopup('Debe agregar al menos un artículo.', '❗', false);
-      return;
+      enviandoPedido = false; return;
     }
     // Validar artículos
     for (const item of items) {
       if (!item.nombre || item.cantidad <= 0 || item.valorU < 0) {
         showPopup('Complete correctamente los datos de los artículos.', '❗', false);
-        return;
+        enviandoPedido = false; return;
       }
       
       // FORZAR ACTUALIZACIÓN de todos los campos desde Google Sheets antes de guardar
@@ -1494,7 +1498,8 @@ function getTipoCliente() {
               
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
-              
+              enviandoPedido = false;
+
               messageDiv.textContent = 'Pedido actualizado correctamente.';
               messageDiv.style.color = 'green';
               setTimeout(() => {
@@ -1508,6 +1513,7 @@ function getTipoCliente() {
             } catch (err) {
               // DESBLOQUEAR INTERFAZ en caso de error
               desbloquearInterfaz();
+              enviandoPedido = false;
               console.error('Error al actualizar pedido:', err);
               messageDiv.textContent = 'Error al actualizar el pedido.';
               messageDiv.style.color = 'red';
@@ -1533,7 +1539,8 @@ function getTipoCliente() {
               }
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
-              
+              enviandoPedido = false;
+
               // Mostrar modal de impresión DESPUÉS de guardar exitosamente
               mostrarModalImprimirOrden(
                 function() { // Sí imprimir
@@ -1556,11 +1563,13 @@ function getTipoCliente() {
             .catch(err => {
               // DESBLOQUEAR INTERFAZ en caso de error
               desbloquearInterfaz();
+              enviandoPedido = false;
               showPopup('Error al guardar el pedido.', '❌', false);
             });
         }
       })
       .catch(err => {
+        enviandoPedido = false;
         if (err && err.message === 'cotizacion') {
           showPopup('No se pudo obtener la cotización del dólar blue.', '❌', false);
         } else {
@@ -1737,8 +1746,10 @@ function getTipoCliente() {
     // Cambiar el submit para actualizar en vez de crear
     form.onsubmit = function(e) {
       e.preventDefault();
+      if (enviandoPedido) return;
       mostrarModalPasswordEdicion(function(contrasena) {
         if (!contrasena) return; // Si se cancela, no continuar
+        enviandoPedido = true;
         modificarPedido(contrasena);
       });
     };
@@ -1750,7 +1761,7 @@ function getTipoCliente() {
         if (!item.nombre || item.cantidad <= 0 || item.valorU < 0) {
           messageDiv.textContent = 'Complete correctamente los datos de los artículos.';
           messageDiv.style.color = 'red';
-          return;
+          enviandoPedido = false; return;
         }
         
         // FORZAR ACTUALIZACIÓN de todos los campos desde Google Sheets antes de guardar
@@ -1865,7 +1876,8 @@ function getTipoCliente() {
                 
                 // DESBLOQUEAR INTERFAZ después de completar proceso
                 desbloquearInterfaz();
-                
+                enviandoPedido = false;
+
                 // Mostrar modal de impresión DESPUÉS de actualizar exitosamente
                 mostrarModalImprimirOrden(
                   function() { // Sí imprimir
@@ -1898,12 +1910,14 @@ function getTipoCliente() {
               .catch(err => {
                 // DESBLOQUEAR INTERFAZ en caso de error
                 desbloquearInterfaz();
+                enviandoPedido = false;
                 messageDiv.textContent = 'Error al actualizar el pedido.';
                 messageDiv.style.color = 'red';
               });
           });
         })
         .catch(() => {
+          enviandoPedido = false;
           messageDiv.textContent = 'No se pudo obtener la cotización del dólar blue.';
           messageDiv.style.color = 'red';
         });
