@@ -1183,13 +1183,19 @@
         console.log(`✅ Eliminados ${cantidadEliminada} movimientos del artículo ${codigoSeleccionado}`);
         
         // Crear nuevo registro inicial después de la eliminación
+        // El timestamp será la fecha máxima de los registros ENTRADA anteriores
+        const entradasTs = movimientosArticulo
+          .filter(m => m.tipo === 'ENTRADA' && m.timestamp)
+          .map(m => m.timestamp);
+        const tsReset = entradasTs.length > 0 ? Math.max(...entradasTs) : null;
+
         const nuevoRegistro = {
           cantidad: 0,
           codigo: codigoSeleccionado,
           nombre: nombreSeleccionado,
-          timestamp: Date.now(),
           tipo: 'RESET'
         };
+        if (tsReset !== null) nuevoRegistro.timestamp = tsReset;
         
         await db.ref('movimientos').push(nuevoRegistro);
         console.log(`✅ Creado nuevo registro inicial para ${codigoSeleccionado}`);
@@ -1388,24 +1394,32 @@
             .equalTo(codigo)
             .once('value');
           
+          let maxTsEntrada = null;
           if (snapshot.exists()) {
             snapshot.forEach(child => {
+              const val = child.val();
               todosLosMovimientos.push({
                 id: child.key,
                 codigo: codigo
               });
+              if (val.tipo === 'ENTRADA' && val.timestamp) {
+                if (maxTsEntrada === null || val.timestamp > maxTsEntrada) {
+                  maxTsEntrada = val.timestamp;
+                }
+              }
             });
           }
-          
-          // Preparar registro RESET para este artículo
+
+          // Preparar registro RESET: timestamp = fecha máxima de ENTRADA, o sin campo si no hay
           const prod = productos.find(p => p.codigo === codigo);
-          registrosReset.push({
+          const registroReset = {
             cantidad: 0,
             codigo: codigo,
             nombre: prod ? prod.nombre : 'Desconocido',
-            timestamp: Date.now(),
             tipo: 'RESET'
-          });
+          };
+          if (maxTsEntrada !== null) registroReset.timestamp = maxTsEntrada;
+          registrosReset.push(registroReset);
         }
         
         if (todosLosMovimientos.length === 0) {

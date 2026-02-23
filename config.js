@@ -10,8 +10,7 @@ const firebaseConfig = {
 };
 
 const GOOGLE_SHEETS_CONFIG = {
-    //API_KEY: 'AIzaSyDwiZWDc66tv4usDIA-IreiJMLFuk0236Q',
-    API_KEY: 'AIzaSyD9h4SH9laGhvh-NRhDjYgbCThVEbM8HTo', //testing key
+    API_KEY: 'AIzaSyDwiZWDc66tv4usDIA-IreiJMLFuk0236Q',
     SPREADSHEET_ID: '1cD50d0-oSTogEe9tYo9ABUSP1ONCy3SAV92zsYYIG84',
     RANGO: 'Lista!A2:Z'
 };
