@@ -1810,7 +1810,7 @@
     }
 
     // ============ SYNC FAB ============
-    const SYNC_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQzfIjSOu6ELi_RydE9CRqZ_kNfmQzo1tRGlqak_0754BvkvwHrK6nosDZ-851O9OS/exec';
+    const SYNC_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwE8EGD_Dk3Onz8HTQxYwft763qh61jn-3YV092r97flM5OZonT_zUUFn0wglcd37Ur/exec';
 
     document.getElementById('syncFab').addEventListener('click', async () => {
         const btn = document.getElementById('syncFab');
@@ -1818,13 +1818,19 @@
 
         btn.classList.add('syncing');
         try {
-            const res = await fetch(SYNC_SCRIPT_URL);
-            const data = await res.json();
-            if (data.status === 'ok') {
-                showToast('Sincronización completada');
-            } else {
-                showToast('Error: ' + (data.message || 'respuesta inesperada'));
-            }
+            await new Promise((resolve, reject) => {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = SYNC_SCRIPT_URL;
+                iframe.onload = () => {
+                    setTimeout(() => { iframe.remove(); resolve(); }, 500);
+                };
+                iframe.onerror = () => { iframe.remove(); reject(new Error('Network error')); };
+                document.body.appendChild(iframe);
+                // Timeout de seguridad por si no dispara onload
+                setTimeout(() => { iframe.remove(); resolve(); }, 15000);
+            });
+            showToast('Sincronización enviada');
         } catch (err) {
             console.error('Sync error:', err);
             showToast('Error al sincronizar');
