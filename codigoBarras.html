@@ -644,6 +644,42 @@
             }
         }
 
+        /* ======= SYNC FAB ======= */
+        .sync-fab {
+            position: fixed;
+            bottom: 76px;
+            left: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(0,122,255,0.1);
+            color: var(--accent);
+            border: 1.5px solid rgba(0,122,255,0.28);
+            box-shadow: 0 2px 10px rgba(0,122,255,0.15);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 150;
+            transition: all 0.2s;
+        }
+
+        .sync-fab:active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            transform: scale(0.92);
+        }
+
+        .sync-fab.syncing {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .sync-fab.syncing svg {
+            animation: spin 0.7s linear infinite;
+        }
+
         /* ======= VERIFICAR CÓDIGO DE BARRAS ======= */
         .lookup-fab {
             position: fixed;
@@ -880,6 +916,16 @@
     <div class="toast" id="toast"></div>
     <button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#8593;</button>
 
+    <!-- Sync FAB -->
+    <button class="sync-fab" id="syncFab" title="Sincronizar códigos de barras">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6"/>
+            <path d="M2.5 22v-6h6"/>
+            <path d="M2.5 11.5a10 10 0 0 1 16.5-5.5L21.5 8"/>
+            <path d="M21.5 12.5a10 10 0 0 1-16.5 5.5L2.5 16"/>
+        </svg>
+    </button>
+
     <!-- Lookup Barcode FAB -->
     <button class="lookup-fab" id="lookupFab" title="Verificar código de barras">
         <svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -985,6 +1031,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const codigosRef = db.ref('codigosBarras');
+    const codigosUpdateRef = db.ref('codigoBarrasUpdate');
 
     // ============ STATE ============
     let articulos = [];
@@ -1039,6 +1086,9 @@
     function saveBarcode(codigo, nombre, codigoBarras) {
         const now = new Date();
         const timestamp = now.toLocaleDateString('es-AR') + ', ' + now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        // Registrar timestamp global de última actualización
+        codigosUpdateRef.set({ timestamp, updatedAt: firebase.database.ServerValue.TIMESTAMP });
 
         if (firebaseData[codigo]) {
             // Update existing
@@ -1758,6 +1808,30 @@
             });
         });
     }
+
+    // ============ SYNC FAB ============
+    const SYNC_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQzfIjSOu6ELi_RydE9CRqZ_kNfmQzo1tRGlqak_0754BvkvwHrK6nosDZ-851O9OS/exec';
+
+    document.getElementById('syncFab').addEventListener('click', async () => {
+        const btn = document.getElementById('syncFab');
+        if (btn.classList.contains('syncing')) return;
+
+        btn.classList.add('syncing');
+        try {
+            const res = await fetch(SYNC_SCRIPT_URL);
+            const data = await res.json();
+            if (data.status === 'ok') {
+                showToast('Sincronización completada');
+            } else {
+                showToast('Error: ' + (data.message || 'respuesta inesperada'));
+            }
+        } catch (err) {
+            console.error('Sync error:', err);
+            showToast('Error al sincronizar');
+        } finally {
+            btn.classList.remove('syncing');
+        }
+    });
 
     // ============ INIT ============
     async function init() {
