@@ -152,19 +152,23 @@
 
     /* === DATOS CLIENTE === */
     .cliente-section {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 10px;
       margin-bottom: 18px;
     }
+    .cliente-row {
+      display: flex;
+      gap: 10px;
+    }
     .cliente-card {
+      flex: 1;
       background: #fff;
       border-radius: 12px;
       padding: 12px 14px;
       box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.03);
-      transition: box-shadow .2s;
+      min-width: 0;
     }
-    .cliente-card.full { grid-column: 1 / -1; }
     .cliente-card label {
       display: block;
       font-size: 10px;
@@ -608,7 +612,6 @@
 
     /* === RESPONSIVE === */
     @media (max-width: 480px) {
-      .cliente-section { grid-template-columns: 1fr; }
       .header h1 { display: none; }
     }
   </style>
@@ -965,8 +968,18 @@
       const v = valor.toLowerCase();
       if (v.includes('correo'))     return '📦 ';
       if (v.includes('moto'))       return '🏍️ ';
-      if (v.includes('via')) return '🚛 ';
+      if (v.includes('via'))        return '🚛 ';
       if (v.includes('retiro'))     return '🏪 ';
+      return '';
+    }
+
+    function emojiStatus(valor) {
+      if (!valor) return '';
+      const v = valor.toUpperCase();
+      if (v.includes('DESPACHADO') || v.includes('ENTREGADO')) return '📦 ';
+      if (v.includes('CANCELADO'))  return '❌ ';
+      if (v.includes('CERRADO'))    return '🔒 ';
+      if (v.includes('ABIERTO'))    return '📝 ';
       return '';
     }
 
@@ -991,14 +1004,24 @@
 
       // DATOS CLIENTE
       html += '<div class="cliente-section">';
-      html += '<div class="cliente-card full"><label>Cliente</label><div class="value">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div></div>';
-      html += '<div class="cliente-card"><label>Telefono</label><div class="value">' +
+
+      // Fila 1: Nombre (ancho doble) + Teléfono
+      html += '<div class="cliente-row">';
+      html += '<div class="cliente-card" style="flex:2"><label>Cliente</label><div class="value">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div></div>';
+      html += '<div class="cliente-card"><label>Teléfono</label><div class="value">' +
         (cliente.telefono
           ? '<a href="' + whatsappLink + '" target="_blank">' + escapeHtml(cliente.telefono) + ' &#128172;</a>'
           : 'N/A') +
         '</div></div>';
-      html += '<div class="cliente-card"><label>Tipo de Pago</label><div class="value tipoPagoDisplay">' + emojiPago(pedidoActual.tipoPago) + escapeHtml(pedidoActual.tipoPago || 'N/A') + '</div></div>';
+      html += '</div>';
+
+      // Fila 2: Tipo de pago + Entrega + Estado
+      html += '<div class="cliente-row">';
+      html += '<div class="cliente-card"><label>Pago</label><div class="value tipoPagoDisplay">' + emojiPago(pedidoActual.tipoPago) + escapeHtml(pedidoActual.tipoPago || 'N/A') + '</div></div>';
       html += '<div class="cliente-card"><label>Entrega</label><div class="value tipoEntregaDisplay">' + emojiEntrega(pedidoActual.tipoEntrega) + escapeHtml(pedidoActual.tipoEntrega || 'N/A') + '</div></div>';
+      html += '<div class="cliente-card"><label>Estado</label><div class="value">' + emojiStatus(pedidoActual.status) + escapeHtml(pedidoActual.status || 'N/A') + '</div></div>';
+      html += '</div>';
+
       html += '</div>';
 
       // HEADER ITEMS
