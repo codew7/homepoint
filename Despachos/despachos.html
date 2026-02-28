@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Despacho de Pedidos</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e3a5f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Despachos">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <link rel="icon" href="favicon.png" type="image/png">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -435,21 +443,25 @@
     }
     .btn-add-item:active { background: #dbeafe; transform: scale(.98); }
 
-    .btn-save {
+    .btn-listo {
       flex: 1;
-      background: linear-gradient(135deg, #22c55e, #16a34a);
-      color: #fff;
-      border: none;
+      background: #f0fdf4;
+      color: #22c55e;
+      border: 2px solid #22c55e;
       border-radius: 12px;
       padding: 11px;
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(34,197,94,.3);
-      transition: all .15s;
+      transition: all .2s;
     }
-    .btn-save:active { transform: scale(.97); }
-    .btn-save:disabled { background: #cbd5e1; box-shadow: none; cursor: default; }
+    .btn-listo.active {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(34,197,94,.45);
+      border-color: transparent;
+    }
+    .btn-listo:active { transform: scale(.97); }
 
     .nota-select {
       flex: 1;
@@ -463,12 +475,6 @@
       transition: border-color .2s;
     }
     .nota-select:focus { border-color: #2563eb; outline: none; }
-    .nota-fecha {
-      font-size: 11px;
-      color: #94a3b8;
-      margin-top: 2px;
-      font-weight: 500;
-    }
 
     .comentario-area {
       width: 100%;
@@ -622,23 +628,23 @@
   <div class="footer-controls" id="footerControls" style="display:none">
     <div class="footer-row">
       <button class="btn-add-item" id="btnAddItem">+ Agregar articulo</button>
-      <button class="btn-save" id="btnSave">Guardar Despacho</button>
+      <button class="btn-listo" id="btnListo">Listo</button>
     </div>
     <div class="footer-row">
       <select class="nota-select" id="notaSelect">
-        <option value="---">--- Nota ---</option>
-        <option value="Esperando respuesta">Esperando respuesta</option>
-        <option value="Esperando cierre">Esperando cierre</option>
-        <option value="Espera cotizacion">Espera cotizacion</option>
-        <option value="Esperando pago">Esperando pago</option>
-        <option value="Pago">Pago</option>
-        <option value="Retira">Retira</option>
-        <option value="Respuesta Pendiente">Respuesta Pendiente</option>
-        <option value="No responde">No responde</option>
-        <option value="No cumple minimo">No cumple minimo</option>
+        <option value="">---</option>
+        <option value="esperando respuesta">Esperando respuesta</option>
+        <option value="esperando cierre">Esperando cierre</option>
+        <option value="espera cotización">Espera cotización</option>
+        <option value="esperando pago">Esperando pago</option>
+        <option value="pago">Pago</option>
+        <option value="retira">Retira</option>
+        <option value="respuesta pendiente">Respuesta Pendiente</option>
+        <option value="no responde">No responde</option>
+        <option value="no cumple minimo">No cumple minimo</option>
+        <option value="???">???</option>
       </select>
     </div>
-    <div id="notaFechaContainer" class="nota-fecha"></div>
     <div class="footer-row">
       <textarea class="comentario-area" id="comentarioArea" placeholder="Comentarios del despacho..."></textarea>
     </div>
@@ -661,17 +667,6 @@
       <div class="modal-btns">
         <button class="btn-cancel" id="deleteCancel">Cancelar</button>
         <button class="btn-danger" id="deleteConfirm">Eliminar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL GUARDAR -->
-  <div class="modal-backdrop" id="saveModal">
-    <div class="modal-box">
-      <p>Confirmar el despacho de este pedido?</p>
-      <div class="modal-btns">
-        <button class="btn-cancel" id="saveCancel">Cancelar</button>
-        <button class="btn-primary" id="saveConfirm">Confirmar</button>
       </div>
     </div>
   </div>
@@ -710,6 +705,20 @@
     let deleteIdx = -1;
     let html5QrCode = null;
     let tooltipTimer = null;
+    let autoSaveTimer = null;
+    let realtimeListener = null;
+
+    function programarAutoGuardado(cambios) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(async () => {
+        if (!pedidoId || !pedidoActual) return;
+        try {
+          await db.ref('pedidos/' + pedidoId).update({ ...cambios, lastUpdated: Date.now() });
+        } catch (err) {
+          console.error('Auto-guardado error:', err);
+        }
+      }, 1200);
+    }
 
     // ==========================================
     // CARGAR GOOGLE SHEETS (una sola vez)
@@ -819,6 +828,12 @@
     // CARGAR PEDIDO DESDE FIREBASE
     // ==========================================
     async function cargarPedido(id) {
+      // Desconectar listener del pedido anterior si existe
+      if (realtimeListener) {
+        db.ref('pedidos/' + pedidoId).off('value', realtimeListener);
+        realtimeListener = null;
+      }
+
       pedidoId = id;
       isBlocked = false;
       const mainContent = document.getElementById('mainContent');
@@ -847,8 +862,8 @@
         pedidoActual.id = id;
 
         // Verificar status bloqueado
-        if (pedido.status === 'CANCELADO' || pedido.status === 'DESPACHADO/ENTREGADO') {
-          isBlocked = true;
+        isBlocked = pedido.status === 'CANCELADO' || pedido.status === 'DESPACHADO/ENTREGADO';
+        if (isBlocked) {
           statusBar.textContent = 'Pedido ' + pedido.status + ' - Solo lectura';
           statusBar.className = 'status-bar blocked';
           statusBar.style.display = 'block';
@@ -857,9 +872,83 @@
         renderPedido();
         footer.style.display = isBlocked ? 'none' : 'block';
         cargarLocalStorage();
+
+        // Activar listener en tiempo real
+        activarListenerTiempoReal(id);
       } catch (err) {
         mainContent.innerHTML = '<div class="error-screen"><div class="error-icon">&#9888;</div><p>Error al cargar: ' + err.message + '</p></div>';
       }
+    }
+
+    // ==========================================
+    // LISTENER EN TIEMPO REAL
+    // ==========================================
+    function activarListenerTiempoReal(id) {
+      const callback = (snap) => {
+        const nuevoPedido = snap.val();
+        if (!nuevoPedido || !pedidoActual) return;
+
+        const itemsChanged = JSON.stringify(nuevoPedido.items) !== JSON.stringify(pedidoActual.items);
+        const statusChanged = nuevoPedido.status !== pedidoActual.status;
+        const notaChanged = nuevoPedido.nota !== pedidoActual.nota || nuevoPedido.notaFecha !== pedidoActual.notaFecha;
+        const clienteChanged =
+          JSON.stringify(nuevoPedido.cliente) !== JSON.stringify(pedidoActual.cliente) ||
+          nuevoPedido.tipoPago !== pedidoActual.tipoPago ||
+          nuevoPedido.tipoEntrega !== pedidoActual.tipoEntrega;
+
+        if (!itemsChanged && !statusChanged && !notaChanged && !clienteChanged) return;
+
+        pedidoActual = nuevoPedido;
+        pedidoActual.id = id;
+
+        if (statusChanged) {
+          const footer = document.getElementById('footerControls');
+          const statusBar = document.getElementById('statusBar');
+          isBlocked = nuevoPedido.status === 'CANCELADO' || nuevoPedido.status === 'DESPACHADO/ENTREGADO';
+          if (isBlocked) {
+            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura';
+            statusBar.className = 'status-bar blocked';
+            statusBar.style.display = 'block';
+            footer.style.display = 'none';
+          } else {
+            statusBar.className = 'status-bar';
+            statusBar.style.display = 'none';
+            footer.style.display = 'block';
+          }
+        }
+
+        if (itemsChanged || clienteChanged || statusChanged) {
+          renderPedido();
+        }
+
+        if (notaChanged) {
+          notaSelect.value = nuevoPedido.nota || '';
+        }
+      };
+
+      realtimeListener = callback;
+      db.ref('pedidos/' + id).on('value', callback);
+    }
+
+    // ==========================================
+    // EMOJIS PARA TIPO DE PAGO Y ENTREGA
+    // ==========================================
+    function emojiPago(valor) {
+      if (!valor) return '';
+      const v = valor.toLowerCase();
+      if (v.includes('efectivo'))      return '💵 ';
+      if (v.includes('transferencia')) return '💳 ';
+      return '';
+    }
+
+    function emojiEntrega(valor) {
+      if (!valor) return '';
+      const v = valor.toLowerCase();
+      if (v.includes('correo'))     return '📦 ';
+      if (v.includes('moto'))       return '🏍️ ';
+      if (v.includes('via')) return '🚛 ';
+      if (v.includes('retiro'))     return '🏪 ';
+      return '';
     }
 
     // ==========================================
@@ -889,8 +978,8 @@
           ? '<a href="' + whatsappLink + '" target="_blank">' + escapeHtml(cliente.telefono) + ' &#128172;</a>'
           : 'N/A') +
         '</div></div>';
-      html += '<div class="cliente-card"><label>Localidad</label><div class="value">' + escapeHtml(cliente.localidad || 'N/A') + '</div></div>';
-      html += '<div class="cliente-card"><label>Provincia</label><div class="value">' + escapeHtml(cliente.provincia || 'N/A') + '</div></div>';
+      html += '<div class="cliente-card"><label>Tipo de Pago</label><div class="value tipoPagoDisplay">' + emojiPago(pedidoActual.tipoPago) + escapeHtml(pedidoActual.tipoPago || 'N/A') + '</div></div>';
+      html += '<div class="cliente-card"><label>Entrega</label><div class="value tipoEntregaDisplay">' + emojiEntrega(pedidoActual.tipoEntrega) + escapeHtml(pedidoActual.tipoEntrega || 'N/A') + '</div></div>';
       html += '</div>';
 
       // HEADER ITEMS
@@ -947,11 +1036,20 @@
     // INTERACTIVIDAD DE ITEMS
     // ==========================================
 
-    // Actualizar cantidad (solo en memoria, no Firebase)
+    function actualizarContador() {
+      const counter = document.querySelector('.items-counter');
+      if (!counter || !pedidoActual || !pedidoActual.items) return;
+      const items = pedidoActual.items;
+      const total = items.reduce((s, it) => s + (parseInt(it.cantidad) || 0), 0);
+      counter.textContent = items.length + ' items (' + total + ' u.)';
+    }
+
     function updateQty(idx, val) {
       const qty = parseInt(val, 10) || 1;
       if (pedidoActual && pedidoActual.items && pedidoActual.items[idx]) {
         pedidoActual.items[idx].cantidad = qty;
+        actualizarContador();
+        programarAutoGuardado({ items: pedidoActual.items });
       }
     }
 
@@ -1117,9 +1215,7 @@
         pedidoActual.items.push({
           codigo,
           nombre: info.nombre,
-          cantidad: 1,
-          valorU: 0,
-          valorC: 0
+          cantidad: 1
         });
         showToast('Agregado: ' + info.nombre);
       }
@@ -1127,37 +1223,42 @@
       addItemModal.classList.remove('active');
       renderPedido();
       cargarLocalStorage();
+      programarAutoGuardado({ items: pedidoActual.items });
     });
 
     // ==========================================
-    // NOTA Y COMENTARIOS (localStorage)
+    // NOTA, COMENTARIOS, TIPO PAGO Y ENTREGA (Firebase)
     // ==========================================
     const notaSelect = document.getElementById('notaSelect');
     const comentarioArea = document.getElementById('comentarioArea');
-    const notaFechaContainer = document.getElementById('notaFechaContainer');
 
-    notaSelect.addEventListener('change', () => {
-      saveLocalData();
+    notaSelect.addEventListener('change', async () => {
+      if (!pedidoId) return;
+      const ahora = Date.now();
+      try {
+        await db.ref('pedidos/' + pedidoId).update({
+          nota: notaSelect.value,
+          notaFecha: ahora,
+          lastUpdated: ahora
+        });
+      } catch (err) {
+        console.error('Error guardando nota:', err);
+      }
     });
 
     comentarioArea.addEventListener('input', () => {
-      saveLocalData();
+      saveComentarioToLocal(comentarioArea.value);
     });
 
     function getLocalKey() {
       return 'despachos_' + pedidoId;
     }
 
-    function saveLocalData() {
+    function saveComentarioToLocal(value) {
       if (!pedidoId) return;
       const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      existing.nota = notaSelect.value;
-      existing.notaFecha = Date.now();
-      existing.comentarios = comentarioArea.value;
-      // Preservar checkedItems
-      if (!existing.checkedItems) existing.checkedItems = {};
+      existing.comentario = value;
       localStorage.setItem(getLocalKey(), JSON.stringify(existing));
-      renderNotaFecha(existing.notaFecha);
     }
 
     function saveCheckedToLocal(codigo, checked) {
@@ -1175,66 +1276,47 @@
     }
 
     function cargarLocalStorage() {
-      if (!pedidoId) return;
+      if (!pedidoId || !pedidoActual) return;
+
+      // Nota desde Firebase (campo pedidos.nota)
+      notaSelect.value = pedidoActual.nota || '';
+
+      // Comentarios desde localStorage (no se guardan en Firebase)
+      const localData = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      comentarioArea.value = localData.comentario || '';
+
+      // Estado del botón Listo
+      aplicarEstadoListo();
+    }
+
+    // ==========================================
+    // BOTON LISTO (indicador localStorage)
+    // ==========================================
+    const btnListo = document.getElementById('btnListo');
+
+    function getListo() {
       const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-
-      // Nota
-      if (data.nota) {
-        notaSelect.value = data.nota;
-      } else {
-        notaSelect.value = '---';
-      }
-
-      // Fecha nota
-      renderNotaFecha(data.notaFecha);
-
-      // Comentarios
-      comentarioArea.value = data.comentarios || '';
+      return data.listo === true;
     }
 
-    function renderNotaFecha(ts) {
-      if (ts) {
-        const d = new Date(ts);
-        notaFechaContainer.textContent = 'Actualizado: ' + d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    function setListo(value) {
+      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      existing.listo = value;
+      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+    }
+
+    function aplicarEstadoListo() {
+      if (getListo()) {
+        btnListo.classList.add('active');
       } else {
-        notaFechaContainer.textContent = '';
+        btnListo.classList.remove('active');
       }
     }
 
-    // ==========================================
-    // GUARDAR DESPACHO
-    // ==========================================
-    document.getElementById('btnSave').addEventListener('click', () => {
-      document.getElementById('saveModal').classList.add('active');
-    });
-
-    document.getElementById('saveCancel').addEventListener('click', () => {
-      document.getElementById('saveModal').classList.remove('active');
-    });
-
-    document.getElementById('saveConfirm').addEventListener('click', async () => {
-      document.getElementById('saveModal').classList.remove('active');
-      if (!pedidoActual || !pedidoId) return;
-
-      const btnSave = document.getElementById('btnSave');
-      btnSave.disabled = true;
-      btnSave.textContent = 'Guardando...';
-
-      try {
-        await db.ref('pedidos/' + pedidoId).update({
-          items: pedidoActual.items,
-          lastUpdated: Date.now()
-        });
-
-        showToast('Despacho guardado correctamente');
-        btnSave.textContent = 'Guardar Despacho';
-        btnSave.disabled = false;
-      } catch (err) {
-        showToast('Error al guardar: ' + err.message);
-        btnSave.textContent = 'Guardar Despacho';
-        btnSave.disabled = false;
-        console.error(err);
-      }
+    btnListo.addEventListener('click', () => {
+      const nuevoEstado = !btnListo.classList.contains('active');
+      setListo(nuevoEstado);
+      aplicarEstadoListo();
     });
 
     // ==========================================
@@ -1266,6 +1348,15 @@
         cargarPedido(id);
       }
     })();
+
+    // ==========================================
+    // REGISTRO SERVICE WORKER (PWA)
+    // ==========================================
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
   </script>
 </body>
 </html>
