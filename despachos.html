@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Despacho de Pedidos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* === HEADER === */
+    .header {
+      background: #1565c0;
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,.15);
+      z-index: 10;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
+    .header input[type="text"] {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      outline: none;
+    }
+    .header button {
+      background: #fff;
+      color: #1565c0;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .header button:active { opacity: .8; }
+
+    /* === QR SCANNER === */
+    #qr-reader-container {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 1000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #qr-reader-container.active { display: flex; }
+    #qr-reader {
+      width: 320px;
+      max-width: 90vw;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #qr-reader-container .qr-close {
+      margin-top: 16px;
+      background: #fff;
+      color: #333;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 32px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    /* === STATUS BAR === */
+    .status-bar {
+      display: none;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .status-bar.blocked {
+      display: block;
+      background: #ffcdd2;
+      color: #b71c1c;
+    }
+
+    /* === CONTENIDO PRINCIPAL === */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* === LOADING / ERROR === */
+    .loading-screen, .error-screen, .welcome-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #1565c0;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-screen { color: #c62828; }
+    .error-screen .error-icon { font-size: 48px; margin-bottom: 12px; }
+    .welcome-screen { color: #757575; }
+    .welcome-screen .welcome-icon { font-size: 56px; margin-bottom: 12px; opacity: .6; }
+
+    /* === DATOS CLIENTE === */
+    .cliente-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .cliente-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .cliente-card.full { grid-column: 1 / -1; }
+    .cliente-card label {
+      display: block;
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 2px;
+    }
+    .cliente-card .value {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .cliente-card a {
+      color: #1565c0;
+      text-decoration: none;
+    }
+
+    /* === ITEMS === */
+    .items-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .items-header h2 { font-size: 16px; color: #555; }
+    .items-counter {
+      font-size: 13px;
+      color: #888;
+      background: #e8e8e8;
+      padding: 2px 10px;
+      border-radius: 12px;
+    }
+
+    .item-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background .3s;
+      position: relative;
+    }
+    .item-card.checked { background: #e8f5e9; }
+
+    .item-img {
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      object-fit: cover;
+      cursor: pointer;
+      flex-shrink: 0;
+      background: #eee;
+    }
+    .item-img-placeholder {
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      background: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #999;
+      flex-shrink: 0;
+    }
+
+    .item-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .item-name {
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-name:active { color: #1565c0; }
+    .item-code {
+      font-size: 11px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .item-qty {
+      width: 52px;
+      text-align: center;
+      padding: 6px 4px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .item-qty:focus { border-color: #1565c0; outline: none; }
+
+    .item-check {
+      width: 28px;
+      height: 28px;
+      accent-color: #43a047;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .item-delete {
+      background: none;
+      border: none;
+      color: #bbb;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .item-delete:active { color: #e53935; }
+
+    /* === TOOLTIP === */
+    .tooltip-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 500;
+    }
+    .tooltip-overlay.active { display: block; }
+    .tooltip-box {
+      position: absolute;
+      background: #333;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+      max-width: 250px;
+      z-index: 501;
+      animation: fadeIn .2s;
+    }
+    .tooltip-box span { display: block; }
+    .tooltip-box .tt-label { color: #aaa; font-size: 11px; }
+
+    /* === LIGHTBOX === */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.9);
+      z-index: 900;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .lightbox.active { display: flex; }
+    .lightbox img {
+      max-width: 92vw;
+      max-height: 88vh;
+      border-radius: 8px;
+    }
+
+    /* === MODAL CONFIRMACION === */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 800;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.active { display: flex; }
+    .modal-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      width: 300px;
+      max-width: 85vw;
+      text-align: center;
+    }
+    .modal-box p { font-size: 15px; margin-bottom: 20px; color: #333; }
+    .modal-btns { display: flex; gap: 10px; justify-content: center; }
+    .modal-btns button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-cancel { background: #e0e0e0; color: #555; }
+    .btn-danger { background: #e53935; color: #fff; }
+    .btn-primary { background: #1565c0; color: #fff; }
+
+    /* === FOOTER CONTROLES === */
+    .footer-controls {
+      flex-shrink: 0;
+      background: #fff;
+      border-top: 1px solid #e0e0e0;
+      padding: 10px 16px 14px;
+      box-shadow: 0 -2px 4px rgba(0,0,0,.06);
+      z-index: 10;
+    }
+    .footer-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .footer-row:last-child { margin-bottom: 0; }
+
+    .btn-add-item {
+      flex: 1;
+      background: #e3f2fd;
+      color: #1565c0;
+      border: 1px solid #bbdefb;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-add-item:active { background: #bbdefb; }
+
+    .btn-save {
+      flex: 1;
+      background: #43a047;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-save:active { background: #388e3c; }
+    .btn-save:disabled { background: #bbb; cursor: default; }
+
+    .nota-select {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .nota-fecha {
+      font-size: 11px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .comentario-area {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      resize: none;
+      height: 44px;
+      font-family: inherit;
+    }
+    .comentario-area:focus { border-color: #1565c0; outline: none; }
+
+    /* === AGREGAR ARTICULO MODAL === */
+    .add-item-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 800;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .add-item-modal.active { display: flex; }
+    .add-item-panel {
+      background: #fff;
+      width: 100%;
+      max-width: 600px;
+      max-height: 70vh;
+      border-radius: 16px 16px 0 0;
+      display: flex;
+      flex-direction: column;
+      animation: slideUp .25s;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .add-item-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .add-item-header input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    .add-item-header input:focus { border-color: #1565c0; }
+    .add-item-header button {
+      background: none;
+      border: none;
+      font-size: 22px;
+      color: #999;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .add-item-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .add-item-option {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f5f5f5;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .add-item-option:active { background: #e3f2fd; }
+    .add-item-option img {
+      width: 36px; height: 36px;
+      border-radius: 4px;
+      object-fit: cover;
+      background: #eee;
+    }
+    .add-item-option .opt-name { font-size: 14px; font-weight: 500; }
+    .add-item-option .opt-code { font-size: 11px; color: #999; }
+
+    /* === TOAST === */
+    .toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 2000;
+      animation: fadeIn .3s;
+      pointer-events: none;
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 480px) {
+      .cliente-section { grid-template-columns: 1fr; }
+      .header h1 { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>Despacho</h1>
+    <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off">
+    <button id="btnBuscar">Buscar</button>
+    <button id="btnQR">QR</button>
+  </div>
+
+  <!-- QR SCANNER -->
+  <div id="qr-reader-container">
+    <div id="qr-reader"></div>
+    <button class="qr-close" id="btnQRClose">Cerrar</button>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar" id="statusBar"></div>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="main-content" id="mainContent">
+    <div class="welcome-screen" id="welcomeScreen">
+      <div class="welcome-icon">&#128230;</div>
+      <p>Ingresa o escanea un ID de pedido para comenzar</p>
+    </div>
+  </div>
+
+  <!-- FOOTER CONTROLES -->
+  <div class="footer-controls" id="footerControls" style="display:none">
+    <div class="footer-row">
+      <button class="btn-add-item" id="btnAddItem">+ Agregar articulo</button>
+      <button class="btn-save" id="btnSave">Guardar Despacho</button>
+    </div>
+    <div class="footer-row">
+      <select class="nota-select" id="notaSelect">
+        <option value="---">--- Nota ---</option>
+        <option value="Esperando respuesta">Esperando respuesta</option>
+        <option value="Esperando cierre">Esperando cierre</option>
+        <option value="Espera cotizacion">Espera cotizacion</option>
+        <option value="Esperando pago">Esperando pago</option>
+        <option value="Pago">Pago</option>
+        <option value="Retira">Retira</option>
+        <option value="Respuesta Pendiente">Respuesta Pendiente</option>
+        <option value="No responde">No responde</option>
+        <option value="No cumple minimo">No cumple minimo</option>
+      </select>
+    </div>
+    <div id="notaFechaContainer" class="nota-fecha"></div>
+    <div class="footer-row">
+      <textarea class="comentario-area" id="comentarioArea" placeholder="Comentarios del despacho..."></textarea>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX -->
+  <div class="lightbox" id="lightbox">
+    <img id="lightboxImg" src="" alt="Imagen">
+  </div>
+
+  <!-- TOOLTIP -->
+  <div class="tooltip-overlay" id="tooltipOverlay">
+    <div class="tooltip-box" id="tooltipBox"></div>
+  </div>
+
+  <!-- MODAL ELIMINAR -->
+  <div class="modal-backdrop" id="deleteModal">
+    <div class="modal-box">
+      <p id="deleteModalText">Eliminar este articulo?</p>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="deleteCancel">Cancelar</button>
+        <button class="btn-danger" id="deleteConfirm">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL GUARDAR -->
+  <div class="modal-backdrop" id="saveModal">
+    <div class="modal-box">
+      <p>Confirmar el despacho de este pedido?</p>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="saveCancel">Cancelar</button>
+        <button class="btn-primary" id="saveConfirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGREGAR ARTICULO -->
+  <div class="add-item-modal" id="addItemModal">
+    <div class="add-item-panel">
+      <div class="add-item-header">
+        <input type="text" id="addItemSearch" placeholder="Buscar por nombre o codigo...">
+        <button id="addItemClose">&times;</button>
+      </div>
+      <div class="add-item-list" id="addItemList"></div>
+    </div>
+  </div>
+
+  <!-- Firebase + Config -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="config.js"></script>
+
+  <script>
+    // ==========================================
+    // INICIALIZACION
+    // ==========================================
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Estado global
+    let pedidoActual = null;
+    let pedidoId = null;
+    let sheetsData = {};       // { codigo: { imagen, nombre, codigoBarras } }
+    let sheetsAllItems = [];   // Lista completa para agregar articulos
+    let sheetsLoaded = false;
+    let isBlocked = false;
+    let deleteIdx = -1;
+    let html5QrCode = null;
+    let tooltipTimer = null;
+
+    // ==========================================
+    // CARGAR GOOGLE SHEETS (una sola vez)
+    // ==========================================
+    async function cargarSheets() {
+      if (sheetsLoaded) return;
+      try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const rows = data.values || [];
+
+        rows.forEach(row => {
+          const codigo = (row[2] || '').trim();
+          if (!codigo) return;
+          const imagenRaw = row[1] || '';
+          const imagenes = imagenRaw.split(',').map(u => u.trim()).filter(Boolean);
+          sheetsData[codigo] = {
+            imagen: imagenes[0] || '',
+            nombre: (row[3] || '').trim(),
+            codigoBarras: (row[11] || '').trim()
+          };
+          sheetsAllItems.push({
+            codigo,
+            nombre: (row[3] || '').trim(),
+            imagen: imagenes[0] || ''
+          });
+        });
+
+        sheetsLoaded = true;
+      } catch (err) {
+        console.error('Error cargando Google Sheets:', err);
+      }
+    }
+
+    // Cargar sheets al inicio
+    cargarSheets();
+
+    // ==========================================
+    // BUSCAR PEDIDO
+    // ==========================================
+    const pedidoInput = document.getElementById('pedidoInput');
+    const btnBuscar = document.getElementById('btnBuscar');
+    const btnQR = document.getElementById('btnQR');
+
+    btnBuscar.addEventListener('click', () => {
+      const id = pedidoInput.value.trim();
+      if (id) cargarPedido(id);
+    });
+    pedidoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const id = pedidoInput.value.trim();
+        if (id) cargarPedido(id);
+      }
+    });
+
+    // ==========================================
+    // ESCANEO QR
+    // ==========================================
+    const qrContainer = document.getElementById('qr-reader-container');
+    const btnQRClose = document.getElementById('btnQRClose');
+
+    btnQR.addEventListener('click', async () => {
+      qrContainer.classList.add('active');
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode('qr-reader');
+      }
+      try {
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 250 },
+          (decodedText) => {
+            // Extraer ID del texto decodificado
+            let id = decodedText;
+            // Si es una URL, extraer el parametro o la ultima parte
+            if (id.includes('id=')) {
+              const match = id.match(/id=([^&]+)/);
+              if (match) id = match[1];
+            } else if (id.includes('/')) {
+              id = id.split('/').pop();
+            }
+            id = id.trim();
+            if (id) {
+              pedidoInput.value = id;
+              cerrarQR();
+              cargarPedido(id);
+            }
+          },
+          () => {} // error silencioso por frame
+        );
+      } catch (err) {
+        cerrarQR();
+        showToast('No se pudo acceder a la camara');
+      }
+    });
+
+    btnQRClose.addEventListener('click', cerrarQR);
+
+    function cerrarQR() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(() => {});
+      }
+      qrContainer.classList.remove('active');
+    }
+
+    // ==========================================
+    // CARGAR PEDIDO DESDE FIREBASE
+    // ==========================================
+    async function cargarPedido(id) {
+      pedidoId = id;
+      isBlocked = false;
+      const mainContent = document.getElementById('mainContent');
+      const statusBar = document.getElementById('statusBar');
+      const footer = document.getElementById('footerControls');
+
+      // Mostrar loading
+      statusBar.className = 'status-bar';
+      statusBar.style.display = 'none';
+      footer.style.display = 'none';
+      mainContent.innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Cargando pedido...</p></div>';
+
+      // Esperar a que sheets este cargado
+      await cargarSheets();
+
+      try {
+        const snap = await db.ref('pedidos/' + id).once('value');
+        const pedido = snap.val();
+
+        if (!pedido) {
+          mainContent.innerHTML = '<div class="error-screen"><div class="error-icon">&#10060;</div><p>Pedido no encontrado o expirado</p></div>';
+          return;
+        }
+
+        pedidoActual = pedido;
+        pedidoActual.id = id;
+
+        // Verificar status bloqueado
+        if (pedido.status === 'CANCELADO' || pedido.status === 'DESPACHADO/ENTREGADO') {
+          isBlocked = true;
+          statusBar.textContent = 'Pedido ' + pedido.status + ' - Solo lectura';
+          statusBar.className = 'status-bar blocked';
+          statusBar.style.display = 'block';
+        }
+
+        renderPedido();
+        footer.style.display = isBlocked ? 'none' : 'block';
+        cargarLocalStorage();
+      } catch (err) {
+        mainContent.innerHTML = '<div class="error-screen"><div class="error-icon">&#9888;</div><p>Error al cargar: ' + err.message + '</p></div>';
+      }
+    }
+
+    // ==========================================
+    // RENDER PEDIDO COMPLETO
+    // ==========================================
+    function renderPedido() {
+      const mainContent = document.getElementById('mainContent');
+      const cliente = pedidoActual.cliente || {};
+      const items = pedidoActual.items || [];
+
+      // Formatear telefono para WhatsApp
+      let whatsappLink = '';
+      if (cliente.telefono) {
+        let tel = cliente.telefono.replace(/[^\d]/g, '');
+        if (tel.startsWith('0')) tel = tel.substring(1);
+        if (!tel.startsWith('54')) tel = '54' + tel;
+        whatsappLink = 'https://api.whatsapp.com/send/?phone=' + tel;
+      }
+
+      let html = '';
+
+      // DATOS CLIENTE
+      html += '<div class="cliente-section">';
+      html += '<div class="cliente-card full"><label>Cliente</label><div class="value">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div></div>';
+      html += '<div class="cliente-card"><label>Telefono</label><div class="value">' +
+        (cliente.telefono
+          ? '<a href="' + whatsappLink + '" target="_blank">' + escapeHtml(cliente.telefono) + ' &#128172;</a>'
+          : 'N/A') +
+        '</div></div>';
+      html += '<div class="cliente-card"><label>Localidad</label><div class="value">' + escapeHtml(cliente.localidad || 'N/A') + '</div></div>';
+      html += '<div class="cliente-card"><label>Provincia</label><div class="value">' + escapeHtml(cliente.provincia || 'N/A') + '</div></div>';
+      html += '</div>';
+
+      // HEADER ITEMS
+      const totalItems = items.reduce((s, it) => s + (it.cantidad || 0), 0);
+      html += '<div class="items-header"><h2>Articulos</h2><span class="items-counter">' + items.length + ' items (' + totalItems + ' u.)</span></div>';
+
+      // ITEMS
+      items.forEach((it, idx) => {
+        const sheetInfo = sheetsData[it.codigo] || {};
+        const imgUrl = sheetInfo.imagen || '';
+        const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
+
+        html += '<div class="item-card' + checkedClass + '" data-idx="' + idx + '">';
+
+        // Imagen
+        if (imgUrl) {
+          html += '<img class="item-img" src="' + escapeHtml(imgUrl) + '" alt="" onclick="openLightbox(\'' + escapeHtml(imgUrl) + '\')" loading="lazy">';
+        } else {
+          html += '<div class="item-img-placeholder">&#128247;</div>';
+        }
+
+        // Info
+        html += '<div class="item-info">';
+        html += '<div class="item-name" onclick="showTooltip(event, \'' + escapeHtml(it.codigo || '') + '\')">' + escapeHtml(it.nombre || 'Sin nombre') + '</div>';
+        html += '<div class="item-code">' + escapeHtml(it.codigo || '') + '</div>';
+        html += '</div>';
+
+        // Cantidad
+        if (!isBlocked) {
+          html += '<input type="number" class="item-qty" value="' + (it.cantidad || 1) + '" min="1" onchange="updateQty(' + idx + ', this.value)">';
+        } else {
+          html += '<span style="font-weight:600;font-size:15px;padding:0 8px;">' + (it.cantidad || 1) + '</span>';
+        }
+
+        // Checkbox
+        html += '<input type="checkbox" class="item-check"' + (isItemChecked(it.codigo) ? ' checked' : '') + ' onchange="toggleCheck(' + idx + ', this.checked)">';
+
+        // Eliminar
+        if (!isBlocked) {
+          html += '<button class="item-delete" onclick="confirmDelete(' + idx + ')">&times;</button>';
+        }
+
+        html += '</div>';
+      });
+
+      if (items.length === 0) {
+        html += '<div style="text-align:center;padding:40px;color:#999;">No hay articulos en este pedido</div>';
+      }
+
+      mainContent.innerHTML = html;
+    }
+
+    // ==========================================
+    // INTERACTIVIDAD DE ITEMS
+    // ==========================================
+
+    // Actualizar cantidad (solo en memoria, no Firebase)
+    function updateQty(idx, val) {
+      const qty = parseInt(val, 10) || 1;
+      if (pedidoActual && pedidoActual.items && pedidoActual.items[idx]) {
+        pedidoActual.items[idx].cantidad = qty;
+      }
+    }
+
+    // Toggle checkbox empaquetado
+    function toggleCheck(idx, checked) {
+      if (!pedidoActual || !pedidoActual.items[idx]) return;
+      const codigo = pedidoActual.items[idx].codigo;
+      const card = document.querySelector('.item-card[data-idx="' + idx + '"]');
+
+      if (checked) {
+        if (card) card.classList.add('checked');
+      } else {
+        if (card) card.classList.remove('checked');
+      }
+
+      saveCheckedToLocal(codigo, checked);
+    }
+
+    // Confirmar eliminacion
+    function confirmDelete(idx) {
+      deleteIdx = idx;
+      const item = pedidoActual.items[idx];
+      document.getElementById('deleteModalText').textContent = 'Eliminar "' + (item.nombre || 'articulo') + '"?';
+      document.getElementById('deleteModal').classList.add('active');
+    }
+
+    document.getElementById('deleteCancel').addEventListener('click', () => {
+      document.getElementById('deleteModal').classList.remove('active');
+      deleteIdx = -1;
+    });
+
+    document.getElementById('deleteConfirm').addEventListener('click', async () => {
+      document.getElementById('deleteModal').classList.remove('active');
+      if (deleteIdx < 0 || !pedidoActual) return;
+
+      pedidoActual.items.splice(deleteIdx, 1);
+      deleteIdx = -1;
+
+      // Eliminar de Firebase inmediatamente
+      try {
+        await db.ref('pedidos/' + pedidoId).update({
+          items: pedidoActual.items,
+          lastUpdated: Date.now()
+        });
+        renderPedido();
+        cargarLocalStorage(); // Re-aplicar checks
+        showToast('Articulo eliminado');
+      } catch (err) {
+        showToast('Error al eliminar');
+        console.error(err);
+      }
+    });
+
+    // ==========================================
+    // LIGHTBOX
+    // ==========================================
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightboxImg');
+
+    function openLightbox(url) {
+      lightboxImg.src = url;
+      lightbox.classList.add('active');
+    }
+    lightbox.addEventListener('click', () => {
+      lightbox.classList.remove('active');
+      lightboxImg.src = '';
+    });
+
+    // ==========================================
+    // TOOLTIP (codigo + codigo de barras)
+    // ==========================================
+    const tooltipOverlay = document.getElementById('tooltipOverlay');
+    const tooltipBox = document.getElementById('tooltipBox');
+
+    function showTooltip(event, codigo) {
+      const info = sheetsData[codigo] || {};
+      tooltipBox.innerHTML =
+        '<span class="tt-label">Codigo</span><span>' + escapeHtml(codigo) + '</span>' +
+        '<span class="tt-label" style="margin-top:6px">Codigo de Barras</span><span>' + escapeHtml(info.codigoBarras || 'N/A') + '</span>';
+
+      // Posicionar cerca del click
+      const rect = event.target.getBoundingClientRect();
+      tooltipBox.style.top = (rect.bottom + 8) + 'px';
+      tooltipBox.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
+
+      tooltipOverlay.classList.add('active');
+
+      clearTimeout(tooltipTimer);
+      tooltipTimer = setTimeout(() => {
+        tooltipOverlay.classList.remove('active');
+      }, 3500);
+    }
+
+    tooltipOverlay.addEventListener('click', () => {
+      tooltipOverlay.classList.remove('active');
+      clearTimeout(tooltipTimer);
+    });
+
+    // ==========================================
+    // AGREGAR ARTICULO
+    // ==========================================
+    const addItemModal = document.getElementById('addItemModal');
+    const addItemSearch = document.getElementById('addItemSearch');
+    const addItemList = document.getElementById('addItemList');
+
+    document.getElementById('btnAddItem').addEventListener('click', () => {
+      addItemSearch.value = '';
+      renderAddItemList('');
+      addItemModal.classList.add('active');
+      setTimeout(() => addItemSearch.focus(), 100);
+    });
+
+    document.getElementById('addItemClose').addEventListener('click', () => {
+      addItemModal.classList.remove('active');
+    });
+
+    addItemModal.addEventListener('click', (e) => {
+      if (e.target === addItemModal) addItemModal.classList.remove('active');
+    });
+
+    addItemSearch.addEventListener('input', () => {
+      renderAddItemList(addItemSearch.value.trim().toLowerCase());
+    });
+
+    function renderAddItemList(filter) {
+      let filtered = sheetsAllItems;
+      if (filter) {
+        filtered = sheetsAllItems.filter(it =>
+          it.nombre.toLowerCase().includes(filter) ||
+          it.codigo.toLowerCase().includes(filter)
+        );
+      }
+
+      // Limitar a 50 resultados para rendimiento
+      const limited = filtered.slice(0, 50);
+
+      addItemList.innerHTML = limited.map(it =>
+        '<div class="add-item-option" data-codigo="' + escapeHtml(it.codigo) + '">' +
+        (it.imagen ? '<img src="' + escapeHtml(it.imagen) + '" loading="lazy">' : '<div style="width:36px;height:36px;background:#eee;border-radius:4px"></div>') +
+        '<div><div class="opt-name">' + escapeHtml(it.nombre) + '</div><div class="opt-code">' + escapeHtml(it.codigo) + '</div></div>' +
+        '</div>'
+      ).join('');
+
+      if (limited.length === 0) {
+        addItemList.innerHTML = '<div style="padding:20px;text-align:center;color:#999">Sin resultados</div>';
+      }
+    }
+
+    addItemList.addEventListener('click', (e) => {
+      const option = e.target.closest('.add-item-option');
+      if (!option) return;
+
+      const codigo = option.dataset.codigo;
+      const info = sheetsData[codigo];
+      if (!info || !pedidoActual) return;
+
+      // Verificar si ya existe en el pedido
+      const existente = pedidoActual.items.find(it => it.codigo === codigo);
+      if (existente) {
+        existente.cantidad = (existente.cantidad || 1) + 1;
+        showToast('Cantidad aumentada: ' + info.nombre);
+      } else {
+        pedidoActual.items.push({
+          codigo,
+          nombre: info.nombre,
+          cantidad: 1,
+          valorU: 0,
+          valorC: 0
+        });
+        showToast('Agregado: ' + info.nombre);
+      }
+
+      addItemModal.classList.remove('active');
+      renderPedido();
+      cargarLocalStorage();
+    });
+
+    // ==========================================
+    // NOTA Y COMENTARIOS (localStorage)
+    // ==========================================
+    const notaSelect = document.getElementById('notaSelect');
+    const comentarioArea = document.getElementById('comentarioArea');
+    const notaFechaContainer = document.getElementById('notaFechaContainer');
+
+    notaSelect.addEventListener('change', () => {
+      saveLocalData();
+    });
+
+    comentarioArea.addEventListener('input', () => {
+      saveLocalData();
+    });
+
+    function getLocalKey() {
+      return 'despachos_' + pedidoId;
+    }
+
+    function saveLocalData() {
+      if (!pedidoId) return;
+      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      existing.nota = notaSelect.value;
+      existing.notaFecha = Date.now();
+      existing.comentarios = comentarioArea.value;
+      // Preservar checkedItems
+      if (!existing.checkedItems) existing.checkedItems = {};
+      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+      renderNotaFecha(existing.notaFecha);
+    }
+
+    function saveCheckedToLocal(codigo, checked) {
+      if (!pedidoId) return;
+      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      if (!existing.checkedItems) existing.checkedItems = {};
+      existing.checkedItems[codigo] = checked;
+      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+    }
+
+    function isItemChecked(codigo) {
+      if (!pedidoId) return false;
+      const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      return data.checkedItems && data.checkedItems[codigo] === true;
+    }
+
+    function cargarLocalStorage() {
+      if (!pedidoId) return;
+      const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+
+      // Nota
+      if (data.nota) {
+        notaSelect.value = data.nota;
+      } else {
+        notaSelect.value = '---';
+      }
+
+      // Fecha nota
+      renderNotaFecha(data.notaFecha);
+
+      // Comentarios
+      comentarioArea.value = data.comentarios || '';
+    }
+
+    function renderNotaFecha(ts) {
+      if (ts) {
+        const d = new Date(ts);
+        notaFechaContainer.textContent = 'Actualizado: ' + d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      } else {
+        notaFechaContainer.textContent = '';
+      }
+    }
+
+    // ==========================================
+    // GUARDAR DESPACHO
+    // ==========================================
+    document.getElementById('btnSave').addEventListener('click', () => {
+      document.getElementById('saveModal').classList.add('active');
+    });
+
+    document.getElementById('saveCancel').addEventListener('click', () => {
+      document.getElementById('saveModal').classList.remove('active');
+    });
+
+    document.getElementById('saveConfirm').addEventListener('click', async () => {
+      document.getElementById('saveModal').classList.remove('active');
+      if (!pedidoActual || !pedidoId) return;
+
+      const btnSave = document.getElementById('btnSave');
+      btnSave.disabled = true;
+      btnSave.textContent = 'Guardando...';
+
+      try {
+        await db.ref('pedidos/' + pedidoId).update({
+          items: pedidoActual.items,
+          lastUpdated: Date.now()
+        });
+
+        showToast('Despacho guardado correctamente');
+        btnSave.textContent = 'Guardar Despacho';
+        btnSave.disabled = false;
+      } catch (err) {
+        showToast('Error al guardar: ' + err.message);
+        btnSave.textContent = 'Guardar Despacho';
+        btnSave.disabled = false;
+        console.error(err);
+      }
+    });
+
+    // ==========================================
+    // UTILIDADES
+    // ==========================================
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg) {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }
+
+    // ==========================================
+    // PARAMETRO URL AUTOMATICO
+    // ==========================================
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (id) {
+        pedidoInput.value = id;
+        cargarPedido(id);
+      }
+    })();
+  </script>
+</body>
+</html>
