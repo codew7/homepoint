@@ -266,19 +266,37 @@
       font-weight: 500;
     }
 
-    .item-qty {
-      width: 50px;
-      text-align: center;
-      padding: 7px 4px;
+    .qty-control {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .qty-btn {
+      background: #f1f5f9;
       border: 1.5px solid #e2e8f0;
-      border-radius: 10px;
+      border-radius: 7px;
+      width: 32px;
+      height: 22px;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #475569;
+      transition: all .12s;
+      line-height: 1;
+      user-select: none;
+    }
+    .qty-btn:active { background: #dbeafe; border-color: #2563eb; color: #2563eb; transform: scale(.88); }
+    .qty-value {
       font-size: 15px;
       font-weight: 700;
       color: #1e293b;
-      background: #f8fafc;
-      transition: border-color .2s, box-shadow .2s;
+      min-width: 32px;
+      text-align: center;
     }
-    .item-qty:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); outline: none; }
 
     /* Custom checkbox */
     .item-check {
@@ -605,6 +623,7 @@
     <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off">
     <button id="btnBuscar">Buscar</button>
     <button id="btnQR">QR</button>
+    <button id="btnInstall" style="display:none" title="Instalar app">📲</button>
   </div>
 
   <!-- QR SCANNER -->
@@ -1009,7 +1028,11 @@
 
         // Cantidad
         if (!isBlocked) {
-          html += '<input type="number" class="item-qty" value="' + (it.cantidad || 1) + '" min="1" onchange="updateQty(' + idx + ', this.value)">';
+          html += '<div class="qty-control">' +
+            '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)">▲</button>' +
+            '<span class="qty-value">' + (it.cantidad || 1) + '</span>' +
+            '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)">▼</button>' +
+            '</div>';
         } else {
           html += '<span style="font-weight:600;font-size:15px;padding:0 8px;">' + (it.cantidad || 1) + '</span>';
         }
@@ -1044,13 +1067,17 @@
       counter.textContent = items.length + ' items (' + total + ' u.)';
     }
 
-    function updateQty(idx, val) {
-      const qty = parseInt(val, 10) || 1;
-      if (pedidoActual && pedidoActual.items && pedidoActual.items[idx]) {
-        pedidoActual.items[idx].cantidad = qty;
-        actualizarContador();
-        programarAutoGuardado({ items: pedidoActual.items });
+    function cambiarQty(idx, delta) {
+      if (!pedidoActual || !pedidoActual.items[idx]) return;
+      const qty = Math.max(1, (pedidoActual.items[idx].cantidad || 1) + delta);
+      pedidoActual.items[idx].cantidad = qty;
+      const card = document.querySelector('.item-card[data-idx="' + idx + '"]');
+      if (card) {
+        const display = card.querySelector('.qty-value');
+        if (display) display.textContent = qty;
       }
+      actualizarContador();
+      programarAutoGuardado({ items: pedidoActual.items });
     }
 
     // Toggle checkbox empaquetado
@@ -1348,6 +1375,31 @@
         cargarPedido(id);
       }
     })();
+
+    // ==========================================
+    // INSTALACION PWA
+    // ==========================================
+    let deferredPrompt = null;
+    const btnInstall = document.getElementById('btnInstall');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btnInstall.style.display = 'block';
+    });
+
+    btnInstall.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      btnInstall.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      btnInstall.style.display = 'none';
+    });
 
     // ==========================================
     // REGISTRO SERVICE WORKER (PWA)
