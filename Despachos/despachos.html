@@ -1039,9 +1039,38 @@
       .main-content { padding: 20px 24px 28px; max-width: 720px; margin: 0 auto; }
       .footer-controls { max-width: 720px; margin: 0 auto; }
     }
+
+    /* Auth loading overlay */
+    .auth-loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      transition: opacity .3s var(--ease-out);
+    }
+    .auth-loading.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .auth-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
   </style>
 </head>
 <body>
+
+  <!-- AUTH LOADING OVERLAY -->
+  <div class="auth-loading" id="authLoading">
+    <div class="auth-spinner"></div>
+  </div>
 
   <!-- HEADER -->
   <div class="header">
@@ -1139,6 +1168,7 @@
   <!-- Firebase + Config -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="config.js"></script>
 
@@ -1148,6 +1178,22 @@
     // ==========================================
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+
+    // ==========================================
+    // AUTENTICACION
+    // ==========================================
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) {
+        const currentUrl = encodeURIComponent(window.location.href);
+        window.location.href = '../Admin/login.html?redirect=' + currentUrl;
+        return;
+      }
+      const authLoading = document.getElementById('authLoading');
+      if (authLoading) {
+        authLoading.classList.add('hide');
+        setTimeout(() => authLoading.remove(), 300);
+      }
+    });
 
     // Estado global
     let pedidoActual = null;
