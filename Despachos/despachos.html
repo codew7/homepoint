@@ -1040,6 +1040,62 @@
       .footer-controls { max-width: 720px; margin: 0 auto; }
     }
 
+    /* =========================================
+       SEARCH DROPDOWN (HISTORIAL)
+       ========================================= */
+    .search-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: var(--header-from);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 200;
+      box-shadow: 0 8px 28px rgba(0,0,0,.35);
+      display: none;
+    }
+    .search-dropdown.active { display: block; }
+    .search-dropdown-header {
+      padding: 7px 14px 5px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.28);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .search-dropdown-item {
+      padding: 9px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      transition: background .12s;
+    }
+    .search-dropdown-item:last-child { border-bottom: none; }
+    .search-dropdown-item:hover { background: rgba(255,255,255,.08); }
+    .search-dropdown-item:active { background: rgba(255,255,255,.14); }
+    .search-dropdown-id {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 90px;
+    }
+    .search-dropdown-nombre {
+      font-size: 12px;
+      color: rgba(255,255,255,.65);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+
     /* Auth loading overlay */
     .auth-loading {
       position: fixed;
@@ -1081,6 +1137,7 @@
     <div class="header-search">
       <span class="search-icon">&#128270;</span>
       <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off">
+      <div class="search-dropdown" id="searchDropdown"></div>
     </div>
     <div class="header-actions">
       <button class="header-btn header-btn--accent" id="btnBuscar">Buscar</button>
@@ -1208,6 +1265,46 @@
     let autoSaveTimer = null;
     let realtimeListener = null;
 
+    // ==========================================
+    // HISTORIAL DE BUSQUEDA
+    // ==========================================
+    const HISTORIAL_KEY = 'despachos_historial';
+
+    function getHistorial() {
+      return JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+    }
+
+    function saveToHistorial(id, nombre) {
+      let hist = getHistorial();
+      hist = hist.filter(h => h.id !== id);
+      hist.unshift({ id, nombre: nombre || 'Sin nombre' });
+      hist = hist.slice(0, 10);
+      localStorage.setItem(HISTORIAL_KEY, JSON.stringify(hist));
+    }
+
+    const searchDropdown = document.getElementById('searchDropdown');
+
+    function renderSearchDropdown() {
+      const hist = getHistorial();
+      if (hist.length === 0) {
+        searchDropdown.classList.remove('active');
+        return;
+      }
+      searchDropdown.innerHTML =
+        '<div class="search-dropdown-header">Recientes</div>' +
+        hist.map(h =>
+          '<div class="search-dropdown-item" data-id="' + escapeHtml(h.id) + '">' +
+          '<span class="search-dropdown-id">' + escapeHtml(h.id) + '</span>' +
+          '<span class="search-dropdown-nombre">' + escapeHtml(h.nombre) + '</span>' +
+          '</div>'
+        ).join('');
+      searchDropdown.classList.add('active');
+    }
+
+    function hideSearchDropdown() {
+      searchDropdown.classList.remove('active');
+    }
+
     function programarAutoGuardado(cambios) {
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(async () => {
@@ -1271,8 +1368,31 @@
     pedidoInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const id = pedidoInput.value.trim();
-        if (id) cargarPedido(id);
+        if (id) { hideSearchDropdown(); cargarPedido(id); }
       }
+      if (e.key === 'Escape') hideSearchDropdown();
+    });
+
+    pedidoInput.addEventListener('focus', () => {
+      renderSearchDropdown();
+    });
+
+    pedidoInput.addEventListener('blur', () => {
+      setTimeout(hideSearchDropdown, 160);
+    });
+
+    searchDropdown.addEventListener('mousedown', (e) => {
+      // Evitar que el blur del input se dispare antes del click
+      e.preventDefault();
+    });
+
+    searchDropdown.addEventListener('click', (e) => {
+      const item = e.target.closest('.search-dropdown-item');
+      if (!item) return;
+      const id = item.dataset.id;
+      pedidoInput.value = id;
+      hideSearchDropdown();
+      cargarPedido(id);
     });
 
     // ==========================================
@@ -1369,6 +1489,7 @@
           statusBar.style.display = 'block';
         }
 
+        saveToHistorial(id, (pedidoActual.cliente || {}).nombre);
         renderPedido();
         footer.style.display = isBlocked ? 'none' : 'block';
         cargarLocalStorage();
