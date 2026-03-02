@@ -83,7 +83,7 @@
       flex-shrink: 0;
       z-index: 10;
       position: relative;
-      overflow: hidden;
+      overflow: visible;
     }
     .header::before {
       content: '';
@@ -250,6 +250,110 @@
     }
     #qr-reader-container .qr-close:hover { background: rgba(255,255,255,.18); }
     #qr-reader-container .qr-close:active { transform: scale(.95); }
+
+    /* =========================================
+       PEDIDOS PANEL
+       ========================================= */
+    .pedidos-panel {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15,23,42,.45);
+      z-index: 800;
+      align-items: flex-end;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+    .pedidos-panel.active { display: flex; }
+    .pedidos-panel-box {
+      background: var(--surface);
+      width: 100%;
+      max-width: 600px;
+      max-height: 80vh;
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      display: flex;
+      flex-direction: column;
+      animation: slideUp .35s var(--ease-out);
+      box-shadow: 0 -12px 40px rgba(0,0,0,.1);
+    }
+    .pedidos-panel-header {
+      padding: 20px 16px 12px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+    .pedidos-panel-header::before {
+      content: '';
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+    }
+    .pedidos-panel-header h3 {
+      font-size: 15px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text);
+    }
+    .pedidos-panel-close {
+      background: var(--bg);
+      border: none;
+      font-size: 20px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      transition: all .15s;
+      line-height: 1;
+    }
+    .pedidos-panel-close:hover { background: var(--border); color: var(--text); }
+    .pedidos-panel-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .pedidos-panel-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: background .12s;
+    }
+    .pedidos-panel-item:active { background: var(--accent-soft); }
+    .pedidos-panel-nombre {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+    .pedidos-panel-loading {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .pedidos-panel-empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 500;
+    }
 
     /* =========================================
        STATUS BAR
@@ -814,11 +918,11 @@
     .btn-add-item:hover { background: var(--accent-soft); }
     .btn-add-item:active { transform: scale(.97); }
 
-    .btn-listo {
+    .btn-impresion {
       flex: 1;
-      background: var(--success-soft);
-      color: var(--success);
-      border: 2px solid var(--success);
+      background: var(--accent);
+      color: #fff;
+      border: 2px solid var(--accent);
       border-radius: var(--radius-md);
       padding: 12px;
       font-size: 13px;
@@ -828,14 +932,61 @@
       transition: all .25s var(--ease-out);
       text-transform: uppercase;
       letter-spacing: .5px;
+      box-shadow: 0 2px 8px rgba(230,126,34,.25);
     }
-    .btn-listo.active {
-      background: var(--success);
-      color: #fff;
-      box-shadow: 0 4px 16px var(--success-glow);
-      border-color: transparent;
+    .btn-impresion:hover { background: #d4711f; border-color: #d4711f; }
+    .btn-impresion:active { transform: scale(.96); }
+
+    .print-menu-wrap { position: relative; flex: 1; }
+
+    .print-menu {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      z-index: 100;
+      border: 1px solid var(--border);
+      animation: fadeSlideIn .2s var(--ease-out);
     }
-    .btn-listo:active { transform: scale(.96); }
+    .print-menu.active { display: block; }
+    .print-menu-item {
+      padding: 13px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-ui);
+      color: var(--text);
+      cursor: pointer;
+      transition: background .12s;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .print-menu-item:last-child { border-bottom: none; }
+    .print-menu-item:hover { background: var(--accent-soft); }
+    .print-menu-item:active { background: var(--accent-soft); color: var(--accent); }
+
+    .rotulo-qty-input {
+      width: 80px;
+      padding: 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 18px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      background: var(--surface-warm);
+      color: var(--text);
+      margin-bottom: 20px;
+      transition: all .2s var(--ease-out);
+    }
+    .rotulo-qty-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
 
     .nota-select {
       flex: 1;
@@ -870,6 +1021,81 @@
       box-shadow: 0 0 0 3px var(--accent-glow);
       outline: none;
     }
+
+    .footer-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 6px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .footer-handle:active { background: var(--accent); }
+    .footer-drawer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .35s var(--ease-out);
+    }
+    .footer-drawer.open {
+      max-height: 320px;
+    }
+    .footer-drawer-inner {
+      padding: 0 0 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .footer-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      background: var(--surface-warm);
+      color: var(--text);
+      transition: all .2s var(--ease-out);
+      outline: none;
+    }
+    .footer-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .btn-faltantes {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1.5px solid var(--danger);
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--font-ui);
+      background: var(--danger-soft);
+      color: var(--danger);
+      cursor: pointer;
+      transition: all .2s var(--ease-out);
+      text-transform: uppercase;
+      letter-spacing: .3px;
+    }
+    .btn-faltantes:not(:disabled):active { transform: scale(.97); }
+    .btn-faltantes-clear {
+      width: 36px;
+      height: 36px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-warm);
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .btn-faltantes-clear:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+    .btn-faltantes-clear:active { transform: scale(.9); }
 
     /* =========================================
        ADD ITEM MODAL
@@ -1141,6 +1367,7 @@
     </div>
     <div class="header-actions">
       <button class="header-btn header-btn--accent" id="btnBuscar">Buscar</button>
+      <button class="header-btn" id="btnPedidos">Pedidos</button>
       <button class="header-btn" id="btnQR">QR</button>
       <button id="btnInstall" style="display:none" title="Instalar app">&#128242;</button>
     </div>
@@ -1166,27 +1393,59 @@
 
   <!-- FOOTER CONTROLES -->
   <div class="footer-controls" id="footerControls" style="display:none">
+    <div class="footer-handle" id="footerHandle"></div>
+    <div class="footer-drawer" id="footerDrawer">
+      <div class="footer-drawer-inner">
+        <div class="footer-row">
+          <select class="nota-select" id="notaSelect">
+            <option value="">---</option>
+            <option value="esperando respuesta">Esperando respuesta</option>
+            <option value="esperando cierre">Esperando cierre</option>
+            <option value="espera cotización">Espera cotización</option>
+            <option value="esperando pago">Esperando pago</option>
+            <option value="pago">Pago</option>
+            <option value="retira">Retira</option>
+            <option value="respuesta pendiente">Respuesta Pendiente</option>
+            <option value="no responde">No responde</option>
+            <option value="no cumple minimo">No cumple minimo</option>
+            <option value="???">???</option>
+          </select>
+        </div>
+        <div class="footer-row">
+          <textarea class="comentario-area" id="comentarioArea" placeholder="Comentarios del despacho..."></textarea>
+        </div>
+        <div class="footer-row">
+          <input type="text" class="footer-input" id="tamanoInput" placeholder="Tamano...">
+          <input type="text" class="footer-input" id="pesoInput" placeholder="Peso...">
+        </div>
+        <div class="footer-row">
+          <button class="btn-faltantes" id="btnFaltantes" disabled>Sin faltantes</button>
+          <button class="btn-faltantes-clear" id="btnFaltantesClear" title="Limpiar faltantes">&times;</button>
+        </div>
+      </div>
+    </div>
     <div class="footer-row">
       <button class="btn-add-item" id="btnAddItem">+ Agregar articulo</button>
-      <button class="btn-listo" id="btnListo">Listo</button>
+      <div class="print-menu-wrap">
+        <button class="btn-impresion" id="btnImpresion">Impresion</button>
+        <div class="print-menu" id="printMenu">
+          <div class="print-menu-item" id="printFactura">&#129534; Imprimir Factura</div>
+          <div class="print-menu-item" id="printRotulo">&#127991;&#65039; Imprimir Rotulo</div>
+        </div>
+      </div>
     </div>
-    <div class="footer-row">
-      <select class="nota-select" id="notaSelect">
-        <option value="">---</option>
-        <option value="esperando respuesta">Esperando respuesta</option>
-        <option value="esperando cierre">Esperando cierre</option>
-        <option value="espera cotización">Espera cotización</option>
-        <option value="esperando pago">Esperando pago</option>
-        <option value="pago">Pago</option>
-        <option value="retira">Retira</option>
-        <option value="respuesta pendiente">Respuesta Pendiente</option>
-        <option value="no responde">No responde</option>
-        <option value="no cumple minimo">No cumple minimo</option>
-        <option value="???">???</option>
-      </select>
-    </div>
-    <div class="footer-row">
-      <textarea class="comentario-area" id="comentarioArea" placeholder="Comentarios del despacho..."></textarea>
+  </div>
+
+  <!-- PEDIDOS PANEL -->
+  <div class="pedidos-panel" id="pedidosPanel">
+    <div class="pedidos-panel-box">
+      <div class="pedidos-panel-header">
+        <h3>Pedidos pendientes</h3>
+        <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
+      </div>
+      <div class="pedidos-panel-list" id="pedidosPanelList">
+        <div class="pedidos-panel-empty">Presiona "Pedidos" para cargar</div>
+      </div>
     </div>
   </div>
 
@@ -1207,6 +1466,18 @@
       <div class="modal-btns">
         <button class="btn-cancel" id="deleteCancel">Cancelar</button>
         <button class="btn-danger" id="deleteConfirm">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ROTULOS -->
+  <div class="modal-backdrop" id="rotuloModal">
+    <div class="modal-box">
+      <p>Cantidad de rotulos a imprimir?</p>
+      <input type="number" id="rotuloCantidad" value="1" min="1" max="20" class="rotulo-qty-input">
+      <div class="modal-btns">
+        <button class="btn-cancel" id="rotuloCancel">Cancelar</button>
+        <button class="btn-primary" id="rotuloConfirm">Imprimir</button>
       </div>
     </div>
   </div>
@@ -1516,7 +1787,6 @@
           JSON.stringify(nuevoPedido.cliente) !== JSON.stringify(pedidoActual.cliente) ||
           nuevoPedido.tipoPago !== pedidoActual.tipoPago ||
           nuevoPedido.tipoEntrega !== pedidoActual.tipoEntrega;
-
         if (!itemsChanged && !statusChanged && !notaChanged && !clienteChanged) return;
 
         pedidoActual = nuevoPedido;
@@ -1775,8 +2045,12 @@
       document.getElementById('deleteModal').classList.remove('active');
       if (deleteIdx < 0 || !pedidoActual) return;
 
+      const itemEliminado = pedidoActual.items[deleteIdx];
       pedidoActual.items.splice(deleteIdx, 1);
       deleteIdx = -1;
+
+      // Registrar en log de faltantes (localStorage)
+      guardarFaltante(itemEliminado);
 
       // Eliminar de Firebase inmediatamente
       try {
@@ -1785,12 +2059,88 @@
           lastUpdated: Date.now()
         });
         renderPedido();
-        cargarLocalStorage(); // Re-aplicar checks
+        cargarLocalStorage();
         showToast('Articulo eliminado');
       } catch (err) {
         showToast('Error al eliminar');
         console.error(err);
       }
+    });
+
+    function guardarFaltante(item) {
+      if (!pedidoId || !item) return;
+      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      if (!existing.faltantes) existing.faltantes = [];
+      existing.faltantes.push({
+        nombre: item.nombre || '',
+        codigo: item.codigo || '',
+        cantidad: item.cantidad || 1
+      });
+      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+      actualizarBtnFaltantes();
+    }
+
+    function getFaltantes() {
+      if (!pedidoId) return [];
+      const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      return data.faltantes || [];
+    }
+
+    function limpiarFaltantes() {
+      if (!pedidoId) return;
+      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
+      existing.faltantes = [];
+      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+      actualizarBtnFaltantes();
+    }
+
+    function formatearFaltantes() {
+      const faltantes = getFaltantes();
+      if (faltantes.length === 0) return '';
+      let texto = 'Articulos faltantes:\n';
+      faltantes.forEach(f => {
+        texto += '- ' + f.nombre + ' (x' + f.cantidad + ')\n';
+      });
+      return texto.trim();
+    }
+
+    async function copiarFaltantes() {
+      const texto = formatearFaltantes();
+      if (!texto) {
+        showToast('No hay faltantes registrados');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(texto);
+        showToast('Faltantes copiados al portapapeles');
+      } catch (err) {
+        // Fallback para navegadores sin clipboard API
+        const ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('Faltantes copiados al portapapeles');
+      }
+    }
+
+    function actualizarBtnFaltantes() {
+      const btn = document.getElementById('btnFaltantes');
+      if (!btn) return;
+      const count = getFaltantes().length;
+      btn.textContent = count > 0 ? 'Copiar faltantes (' + count + ')' : 'Sin faltantes';
+      btn.disabled = count === 0;
+      btn.style.opacity = count === 0 ? '.5' : '1';
+    }
+
+    document.getElementById('btnFaltantes').addEventListener('click', copiarFaltantes);
+
+    document.getElementById('btnFaltantesClear').addEventListener('click', () => {
+      limpiarFaltantes();
+      showToast('Faltantes limpiados');
     });
 
     // ==========================================
@@ -1975,39 +2325,289 @@
       const localData = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
       comentarioArea.value = localData.comentario || '';
 
-      // Estado del boton Listo
-      aplicarEstadoListo();
+      // Tamano y peso desde localStorage
+      tamanoInput.value = localData.tamano || '';
+      pesoInput.value = localData.peso || '';
+
+      // Actualizar boton faltantes
+      actualizarBtnFaltantes();
     }
 
     // ==========================================
-    // BOTON LISTO (indicador localStorage)
+    // DRAWER DEL FOOTER (swipe + tap)
     // ==========================================
-    const btnListo = document.getElementById('btnListo');
+    const footerDrawer = document.getElementById('footerDrawer');
+    const footerHandle = document.getElementById('footerHandle');
 
-    function getListo() {
-      const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      return data.listo === true;
-    }
+    function toggleDrawer() { footerDrawer.classList.toggle('open'); }
+    function openDrawer() { footerDrawer.classList.add('open'); }
+    function closeDrawer() { footerDrawer.classList.remove('open'); }
 
-    function setListo(value) {
+    footerHandle.addEventListener('click', toggleDrawer);
+
+    let touchStartY = 0;
+    document.getElementById('footerControls').addEventListener('touchstart', (e) => {
+      touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    document.getElementById('footerControls').addEventListener('touchend', (e) => {
+      const diff = touchStartY - e.changedTouches[0].screenY;
+      if (diff > 40) openDrawer();
+      if (diff < -40) closeDrawer();
+    }, { passive: true });
+
+    // ==========================================
+    // CAMPOS TAMANO Y PESO (localStorage)
+    // ==========================================
+    const tamanoInput = document.getElementById('tamanoInput');
+    const pesoInput = document.getElementById('pesoInput');
+
+    function saveTamanoYPesoToLocal() {
+      if (!pedidoId) return;
       const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      existing.listo = value;
+      existing.tamano = tamanoInput.value;
+      existing.peso = pesoInput.value;
       localStorage.setItem(getLocalKey(), JSON.stringify(existing));
     }
 
-    function aplicarEstadoListo() {
-      if (getListo()) {
-        btnListo.classList.add('active');
-      } else {
-        btnListo.classList.remove('active');
+    tamanoInput.addEventListener('input', saveTamanoYPesoToLocal);
+    pesoInput.addEventListener('input', saveTamanoYPesoToLocal);
+
+    // ==========================================
+    // PANEL DE PEDIDOS (ABIERTO / CERRADO)
+    // ==========================================
+    const pedidosPanel = document.getElementById('pedidosPanel');
+    const pedidosPanelList = document.getElementById('pedidosPanelList');
+
+    document.getElementById('btnPedidos').addEventListener('click', () => {
+      pedidosPanel.classList.add('active');
+      cargarPedidosPendientes();
+    });
+
+    document.getElementById('pedidosPanelClose').addEventListener('click', () => {
+      pedidosPanel.classList.remove('active');
+    });
+
+    pedidosPanel.addEventListener('click', (e) => {
+      if (e.target === pedidosPanel) pedidosPanel.classList.remove('active');
+    });
+
+    async function cargarPedidosPendientes() {
+      pedidosPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando pedidos...</div>';
+
+      try {
+        // Consulta 1: status ABIERTO
+        const snapAbierto = await db.ref('pedidos')
+          .orderByChild('status')
+          .equalTo('ABIERTO')
+          .once('value');
+
+        // Consulta 2: status CERRADO
+        const snapCerrado = await db.ref('pedidos')
+          .orderByChild('status')
+          .equalTo('CERRADO')
+          .once('value');
+
+        const pedidos = [];
+
+        snapAbierto.forEach(child => {
+          const p = child.val();
+          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status });
+        });
+
+        snapCerrado.forEach(child => {
+          const p = child.val();
+          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status });
+        });
+
+        if (pedidos.length === 0) {
+          pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
+          return;
+        }
+
+        pedidosPanelList.innerHTML = pedidos.map(p =>
+          '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
+          '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+          '<span class="status-badge ' + getStatusClass(p.status) + '">' + emojiStatus(p.status) + escapeHtml(p.status) + '</span>' +
+          '</div>'
+        ).join('');
+      } catch (err) {
+        console.error('Error cargando pedidos:', err);
+        pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">Error al cargar pedidos</div>';
       }
     }
 
-    btnListo.addEventListener('click', () => {
-      const nuevoEstado = !btnListo.classList.contains('active');
-      setListo(nuevoEstado);
-      aplicarEstadoListo();
+    pedidosPanelList.addEventListener('click', (e) => {
+      const item = e.target.closest('.pedidos-panel-item');
+      if (!item) return;
+      const id = item.dataset.id;
+      pedidosPanel.classList.remove('active');
+      pedidoInput.value = id;
+      cargarPedido(id);
     });
+
+    // ==========================================
+    // MENU IMPRESION
+    // ==========================================
+    const btnImpresion = document.getElementById('btnImpresion');
+    const printMenu = document.getElementById('printMenu');
+
+    btnImpresion.addEventListener('click', (e) => {
+      e.stopPropagation();
+      printMenu.classList.toggle('active');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!printMenu.contains(e.target) && e.target !== btnImpresion) {
+        printMenu.classList.remove('active');
+      }
+    });
+
+    // Imprimir Factura
+    document.getElementById('printFactura').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      imprimirFactura();
+    });
+
+    // Imprimir Rotulo
+    document.getElementById('printRotulo').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      document.getElementById('rotuloModal').classList.add('active');
+      document.getElementById('rotuloCantidad').value = 1;
+    });
+
+    document.getElementById('rotuloCancel').addEventListener('click', () => {
+      document.getElementById('rotuloModal').classList.remove('active');
+    });
+
+    document.getElementById('rotuloConfirm').addEventListener('click', () => {
+      const cant = Math.max(1, Math.min(20, parseInt(document.getElementById('rotuloCantidad').value) || 1));
+      document.getElementById('rotuloModal').classList.remove('active');
+      imprimirRotulo(cant);
+    });
+
+    // ==========================================
+    // FUNCION IMPRIMIR FACTURA
+    // (Replica exacta de ingresoPedido.js)
+    // ==========================================
+    function imprimirFactura() {
+      if (!pedidoActual) return;
+      const cliente = pedidoActual.cliente || {};
+      const pagos = pedidoActual.pagos || {};
+      const items = pedidoActual.items || [];
+
+      const formatNum = (v) => {
+        if (v === undefined || v === null || v === '') return '';
+        const n = parseInt(String(v).replace(/\D/g, ''), 10);
+        return isNaN(n) ? '' : n.toLocaleString('es-AR');
+      };
+
+      let itemsHtml = '';
+      items.forEach(it => {
+        itemsHtml += '<tr><td>' + escapeHtml(it.codigo || '') + '</td><td>' + escapeHtml(it.nombre || '') + '</td><td style="text-align:right;">' + (it.cantidad || '') + '</td><td style="text-align:right;">' + formatNum(it.valorU) + '</td><td style="text-align:right;">' + formatNum((it.cantidad || 0) * (it.valorU || 0)) + '</td></tr>';
+      });
+
+      const reciboHtml = '<!DOCTYPE html><html><head><title>Orden de Pedido</title>' +
+        '<style>' +
+        'body { font-family: "Courier New", Courier, monospace; color: #111; background: #fff; }' +
+        '.recibo-box { margin: 0 auto; border: 1px dashed #333; padding: 24px 18px; background: #fff; }' +
+        'h2 { text-align: left; font-size: 1.3em; margin: 0 0 12px 0; }' +
+        'table { width: 100%; border-collapse: collapse; margin: 12px 0; }' +
+        'th, td { border-bottom: 1px dotted #aaa; padding: 4px 2px; font-size: 0.90em; }' +
+        'th { background: #eee; font-weight: bold; text-align: left; }' +
+        '.totales td { border: none; font-weight: bold; }' +
+        '.label { width: 110px; display: inline-block; }' +
+        '@media print { button { display: none !important; } }' +
+        '</style></head><body>' +
+        '<div class="recibo-box">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<h2 style="margin:0;">Orden de Pedido</h2>' +
+        '<img src="logo.png" alt="Logo" style="height:48px;max-width:180px;object-fit:contain;" onerror="this.style.display=\'none\'">' +
+        '</div>' +
+        '<div style="font-size:0.90em; margin-bottom: 5px;">' + new Date().toLocaleString('es-AR', { hour12: false }) + '</div>' +
+        '<div><span class="label">Nombre:</span> ' + escapeHtml(cliente.nombre || '') + '</div>' +
+        '<div><span class="label">Telefono:</span> ' + escapeHtml(cliente.telefono || '') + '</div>' +
+        '<div><span class="label">Direccion:</span> ' + escapeHtml(cliente.direccion || '') + '</div>' +
+        '<div><span class="label">DNI:</span> ' + escapeHtml(cliente.dni || '') + '</div>' +
+        '<div><span class="label">Email:</span> ' + escapeHtml(cliente.email || '') + '</div>' +
+        '<div><span class="label">Tipo:</span> ' + escapeHtml(cliente.tipoCliente || '') + '</div>' +
+        '<hr style="margin:10px 0;">' +
+        '<table><thead><tr><th>Cod</th><th>Articulo</th><th>Cant</th><th>Valor</th><th>Total</th></tr></thead><tbody>' +
+        itemsHtml +
+        '</tbody></table>' +
+        '<table>' +
+        '<tr class="totales"><td>Subtotal</td><td style="text-align:right;">' + formatNum(pagos.subtotal) + '</td></tr>' +
+        '<tr class="totales"><td>Medio de Pago</td><td style="text-align:right;">' + escapeHtml(pagos.medioPago || '') + '</td></tr>' +
+        '<tr class="totales"><td>Recargo</td><td style="text-align:right;">' + formatNum(pagos.recargo) + '</td></tr>' +
+        '<tr class="totales"><td>Descuento</td><td style="text-align:right;">' + formatNum(pagos.descuento) + '</td></tr>' +
+        '<tr class="totales"><td>Costo de Envio</td><td style="text-align:right;">' + formatNum(pagos.envio) + '</td></tr>' +
+        '<tr class="totales"><td>Total</td><td style="text-align:right;font-size:1.1em;">' + formatNum(pagos.totalFinal) + '</td></tr>' +
+        '</table></div>' +
+        '<script>window.onload = function(){ window.print(); }<\/script>' +
+        '</body></html>';
+
+      const w = window.open('', '_blank', 'width=600,height=800');
+      w.document.write(reciboHtml);
+      w.document.close();
+    }
+
+    // ==========================================
+    // FUNCION IMPRIMIR ROTULO
+    // ==========================================
+    function imprimirRotulo(cantidad) {
+      if (!pedidoActual) return;
+      const cliente = pedidoActual.cliente || {};
+
+      let rotuloHtml = '';
+      for (let i = 0; i < cantidad; i++) {
+        rotuloHtml += '<div class="rotulo">' +
+          '<div class="rotulo-inner">' +
+          '<div class="rotulo-dest">' +
+          '<div class="rotulo-title">Destinatario</div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Nombre</span><span class="rotulo-value">' + escapeHtml(cliente.nombre || '') + '</span></div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Direccion</span><span class="rotulo-value">' + escapeHtml(cliente.direccion || '') + '</span></div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Localidad</span><span class="rotulo-value">' + escapeHtml(cliente.localidad || '') + '</span></div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Provincia</span><span class="rotulo-value">' + escapeHtml(cliente.provincia || '') + '</span></div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Telefono</span><span class="rotulo-value">' + escapeHtml(cliente.telefono || '') + '</span></div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">DNI</span><span class="rotulo-value">' + escapeHtml(cliente.dni || '') + '</span></div>' +
+          '<div class="rotulo-entrega"><span class="rotulo-label">Entrega</span><span class="rotulo-value">' + escapeHtml(pedidoActual.tipoEntrega || '') + '</span></div>' +
+          '</div>' +
+          '<div class="rotulo-rem">' +
+          '<div class="rotulo-title">Remitente</div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Nombre</span><span class="rotulo-value">Javier Romero Perez</span></div>' +
+          '<div class="rotulo-field"><span class="rotulo-label">Telefono</span><span class="rotulo-value">11-1111-1111</span></div>' +
+          '</div>' +
+          '</div>' +
+          '</div>';
+      }
+
+      const html = '<!DOCTYPE html><html><head><title>Rotulos de Envio</title>' +
+        '<style>' +
+        '@page { size: A4; margin: 12mm; }' +
+        'body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }' +
+        '.rotulos-grid { display: flex; flex-direction: column; gap: 10mm; }' +
+        '.rotulo { border: 2px dashed #333; border-radius: 6px; padding: 20px 28px; break-inside: avoid; page-break-inside: avoid; }' +
+        '.rotulo-inner { display: flex; gap: 24px; align-items: stretch; }' +
+        '.rotulo-dest { flex: 1; }' +
+        '.rotulo-rem { width: 220px; flex-shrink: 0; background: #f5f5f5; border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: center; }' +
+        '.rotulo-section { margin-bottom: 12px; }' +
+        '.rotulo-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #555; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 12px; }' +
+        '.rotulo-field { font-size: 17px; margin-bottom: 6px; line-height: 1.4; }' +
+        '.rotulo-label { font-weight: bold; display: inline-block; min-width: 100px; font-size: 11px; text-transform: uppercase; color: #555; vertical-align: middle; }' +
+        '.rotulo-value { font-size: 17px; font-weight: 600; vertical-align: middle; }' +
+        '.rotulo-entrega { font-size: 15px; font-weight: bold; margin: 14px 0; padding: 8px 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }' +
+        '.rotulo-entrega .rotulo-label { font-size: 11px; }' +
+        '.rotulo-entrega .rotulo-value { font-size: 16px; }' +
+        '@media print { button { display: none !important; } }' +
+        '</style></head><body>' +
+        '<div class="rotulos-grid">' + rotuloHtml + '</div>' +
+        '<script>window.onload = function(){ window.print(); }<\/script>' +
+        '</body></html>';
+
+      const w = window.open('', '_blank', 'width=800,height=900');
+      w.document.write(html);
+      w.document.close();
+    }
 
     // ==========================================
     // UTILIDADES
