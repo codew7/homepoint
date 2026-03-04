@@ -1524,13 +1524,13 @@
 
   <!-- HEADER -->
   <div class="header">
-    <div class="header-brand">
+    <div class="header-brand" id="headerBrand" style="cursor:pointer">
       <div class="brand-mark"><img src="faviconblanco.png" alt="Logo"></div>
       <h1>Despacho</h1>
     </div>
     <div class="header-search">
       <span class="search-icon">&#128270;</span>
-      <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off">
+      <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off" inputmode="none">
       <div class="search-dropdown" id="searchDropdown"></div>
     </div>
     <div class="header-actions">
@@ -1815,6 +1815,30 @@
     // ==========================================
     const pedidoInput = document.getElementById('pedidoInput');
     const btnQR = document.getElementById('btnQR');
+
+    function resetView() {
+      if (realtimeListener && pedidoId) {
+        db.ref('pedidos/' + pedidoId).off('value', realtimeListener);
+        realtimeListener = null;
+      }
+      clearTimeout(autoSaveTimer);
+      pedidoActual = null;
+      pedidoId = null;
+      isBlocked = false;
+      pedidoInput.value = '';
+      hideSearchDropdown();
+      document.getElementById('statusBar').className = 'status-bar';
+      document.getElementById('statusBar').style.display = 'none';
+      document.getElementById('footerControls').style.display = 'none';
+      document.getElementById('mainContent').innerHTML =
+        '<div class="welcome-screen" id="welcomeScreen">' +
+        '<div class="welcome-icon">&#128230;</div>' +
+        '<p>Ingresa o escanea un ID de pedido para comenzar</p>' +
+        '<span class="welcome-hint">Usa el boton QR para escanear</span>' +
+        '</div>';
+    }
+
+    document.getElementById('headerBrand').addEventListener('click', resetView);
 
     pedidoInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
