@@ -2722,14 +2722,15 @@
 
       const formatNum = (v) => {
         if (v === undefined || v === null || v === '') return '';
-        const n = parseInt(String(v).replace(/\D/g, ''), 10);
-        return isNaN(n) ? '' : n.toLocaleString('es-AR');
+        const n = parseFloat(v);
+        return isNaN(n) ? '' : Math.round(n).toLocaleString('es-AR');
       };
 
       let itemsHtml = '';
       items.forEach(it => {
         itemsHtml += '<tr><td>' + escapeHtml(it.codigo || '') + '</td><td>' + escapeHtml(it.nombre || '') + '</td><td style="text-align:right;">' + (it.cantidad || '') + '</td><td style="text-align:right;">' + formatNum(it.valorU) + '</td><td style="text-align:right;">' + formatNum((it.cantidad || 0) * (it.valorU || 0)) + '</td></tr>';
       });
+      const subtotal = items.reduce((s, it) => s + (it.cantidad || 0) * (it.valorU || 0), 0);
 
       const reciboHtml = '<!DOCTYPE html><html><head><title>Orden de Pedido</title>' +
         '<style>' +
@@ -2754,17 +2755,16 @@
         '<div><span class="label">Direccion:</span> ' + escapeHtml(cliente.direccion || '') + '</div>' +
         '<div><span class="label">DNI:</span> ' + escapeHtml(cliente.dni || '') + '</div>' +
         '<div><span class="label">Email:</span> ' + escapeHtml(cliente.email || '') + '</div>' +
-        '<div><span class="label">Tipo:</span> ' + escapeHtml(cliente.tipoCliente || '') + '</div>' +
         '<hr style="margin:10px 0;">' +
         '<table><thead><tr><th>Cod</th><th>Articulo</th><th>Cant</th><th>Valor</th><th>Total</th></tr></thead><tbody>' +
         itemsHtml +
         '</tbody></table>' +
         '<table>' +
-        '<tr class="totales"><td>Subtotal</td><td style="text-align:right;">' + formatNum(pagos.subtotal) + '</td></tr>' +
-        '<tr class="totales"><td>Medio de Pago</td><td style="text-align:right;">' + escapeHtml(pagos.medioPago || '') + '</td></tr>' +
-        '<tr class="totales"><td>Recargo</td><td style="text-align:right;">' + formatNum(pagos.recargo) + '</td></tr>' +
-        '<tr class="totales"><td>Descuento</td><td style="text-align:right;">' + formatNum(pagos.descuento) + '</td></tr>' +
-        '<tr class="totales"><td>Costo de Envio</td><td style="text-align:right;">' + formatNum(pagos.envio) + '</td></tr>' +
+        '<tr class="totales"><td>Subtotal</td><td style="text-align:right;">' + formatNum(subtotal) + '</td></tr>' +
+        '<tr class="totales"><td>Medio de Pago</td><td style="text-align:right;">' + escapeHtml(pedidoActual.tipoPago || '') + '</td></tr>' +
+        (pagos.recargo ? '<tr class="totales"><td>Recargo</td><td style="text-align:right;">' + formatNum(pagos.recargo) + '</td></tr>' : '') +
+        (pagos.descuento ? '<tr class="totales"><td>Descuento</td><td style="text-align:right;">' + formatNum(pagos.descuento) + '</td></tr>' : '') +
+        (pagos.envio ? '<tr class="totales"><td>Costo de Envio</td><td style="text-align:right;">' + formatNum(pagos.envio) + '</td></tr>' : '') +
         '<tr class="totales"><td>Total</td><td style="text-align:right;font-size:1.1em;">' + formatNum(pagos.totalFinal) + '</td></tr>' +
         '</table></div>' +
         '<script>window.onload = function(){ window.print(); }<\/script>' +
