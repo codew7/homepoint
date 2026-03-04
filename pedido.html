@@ -838,41 +838,35 @@ let admin = false; // Declarar admin al principio para evitar errores de hoistin
       mostrarAvisoPopup();
     }, 500);
     
-    // Solo activar listener en tiempo real si el pedido está abierto y no despachado/cancelado
-    if (!pedidoActual.locked && 
-        pedidoActual.status !== 'DESPACHADO/ENTREGADO' && 
-        pedidoActual.status !== 'CANCELADO') {
-      activarListenerTiempoReal();
-    }
+    // Activar listener en tiempo real siempre para reflejar cambios al instante
+    activarListenerTiempoReal();
   }
 
-  // Función para activar listener en tiempo real (solo para pedidos abiertos)
+  // Función para activar listener en tiempo real
   function activarListenerTiempoReal() {
     if (listenerActivo) return; // Ya está activo
-    
+
     listenerActivo = (snap) => {
       const pedidoNuevo = snap.val();
       if (!pedidoNuevo) return;
-      
-      // Solo actualizar si hay cambios relevantes
-      const cambiosRelevantes = 
+
+      // Detectar cualquier cambio relevante para la UI
+      const cambiosRelevantes =
         JSON.stringify(pedidoNuevo.items) !== JSON.stringify(pedidoActual.items) ||
         pedidoNuevo.status !== pedidoActual.status ||
-        pedidoNuevo.locked !== pedidoActual.locked;
-      
+        pedidoNuevo.locked !== pedidoActual.locked ||
+        pedidoNuevo.tipoPago !== pedidoActual.tipoPago ||
+        pedidoNuevo.tipoEntrega !== pedidoActual.tipoEntrega ||
+        pedidoNuevo.nota !== pedidoActual.nota ||
+        JSON.stringify(pedidoNuevo.pagos) !== JSON.stringify(pedidoActual.pagos) ||
+        JSON.stringify(pedidoNuevo.cliente) !== JSON.stringify(pedidoActual.cliente);
+
       if (cambiosRelevantes) {
         pedidoActual = pedidoNuevo;
         procesarPedidoCargado();
       }
-      
-      // Desactivar listener si el pedido se cierra o despacha
-      if (pedidoNuevo.locked || 
-          pedidoNuevo.status === 'DESPACHADO/ENTREGADO' || 
-          pedidoNuevo.status === 'CANCELADO') {
-        desactivarListenerTiempoReal();
-      }
     };
-    
+
     pedidoRef.on('value', listenerActivo);
     console.log('Listener en tiempo real activado');
   }
