@@ -1391,6 +1391,25 @@
       to { opacity: 1; }
     }
 
+    /* Sin stock highlight */
+    .item-card.sin-stock {
+      background: #fffbeb;
+    }
+    .item-card.sin-stock.checked {
+      background: var(--success-soft);
+    }
+    .item-stock {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-left: 8px;
+      letter-spacing: .2px;
+    }
+    .item-stock.stock-low {
+      color: #b8860b;
+    }
+
     /* Empty state */
     .empty-items {
       text-align: center;
@@ -1768,10 +1787,12 @@
           if (!codigo) return;
           const imagenRaw = row[1] || '';
           const imagenes = imagenRaw.split(',').map(u => u.trim()).filter(Boolean);
+          const stockRaw = (row[10] || '').trim();
           sheetsData[codigo] = {
             imagen: imagenes[0] || '',
             nombre: (row[3] || '').trim(),
-            codigoBarras: (row[11] || '').trim()
+            codigoBarras: (row[11] || '').trim(),
+            stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
           };
           sheetsAllItems.push({
             codigo,
@@ -2082,9 +2103,11 @@
         const sheetInfo = sheetsData[it.codigo] || {};
         const imgUrl = sheetInfo.imagen || '';
         const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
+        const sinStock = sheetInfo.stock !== null && sheetInfo.stock !== undefined && Number.isFinite(sheetInfo.stock) && sheetInfo.stock <= 0;
+        const sinStockClass = sinStock ? ' sin-stock' : '';
         const delay = Math.min(idx * 0.03, 0.3);
 
-        html += '<div class="item-card' + checkedClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
+        html += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
 
         // Imagen
         if (imgUrl) {
@@ -2096,7 +2119,11 @@
         // Info
         html += '<div class="item-info">';
         html += '<div class="item-name" onclick="showTooltip(event, \'' + escapeHtml(it.codigo || '') + '\')">' + escapeHtml(it.nombre || 'Sin nombre') + '</div>';
-        html += '<div class="item-code">' + escapeHtml(it.codigo || '') + '</div>';
+        const stockVal = sheetInfo.stock;
+        const stockDisplay = (stockVal !== null && stockVal !== undefined && Number.isFinite(stockVal))
+          ? '<span class="item-stock' + (stockVal <= 0 ? ' stock-low' : '') + '">stk: ' + stockVal + '</span>'
+          : '';
+        html += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
         html += '</div>';
 
         // Cantidad
