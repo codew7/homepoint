@@ -1967,6 +1967,8 @@ function getTipoCliente() {
     });
   }
 
+  /* FUNCIÓN PARA ACTUALIZAR RECARGO AUTOMÁTICO SEGÚN MEDIO DE PAGO DESACTIVADA
+
   // Detectar cambio de medio de pago y aplicar recargo automático si corresponde
   function actualizarRecargoAutomatico() {
     if (form.medioPago.value === 'MercadoPago') {
@@ -1985,7 +1987,7 @@ function getTipoCliente() {
     }
   }
 
-  form.medioPago.addEventListener('change', function() {
+  /* form.medioPago.addEventListener('change', function() {
     actualizarRecargoAutomatico();
     calcularTotalFinal();
   });
@@ -2005,6 +2007,8 @@ function getTipoCliente() {
     clearTimeout(recargoTimeout);
     recargoTimeout = setTimeout(recalcularYActualizarRecargoSiMedioPago, 100);
   }
+    
+  */
 
   // Llamar a la función después de cada cambio relevante solo si es necesario
   // Al modificar descuentos/envío (mantener directo)
