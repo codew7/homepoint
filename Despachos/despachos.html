@@ -2842,11 +2842,27 @@
     // FUNCION IMPRIMIR FACTURA
     // (Replica exacta de ingresoPedido.js)
     // ==========================================
-    function imprimirFactura() {
-      if (!pedidoActual) return;
-      const cliente = pedidoActual.cliente || {};
-      const pagos = pedidoActual.pagos || {};
-      const items = pedidoActual.items || [];
+    async function imprimirFactura() {
+      if (!pedidoActual || !pedidoId) return;
+
+      // Obtener datos frescos de Firebase antes de imprimir
+      let pedidoFresh;
+      try {
+        const snap = await db.ref('pedidos/' + pedidoId).once('value');
+        pedidoFresh = snap.val();
+        if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
+        // Actualizar estado local con los datos mas recientes
+        pedidoActual = pedidoFresh;
+        pedidoActual.id = pedidoId;
+      } catch (err) {
+        showToast('Error al cargar datos para imprimir');
+        console.error(err);
+        return;
+      }
+
+      const cliente = pedidoFresh.cliente || {};
+      const pagos = pedidoFresh.pagos || {};
+      const items = pedidoFresh.items || [];
 
       const formatNum = (v) => {
         if (v === undefined || v === null || v === '') return '';
@@ -2889,7 +2905,7 @@
         '</tbody></table>' +
         '<table>' +
         '<tr class="totales"><td>Subtotal</td><td style="text-align:right;">' + formatNum(subtotal) + '</td></tr>' +
-        '<tr class="totales"><td>Medio de Pago</td><td style="text-align:right;">' + escapeHtml(pedidoActual.tipoPago || '') + '</td></tr>' +
+        '<tr class="totales"><td>Medio de Pago</td><td style="text-align:right;">' + escapeHtml(pedidoFresh.tipoPago || '') + '</td></tr>' +
         (pagos.recargo ? '<tr class="totales"><td>Recargo</td><td style="text-align:right;">' + formatNum(pagos.recargo) + '</td></tr>' : '') +
         (pagos.descuento ? '<tr class="totales"><td>Descuento</td><td style="text-align:right;">' + formatNum(pagos.descuento) + '</td></tr>' : '') +
         (pagos.envio ? '<tr class="totales"><td>Costo de Envio</td><td style="text-align:right;">' + formatNum(pagos.envio) + '</td></tr>' : '') +
