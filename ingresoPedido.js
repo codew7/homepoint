@@ -205,8 +205,56 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
-  // Cargar cotización al inicializar
+  // Cargar cotización al inicializar y actualizar cada 30 minutos
   cargarCotizacionDolar();
+  setInterval(cargarCotizacionDolar, 30 * 60 * 1000);
+
+  // === DIF%USD DESDE GOOGLE SHEETS (Dolar!C2) ===
+  const difUSDValorElement = document.getElementById('difUSDValor');
+  function cargarDifUSD() {
+    if (!difUSDValorElement) return;
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Dolar!C2?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`)
+      .then(response => response.json())
+      .then(data => {
+        const valor = data.values && data.values[0] && data.values[0][0];
+        if (valor !== undefined && valor !== '') {
+          difUSDValorElement.textContent = valor;
+          const numerico = parseFloat(String(valor).replace(',', '.'));
+          if (!isNaN(numerico) && numerico < 0) {
+            difUSDValorElement.style.color = '#dc3545';
+            mostrarAlertaDifUSD(true);
+          } else {
+            difUSDValorElement.style.color = '#28a745';
+            mostrarAlertaDifUSD(false);
+          }
+        } else {
+          difUSDValorElement.textContent = 'No disponible';
+          difUSDValorElement.style.color = '#dc3545';
+        }
+      })
+      .catch(() => {
+        difUSDValorElement.textContent = 'Error al cargar';
+        difUSDValorElement.style.color = '#dc3545';
+      });
+  }
+
+  function mostrarAlertaDifUSD(mostrar) {
+    let banner = document.getElementById('alertaDifUSD');
+    if (mostrar) {
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'alertaDifUSD';
+        banner.textContent = 'ATENCIÓN: Cotización USD desfavorable. Revisar precios';
+        banner.style.cssText = 'background:#dc3545;color:#000;font-weight:700;text-align:center;padding:10px 16px;font-size:1rem;letter-spacing:0.02em;position:sticky;top:0;z-index:9999;';
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
+    } else {
+      if (banner) banner.remove();
+    }
+  }
+
+  cargarDifUSD();
+  setInterval(cargarDifUSD, 30 * 60 * 1000);
 
   // === CARGA DE ARTÍCULOS DESDE GOOGLE SHEETS ===
   let articulosDisponibles = [];
