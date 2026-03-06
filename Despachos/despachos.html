@@ -64,6 +64,7 @@
       background: var(--bg);
       color: var(--text);
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -1655,14 +1656,14 @@
     </div>
     <div class="footer-row">
       <button class="btn-add-item" id="btnAddItem">+ Agregar</button>
+      <button class="btn-terminar" id="btnTerminar">Terminar</button>
       <div class="print-menu-wrap">
         <button class="btn-impresion" id="btnImpresion">Impresion</button>
         <div class="print-menu" id="printMenu">
-          <div class="print-menu-item" id="printFactura">&#129534; Imprimir Factura</div>
-          <div class="print-menu-item" id="printRotulo">&#127991;&#65039; Imprimir Rotulo</div>
+          <div class="print-menu-item" id="printRotulo">&#127991;&#65039; Rotulo</div>
+          <div class="print-menu-item" id="printFactura">&#129534; Factura</div>
         </div>
       </div>
-      <button class="btn-terminar" id="btnTerminar">Terminar</button>
     </div>
   </div>
 
@@ -2302,15 +2303,23 @@
 
       if (checked) {
         if (card) card.classList.add('checked');
-        // Primera vez que se marca un item: registrar enPreparacion en Firebase
-        if (pedidoActual.enPreparacion !== 'si') {
-          pedidoActual.enPreparacion = 'si';
-          db.ref('pedidos/' + pedidoId).update({ enPreparacion: 'si' }).catch(err => {
-            console.error('Error al guardar enPreparacion:', err);
-          });
-        }
       } else {
         if (card) card.classList.remove('checked');
+      }
+
+      // Si estaba "listo", cualquier cambio de check lo vuelve a "si"
+      if (pedidoActual.enPreparacion === 'listo') {
+        pedidoActual.enPreparacion = 'si';
+        actualizarBtnTerminar();
+        db.ref('pedidos/' + pedidoId).update({ enPreparacion: 'si' }).catch(err => {
+          console.error('Error al guardar enPreparacion:', err);
+        });
+      } else if (checked && pedidoActual.enPreparacion !== 'si') {
+        // Primera vez que se marca un item: registrar enPreparacion en Firebase
+        pedidoActual.enPreparacion = 'si';
+        db.ref('pedidos/' + pedidoId).update({ enPreparacion: 'si' }).catch(err => {
+          console.error('Error al guardar enPreparacion:', err);
+        });
       }
 
       saveCheckedToLocal(codigo, checked);
@@ -3044,6 +3053,24 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').catch(() => {});
       });
+    }
+
+    // ==========================================
+    // FIX VIEWPORT DINAMICO (mobile)
+    // Corrige el footer oculto cuando la barra
+    // del navegador o teclado virtual cambian
+    // la altura visible real del viewport.
+    // ==========================================
+    function ajustarAlturaViewport() {
+      const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      document.body.style.height = h + 'px';
+    }
+
+    ajustarAlturaViewport();
+    window.addEventListener('resize', ajustarAlturaViewport);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', ajustarAlturaViewport);
+      window.visualViewport.addEventListener('scroll', ajustarAlturaViewport);
     }
   </script>
 </body>
