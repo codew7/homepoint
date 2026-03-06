@@ -988,6 +988,11 @@
     }
     .btn-terminar:hover { background: var(--bg); }
     .btn-terminar:active { transform: scale(.96); }
+    .btn-terminar:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
     .btn-terminar.listo {
       background: var(--success);
       color: #fff;
@@ -995,6 +1000,17 @@
       box-shadow: 0 2px 8px rgba(45,159,111,.3);
     }
     .btn-terminar.listo:hover { background: #268a5f; }
+    .btn-terminar.completo:not(.listo) {
+      border-width: 3px;
+      border-color: var(--success);
+      color: var(--success);
+      box-shadow: 0 0 0 3px var(--success-glow), 0 2px 8px var(--success-glow);
+      animation: pulsoListo 2s var(--ease-out) infinite;
+    }
+    @keyframes pulsoListo {
+      0%, 100% { box-shadow: 0 0 0 3px var(--success-glow), 0 2px 8px var(--success-glow); }
+      50%       { box-shadow: 0 0 0 6px var(--success-glow), 0 4px 16px rgba(45,159,111,.25); }
+    }
 
     .print-menu {
       display: none;
@@ -2193,7 +2209,7 @@
 
       // HEADER ITEMS
       const totalItems = items.reduce((s, it) => s + (it.cantidad || 0), 0);
-      html += '<div class="items-header"><h2>Articulos</h2><span class="items-counter">' + items.length + ' items \u00B7 ' + totalItems + ' u.</span></div>';
+      html += '<div class="items-header"><h2>Articulos</h2><span class="items-counter" style="cursor:pointer" onclick="copiarLinkPedido()">' + items.length + ' items \u00B7 ' + totalItems + ' u.</span></div>';
 
       // ITEMS
       items.forEach((it, idx) => {
@@ -2250,6 +2266,7 @@
       }
 
       mainContent.innerHTML = html;
+      actualizarProgreso();
     }
 
     // ==========================================
@@ -2279,6 +2296,12 @@
       if (label) {
         label.textContent = pct + '%';
         label.classList.toggle('complete', isComplete);
+      }
+      const btnTerminar = document.getElementById('btnTerminar');
+      if (btnTerminar) {
+        btnTerminar.classList.toggle('completo', isComplete);
+        // Habilitado si todos los checks están listos O si ya estaba en estado 'listo' (para poder revertirlo)
+        btnTerminar.disabled = !isComplete && pedidoActual.enPreparacion !== 'listo';
       }
     }
 
@@ -2989,6 +3012,28 @@
       const w = window.open('', '_blank', 'width=800,height=900');
       w.document.write(html);
       w.document.close();
+    }
+
+    // ==========================================
+    // COPIAR LINK DEL PEDIDO
+    // ==========================================
+    async function copiarLinkPedido() {
+      if (!pedidoId) return;
+      const url = 'https://home-point.com.ar/pedidos.html?id=' + pedidoId;
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copiado');
+      } catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('Link copiado');
+      }
     }
 
     // ==========================================
