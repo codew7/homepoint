@@ -698,7 +698,38 @@
   <script>
     // Variable para bloquear la interfaz durante procesos críticos de Firebase
     let procesoCriticoEnEjecucion = false;
-    
+
+    // Estado de conexión persistente — se actualiza en tiempo real
+    let firebaseConectado = false;
+    db.ref('.info/connected').on('value', snap => {
+      firebaseConectado = snap.val() === true;
+    });
+
+    // Verificar conexión activa con Firebase antes de escribir
+    async function verificarConexionFirebase(timeoutMs = 5000) {
+      // Si ya sabemos que está conectado, retornar inmediatamente
+      if (firebaseConectado) return true;
+      // Si no, esperar a que se conecte (o timeout)
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), timeoutMs);
+        const unsub = db.ref('.info/connected').on('value', snap => {
+          if (snap.val() === true) {
+            clearTimeout(timer);
+            db.ref('.info/connected').off('value', unsub);
+            resolve(true);
+          }
+        });
+      });
+    }
+
+    // Envolver promesa con timeout
+    function conTimeout(promise, ms, msg) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+      ]);
+    }
+
     // Prevenir cierre de ventana durante procesos críticos
     window.addEventListener('beforeunload', function(e) {
       if (procesoCriticoEnEjecucion) {
@@ -891,9 +922,26 @@
         // BLOQUEAR INTERFAZ durante proceso crítico
         const mensajeBloqueo = tipo === 'ENTRADA' ? 'Registrando ingreso de stock...' : 'Registrando retiro de stock...';
         bloquearInterfaz(mensajeBloqueo);
-        
-        // Registrar movimiento y obtener el key generado
-        const newId = await registrarMovimiento(mov);
+
+        // Verificar conexión con Firebase antes de escribir
+        let conectado = false;
+        try {
+          conectado = await verificarConexionFirebase(5000);
+        } catch (_) {
+          conectado = false;
+        }
+        if (!conectado) {
+          desbloquearInterfaz();
+          mostrarFeedback('Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.', 'error');
+          return;
+        }
+
+        // Registrar movimiento con verificación de escritura
+        const newId = await conTimeout(
+          registrarMovimiento(mov),
+          15000,
+          'Timeout: la escritura tardó demasiado. Verifica tu conexión.'
+        );
 
         // Agregar al array local para mostrar en tiempo real sin releer Firebase
         movimientos.unshift({ ...mov, _id: newId });
@@ -903,13 +951,13 @@
         if (codigo && document.getElementById('codigo').value === codigo) {
           await cargarStockDisponible(codigo);
         }
-        
+
         // DESBLOQUEAR INTERFAZ después de completar proceso
         desbloquearInterfaz();
-        
-        const mensaje = tipo === 'ENTRADA' ? 'Stock agregado exitosamente!' : 'Stock retirado exitosamente!';
+
+        const mensaje = tipo === 'ENTRADA' ? 'Stock agregado y verificado en Firebase!' : 'Stock retirado y verificado en Firebase!';
         mostrarFeedback(mensaje, 'success');
-        
+
         // Solo limpiar cantidad, mantener producto seleccionado para facilitar múltiples operaciones
         document.getElementById('cantidad').value = '';
         document.getElementById('cantidad').focus();
@@ -917,7 +965,7 @@
         // DESBLOQUEAR INTERFAZ en caso de error
         desbloquearInterfaz();
         console.error('Error al procesar movimiento:', e);
-        mostrarFeedback('Error al registrar movimiento', 'error');
+        mostrarFeedback('Error: ' + e.message, 'error');
       }
     }
 
@@ -1182,14 +1230,26 @@
       }
     }
 
-    // Registrar movimiento en Firebase (solo en nodo 'movimientos', sin actualizar nodo 'stock')
+    // Registrar movimiento en Firebase con verificación de escritura
     async function registrarMovimiento(mov) {
       try {
         const ref = db.ref('movimientos').push();
         await ref.set(mov);
-        return ref.key; // Retornar el key para actualizar el array local
+
+        // Verificar que los datos se guardaron correctamente leyendo de vuelta
+        const snap = await ref.once('value');
+        if (!snap.exists()) {
+          throw new Error('El registro no se encontró en Firebase después de guardar');
+        }
+        const saved = snap.val();
+        if (saved.timestamp !== mov.timestamp || saved.codigo !== mov.codigo) {
+          throw new Error('Los datos guardados no coinciden con los enviados');
+        }
+
+        console.log('Movimiento verificado en Firebase:', ref.key);
+        return ref.key;
       } catch (error) {
-        console.error('❌ Error en registrarMovimiento:', error);
+        console.error('Error en registrarMovimiento:', error);
         throw error;
       }
     }
@@ -1329,14 +1389,45 @@
       renderTabla();
     }
 
-    // Eliminar movimiento
-    window.eliminarMovimiento = function(id) {
+    // Eliminar movimiento con verificación
+    window.eliminarMovimiento = async function(id) {
       if (!confirm('¿Seguro que deseas eliminar este movimiento?')) return;
-      db.ref('movimientos/' + id).remove();
-      // Sincronizar array local para que la tabla se actualice sin releer Firebase
-      movimientos = movimientos.filter(m => m._id !== id);
-      filtrarMovimientos();
-      mostrarFeedback('Movimiento eliminado','success');
+
+      try {
+        bloquearInterfaz('Eliminando movimiento...');
+
+        // Verificar conexión
+        let conectado = false;
+        try {
+          conectado = await verificarConexionFirebase(5000);
+        } catch (_) {
+          conectado = false;
+        }
+        if (!conectado) {
+          desbloquearInterfaz();
+          mostrarFeedback('Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.', 'error');
+          return;
+        }
+
+        const ref = db.ref('movimientos/' + id);
+        await conTimeout(ref.remove(), 15000, 'Timeout al eliminar. Verifica tu conexión.');
+
+        // Verificar que se eliminó correctamente
+        const snap = await ref.once('value');
+        if (snap.exists()) {
+          throw new Error('El registro sigue existiendo después de intentar eliminarlo');
+        }
+
+        // Sincronizar array local
+        movimientos = movimientos.filter(m => m._id !== id);
+        filtrarMovimientos();
+        desbloquearInterfaz();
+        mostrarFeedback('Movimiento eliminado y verificado en Firebase', 'success');
+      } catch (e) {
+        desbloquearInterfaz();
+        console.error('Error al eliminar movimiento:', e);
+        mostrarFeedback('Error al eliminar: ' + e.message, 'error');
+      }
     }
 
     // Editar movimiento (modal inline)
