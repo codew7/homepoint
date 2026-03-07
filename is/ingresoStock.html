@@ -367,6 +367,16 @@
             padding:20px 14px;text-align:center;
             color:var(--text-dim);font-size:0.8rem;
         }
+        .history-delete-btn{
+            width:28px;height:28px;border-radius:6px;
+            background:var(--danger-glow);border:1px solid transparent;
+            color:var(--danger);font-size:1.1rem;line-height:1;
+            cursor:pointer;display:flex;align-items:center;justify-content:center;
+            flex-shrink:0;transition:all 0.15s;padding:0;
+            font-family:var(--font);
+        }
+        .history-delete-btn:active{background:var(--danger);color:#fff;border-color:var(--danger)}
+        .history-delete-btn:disabled{opacity:0.4;cursor:not-allowed}
 
         /* ========= SCANNER OVERLAY ========= */
         .scanner-overlay{
@@ -857,6 +867,48 @@ firebase.auth().onAuthStateChanged(user => {
 });
 
 // ============================================================
+//  Firebase Write Safety — conexión + verificación
+// ============================================================
+let procesoCriticoEnEjecucion = false;
+
+window.addEventListener('beforeunload', function(e) {
+    if (procesoCriticoEnEjecucion) {
+        e.preventDefault();
+        e.returnValue = 'Hay un registro en curso. Si cierra la pagina, los datos pueden no guardarse.';
+        return e.returnValue;
+    }
+});
+
+// Estado de conexión persistente — se actualiza en tiempo real
+let firebaseConectado = false;
+mainDb.ref('.info/connected').on('value', snap => {
+    firebaseConectado = snap.val() === true;
+});
+
+async function verificarConexionFirebase(timeoutMs = 5000) {
+    // Si ya sabemos que está conectado, retornar inmediatamente
+    if (firebaseConectado) return true;
+    // Si no, esperar a que se conecte (o timeout)
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), timeoutMs);
+        const unsub = mainDb.ref('.info/connected').on('value', snap => {
+            if (snap.val() === true) {
+                clearTimeout(timer);
+                mainDb.ref('.info/connected').off('value', unsub);
+                resolve(true);
+            }
+        });
+    });
+}
+
+function conTimeout(promise, ms, msg) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+    ]);
+}
+
+// ============================================================
 //  State
 // ============================================================
 let articulos = [];        // from Google Sheets: { codigo, nombre, imagen }
@@ -1007,7 +1059,18 @@ function findProductsManual(input) {
             });
         }
     }
-    return codeMatches;
+    if (codeMatches.length > 0) return codeMatches;
+
+    // 4) Coincidencia por nombre de articulo
+    const nameMatches = articulos.filter(a =>
+        a.nombre.toLowerCase().includes(qLower)
+    ).slice(0, 20).map(a => ({
+        codigo: a.codigo,
+        nombre: a.nombre,
+        imagen: a.imagen,
+        codigoBarras: firebaseBarcodes[a.codigo]?.codigoBarras || ''
+    }));
+    return nameMatches;
 }
 
 // ============================================================
@@ -1023,7 +1086,19 @@ async function registerMovement(codigo, nombre, cantidad) {
     };
     const ref = mainDb.ref('movimientos').push();
     await ref.set(mov);
-    return mov;
+
+    // Verificar que los datos se guardaron correctamente
+    const snap = await ref.once('value');
+    if (!snap.exists()) {
+        throw new Error('El registro no se encontro en Firebase despues de guardar');
+    }
+    const saved = snap.val();
+    if (saved.timestamp !== mov.timestamp || saved.codigo !== mov.codigo) {
+        throw new Error('Los datos guardados no coinciden con los enviados');
+    }
+
+    console.log('Movimiento verificado en Firebase:', ref.key);
+    return { ...mov, _id: ref.key };
 }
 
 // ============================================================
@@ -1246,14 +1321,37 @@ async function confirmEntry() {
 
     const btn = document.getElementById('confirmBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span style="opacity:0.7">Registrando...</span>';
+    btn.innerHTML = '<span style="opacity:0.7">Verificando conexion...</span>';
+    procesoCriticoEnEjecucion = true;
 
     try {
-        const mov = await registerMovement(selectedProduct.codigo, selectedProduct.nombre, qty);
+        // Verificar conexión con Firebase antes de escribir
+        let conectado = false;
+        try {
+            conectado = await verificarConexionFirebase(5000);
+        } catch (_) {
+            conectado = false;
+        }
+        if (!conectado) {
+            showToast('Sin conexion a Firebase. Verifica tu internet.', true);
+            return;
+        }
+
+        btn.innerHTML = '<span style="opacity:0.7">Registrando...</span>';
+
+        // Registrar con timeout de seguridad
+        const mov = await conTimeout(
+            registerMovement(selectedProduct.codigo, selectedProduct.nombre, qty),
+            15000,
+            'Timeout: la escritura tardo demasiado. Verifica tu conexion.'
+        );
+
         // Success animation
         showSuccessStamp();
+        showToast('Entrada verificada en Firebase', false);
         // Add to session history
         sessionEntries.unshift({
+            _id: mov._id,
             nombre: selectedProduct.nombre,
             codigo: selectedProduct.codigo,
             cantidad: qty,
@@ -1266,8 +1364,9 @@ async function confirmEntry() {
         document.getElementById('manualInput').value = '';
     } catch (err) {
         console.error('Error registering:', err);
-        showToast('Error al registrar movimiento', true);
+        showToast('Error: ' + err.message, true);
     } finally {
+        procesoCriticoEnEjecucion = false;
         btn.disabled = false;
         btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Registrar Entrada';
     }
@@ -1278,7 +1377,6 @@ async function confirmEntry() {
 // ============================================================
 function renderHistory() {
     const list = document.getElementById('historyList');
-    const empty = document.getElementById('historyEmpty');
     if (sessionEntries.length === 0) {
         list.innerHTML = '<div class="history-empty" id="historyEmpty">Sin entradas registradas</div>';
         return;
@@ -1294,8 +1392,54 @@ function renderHistory() {
                 <div class="history-meta">${escapeHtml(e.codigo)} &middot; ${hh}:${mm}</div>
             </div>
             <div class="history-qty">+${e.cantidad}</div>
+            <button class="history-delete-btn" data-id="${e._id}" title="Eliminar registro">&times;</button>
         </div>`;
     }).join('');
+
+    // Event listeners para botones de eliminar
+    list.querySelectorAll('.history-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteEntry(btn.dataset.id));
+    });
+}
+
+async function deleteEntry(id) {
+    if (!id) return;
+    const entry = sessionEntries.find(e => e._id === id);
+    if (!entry) return;
+    if (!confirm('Eliminar entrada de ' + entry.nombre + ' (x' + entry.cantidad + ')?')) return;
+
+    const btn = document.querySelector(`.history-delete-btn[data-id="${id}"]`);
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    procesoCriticoEnEjecucion = true;
+
+    try {
+        let conectado = false;
+        try { conectado = await verificarConexionFirebase(5000); } catch (_) { conectado = false; }
+        if (!conectado) {
+            showToast('Sin conexion a Firebase. Verifica tu internet.', true);
+            return;
+        }
+
+        const ref = mainDb.ref('movimientos/' + id);
+        await conTimeout(ref.remove(), 15000, 'Timeout al eliminar. Verifica tu conexion.');
+
+        // Verificar que se elimino
+        const snap = await ref.once('value');
+        if (snap.exists()) {
+            throw new Error('El registro sigue existiendo despues de intentar eliminarlo');
+        }
+
+        sessionEntries = sessionEntries.filter(e => e._id !== id);
+        updateSessionCount();
+        renderHistory();
+        showToast('Registro eliminado de Firebase', false);
+    } catch (err) {
+        console.error('Error deleting:', err);
+        showToast('Error: ' + err.message, true);
+    } finally {
+        procesoCriticoEnEjecucion = false;
+        if (btn) { btn.disabled = false; btn.textContent = '×'; }
+    }
 }
 
 function clearHistory() {
