@@ -1,4 +1,4 @@
-const CACHE_NAME = 'etiquetas-v1';
+const CACHE_NAME = 'etiquetas-v2';
 const ASSETS = [
   './etiquetas.html',
   './config.js',

@@ -375,7 +375,6 @@
             gap:6px;
         }
         .label-preview .lp-date{font-family:var(--mono)}
-        .label-preview .lp-barcode{font-family:var(--mono)}
 
         /* ========= SCANNER OVERLAY ========= */
         .scanner-overlay{
@@ -666,16 +665,16 @@
             <div class="settings-row">
                 <div class="setting-field">
                     <label for="settingWidth">Ancho</label>
-                    <input type="number" id="settingWidth" value="100" min="20" max="300" step="1">
+                    <input type="number" id="settingWidth" value="70" min="20" max="300" step="1">
                     <span class="setting-unit">mm</span>
                 </div>
                 <div class="setting-field">
                     <label for="settingHeight">Alto</label>
-                    <input type="number" id="settingHeight" value="80" min="20" max="300" step="1">
+                    <input type="number" id="settingHeight" value="30" min="20" max="300" step="1">
                     <span class="setting-unit">mm</span>
                 </div>
                 <div class="setting-field">
-                    <label for="settingPerLabel">Articulos por etiqueta</label>
+                    <label for="settingPerLabel">Unidades</label>
                     <input type="number" id="settingPerLabel" value="1" min="1" max="20" step="1">
                 </div>
             </div>
@@ -706,7 +705,6 @@
                     </div>
                     <div class="lp-bottom">
                         <span id="previewCode">COD</span>
-                        <span class="lp-barcode" id="previewBarcode"></span>
                         <span class="lp-date" id="previewDate"></span>
                     </div>
                 </div>
@@ -773,8 +771,8 @@ let html5QrCode = null;
 
 // Label settings (persisted in sessionStorage)
 let labelSettings = {
-    width: 100,   // mm
-    height: 80,   // mm
+    width: 70,    // mm
+    height: 30,   // mm
     perLabel: 1   // articles per label page
 };
 
@@ -783,8 +781,8 @@ function loadSettings() {
         const saved = sessionStorage.getItem('labelSettings');
         if (saved) {
             const parsed = JSON.parse(saved);
-            labelSettings.width = parsed.width || 100;
-            labelSettings.height = parsed.height || 80;
+            labelSettings.width = parsed.width || 70;
+            labelSettings.height = parsed.height || 30;
             labelSettings.perLabel = parsed.perLabel || 1;
         }
     } catch (_) {}
@@ -794,8 +792,8 @@ function loadSettings() {
 }
 
 function saveSettings() {
-    labelSettings.width = Math.max(20, Math.min(300, parseInt(document.getElementById('settingWidth').value) || 100));
-    labelSettings.height = Math.max(20, Math.min(300, parseInt(document.getElementById('settingHeight').value) || 80));
+    labelSettings.width = Math.max(20, Math.min(300, parseInt(document.getElementById('settingWidth').value) || 70));
+    labelSettings.height = Math.max(20, Math.min(300, parseInt(document.getElementById('settingHeight').value) || 30));
     labelSettings.perLabel = Math.max(1, Math.min(20, parseInt(document.getElementById('settingPerLabel').value) || 1));
     sessionStorage.setItem('labelSettings', JSON.stringify(labelSettings));
 }
@@ -833,10 +831,12 @@ async function loadSheets() {
 function findProductsByBarcode(barcode) {
     const target = barcode.trim();
     if (!target) return [];
+    // Compare only the last 6 characters
+    const tail = target.slice(-6);
     return articulos.filter(a => {
         if (!a.codigoBarras) return false;
         const codes = a.codigoBarras.split(',').map(c => c.trim());
-        return codes.some(c => c && c === target);
+        return codes.some(c => c && c.slice(-6) === tail);
     });
 }
 
@@ -1032,7 +1032,6 @@ function updatePreview(item) {
     document.getElementById('previewCode').textContent = item.codigo;
     document.getElementById('previewPrice').textContent = formatPriceDisplay(item.precio);
     document.getElementById('previewDate').textContent = getTodayString();
-    document.getElementById('previewBarcode').textContent = item.codigoBarras || '';
 }
 
 function formatPriceDisplay(precio) {
@@ -1130,122 +1129,72 @@ function generatePDF() {
     }
 }
 
-function fitFontSize(doc, text, maxW, maxFontSize, minFontSize, fontStyle) {
-    fontStyle = fontStyle || 'bold';
-    let size = maxFontSize;
-    doc.setFont('helvetica', fontStyle);
-    doc.setFontSize(size);
-    while (doc.getTextWidth(text) > maxW && size > minFontSize) {
-        size -= 0.5;
-        doc.setFontSize(size);
-    }
-    return size;
-}
-
 function drawArticleInSlot(doc, item, x, y, slotW, slotH, today) {
-    // jsPDF uses points for font size but mm for coordinates
-    // 1mm ≈ 2.835pt — we need this to convert zone heights (mm) to max font sizes (pt)
+    // Fixed font sizes in mm, converted to pt (1mm ≈ 2.835pt)
     const MM2PT = 2.835;
+    const NAME_H_MM = 5;       // title height: 5mm
+    const PRICE_H_MM = 16;     // price height: 16mm
+    const BOTTOM_H_MM = 4;     // code/barcode/date height: 4mm
 
-    const pad = slotW * 0.035;
-    const usableW = slotW - pad * 2;
+    const namePt = NAME_H_MM * MM2PT;       // ~19.8pt
+    const pricePt = PRICE_H_MM * MM2PT;     // ~45.4pt
+    const bottomPt = BOTTOM_H_MM * MM2PT;   // ~11.3pt
 
-    // Zone heights in mm — proportional
-    const topBandH = Math.max(5, slotH * 0.18);
-    const bottomStripH = Math.max(5, slotH * 0.13);
-    const priceZoneH = slotH - topBandH - bottomStripH;
+    const pad = 2; // 2mm padding
 
-    // === TOP BAND: Product name ===
+    // === TOP BAND: Product name (7mm zone) ===
+    const topBandH = NAME_H_MM + 2; // 2mm vertical padding
     doc.setFillColor(245, 245, 245);
     doc.rect(x, y, slotW, topBandH, 'F');
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.15);
     doc.line(x, y + topBandH, x + slotW, y + topBandH);
 
-    // Name: max pt that fits height (~70% of band) and width
     doc.setFont('helvetica', 'bold');
-    const nameMaxPt = topBandH * MM2PT * 0.65;
-    let nameFontSize = nameMaxPt;
-    doc.setFontSize(nameFontSize);
-    let nameLines = doc.splitTextToSize(item.nombre, usableW);
-
-    if (nameLines.length === 1) {
-        nameFontSize = fitFontSize(doc, item.nombre, usableW, nameMaxPt, 6, 'bold');
-        doc.setFontSize(nameFontSize);
-        doc.setTextColor(20, 20, 20);
-        const nameYmm = y + topBandH / 2 + (nameFontSize / MM2PT) * 0.35;
-        doc.text(item.nombre, x + pad, nameYmm);
-    } else {
-        // 2 lines: each line uses ~45% of band height
-        const nameMaxPt2 = topBandH * MM2PT * 0.40;
-        nameFontSize = nameMaxPt2;
-        doc.setFontSize(nameFontSize);
-        nameLines = doc.splitTextToSize(item.nombre, usableW);
-        doc.setTextColor(20, 20, 20);
-        const lineHmm = nameFontSize / MM2PT * 1.15;
-        const linesUsed = Math.min(nameLines.length, 2);
-        const blockH = linesUsed * lineHmm;
-        const startY = y + (topBandH - blockH) / 2 + lineHmm * 0.75;
-        doc.text(nameLines.slice(0, 2), x + pad, startY);
+    doc.setFontSize(namePt);
+    doc.setTextColor(20, 20, 20);
+    // Truncate name if too wide
+    const usableW = slotW - pad * 2;
+    let displayName = item.nombre;
+    while (doc.getTextWidth(displayName) > usableW && displayName.length > 1) {
+        displayName = displayName.slice(0, -1);
     }
+    if (displayName.length < item.nombre.length) displayName += '…';
+    const nameBaseline = y + topBandH / 2 + (namePt / MM2PT) * 0.35;
+    doc.text(displayName, x + pad, nameBaseline);
 
-    // === PRICE ZONE — fill as much as possible ===
+    // === PRICE ZONE ===
     const priceText = formatPriceDisplay(item.precio);
-    const fullPriceStr = '$ ' + priceText;
-
-    // Max font size: limited by zone height (converted to pt) and by width
-    const priceMaxPt = priceZoneH * MM2PT * 0.72;
-    let priceFontSize = fitFontSize(doc, fullPriceStr, usableW, priceMaxPt, 10, 'bold');
+    const bottomStripH = BOTTOM_H_MM + 1.5; // 1.5mm vertical padding
+    const priceZoneTop = y + topBandH;
+    const priceZoneH = slotH - topBandH - bottomStripH;
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(priceFontSize);
-    doc.setTextColor(0, 0, 0);
-
-    // Vertically center: baseline offset is ~30% of font height in mm
-    const priceFontMm = priceFontSize / MM2PT;
-    const priceZoneTop = y + topBandH;
-    const priceBaseline = priceZoneTop + priceZoneH / 2 + priceFontMm * 0.32;
 
     // Draw $ at ~45% of price size
-    const currSizePt = priceFontSize * 0.45;
+    const currSizePt = pricePt * 0.45;
     doc.setFontSize(currSizePt);
     doc.setTextColor(50, 50, 50);
     const dollarW = doc.getTextWidth('$ ');
+    const priceBaseline = priceZoneTop + priceZoneH / 2 + (pricePt / MM2PT) * 0.32;
     doc.text('$', x + pad, priceBaseline);
 
     // Draw price number
-    doc.setFontSize(priceFontSize);
+    doc.setFontSize(pricePt);
     doc.setTextColor(0, 0, 0);
     doc.text(priceText, x + pad + dollarW, priceBaseline);
 
-    // === BOTTOM STRIP (doubled font) ===
-    const bottomMaxPt = bottomStripH * MM2PT * 1.2;
-    const bottomYmm = y + slotH - bottomStripH * 0.25;
+    // === BOTTOM STRIP: code, date (4mm font) ===
+    const bottomYmm = y + slotH - 1;
 
     // Left: codigo
-    let codeFontSize = fitFontSize(doc, item.codigo, usableW * 0.2, bottomMaxPt, 5, 'normal');
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(codeFontSize);
+    doc.setFontSize(bottomPt);
     doc.setTextColor(130, 130, 130);
     doc.text(item.codigo, x + pad, bottomYmm);
 
     // Right: date
-    let dateFontSize = fitFontSize(doc, today, usableW * 0.2, bottomMaxPt, 5, 'normal');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(dateFontSize);
     doc.text(today, x + slotW - pad, bottomYmm, { align: 'right' });
-
-    // Center: barcodes
-    if (item.codigoBarras) {
-        const barcodeStr = item.codigoBarras.split(',').map(c => c.trim()).filter(Boolean).join(' | ');
-        doc.setFontSize(codeFontSize);
-        const leftUsed = doc.getTextWidth(item.codigo) + pad + 2;
-        const rightUsed = doc.getTextWidth(today) + pad + 2;
-        const availableW = slotW - leftUsed - rightUsed;
-        let bcFontSize = fitFontSize(doc, barcodeStr, availableW, codeFontSize, 4, 'normal');
-        doc.setFontSize(bcFontSize);
-        doc.text(barcodeStr, x + slotW / 2, bottomYmm, { align: 'center' });
-    }
 }
 
 // ============================================================
