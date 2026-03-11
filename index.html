@@ -605,6 +605,114 @@
             position: relative;
         }
 
+        /* Login Overlay */
+        .login-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, var(--background) 0%, var(--gray-100) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 1rem;
+        }
+
+        .login-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            box-shadow: var(--shadow-xl);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .login-logo {
+            width: 200px;
+            height: auto;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+        }
+
+        .login-subtitle {
+            font-size: 0.875rem;
+            color: var(--gray-600);
+            margin-bottom: 2rem;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 0.6rem 0.875rem;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-family: var(--font-family);
+            transition: border-color 0.3s ease;
+            color: var(--gray-800);
+            background: var(--white);
+            box-sizing: border-box;
+        }
+
+        .login-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(108, 78, 182, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 0.875rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: var(--white);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: var(--font-family);
+            margin-top: 0.5rem;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(108, 78, 182, 0.3);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .login-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 0.75rem;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            display: none;
+            margin-bottom: 0.5rem;
+            text-align: left;
+        }
+
         /* Estilos para la sección de estado de usuario */
         .user-status-section {
             width: 100%;
@@ -654,34 +762,79 @@
             }
         }
 
-        // Función para redirigir a login con parámetro de retorno
-        function redirigirALogin() {
-            const currentUrl = encodeURIComponent(window.location.href);
-            window.location.href = `login.html?redirect=${currentUrl}`;
+        // Función para mostrar el formulario de login en la misma página
+        function mostrarLogin() {
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('mainContainer').style.display = 'none';
+            setTimeout(() => {
+                const emailInput = document.getElementById('loginEmail');
+                if (emailInput) emailInput.focus();
+            }, 100);
         }
 
-        // Timeout de seguridad: verificar autenticación después de 5 segundos
+        // Función para mostrar el panel principal
+        function mostrarPanel() {
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = '';
+        }
+
+        // Función para iniciar sesión
+        function iniciarSesion() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginSubmitBtn');
+            const errorDiv = document.getElementById('loginError');
+
+            if (!email || !password) {
+                mostrarErrorLogin('Por favor completa todos los campos');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Iniciando sesión...';
+            errorDiv.style.display = 'none';
+
+            firebase.auth().signInWithEmailAndPassword(email, password)
+                .catch(error => {
+                    btn.disabled = false;
+                    btn.textContent = 'Iniciar Sesión';
+                    let msg = 'Error al iniciar sesión';
+                    if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
+                        msg = 'Correo o contraseña incorrectos';
+                    } else if (error.code === 'auth/too-many-requests') {
+                        msg = 'Demasiados intentos. Intenta más tarde';
+                    } else if (error.code === 'auth/invalid-email') {
+                        msg = 'Correo electrónico inválido';
+                    }
+                    mostrarErrorLogin(msg);
+                });
+            // onAuthStateChanged maneja el resto si el login es exitoso
+        }
+
+        function mostrarErrorLogin(msg) {
+            const errorDiv = document.getElementById('loginError');
+            errorDiv.textContent = msg;
+            errorDiv.style.display = 'block';
+        }
+
+        // Timeout de seguridad: mostrar login después de 5 segundos si no se resolvió auth
         setTimeout(() => {
             if (!authResolved) {
-                console.warn('Timeout de autenticación - redirigiendo a login');
-                redirigirALogin();
+                console.warn('Timeout de autenticación - mostrando login');
+                mostrarLogin();
             }
         }, 5000);
 
         firebase.auth().onAuthStateChanged(user => {
             console.log('Firebase Auth State Changed:', user ? 'Usuario autenticado' : 'No hay usuario');
-            authResolved = true; // Marcar que la autenticación se resolvió
-            
+            authResolved = true;
+
             if (user) {
-                // Usuario autenticado
                 console.log('Usuario autenticado:', user.email);
-                
+
                 // Verificar si es administrador
                 if (adminEmails.includes(user.email)) {
                     admin = true;
-                    console.log('Usuario es administrador:', user.email);
-                    
-                    // Mostrar indicador de administrador
                     const adminIndicator = document.getElementById('adminIndicator');
                     const userIndicator = document.getElementById('userIndicator');
                     if (adminIndicator) {
@@ -693,15 +846,10 @@
                         userIndicator.classList.remove('show');
                     }
                 } else {
-                    // Usuario normal (no administrador)
                     admin = false;
-                    console.log('Usuario normal:', user.email);
-                    
-                    // Mostrar indicador de usuario normal
                     const adminIndicator = document.getElementById('adminIndicator');
                     const userIndicator = document.getElementById('userIndicator');
                     const userEmail = document.getElementById('userEmail');
-                    
                     if (adminIndicator) {
                         adminIndicator.style.display = 'none';
                         adminIndicator.classList.remove('show');
@@ -710,18 +858,14 @@
                         userIndicator.style.display = 'block';
                         userIndicator.classList.add('show');
                     }
-                    if (userEmail) {
-                        userEmail.textContent = user.email;
-                    }
+                    if (userEmail) userEmail.textContent = user.email;
                 }
-                
-                // Usuario autenticado, inicializar página
-                console.log('Inicializando página para usuario autenticado...');
+
+                mostrarPanel();
                 inicializarPagina();
             } else {
-                // No hay usuario autenticado, redirigir a login
-                console.log('No hay usuario autenticado, redirigiendo a login...');
-                redirigirALogin();
+                console.log('No hay usuario autenticado, mostrando login...');
+                mostrarLogin();
             }
         });
 
@@ -742,7 +886,22 @@
     </script>
     <!-- Fin Firebase Auth Check -->
 
-    <div class="container">
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay" style="display:none;">
+        <div class="login-card">
+            <img src="logo.png" alt="HomePoint Logo" class="login-logo">
+            <h1 class="login-title">Panel de Control</h1>
+            <p class="login-subtitle">Inicia sesión para continuar</p>
+            <div id="loginError" class="login-error"></div>
+            <div class="login-form">
+                <input type="email" id="loginEmail" class="login-input" placeholder="Correo electrónico" autocomplete="email">
+                <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
+                <button id="loginSubmitBtn" class="login-btn" onclick="iniciarSesion()">Iniciar Sesión</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainContainer" class="container" style="display:none;">
         <!-- Header Section -->
         <header class="header">
             <div class="logo-container">
@@ -1093,6 +1252,11 @@
 
         // Event listener para el modal
         document.addEventListener('DOMContentLoaded', function() {
+            // Soporte Enter en el formulario de login
+            ['loginEmail', 'loginPassword'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('keypress', e => { if (e.key === 'Enter') iniciarSesion(); });
+            });
             const modal = document.getElementById('authModal');
             const passwordInput = document.getElementById('passwordInput');
             const adminModal = document.getElementById('adminModal');
