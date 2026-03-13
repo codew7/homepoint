@@ -1441,33 +1441,6 @@ function closeScanner() {
     if (html5QrCode) stopScanner();
 }
 
-// Desactivar autofocus y fijar foco para lectura cercana
-async function applyFixedFocus() {
-    try {
-        const video = document.querySelector('#scannerReader video');
-        if (!video || !video.srcObject) return;
-        const track = video.srcObject.getVideoTracks()[0];
-        if (!track) return;
-        const caps = track.getCapabilities();
-        if (!caps.focusMode) return;
-
-        if (caps.focusMode.includes('manual')) {
-            const constraints = { advanced: [{ focusMode: 'manual' }] };
-            // Si soporta focusDistance, fijar a distancia cercana (~20-30cm)
-            if (caps.focusDistance) {
-                const min = caps.focusDistance.min || 0;
-                const max = caps.focusDistance.max || 1;
-                // Usar ~15% del rango (muy cercano, ~10-15cm, ideal para codigos de barras)
-                const target = min + (max - min) * 0.15;
-                constraints.advanced[0].focusDistance = target;
-            }
-            await track.applyConstraints(constraints);
-            console.log('Focus fijado en modo manual');
-        }
-    } catch (e) {
-        console.log('No se pudo fijar foco:', e);
-    }
-}
 
 const SCANNER_FORMATS = [
     Html5QrcodeSupportedFormats.EAN_13,
@@ -1498,8 +1471,6 @@ async function startScanner() {
             onScanSuccess,
             () => {}
         );
-        // Desactivar autofocus despues de iniciar la camara
-        await applyFixedFocus();
     } catch (err) {
         console.error('Scanner error:', err);
         // Fallback: si facingMode falla, intentar con enumeracion de camaras
@@ -1513,7 +1484,6 @@ async function startScanner() {
             const backCam = cameras.find(c => /back|rear|environment/i.test(c.label));
             const cameraId = backCam ? backCam.id : cameras[cameras.length - 1].id;
             await html5QrCode.start(cameraId, SCANNER_CONFIG, onScanSuccess, () => {});
-            await applyFixedFocus();
         } catch (err2) {
             console.error('Scanner fallback error:', err2);
             showToast('Error al acceder a la camara', true);
