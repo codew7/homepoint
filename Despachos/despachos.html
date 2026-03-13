@@ -1591,36 +1591,139 @@
       font-weight: 500;
     }
 
-    /* Auth loading overlay */
-    .auth-loading {
+    /* Login screen */
+    .login-screen {
       position: fixed;
       inset: 0;
+      z-index: 99999;
       background: var(--bg);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 99999;
-      transition: opacity .3s var(--ease-out);
+      padding: 20px;
+      transition: opacity .4s var(--ease-out), transform .4s var(--ease-out);
     }
-    .auth-loading.hide {
+    .login-screen.hidden {
       opacity: 0;
+      transform: scale(1.02);
       pointer-events: none;
     }
-    .auth-spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
+    .login-box {
+      width: 100%;
+      max-width: 340px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .login-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 24px var(--accent-glow);
+      overflow: hidden;
+    }
+    .login-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .login-title {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -.4px;
+      text-align: center;
+      color: var(--text);
+    }
+    .login-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: -8px;
+      text-align: center;
+      font-weight: 500;
+    }
+    .login-field {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .login-field label {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      padding-left: 2px;
+    }
+    .login-field input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: var(--font-ui);
+      outline: none;
+      transition: border-color .2s var(--ease-out), box-shadow .2s var(--ease-out);
+    }
+    .login-field input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .login-field input::placeholder { color: var(--text-muted); }
+    .login-btn {
+      width: 100%;
+      padding: 13px 0;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      font-family: var(--font-ui);
+      cursor: pointer;
+      transition: all .2s var(--ease-out);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      box-shadow: 0 3px 12px rgba(230,126,34,.25);
+    }
+    .login-btn:hover { background: #d4711f; }
+    .login-btn:active { transform: scale(.97); }
+    .login-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .login-error {
+      font-size: 12px;
+      color: var(--danger);
+      text-align: center;
+      min-height: 1.2em;
+      font-weight: 600;
     }
   </style>
 </head>
 <body>
 
-  <!-- AUTH LOADING OVERLAY -->
-  <div class="auth-loading" id="authLoading">
-    <div class="auth-spinner"></div>
+  <!-- LOGIN SCREEN -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-box">
+      <div class="login-logo"><img src="faviconblanco.png" alt="Logo"></div>
+      <div class="login-title">Despacho de Pedidos</div>
+      <div class="login-subtitle">Inicia sesion para continuar</div>
+      <div class="login-field">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="correo@ejemplo.com" autocomplete="email">
+      </div>
+      <div class="login-field">
+        <label>Contrasena</label>
+        <input type="password" id="loginPass" placeholder="Tu contrasena" autocomplete="current-password">
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <button class="login-btn" id="loginBtn">Ingresar</button>
+    </div>
   </div>
 
   <!-- HEADER -->
@@ -1793,18 +1896,50 @@
     const db = firebase.database();
 
     // ==========================================
-    // AUTENTICACION
+    // AUTENTICACION (inline)
     // ==========================================
-    firebase.auth().onAuthStateChanged(user => {
-      if (!user) {
-        const currentUrl = encodeURIComponent(window.location.href);
-        window.location.href = '../Admin/login.html?redirect=' + currentUrl;
+    function showLogin() {
+      document.getElementById('loginScreen').classList.remove('hidden');
+    }
+    function hideLogin() {
+      document.getElementById('loginScreen').classList.add('hidden');
+    }
+    function handleLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const pass = document.getElementById('loginPass').value;
+      const errorEl = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
+      if (!email || !pass) {
+        errorEl.textContent = 'Completa ambos campos';
         return;
       }
-      const authLoading = document.getElementById('authLoading');
-      if (authLoading) {
-        authLoading.classList.add('hide');
-        setTimeout(() => authLoading.remove(), 300);
+      btn.disabled = true;
+      btn.textContent = 'Ingresando...';
+      errorEl.textContent = '';
+      firebase.auth().signInWithEmailAndPassword(email, pass)
+        .catch(err => {
+          let msg = 'Error al iniciar sesion';
+          if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+            msg = 'Email o contrasena incorrectos';
+          } else if (err.code === 'auth/invalid-email') {
+            msg = 'Email invalido';
+          } else if (err.code === 'auth/too-many-requests') {
+            msg = 'Demasiados intentos. Espera un momento';
+          }
+          errorEl.textContent = msg;
+          btn.disabled = false;
+          btn.textContent = 'Ingresar';
+        });
+    }
+    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+    document.getElementById('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
+
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        hideLogin();
+      } else {
+        showLogin();
       }
     });
 
@@ -1820,6 +1955,7 @@
     let tooltipTimer = null;
     let autoSaveTimer = null;
     let realtimeListener = null;
+    let skipNextListenerUpdate = false;
 
     // ==========================================
     // HISTORIAL DE BUSQUEDA
@@ -2090,6 +2226,14 @@
       const callback = (snap) => {
         const nuevoPedido = snap.val();
         if (!nuevoPedido || !pedidoActual) return;
+
+        // Saltar re-render si el cambio fue iniciado localmente (ej: toggleCheck)
+        if (skipNextListenerUpdate) {
+          skipNextListenerUpdate = false;
+          pedidoActual = nuevoPedido;
+          pedidoActual.id = id;
+          return;
+        }
 
         const itemsChanged = JSON.stringify(nuevoPedido.items) !== JSON.stringify(pedidoActual.items);
         const statusChanged = nuevoPedido.status !== pedidoActual.status;
@@ -2390,9 +2534,11 @@
         updates.enPreparacion = 'si';
       }
 
-      // Guardar en Firebase
+      // Guardar en Firebase (saltar listener para evitar re-render duplicado)
+      skipNextListenerUpdate = true;
       db.ref('pedidos/' + pedidoId).update(updates).catch(err => {
         console.error('Error al guardar check:', err);
+        skipNextListenerUpdate = false;
       });
 
       // Manipulación directa del DOM en lugar de re-render completo
