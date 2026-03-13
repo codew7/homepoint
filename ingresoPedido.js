@@ -2129,8 +2129,9 @@ function cargarClientes() {
 }
 cargarClientes();
 
-// === ALIAS: Autocompletar con historial desde localStorage ===
+// === ALIAS: Autocompletar con historial desde localStorage + Google Sheets ===
 let aliasHistorial = [];
+let aliasDesdeSheets = [];
 
 // Crear datalist para autocompletar alias
 let datalistAlias = document.getElementById('aliasDatalist');
@@ -2146,26 +2147,57 @@ if (aliasField) {
   aliasField.setAttribute('list', 'aliasDatalist');
 }
 
+// Reconstruir el datalist combinando localStorage + Sheets (localStorage primero)
+function actualizarDatalistAlias() {
+  datalistAlias.innerHTML = '';
+  const vistos = new Set();
+  // Primero los del historial local (más recientes arriba)
+  aliasHistorial.forEach(alias => {
+    if (!vistos.has(alias)) {
+      vistos.add(alias);
+      const option = document.createElement('option');
+      option.value = alias;
+      datalistAlias.appendChild(option);
+    }
+  });
+  // Luego los de Sheets que no estén ya en el historial
+  aliasDesdeSheets.forEach(alias => {
+    if (!vistos.has(alias)) {
+      vistos.add(alias);
+      const option = document.createElement('option');
+      option.value = alias;
+      datalistAlias.appendChild(option);
+    }
+  });
+}
+
 // Cargar historial de alias desde localStorage
 function cargarHistorialAliasDesdeLocalStorage() {
   try {
     const aliasGuardados = localStorage.getItem('historialAlias');
-    if (aliasGuardados) {
-      aliasHistorial = JSON.parse(aliasGuardados);
-    } else {
-      aliasHistorial = [];
-    }
-    
-    // Actualizar datalist
-    datalistAlias.innerHTML = '';
-    aliasHistorial.forEach(alias => {
-      const option = document.createElement('option');
-      option.value = alias;
-      datalistAlias.appendChild(option);
-    });
+    aliasHistorial = aliasGuardados ? JSON.parse(aliasGuardados) : [];
+    actualizarDatalistAlias();
   } catch (error) {
     console.error('Error cargando historial de alias desde localStorage:', error);
     aliasHistorial = [];
+  }
+}
+
+// Cargar alias desde Google Sheets (rango Alias!A2:A)
+async function cargarAliasDesdeSheets() {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Alias!A2:A?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.values && Array.isArray(data.values)) {
+      aliasDesdeSheets = data.values
+        .map(row => (row[0] || '').trim().toUpperCase())
+        .filter(v => v !== '');
+      actualizarDatalistAlias();
+    }
+  } catch (error) {
+    console.error('Error cargando alias desde Google Sheets:', error);
   }
 }
 
@@ -2173,39 +2205,34 @@ function cargarHistorialAliasDesdeLocalStorage() {
 function guardarAliasEnLocalStorage(nuevoAlias) {
   try {
     if (!nuevoAlias || nuevoAlias.trim() === '') return;
-    
+
     const aliasLimpio = nuevoAlias.trim().toUpperCase();
-    
+
     // Cargar historial actual
     let historial = [];
     const aliasGuardados = localStorage.getItem('historialAlias');
     if (aliasGuardados) {
       historial = JSON.parse(aliasGuardados);
     }
-    
+
     // Remover el alias si ya existe para evitar duplicados
     historial = historial.filter(alias => alias !== aliasLimpio);
-    
+
     // Agregar el nuevo alias al principio
     historial.unshift(aliasLimpio);
-    
+
     // Mantener solo los últimos 15 alias
     if (historial.length > 15) {
       historial = historial.slice(0, 15);
     }
-    
+
     // Guardar en localStorage
     localStorage.setItem('historialAlias', JSON.stringify(historial));
-    
+
     // Actualizar el historial en memoria y el datalist
     aliasHistorial = historial;
-    datalistAlias.innerHTML = '';
-    aliasHistorial.forEach(alias => {
-      const option = document.createElement('option');
-      option.value = alias;
-      datalistAlias.appendChild(option);
-    });
-    
+    actualizarDatalistAlias();
+
   } catch (error) {
     console.error('Error guardando alias en localStorage:', error);
   }
@@ -2213,6 +2240,8 @@ function guardarAliasEnLocalStorage(nuevoAlias) {
 
 // Cargar historial de alias al inicializar
 cargarHistorialAliasDesdeLocalStorage();
+// Cargar alias desde Sheets en segundo plano
+cargarAliasDesdeSheets();
 
 // Al salir del input nombre, validar si existe
 form.nombre.addEventListener('blur', function() {

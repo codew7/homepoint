@@ -640,20 +640,42 @@ let admin = false; // Declarar admin al principio para evitar errores de hoistin
     }
   }
 
-  // === ALIAS: Variables y funciones con localStorage ===
+  // === ALIAS: Variables y funciones con localStorage + Google Sheets ===
   let aliasHistorial = [];
+  let aliasDesdeSheets = [];
+
+  // Reconstruir el datalist combinando localStorage + Sheets (localStorage primero)
+  function actualizarDatalistAlias() {
+    const datalistAlias = document.getElementById('aliasDatalist');
+    if (!datalistAlias) return;
+
+    datalistAlias.innerHTML = '';
+    const vistos = new Set();
+    // Primero los del historial local (más recientes arriba)
+    aliasHistorial.forEach(alias => {
+      if (!vistos.has(alias)) {
+        vistos.add(alias);
+        const option = document.createElement('option');
+        option.value = alias;
+        datalistAlias.appendChild(option);
+      }
+    });
+    // Luego los de Sheets que no estén ya en el historial
+    aliasDesdeSheets.forEach(alias => {
+      if (!vistos.has(alias)) {
+        vistos.add(alias);
+        const option = document.createElement('option');
+        option.value = alias;
+        datalistAlias.appendChild(option);
+      }
+    });
+  }
 
   // Cargar historial de alias desde localStorage
   function cargarHistorialAliasDesdeLocalStorage() {
     try {
       const aliasGuardados = localStorage.getItem('historialAlias');
-      if (aliasGuardados) {
-        aliasHistorial = JSON.parse(aliasGuardados);
-      } else {
-        aliasHistorial = [];
-      }
-      
-      // Actualizar datalist
+      aliasHistorial = aliasGuardados ? JSON.parse(aliasGuardados) : [];
       actualizarDatalistAlias();
     } catch (error) {
       console.error('Error cargando historial de alias desde localStorage:', error);
@@ -661,54 +683,59 @@ let admin = false; // Declarar admin al principio para evitar errores de hoistin
     }
   }
 
+  // Cargar alias desde Google Sheets (rango Alias!A2:A)
+  async function cargarAliasDesdeSheets() {
+    try {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Alias!A2:A?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.values && Array.isArray(data.values)) {
+        aliasDesdeSheets = data.values
+          .map(row => (row[0] || '').trim().toUpperCase())
+          .filter(v => v !== '');
+        actualizarDatalistAlias();
+      }
+    } catch (error) {
+      console.error('Error cargando alias desde Google Sheets:', error);
+    }
+  }
+
   // Guardar alias en localStorage
   function guardarAliasEnLocalStorage(nuevoAlias) {
     try {
       if (!nuevoAlias || nuevoAlias.trim() === '') return;
-      
+
       const aliasLimpio = nuevoAlias.trim().toUpperCase();
-      
+
       // Cargar historial actual
       let historial = [];
       const aliasGuardados = localStorage.getItem('historialAlias');
       if (aliasGuardados) {
         historial = JSON.parse(aliasGuardados);
       }
-      
+
       // Remover el alias si ya existe para evitar duplicados
       historial = historial.filter(alias => alias !== aliasLimpio);
-      
+
       // Agregar el nuevo alias al principio
       historial.unshift(aliasLimpio);
-      
+
       // Mantener solo los últimos 15 alias
       if (historial.length > 15) {
         historial = historial.slice(0, 15);
       }
-      
+
       // Guardar en localStorage
       localStorage.setItem('historialAlias', JSON.stringify(historial));
-      
+
       // Actualizar el historial en memoria y el datalist
       aliasHistorial = historial;
       actualizarDatalistAlias();
-      
+
     } catch (error) {
       console.error('Error guardando alias en localStorage:', error);
     }
-  }
-
-  // Función para actualizar el datalist de alias
-  function actualizarDatalistAlias() {
-    const datalistAlias = document.getElementById('aliasDatalist');
-    if (!datalistAlias) return;
-    
-    datalistAlias.innerHTML = '';
-    aliasHistorial.forEach(alias => {
-      const option = document.createElement('option');
-      option.value = alias;
-      datalistAlias.appendChild(option);
-    });
   }
 
   // Función para mostrar/ocultar el campo ALIAS
@@ -806,6 +833,8 @@ let admin = false; // Declarar admin al principio para evitar errores de hoistin
 
   // Cargar historial de alias al inicializar
   cargarHistorialAliasDesdeLocalStorage();
+  // Cargar alias desde Sheets en segundo plano
+  cargarAliasDesdeSheets();
 
   // Función para cerrar el popup de aviso
   function cerrarAvisoPopup() {
@@ -1779,8 +1808,9 @@ ${pedidoLink}`;
       qty.onchange = e => {
         if (bloqueadoCompleto) return;
         pedidoActual.items[idx].cantidad = parseInt(e.target.value, 10) || 1;
+        pedidoActual.items[idx].listo = 'n';
+        programarActualizacion('pedidos/' + pedidoActual.id, { items: pedidoActual.items });
         renderItems();
-        // Actualizar cálculos inmediatamente
         setTimeout(() => actualizarCalculosGlobales(), 100);
       };
       qtyCell.appendChild(qty);
@@ -1835,8 +1865,8 @@ ${pedidoLink}`;
         valorInput.onchange = e => {
           const nuevoValor = parseFloat(e.target.value) || 0;
           pedidoActual.items[idx].valorU = nuevoValor;
-          renderItems(); // Re-renderizar para actualizar subtotal
-          // Actualizar cálculos inmediatamente
+          programarActualizacion('pedidos/' + pedidoActual.id, { items: pedidoActual.items });
+          renderItems();
           setTimeout(() => actualizarCalculosGlobales(), 100);
         };
         valorCell.appendChild(valorInput);
@@ -1861,9 +1891,9 @@ ${pedidoLink}`;
       del.disabled = bloqueadoCompleto; // Deshabilitar si cerrado/despachado (admin puede editar cerrados)
       del.onclick = () => {
         if (bloqueadoCompleto) return;
-        pedidoActual.items.splice(idx, 1); 
+        pedidoActual.items.splice(idx, 1);
+        programarActualizacion('pedidos/' + pedidoActual.id, { items: pedidoActual.items });
         renderItems();
-        // Actualizar cálculos inmediatamente
         setTimeout(() => actualizarCalculosGlobales(), 100);
       };
       delCell.appendChild(del);
