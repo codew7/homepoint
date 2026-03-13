@@ -1404,50 +1404,121 @@ async function registerMovement(codigo, nombre, cantidad) {
 // ============================================================
 //  Scanner
 // ============================================================
+let scannerProcessing = false; // guard contra callbacks duplicados
+
+// ============================================================
+//  Wake Lock — evitar suspension de pantalla
+// ============================================================
+let wakeLock = null;
+
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (_) {}
+}
+
+// Solicitar wake lock al cargar y re-solicitar al volver a la app
+requestWakeLock();
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
+});
+
 function openScanner() {
     const overlay = document.getElementById('scannerOverlay');
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
+    scannerProcessing = false;
     startScanner();
 }
 
 function closeScanner() {
     document.getElementById('scannerOverlay').classList.remove('active');
     document.body.style.overflow = '';
-    stopScanner();
+    // No llamar stopScanner() aqui — ya se detuvo en onScanSuccess
+    // Solo detener si el usuario cierra manualmente (sin escaneo exitoso)
+    if (html5QrCode) stopScanner();
 }
+
+// Desactivar autofocus y fijar foco para lectura cercana
+async function applyFixedFocus() {
+    try {
+        const video = document.querySelector('#scannerReader video');
+        if (!video || !video.srcObject) return;
+        const track = video.srcObject.getVideoTracks()[0];
+        if (!track) return;
+        const caps = track.getCapabilities();
+        if (!caps.focusMode) return;
+
+        if (caps.focusMode.includes('manual')) {
+            const constraints = { advanced: [{ focusMode: 'manual' }] };
+            // Si soporta focusDistance, fijar a distancia cercana (~20-30cm)
+            if (caps.focusDistance) {
+                const min = caps.focusDistance.min || 0;
+                const max = caps.focusDistance.max || 1;
+                // Usar ~30% del rango (cercano, ideal para codigos de barras)
+                const target = min + (max - min) * 0.3;
+                constraints.advanced[0].focusDistance = target;
+            }
+            await track.applyConstraints(constraints);
+            console.log('Focus fijado en modo manual');
+        }
+    } catch (e) {
+        console.log('No se pudo fijar foco:', e);
+    }
+}
+
+const SCANNER_FORMATS = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.QR_CODE
+];
+
+const SCANNER_CONFIG = {
+    fps: 15,
+    qrbox: { width: 280, height: 120 },
+    aspectRatio: 1.0,
+    formatsToSupport: SCANNER_FORMATS
+};
 
 async function startScanner() {
     try {
         html5QrCode = new Html5Qrcode('scannerReader');
-        const cameras = await Html5Qrcode.getCameras();
-        if (!cameras || cameras.length === 0) {
-            showToast('No se detecto camara', true);
-            closeScanner();
-            return;
-        }
-        const backCam = cameras.find(c => /back|rear|environment/i.test(c.label));
-        const cameraId = backCam ? backCam.id : cameras[cameras.length - 1].id;
 
-        await html5QrCode.start(cameraId, {
-            fps: 15,
-            qrbox: { width: 280, height: 120 },
-            aspectRatio: 1.0,
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.QR_CODE
-            ]
-        }, onScanSuccess, () => {});
+        // Usar facingMode directamente — evita getCameras() que es lento
+        await html5QrCode.start(
+            { facingMode: 'environment' },
+            SCANNER_CONFIG,
+            onScanSuccess,
+            () => {}
+        );
+        // Desactivar autofocus despues de iniciar la camara
+        await applyFixedFocus();
     } catch (err) {
         console.error('Scanner error:', err);
-        showToast('Error al acceder a la camara', true);
-        closeScanner();
+        // Fallback: si facingMode falla, intentar con enumeracion de camaras
+        try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (!cameras || cameras.length === 0) {
+                showToast('No se detecto camara', true);
+                closeScanner();
+                return;
+            }
+            const backCam = cameras.find(c => /back|rear|environment/i.test(c.label));
+            const cameraId = backCam ? backCam.id : cameras[cameras.length - 1].id;
+            await html5QrCode.start(cameraId, SCANNER_CONFIG, onScanSuccess, () => {});
+            await applyFixedFocus();
+        } catch (err2) {
+            console.error('Scanner fallback error:', err2);
+            showToast('Error al acceder a la camara', true);
+            closeScanner();
+        }
     }
 }
 
@@ -1459,10 +1530,17 @@ async function stopScanner() {
 }
 
 async function onScanSuccess(decodedText) {
+    // Guard: evitar que callbacks duplicados procesen multiples veces
+    if (scannerProcessing) return;
+    scannerProcessing = true;
+
+    const code = decodedText.trim();
     await stopScanner();
-    closeScanner();
+    document.getElementById('scannerOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+
     // Escaneo de camara: busqueda exacta de barcode
-    processLookup(decodedText.trim(), true);
+    processLookup(code, true);
 }
 
 // ============================================================
