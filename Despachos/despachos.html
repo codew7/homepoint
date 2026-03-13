@@ -1478,6 +1478,20 @@
       to { opacity: 1; }
     }
 
+    /* Item move transitions */
+    .item-card.moving-out {
+      opacity: 0;
+      transform: translateX(30px);
+      transition: opacity .25s var(--ease-out), transform .25s var(--ease-out);
+    }
+    .item-card.moving-in {
+      animation: moveIn .3s var(--ease-out) both;
+    }
+    @keyframes moveIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
     /* Sin stock highlight */
     .item-card.sin-stock {
       background: #fffbeb;
@@ -2234,10 +2248,10 @@
       });
 
       // Función auxiliar para renderizar grupo de items
-      function renderItemGroup(group, groupName) {
+      function renderItemGroup(group, groupName, groupId) {
         if (group.length === 0) return '';
-        let groupHtml = '<div style="margin-bottom: 16px;">';
-        groupHtml += '<div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px;">' + groupName + ' (' + group.length + ')</div>';
+        let groupHtml = '<div id="group-' + groupId + '" style="margin-bottom: 16px;">';
+        groupHtml += '<div id="group-' + groupId + '-header" style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px;">' + groupName + ' (' + group.length + ')</div>';
 
         group.forEach((entry, groupIdx) => {
           const it = entry.item;
@@ -2295,8 +2309,8 @@
       }
 
       // Renderizar primero pendientes, luego listos
-      html += renderItemGroup(pendientes, 'Pendientes');
-      html += renderItemGroup(listos, 'Listos');
+      html += renderItemGroup(pendientes, 'Pendientes', 'pendientes');
+      html += renderItemGroup(listos, 'Listos', 'listos');
 
       if (items.length === 0) {
         html += '<div class="empty-items">No hay articulos en este pedido</div>';
@@ -2363,12 +2377,6 @@
       // Actualizar estado local
       pedidoActual.items[idx].listo = checked ? 'y' : 'n';
 
-      if (checked) {
-        if (card) card.classList.add('checked');
-      } else {
-        if (card) card.classList.remove('checked');
-      }
-
       // Preparar update para Firebase
       const updates = { items: pedidoActual.items, lastUpdated: Date.now() };
 
@@ -2378,19 +2386,97 @@
         updates.enPreparacion = 'si';
         actualizarBtnTerminar();
       } else if (checked && pedidoActual.enPreparacion !== 'si') {
-        // Primera vez que se marca un item: registrar enPreparacion en Firebase
         pedidoActual.enPreparacion = 'si';
         updates.enPreparacion = 'si';
       }
 
-      // Guardar en Firebase y re-renderizar inmediatamente
+      // Guardar en Firebase
       db.ref('pedidos/' + pedidoId).update(updates).catch(err => {
         console.error('Error al guardar check:', err);
       });
 
-      // Re-renderizar para reorganizar items en grupos
-      renderPedido();
+      // Manipulación directa del DOM en lugar de re-render completo
+      if (!card) {
+        renderPedido();
+        return;
+      }
+
+      // Actualizar clase checked en la card
+      card.classList.toggle('checked', checked);
+
+      // Animar salida
+      card.classList.add('moving-out');
+
+      setTimeout(() => {
+        const targetGroupId = checked ? 'listos' : 'pendientes';
+        const sourceGroupId = checked ? 'pendientes' : 'listos';
+        let targetGroup = document.getElementById('group-' + targetGroupId);
+        const sourceGroup = document.getElementById('group-' + sourceGroupId);
+
+        // Crear grupo destino si no existe
+        if (!targetGroup) {
+          const groupDiv = document.createElement('div');
+          groupDiv.id = 'group-' + targetGroupId;
+          groupDiv.style.marginBottom = '16px';
+
+          const headerDiv = document.createElement('div');
+          headerDiv.id = 'group-' + targetGroupId + '-header';
+          headerDiv.style.cssText = 'font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px;';
+          groupDiv.appendChild(headerDiv);
+
+          // Pendientes va antes de Listos
+          const mainContent = document.getElementById('mainContent');
+          const listosGroup = document.getElementById('group-listos');
+          const pendientesGroup = document.getElementById('group-pendientes');
+
+          if (targetGroupId === 'pendientes' && listosGroup) {
+            listosGroup.parentNode.insertBefore(groupDiv, listosGroup);
+          } else if (targetGroupId === 'listos' && pendientesGroup) {
+            pendientesGroup.parentNode.insertBefore(groupDiv, pendientesGroup.nextSibling);
+          } else {
+            // Insertar después del items-header
+            const itemsHeader = mainContent.querySelector('.items-header');
+            if (itemsHeader) {
+              itemsHeader.parentNode.insertBefore(groupDiv, itemsHeader.nextSibling);
+            } else {
+              mainContent.appendChild(groupDiv);
+            }
+          }
+
+          targetGroup = groupDiv;
+        }
+
+        // Mover card al grupo destino
+        card.classList.remove('moving-out');
+        targetGroup.appendChild(card);
+
+        // Animar entrada
+        card.classList.add('moving-in');
+        setTimeout(() => card.classList.remove('moving-in'), 300);
+
+        // Eliminar grupo origen si quedo sin items (solo header)
+        if (sourceGroup && sourceGroup.querySelectorAll('.item-card').length === 0) {
+          sourceGroup.remove();
+        }
+
+        // Actualizar contadores de grupo
+        actualizarContadoresGrupo();
+      }, 250);
+
       actualizarProgreso();
+      actualizarContador();
+    }
+
+    function actualizarContadoresGrupo() {
+      const items = pedidoActual ? pedidoActual.items || [] : [];
+      const pendientesCount = items.filter(it => it.listo !== 'y').length;
+      const listosCount = items.filter(it => it.listo === 'y').length;
+
+      const pendientesHeader = document.getElementById('group-pendientes-header');
+      const listosHeader = document.getElementById('group-listos-header');
+
+      if (pendientesHeader) pendientesHeader.textContent = 'Pendientes (' + pendientesCount + ')';
+      if (listosHeader) listosHeader.textContent = 'Listos (' + listosCount + ')';
     }
 
     // Confirmar eliminacion
