@@ -473,18 +473,22 @@
     .progress-section {
       margin-bottom: 16px;
       animation: fadeSlideIn .4s var(--ease-out) both;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
     .progress-bar-track {
-      height: 6px;
+      flex: 1;
+      height: 3px;
       background: var(--border);
-      border-radius: 3px;
+      border-radius: 2px;
       overflow: hidden;
       position: relative;
     }
     .progress-bar-fill {
       height: 100%;
       background: linear-gradient(90deg, var(--accent), #f0a04b);
-      border-radius: 3px;
+      border-radius: 2px;
       transition: width .5s var(--ease-out);
       position: relative;
     }
@@ -495,28 +499,31 @@
       content: '';
       position: absolute;
       top: 0; right: 0; bottom: 0;
-      width: 30px;
+      width: 20px;
       background: linear-gradient(90deg, transparent, rgba(255,255,255,.35));
-      border-radius: 3px;
+      border-radius: 2px;
     }
     .progress-label {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      gap: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .progress-label span {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: .6px;
+      letter-spacing: .5px;
       color: var(--text-muted);
     }
     .progress-label .progress-pct {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--accent);
+      min-width: 28px;
+      text-align: right;
     }
     .progress-label .progress-pct.complete {
       color: var(--success);
@@ -1828,7 +1835,7 @@
       searchDropdown.innerHTML =
         '<div class="search-dropdown-header">Recientes</div>' +
         hist.map(h =>
-          '<div class="search-dropdown-item" data-id="' + escapeHtml(h.id) + '">' +
+          '<div class="search-dropdown-item" data-id="' + escapeHtml(h.id) + '" data-nombre="' + escapeHtml(h.nombre) + '">' +
           '<span class="search-dropdown-nombre">' + escapeHtml(h.nombre) + '</span>' +
           '<span class="search-dropdown-id">' + escapeHtml(h.id) + '</span>' +
           '</div>'
@@ -1946,7 +1953,8 @@
       const item = e.target.closest('.search-dropdown-item');
       if (!item) return;
       const id = item.dataset.id;
-      pedidoInput.value = id;
+      const nombre = item.dataset.nombre;
+      pedidoInput.value = nombre;
       hideSearchDropdown();
       pedidoInput.blur();
       cargarPedido(id);
@@ -2046,7 +2054,9 @@
           statusBar.style.display = 'block';
         }
 
-        saveToHistorial(id, (pedidoActual.cliente || {}).nombre);
+        const nombreCliente = (pedidoActual.cliente || {}).nombre || 'Sin nombre';
+        saveToHistorial(id, nombreCliente);
+        pedidoInput.value = nombreCliente;
         renderPedido();
         footer.style.display = isBlocked ? 'none' : 'block';
         cargarLocalStorage();
@@ -2180,8 +2190,9 @@
 
       // PROGRESS BAR
       html += '<div class="progress-section">';
-      html += '<div class="progress-label"><span>Progreso</span><span class="progress-pct' + (isComplete ? ' complete' : '') + '">' + progressPct + '%</span></div>';
+      html += '<div class="progress-label"><span>Progreso</span></div>';
       html += '<div class="progress-bar-track"><div class="progress-bar-fill' + (isComplete ? ' complete' : '') + '" style="width:' + progressPct + '%"></div></div>';
+      html += '<div class="progress-label"><span class="progress-pct' + (isComplete ? ' complete' : '') + '">' + progressPct + '%</span></div>';
       html += '</div>';
 
       // DATOS CLIENTE
@@ -2211,55 +2222,81 @@
       const totalItems = items.reduce((s, it) => s + (it.cantidad || 0), 0);
       html += '<div class="items-header"><h2>Articulos</h2><span class="items-counter" style="cursor:pointer" onclick="copiarLinkPedido()">' + items.length + ' items \u00B7 ' + totalItems + ' u.</span></div>';
 
-      // ITEMS
+      // Separar items en pendientes y listos
+      const pendientes = [];
+      const listos = [];
       items.forEach((it, idx) => {
-        const sheetInfo = sheetsData[it.codigo] || {};
-        const imgUrl = sheetInfo.imagen || '';
-        const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
-        const sinStock = sheetInfo.stock !== null && sheetInfo.stock !== undefined && Number.isFinite(sheetInfo.stock) && sheetInfo.stock <= 0;
-        const sinStockClass = sinStock ? ' sin-stock' : '';
-        const delay = Math.min(idx * 0.03, 0.3);
-
-        html += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
-
-        // Imagen
-        if (imgUrl) {
-          html += '<img class="item-img" src="' + escapeHtml(imgUrl) + '" alt="" onclick="openLightbox(\'' + escapeHtml(imgUrl) + '\')" loading="lazy">';
+        if (it.listo === 'y') {
+          listos.push({ item: it, idx });
         } else {
-          html += '<div class="item-img-placeholder">&#128247;</div>';
+          pendientes.push({ item: it, idx });
         }
-
-        // Info
-        html += '<div class="item-info">';
-        html += '<div class="item-name" onclick="showTooltip(event, \'' + escapeHtml(it.codigo || '') + '\')">' + escapeHtml(it.nombre || 'Sin nombre') + '</div>';
-        const stockVal = sheetInfo.stock;
-        const stockDisplay = (stockVal !== null && stockVal !== undefined && Number.isFinite(stockVal))
-          ? '<span class="item-stock' + (stockVal <= 0 ? ' stock-low' : '') + '">stk: ' + stockVal + '</span>'
-          : '';
-        html += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
-        html += '</div>';
-
-        // Cantidad
-        if (!isBlocked) {
-          html += '<div class="qty-control">' +
-            '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)">\u25BC</button>' +
-            '<span class="qty-value">' + (it.cantidad || 1) + '</span>' +
-            '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)">\u25B2</button>' +
-            '</div>';
-        } else {
-          html += '<span class="qty-static">' + (it.cantidad || 1) + '</span>';
-        }
-
-        // Checkbox
-        html += '<input type="checkbox" class="item-check"' + (isItemChecked(it.codigo) ? ' checked' : '') + ' onchange="toggleCheck(' + idx + ', this.checked)">';
-
-        // Eliminar
-        if (!isBlocked) {
-          html += '<button class="item-delete" onclick="confirmDelete(' + idx + ')">&times;</button>';
-        }
-
-        html += '</div>';
       });
+
+      // Función auxiliar para renderizar grupo de items
+      function renderItemGroup(group, groupName) {
+        if (group.length === 0) return '';
+        let groupHtml = '<div style="margin-bottom: 16px;">';
+        groupHtml += '<div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px;">' + groupName + ' (' + group.length + ')</div>';
+
+        group.forEach((entry, groupIdx) => {
+          const it = entry.item;
+          const idx = entry.idx;
+          const sheetInfo = sheetsData[it.codigo] || {};
+          const imgUrl = sheetInfo.imagen || '';
+          const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
+          const sinStock = sheetInfo.stock !== null && sheetInfo.stock !== undefined && Number.isFinite(sheetInfo.stock) && sheetInfo.stock <= 0;
+          const sinStockClass = sinStock ? ' sin-stock' : '';
+          const delay = Math.min((pendientes.length + groupIdx) * 0.03, 0.3);
+
+          groupHtml += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
+
+          // Imagen
+          if (imgUrl) {
+            groupHtml += '<img class="item-img" src="' + escapeHtml(imgUrl) + '" alt="" onclick="openLightbox(\'' + escapeHtml(imgUrl) + '\')" loading="lazy">';
+          } else {
+            groupHtml += '<div class="item-img-placeholder">&#128247;</div>';
+          }
+
+          // Info
+          groupHtml += '<div class="item-info">';
+          groupHtml += '<div class="item-name" onclick="showTooltip(event, \'' + escapeHtml(it.codigo || '') + '\')">' + escapeHtml(it.nombre || 'Sin nombre') + '</div>';
+          const stockVal = sheetInfo.stock;
+          const stockDisplay = (stockVal !== null && stockVal !== undefined && Number.isFinite(stockVal))
+            ? '<span class="item-stock' + (stockVal <= 0 ? ' stock-low' : '') + '">stk: ' + stockVal + '</span>'
+            : '';
+          groupHtml += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
+          groupHtml += '</div>';
+
+          // Cantidad
+          if (!isBlocked) {
+            groupHtml += '<div class="qty-control">' +
+              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)">\u25BC</button>' +
+              '<span class="qty-value">' + (it.cantidad || 1) + '</span>' +
+              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)">\u25B2</button>' +
+              '</div>';
+          } else {
+            groupHtml += '<span class="qty-static">' + (it.cantidad || 1) + '</span>';
+          }
+
+          // Checkbox
+          groupHtml += '<input type="checkbox" class="item-check"' + (isItemChecked(it.codigo) ? ' checked' : '') + ' onchange="toggleCheck(' + idx + ', this.checked)">';
+
+          // Eliminar
+          if (!isBlocked) {
+            groupHtml += '<button class="item-delete" onclick="confirmDelete(' + idx + ')">&times;</button>';
+          }
+
+          groupHtml += '</div>';
+        });
+
+        groupHtml += '</div>';
+        return groupHtml;
+      }
+
+      // Renderizar primero pendientes, luego listos
+      html += renderItemGroup(pendientes, 'Pendientes');
+      html += renderItemGroup(listos, 'Listos');
 
       if (items.length === 0) {
         html += '<div class="empty-items">No hay articulos en este pedido</div>';
@@ -2321,8 +2358,10 @@
     // Toggle checkbox empaquetado
     function toggleCheck(idx, checked) {
       if (!pedidoActual || !pedidoActual.items[idx]) return;
-      const codigo = pedidoActual.items[idx].codigo;
       const card = document.querySelector('.item-card[data-idx="' + idx + '"]');
+
+      // Actualizar estado local
+      pedidoActual.items[idx].listo = checked ? 'y' : 'n';
 
       if (checked) {
         if (card) card.classList.add('checked');
@@ -2330,22 +2369,27 @@
         if (card) card.classList.remove('checked');
       }
 
+      // Preparar update para Firebase
+      const updates = { items: pedidoActual.items, lastUpdated: Date.now() };
+
       // Si estaba "listo", cualquier cambio de check lo vuelve a "si"
       if (pedidoActual.enPreparacion === 'listo') {
         pedidoActual.enPreparacion = 'si';
+        updates.enPreparacion = 'si';
         actualizarBtnTerminar();
-        db.ref('pedidos/' + pedidoId).update({ enPreparacion: 'si' }).catch(err => {
-          console.error('Error al guardar enPreparacion:', err);
-        });
       } else if (checked && pedidoActual.enPreparacion !== 'si') {
         // Primera vez que se marca un item: registrar enPreparacion en Firebase
         pedidoActual.enPreparacion = 'si';
-        db.ref('pedidos/' + pedidoId).update({ enPreparacion: 'si' }).catch(err => {
-          console.error('Error al guardar enPreparacion:', err);
-        });
+        updates.enPreparacion = 'si';
       }
 
-      saveCheckedToLocal(codigo, checked);
+      // Guardar en Firebase y re-renderizar inmediatamente
+      db.ref('pedidos/' + pedidoId).update(updates).catch(err => {
+        console.error('Error al guardar check:', err);
+      });
+
+      // Re-renderizar para reorganizar items en grupos
+      renderPedido();
       actualizarProgreso();
     }
 
@@ -2660,18 +2704,10 @@
       localStorage.setItem(getLocalKey(), JSON.stringify(existing));
     }
 
-    function saveCheckedToLocal(codigo, checked) {
-      if (!pedidoId) return;
-      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      if (!existing.checkedItems) existing.checkedItems = {};
-      existing.checkedItems[codigo] = checked;
-      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
-    }
-
     function isItemChecked(codigo) {
-      if (!pedidoId) return false;
-      const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      return data.checkedItems && data.checkedItems[codigo] === true;
+      if (!pedidoId || !pedidoActual || !pedidoActual.items) return false;
+      const item = pedidoActual.items.find(it => it.codigo === codigo);
+      return item && item.listo === 'y';
     }
 
     function cargarLocalStorage() {
@@ -2771,13 +2807,16 @@
 
         snapAbierto.forEach(child => {
           const p = child.val();
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion });
+          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, timestamp: p.timestamp || 0 });
         });
 
         snapCerrado.forEach(child => {
           const p = child.val();
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion });
+          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, timestamp: p.timestamp || 0 });
         });
+
+        // Ordenar por timestamp descendente (más recientes primero)
+        pedidos.sort((a, b) => b.timestamp - a.timestamp);
 
         if (pedidos.length === 0) {
           pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
@@ -2802,7 +2841,6 @@
       if (!item) return;
       const id = item.dataset.id;
       pedidosPanel.classList.remove('active');
-      pedidoInput.value = id;
       cargarPedido(id);
     });
 
@@ -2910,8 +2948,9 @@
 
       const reciboHtml = '<!DOCTYPE html><html><head><title>Orden de Pedido</title>' +
         '<style>' +
-        'body { font-family: "Courier New", Courier, monospace; color: #111; background: #fff; }' +
-        '.recibo-box { margin: 0 auto; border: 1px dashed #333; padding: 24px 18px; background: #fff; }' +
+        '@page { margin: 0; }' +
+        'body { font-family: "Courier New", Courier, monospace; color: #111; background: #fff; margin: 0; padding: 4px; }' +
+        '.recibo-box { margin: 0 auto; border: 1px dashed #333; padding: 8px 6px; background: #fff; }' +
         'h2 { text-align: left; font-size: 1.3em; margin: 0 0 12px 0; }' +
         'table { width: 100%; border-collapse: collapse; margin: 12px 0; }' +
         'th, td { border-bottom: 1px dotted #aaa; padding: 4px 2px; font-size: 0.90em; }' +
@@ -2985,9 +3024,9 @@
 
       const html = '<!DOCTYPE html><html><head><title>Rotulos de Envio</title>' +
         '<style>' +
-        '@page { size: A4; margin: 12mm; }' +
+        '@page { size: A4; margin: 0; }' +
         'body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }' +
-        '.rotulos-grid { display: flex; flex-direction: column; gap: 10mm; }' +
+        '.rotulos-grid { display: flex; flex-direction: column; gap: 2mm; padding: 2mm; }' +
         '.rotulo { border: 2px dashed #333; border-radius: 6px; padding: 20px 28px; break-inside: avoid; page-break-inside: avoid; position: relative; }' +
         '.rotulo-qr { position: absolute; top: 29px; right: 35px; }' +
         '.rotulo-qr-img { width: 100px; height: 100px; }' +
@@ -2996,13 +3035,13 @@
         '.rotulo-rem { width: 220px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: flex-end; }' +
         '.rotulo-section { margin-bottom: 12px; }' +
         '.rotulo-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #555; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 12px; }' +
-        '.rotulo-field { font-size: 17px; margin-bottom: 6px; line-height: 1.4; }' +
+        '.rotulo-field { font-size: 17px; margin-bottom: 6px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
         '.rotulo-label { font-weight: bold; display: inline-block; min-width: 100px; font-size: 11px; text-transform: uppercase; color: #555; vertical-align: middle; }' +
-        '.rotulo-value { font-size: 17px; font-weight: 600; vertical-align: middle; }' +
+        '.rotulo-value { font-size: 17px; font-weight: 600; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 110px); }' +
         '.rotulo-nowrap { white-space: nowrap; }' +
-        '.rotulo-entrega { font-size: 15px; font-weight: bold; margin: 14px 0; padding: 8px 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }' +
+        '.rotulo-entrega { font-size: 15px; font-weight: bold; margin: 14px 0; padding: 8px 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
         '.rotulo-entrega .rotulo-label { font-size: 11px; }' +
-        '.rotulo-entrega .rotulo-value { font-size: 16px; }' +
+        '.rotulo-entrega .rotulo-value { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 110px); }' +
         '@media print { button { display: none !important; } }' +
         '</style></head><body>' +
         '<div class="rotulos-grid">' + rotuloHtml + '</div>' +
