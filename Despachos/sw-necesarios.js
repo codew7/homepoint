@@ -1,4 +1,4 @@
-const CACHE = 'necesarios-v1';
+const CACHE = 'necesarios-v2';
 const SHELL = [
   './necesarios.html',
   './config.js',
