@@ -884,15 +884,31 @@
         }
 
         .continuous-manual{
-            display:flex;gap:8px;padding:8px 12px;
+            display:flex;gap:6px;padding:8px 12px;
             border-bottom:1px solid var(--border);
+            align-items:center;
+        }
+        .continuous-search-toggle{
+            width:36px;height:36px;border-radius:8px;
+            border:1.5px solid var(--border);background:var(--card);
+            color:var(--text-muted);font-size:0.7rem;font-weight:700;
+            cursor:pointer;display:flex;align-items:center;justify-content:center;
+            flex-shrink:0;transition:all 0.15s;
+            font-family:var(--font);padding:0;
+        }
+        .continuous-search-toggle:active{transform:scale(0.93)}
+        .continuous-search-toggle.text-mode{
+            border-color:var(--primary);background:var(--primary-soft);color:var(--primary);
         }
         .continuous-manual-input{
             flex:1;padding:10px 12px;
             background:var(--card);border:1.5px solid var(--border);
             border-radius:var(--radius);color:var(--text);
             font-family:var(--mono);font-size:0.9rem;
-            outline:none;
+            outline:none;transition:all 0.2s;
+        }
+        .continuous-manual-input.text-mode{
+            font-family:var(--font);
         }
         .continuous-manual-input:focus{border-color:var(--primary)}
         .continuous-manual-input::placeholder{color:var(--text-dim);font-family:var(--font);font-size:0.78rem}
@@ -1237,6 +1253,7 @@
         </div>
         <div class="continuous-bottom">
             <div class="continuous-manual">
+                <button class="continuous-search-toggle" id="contSearchToggle" title="Cambiar a busqueda por nombre">Aa</button>
                 <input type="text" class="continuous-manual-input" id="continuousCodeInput"
                        placeholder="Codigo interno o barras..." inputmode="numeric" autocomplete="off">
                 <button class="continuous-manual-btn" id="continuousCodeBtn">&rarr;</button>
@@ -2295,6 +2312,16 @@ function openContinuousMode() {
     hideContinuousSelector();
     document.getElementById('continuousCodeInput').value = '';
     lastScannedCode = '';
+    // Reset toggle a modo codigo
+    contSearchByName = false;
+    const _tog = document.getElementById('contSearchToggle');
+    const _inp = document.getElementById('continuousCodeInput');
+    _tog.classList.remove('text-mode');
+    _tog.textContent = 'Aa';
+    _inp.inputMode = 'numeric';
+    _inp.placeholder = 'Codigo interno o barras...';
+    _inp.classList.remove('text-mode');
+
     continuousActive = true;
     startContinuousScanner();
 }
@@ -2566,6 +2593,31 @@ document.getElementById('contProductDismiss').addEventListener('click', hideCont
 document.getElementById('continuousCodeBtn').addEventListener('click', continuousManualLookup);
 document.getElementById('continuousCodeInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') continuousManualLookup();
+});
+
+// Toggle busqueda por nombre / codigo
+let contSearchByName = false;
+document.getElementById('contSearchToggle').addEventListener('click', () => {
+    contSearchByName = !contSearchByName;
+    const toggle = document.getElementById('contSearchToggle');
+    const input = document.getElementById('continuousCodeInput');
+    if (contSearchByName) {
+        toggle.classList.add('text-mode');
+        toggle.textContent = '123';
+        toggle.title = 'Cambiar a busqueda por codigo';
+        input.inputMode = 'text';
+        input.placeholder = 'Buscar por nombre...';
+        input.classList.add('text-mode');
+    } else {
+        toggle.classList.remove('text-mode');
+        toggle.textContent = 'Aa';
+        toggle.title = 'Cambiar a busqueda por nombre';
+        input.inputMode = 'numeric';
+        input.placeholder = 'Codigo interno o barras...';
+        input.classList.remove('text-mode');
+    }
+    input.value = '';
+    input.focus();
 });
 
 document.getElementById('contQtyInput').addEventListener('input', function() {
