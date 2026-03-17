@@ -817,6 +817,8 @@
   <div class="section filter-card" id="sectionFilter">
     <div class="filter-card-title">Filtrar por fecha</div>
     <div class="quick-btns" id="quickBtns">
+      <button class="quick-btn" data-days="today">Hoy</button>
+      <button class="quick-btn" data-days="yesterday">Ayer</button>
       <button class="quick-btn" data-days="7">Última semana</button>
       <button class="quick-btn" data-days="30">Último mes</button>
       <button class="quick-btn active" data-days="0">Todo</button>
@@ -865,12 +867,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ─── Top 10 ───────────────────────────────────────── -->
-  <div class="section" id="sectionTop">
-    <div class="section-title">🏆 Top 10 más vendidos</div>
-    <div class="top-card" id="topList"></div>
   </div>
 
   <!-- ─── Subcategory Breakdown ────────────────────────── -->
@@ -1005,7 +1001,7 @@
     // Show all sections
     showSection('sectionFilter');
     showSection('sectionStats');
-    showSection('sectionTop');
+
     showSection('sectionTable');
     // Reset filters
     dateFrom = null;
@@ -1114,9 +1110,6 @@
     document.getElementById('hStatUSD').textContent = fmtUSDShort(totalUSD);
     document.getElementById('headerStats').style.display = 'flex';
 
-    // Top 10
-    renderTop10(arts);
-
     // Subcategory breakdown
     renderSubcatBreakdown(allArts, subcats);
 
@@ -1147,37 +1140,6 @@
         renderAll();
       });
     });
-  }
-
-  /* ─── Top 10 ─────────────────────────────────────────────────── */
-  function renderTop10(arts) {
-    const sorted = [...arts].sort((a, b) => b.cantidad - a.cantidad).slice(0, 10);
-    const container = document.getElementById('topList');
-
-    if (!sorted.length) {
-      container.innerHTML = '<div class="empty-state"><span class="es-icon">👗</span><h3>Sin datos</h3><p>No hay artículos en el rango seleccionado</p></div>';
-      return;
-    }
-
-    container.innerHTML = sorted.map((art, i) => {
-      const rank = i + 1;
-      let rankClass = 'rank-other';
-      if (rank === 1) rankClass = 'rank-1';
-      else if (rank === 2) rankClass = 'rank-2';
-      else if (rank === 3) rankClass = 'rank-3';
-
-      return `
-        <div class="top-row">
-          <div class="top-rank ${rankClass}">${rank}</div>
-          <div class="top-name-block">
-            <div class="top-name" title="${esc(art.nombre)}">${esc(art.nombre)}</div>
-            ${art.codigo ? `<div class="top-code">${esc(art.codigo)}</div>` : ''}
-          </div>
-          <div class="top-qty">${fmtNum(art.cantidad)} <small style="font-size:10px;color:var(--text-muted)">u.</small></div>
-          <div class="top-usd">${fmtUSD(art.totalUSD)}</div>
-        </div>
-      `;
-    }).join('');
   }
 
   /* ─── Subcategory Breakdown ──────────────────────────────────── */
@@ -1319,17 +1281,30 @@
     if (!btn) return;
     document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const days = parseInt(btn.dataset.days);
-    if (days === 0) {
+    const val = btn.dataset.days;
+    const today = new Date();
+    const pad = d => d.toISOString().split('T')[0];
+    if (val === '0') {
       dateFrom = null;
       dateTo = null;
       document.getElementById('dateFrom').value = '';
       document.getElementById('dateTo').value = '';
+    } else if (val === 'today') {
+      dateFrom = pad(today);
+      dateTo = pad(today);
+      document.getElementById('dateFrom').value = dateFrom;
+      document.getElementById('dateTo').value = dateTo;
+    } else if (val === 'yesterday') {
+      const ayer = new Date(today - 86400000);
+      dateFrom = pad(ayer);
+      dateTo = pad(ayer);
+      document.getElementById('dateFrom').value = dateFrom;
+      document.getElementById('dateTo').value = dateTo;
     } else {
-      const now = new Date();
-      const from = new Date(now - days * 86400000);
-      dateFrom = from.toISOString().split('T')[0];
-      dateTo = now.toISOString().split('T')[0];
+      const days = parseInt(val);
+      const from = new Date(today - days * 86400000);
+      dateFrom = pad(from);
+      dateTo = pad(today);
       document.getElementById('dateFrom').value = dateFrom;
       document.getElementById('dateTo').value = dateTo;
     }
@@ -1357,6 +1332,7 @@
       b.classList.toggle('active', b.dataset.days === '0');
     });
     renderAll();
+
   });
 </script>
 </body>
