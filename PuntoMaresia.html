@@ -837,11 +837,6 @@
     </div>
   </div>
 
-  <!-- ─── Subcategory Pills ───────────────────────────── -->
-  <div class="section" id="sectionPills">
-    <div class="subcat-pills" id="subcatPills"></div>
-  </div>
-
   <!-- ─── Stats Cards ─────────────────────────────────── -->
   <div class="section" id="sectionStats">
     <div class="stats-grid">
@@ -867,12 +862,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ─── Subcategory Breakdown ────────────────────────── -->
-  <div class="section" id="sectionSubcatBreak">
-    <div class="section-title">📊 Por subcategoría</div>
-    <div class="subcat-breakdown" id="subcatBreakdown"></div>
   </div>
 
   <!-- ─── Articles Table ──────────────────────────────── -->
@@ -922,7 +911,6 @@
   /* ─── State ─────────────────────────────────────────────────── */
   let allPedidos = [];         // raw array of pedido objects
   let filteredArts = [];       // current filtered+aggregated articles
-  let activeSubcat = 'Todas';
   let dateFrom = null;
   let dateTo = null;
   let searchDebounce = null;
@@ -1012,7 +1000,6 @@
     document.querySelectorAll('.quick-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.days === '0');
     });
-    activeSubcat = 'Todas';
     renderAll();
     showToast('Datos cargados: ' + pedidos.length + ' pedidos', 'success');
   }
@@ -1084,21 +1071,12 @@
   function renderAll() {
     const allArts = aggregateData();
 
-    // Subcategory pills
-    const subcats = [...new Set(allArts.map(a => a.categoria))].sort();
-    renderPills(subcats);
-
-    // Filter by subcategory
-    const arts = activeSubcat === 'Todas'
-      ? allArts
-      : allArts.filter(a => a.categoria === activeSubcat);
-
-    filteredArts = arts;
+    filteredArts = allArts;
 
     // Stats
-    const totalUnits = arts.reduce((s, a) => s + a.cantidad, 0);
-    const totalUSD = arts.reduce((s, a) => s + a.totalUSD, 0);
-    const uniqueArts = arts.length;
+    const totalUnits = allArts.reduce((s, a) => s + a.cantidad, 0);
+    const totalUSD = allArts.reduce((s, a) => s + a.totalUSD, 0);
+    const uniqueArts = allArts.length;
 
     document.getElementById('statArts').textContent = fmtNum(uniqueArts);
     document.getElementById('statUnits').textContent = fmtNum(totalUnits);
@@ -1110,65 +1088,8 @@
     document.getElementById('hStatUSD').textContent = fmtUSDShort(totalUSD);
     document.getElementById('headerStats').style.display = 'flex';
 
-    // Subcategory breakdown
-    renderSubcatBreakdown(allArts, subcats);
-
     // Table
     renderTable();
-  }
-
-  /* ─── Pills ─────────────────────────────────────────────────── */
-  function renderPills(subcats) {
-    const container = document.getElementById('subcatPills');
-    const section = document.getElementById('sectionPills');
-
-    if (subcats.length <= 1) {
-      section.classList.remove('visible');
-      return;
-    }
-    section.classList.add('visible');
-
-    const pills = ['Todas', ...subcats];
-    container.innerHTML = pills.map(sc => `
-      <button class="subcat-pill${sc === activeSubcat ? ' active' : ''}"
-              data-subcat="${esc(sc)}">${esc(sc)}</button>
-    `).join('');
-
-    container.querySelectorAll('.subcat-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
-        activeSubcat = pill.dataset.subcat;
-        renderAll();
-      });
-    });
-  }
-
-  /* ─── Subcategory Breakdown ──────────────────────────────────── */
-  function renderSubcatBreakdown(allArts, subcats) {
-    const section = document.getElementById('sectionSubcatBreak');
-    const container = document.getElementById('subcatBreakdown');
-
-    if (subcats.length <= 1) {
-      section.classList.remove('visible');
-      return;
-    }
-    section.classList.add('visible');
-
-    const COLORS = ['#6c4eb6','#ec4899','#059669','#f59e0b','#3b82f6','#ef4444','#8b5cf6','#14b8a6'];
-
-    container.innerHTML = subcats.map((sc, idx) => {
-      const arts = allArts.filter(a => a.categoria === sc);
-      const units = arts.reduce((s, a) => s + a.cantidad, 0);
-      const usd = arts.reduce((s, a) => s + a.totalUSD, 0);
-      const color = COLORS[idx % COLORS.length];
-      return `
-        <div class="subcat-card" style="border-left-color:${color}">
-          <div class="sc-name" title="${esc(sc)}">${esc(sc)}</div>
-          <div class="sc-row"><span>Artículos</span><span class="sc-val">${fmtNum(arts.length)}</span></div>
-          <div class="sc-row"><span>Unidades</span><span class="sc-val">${fmtNum(units)}</span></div>
-          <div class="sc-row"><span>Total</span><span class="sc-val">${fmtUSD(usd)}</span></div>
-        </div>
-      `;
-    }).join('');
   }
 
   /* ─── Table ──────────────────────────────────────────────────── */
@@ -1327,7 +1248,6 @@
     document.getElementById('dateFrom').value = '';
     document.getElementById('dateTo').value = '';
     document.getElementById('searchInput').value = '';
-    activeSubcat = 'Todas';
     document.querySelectorAll('.quick-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.days === '0');
     });
