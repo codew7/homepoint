@@ -1,6 +1,6 @@
-const CACHE = 'despachos-v2';
+const CACHE = 'despachos-v3';
 const SHELL = [
-  './despachos.html',
+  './pedidosv2.html',
   './config.js',
   './favicon.png',
   './manifest.json'
