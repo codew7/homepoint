@@ -1722,39 +1722,6 @@
     /* =========================================
        VIEW TOGGLE (Despacho / Pedido)
        ========================================= */
-    .view-toggle {
-      display: none;
-      background: rgba(230,126,34,.12);
-      border-radius: 10px;
-      border: 1px solid rgba(230,126,34,.3);
-      overflow: hidden;
-      flex-shrink: 0;
-      height: 36px;
-      box-sizing: border-box;
-    }
-    .view-toggle-btn {
-      background: transparent;
-      color: rgba(255,255,255,.55);
-      border: none;
-      padding: 0 13px;
-      height: 100%;
-      font-size: 11px;
-      font-weight: 700;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      transition: all .2s var(--ease-out);
-      white-space: nowrap;
-    }
-    .view-toggle-btn.active {
-      background: var(--accent);
-      color: #fff;
-    }
-    .view-toggle-btn:not(.active):hover {
-      background: rgba(230,126,34,.2);
-      color: rgba(255,255,255,.85);
-    }
 
     /* =========================================
        PEDIDO VIEW STYLES
@@ -2156,10 +2123,6 @@
       <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off" inputmode="none">
       <div class="search-dropdown" id="searchDropdown"></div>
     </div>
-    <div class="view-toggle" id="viewToggle" style="display:none">
-      <button class="view-toggle-btn" data-view="despacho">Despacho</button>
-      <button class="view-toggle-btn active" data-view="pedido">Pedido</button>
-    </div>
     <div class="header-actions">
       <button class="header-btn" id="btnPedidos">Examinar</button>
       <button class="header-btn header-btn--accent" id="btnQR">QR</button>
@@ -2446,7 +2409,6 @@
 
     // Estado Pedido View
     const admin = true;
-    let currentView = 'pedido';
     let sheetValorMap = {};
     let sheetCategoryMap = {};
     window.sheetStockMap = window.sheetStockMap || {};
@@ -2585,15 +2547,10 @@
       document.getElementById('statusBar').className = 'status-bar';
       document.getElementById('statusBar').style.display = 'none';
       document.getElementById('footerControls').style.display = 'none';
-      document.getElementById('viewToggle').style.display = 'none';
       const plp = document.getElementById('printListaPedido');
       if (plp) plp.style.display = 'none';
-      currentView = 'pedido';
       despachoYaEjecutado = false;
       window.cachedValues = {};
-      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === 'pedido');
-      });
       document.getElementById('mainContent').innerHTML =
         '<div class="welcome-screen" id="welcomeScreen">' +
         '<div class="welcome-icon">&#128230;</div>' +
@@ -2736,20 +2693,13 @@
         despachoYaEjecutado = false;
         window.cachedValues = {};
 
-        // Show view toggle
-        document.getElementById('viewToggle').style.display = 'flex';
         const plp = document.getElementById('printListaPedido');
         if (plp) plp.style.display = admin ? 'block' : 'none';
 
         footer.style.display = isBlocked ? 'none' : 'block';
-        if (currentView === 'pedido') {
-          actualizarValoresItems();
-          renderPedidoView();
-          configurarPedidoFooterState();
-        } else {
-          renderPedido();
-          cargarLocalStorage();
-        }
+        actualizarValoresItems();
+        renderUnificado();
+        cargarLocalStorage();
         actualizarBtnTerminar();
         configurarPedidoFooterState();
 
@@ -2806,7 +2756,8 @@
         }
 
         if (itemsChanged || clienteChanged || statusChanged) {
-          renderPedido();
+          actualizarValoresItems();
+          renderUnificado();
         }
 
         if (notaChanged) {
@@ -2864,12 +2815,16 @@
     }
 
     // ==========================================
-    // RENDER PEDIDO COMPLETO
+    // RENDER UNIFICADO (Despacho + Pedido)
     // ==========================================
-    function renderPedido() {
+    function renderUnificado() {
       const mainContent = document.getElementById('mainContent');
+      if (!pedidoActual) return;
+
       const cliente = pedidoActual.cliente || {};
       const items = pedidoActual.items || [];
+      const pagos = pedidoActual.pagos || {};
+      const bloqueado = pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO';
 
       // Formatear telefono para WhatsApp
       let whatsappLink = '';
@@ -2880,12 +2835,23 @@
         whatsappLink = 'https://api.whatsapp.com/send/?phone=' + tel;
       }
 
+      // Fecha ingreso
+      let fechaIngreso = '';
+      if (pedidoActual.timestamp) {
+        fechaIngreso = new Date(pedidoActual.timestamp).toLocaleString('es-AR');
+      }
+
       // Calculate progress
       const checkedCount = items.filter(it => isItemChecked(it.codigo)).length;
       const progressPct = items.length > 0 ? Math.round((checkedCount / items.length) * 100) : 0;
       const isComplete = progressPct === 100 && items.length > 0;
 
       let html = '';
+
+      // FECHA
+      if (fechaIngreso) {
+        html += '<div class="pv-fecha">' + escapeHtml(fechaIngreso) + '</div>';
+      }
 
       // PROGRESS BAR
       html += '<div class="progress-section">';
@@ -2894,12 +2860,10 @@
       html += '<div class="progress-label"><span class="progress-pct' + (isComplete ? ' complete' : '') + '">' + progressPct + '%</span></div>';
       html += '</div>';
 
-      // DATOS CLIENTE
+      // DATOS CLIENTE (clickeable para editar)
       html += '<div class="cliente-section">';
-
-      // Fila 1: Nombre + Telefono
       html += '<div class="cliente-row">';
-      html += '<div class="cliente-card"><label>Cliente</label><div class="value"><a href="https://homepoint-admin.dev.ar/pedido.html?id=' + encodeURIComponent(pedidoId) + '&admin=true" target="_blank">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</a></div></div>';
+      html += '<div class="cliente-card" style="cursor:pointer" onclick="abrirEditClientModal()"><label>Cliente</label><div class="value">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div></div>';
       html += '<div class="cliente-card"><label>Localidad</label><div class="value">' + escapeHtml(cliente.localidad || 'N/A') + '</div></div>';
       html += '<div class="cliente-card"><label>Telefono</label><div class="value">' +
         (cliente.telefono
@@ -2914,7 +2878,6 @@
       html += '<div class="cliente-card"><label>Entrega</label><div class="value tipoEntregaDisplay">' + emojiEntrega(pedidoActual.tipoEntrega) + escapeHtml(pedidoActual.tipoEntrega || 'N/A') + '</div></div>';
       html += '<div class="cliente-card"><label>Estado</label><div class="value"><span class="status-badge ' + getStatusClass(pedidoActual.status) + '">' + emojiStatus(pedidoActual.status) + escapeHtml(pedidoActual.status || 'N/A') + '</span></div></div>';
       html += '</div>';
-
       html += '</div>';
 
       // HEADER ITEMS
@@ -2948,6 +2911,9 @@
           const sinStockClass = sinStock ? ' sin-stock' : '';
           const delay = Math.min((pendientes.length + groupIdx) * 0.03, 0.3);
 
+          const unitPesos = Math.round(it.valorU || 0);
+          const sub = Math.round((it.cantidad || 0) * unitPesos);
+
           groupHtml += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
 
           // Imagen
@@ -2966,13 +2932,24 @@
           const stockDisplay = Number.isFinite(stockVal)
             ? '<span class="item-stock' + stockClass + '">stk: ' + stockVal + '</span>' : '';
           groupHtml += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
+
+          // Precio + total del item
+          groupHtml += '<div class="pv-item-fin">';
+          if (admin && !bloqueado) {
+            groupHtml += '<input type="number" class="pv-valor-input" min="0" value="' + unitPesos + '" onchange="pvChangeValor(' + idx + ', this.value)">';
+          } else {
+            groupHtml += '<span class="pv-valor-static">$' + unitPesos.toLocaleString('es-AR') + '</span>';
+          }
+          groupHtml += '<span class="pv-total-item" id="pv-total-' + idx + '">= $' + sub.toLocaleString('es-AR') + '</span>';
+          groupHtml += '</div>';
+
           groupHtml += '</div>';
 
           // Cantidad
           if (!isBlocked) {
             groupHtml += '<div class="qty-control">' +
               '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)">\u25BC</button>' +
-              '<span class="qty-value">' + (it.cantidad || 1) + '</span>' +
+              '<span class="qty-value" id="pv-qty-' + idx + '">' + (it.cantidad || 1) + '</span>' +
               '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)">\u25B2</button>' +
               '</div>';
           } else {
@@ -3002,8 +2979,68 @@
         html += '<div class="empty-items">No hay articulos en este pedido</div>';
       }
 
-      mainContent.innerHTML = html;
+      // SECCION FINANCIERA
+      let totalSubtotal = 0;
+      items.forEach(it => {
+        totalSubtotal += Math.round((it.cantidad || 0) * Math.round(it.valorU || 0));
+      });
+
+      html += '<div class="pv-totals">';
+      html += '<div class="pv-total-row"><span id="pvTotal">Subtotal $ ' + totalSubtotal.toLocaleString('es-AR') + '</span></div>';
+
+      let descuento = window.cachedValues.descuento !== undefined ? window.cachedValues.descuento : (pagos.descuento || 0);
+      let porcentaje = window.cachedValues.porcentaje !== undefined ? window.cachedValues.porcentaje : (pagos.porcentajeDescuento || 0);
+      let recargo = window.cachedValues.recargo !== undefined ? window.cachedValues.recargo : (pagos.recargo || 0);
+      let porcentajeRecargo = window.cachedValues.porcentajeRecargo !== undefined ? window.cachedValues.porcentajeRecargo : (pagos.porcentajeRecargo || 0);
+      let envio = window.cachedValues.envio !== undefined ? window.cachedValues.envio : (pagos.envio || 0);
+
+      const ro = admin ? '' : ' readonly';
+      html += '<div class="pv-total-row">Descuento % <input type="number" class="pv-input-sm" id="pvPorcentajeInput" min="0" max="100" value="' + porcentaje + '"' + ro + '>';
+      html += ' $ <input type="number" class="pv-input-sm" id="pvDescuentoInput" min="0" value="' + descuento + '"' + ro + ' style="width:80px"></div>';
+
+      html += '<div class="pv-total-row">Recargo % <input type="number" class="pv-input-sm" id="pvPorcentajeRecargoInput" min="0" max="100" value="' + porcentajeRecargo + '"' + ro + '>';
+      html += ' $ <input type="number" class="pv-input-sm" id="pvRecargoInput" min="0" value="' + recargo + '"' + ro + ' style="width:80px"></div>';
+
+      const showEnvio = (pedidoActual.tipoEntrega === 'Correo Argentino' || pedidoActual.tipoEntrega === 'Motomensajeria');
+      html += '<div class="pv-total-row" id="pvEnvioRow" style="display:' + (showEnvio ? 'flex' : 'none') + '">Envio $ <input type="number" class="pv-input-sm" id="pvEnvioInput" min="0" value="' + envio + '"' + ro + ' style="width:80px"></div>';
+
+      let totalFinal = totalSubtotal - descuento + recargo + (showEnvio ? envio : 0);
+      if (totalFinal < 0) totalFinal = 0;
+      html += '<div class="pv-total-final" id="pvTotalFinal">TOTAL FINAL $ ' + totalFinal.toLocaleString('es-AR') + '</div>';
+      html += '</div>';
+
+      // RADIO PAGO
+      html += '<div class="pv-radio-group">';
+      html += '<div class="pv-radio-title">Pago</div>';
+      html += '<div class="pv-radio-row">';
+      html += '<label><input type="radio" name="pvTipoPago" value="Efectivo"' + (pedidoActual.tipoPago === 'Efectivo' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Efectivo</label>';
+      html += '<label><input type="radio" name="pvTipoPago" value="Transferencia"' + (pedidoActual.tipoPago === 'Transferencia' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Transferencia (+3%)</label>';
+      html += '</div>';
+
+      const showAlias = admin && pedidoActual.tipoPago === 'Transferencia';
+      html += '<div class="pv-alias-row" id="pvAliasRow" style="display:' + (showAlias ? 'flex' : 'none') + '">';
+      html += '<span style="font-weight:700;min-width:60px">ALIAS</span>';
+      html += '<input type="text" class="pv-alias-input" id="pvAlias" maxlength="50" value="' + escapeHtml((pagos.alias) || '') + '" list="pvAliasDatalist">';
+      html += '<datalist id="pvAliasDatalist"></datalist>';
+      html += '</div>';
+      html += '</div>';
+
+      // RADIO ENTREGA
+      html += '<div class="pv-radio-group">';
+      html += '<div class="pv-radio-title">Entrega</div>';
+      html += '<div class="pv-radio-row">';
+      const entregaOpts = ['Motomensajeria', 'Correo Argentino', 'Via Cargo'];
+      entregaOpts.forEach(opt => {
+        html += '<label><input type="radio" name="pvTipoEntrega" value="' + opt + '"' + (pedidoActual.tipoEntrega === opt ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> ' + opt + '</label>';
+      });
+      html += '</div>';
+      html += '</div>';
+
+      mainContent.innerHTML = '<div class="pv-content">' + html + '</div>';
       actualizarProgreso();
+
+      // Wire up financial event listeners
+      setTimeout(() => { pvWireEvents(bloqueado); actualizarCalculosPV(); }, 0);
     }
 
     // ==========================================
@@ -3052,8 +3089,15 @@
         const display = card.querySelector('.qty-value');
         if (display) display.textContent = qty;
       }
+      // Actualizar total del item
+      const totalEl = document.getElementById('pv-total-' + idx);
+      if (totalEl) {
+        const unitPesos = Math.round(pedidoActual.items[idx].valorU || 0);
+        totalEl.textContent = '= $' + Math.round(qty * unitPesos).toLocaleString('es-AR');
+      }
       actualizarContador();
-      programarAutoGuardado({ items: pedidoActual.items });
+      actualizarCalculosPV();
+      programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
     }
 
     // Toggle checkbox empaquetado
@@ -3086,7 +3130,7 @@
 
       // Manipulación directa del DOM en lugar de re-render completo
       if (!card) {
-        renderPedido();
+        renderUnificado();
         return;
       }
 
@@ -3154,6 +3198,7 @@
 
       actualizarProgreso();
       actualizarContador();
+      actualizarBtnTerminar();
     }
 
     function actualizarContadoresGrupo() {
@@ -3198,7 +3243,7 @@
           items: pedidoActual.items,
           lastUpdated: Date.now()
         });
-        renderPedido();
+        renderUnificado();
         cargarLocalStorage();
         showToast('Articulo eliminado');
       } catch (err) {
@@ -3431,8 +3476,7 @@
         showToast('Cantidad aumentada: ' + info.nombre);
       } else {
         const newItem = { codigo, nombre: info.nombre, cantidad: 1 };
-        // Si estamos en vista pedido, agregar valores
-        if (currentView === 'pedido' && sheetValorMap[codigo]) {
+        if (sheetValorMap[codigo]) {
           newItem.valorU = sheetValorMap[codigo].valorU;
           newItem.valorC = sheetValorMap[codigo].valorC;
         }
@@ -3441,14 +3485,9 @@
       }
 
       addItemModal.classList.remove('active');
-      if (currentView === 'pedido') {
-        renderPedidoView();
-        programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
-      } else {
-        renderPedido();
-        cargarLocalStorage();
-        programarAutoGuardado({ items: pedidoActual.items });
-      }
+      renderUnificado();
+      cargarLocalStorage();
+      programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
     });
 
     // ==========================================
@@ -3637,12 +3676,21 @@
       if (bloqueado) {
         btn.textContent = 'Reabrir Pedido';
         btn.classList.remove('completo');
+        btn.disabled = false;
+        btn.style.opacity = '1';
       } else if (listo) {
         btn.textContent = 'Listo';
         btn.classList.add('completo');
+        btn.disabled = false;
+        btn.style.opacity = '1';
       } else {
         btn.textContent = 'Cerrar Pedido';
         btn.classList.remove('completo');
+        // Solo habilitar si todos los items tienen listo === 'y'
+        const items = pedidoActual.items || [];
+        const todosListos = items.length > 0 && items.every(it => it.listo === 'y');
+        btn.disabled = !todosListos;
+        btn.style.opacity = todosListos ? '1' : '.5';
       }
     }
 
@@ -3936,34 +3984,7 @@
     }
 
     // ==========================================
-    // VIEW SWITCHING (Despacho / Pedido)
-    // ==========================================
-    function switchView(viewName) {
-      currentView = viewName;
-      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === viewName);
-      });
-      if (!pedidoActual) return;
-
-      if (viewName === 'despacho') {
-        renderPedido();
-        cargarLocalStorage();
-      } else {
-        actualizarValoresItems();
-        renderPedidoView();
-      }
-      actualizarBtnTerminar();
-      configurarPedidoFooterState();
-    }
-
-    document.getElementById('viewToggle').addEventListener('click', (e) => {
-      const btn = e.target.closest('.view-toggle-btn');
-      if (!btn || btn.classList.contains('active')) return;
-      switchView(btn.dataset.view);
-    });
-
-    // ==========================================
-    // PEDIDO VIEW: Actualizar valores items
+    // Actualizar valores items desde Sheets
     // ==========================================
     function actualizarValoresItems() {
       if (!pedidoActual || !pedidoActual.items || Object.keys(sheetValorMap).length === 0) return;
@@ -4109,182 +4130,6 @@
       }
     }
 
-    // ==========================================
-    // PEDIDO VIEW: Render completo
-    // ==========================================
-    function renderPedidoView() {
-      const mainContent = document.getElementById('mainContent');
-      if (!pedidoActual) return;
-
-      const cliente = pedidoActual.cliente || {};
-      const items = pedidoActual.items || [];
-      const pagos = pedidoActual.pagos || {};
-      const bloqueado = pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO';
-
-      // Fecha ingreso
-      let fechaIngreso = '';
-      if (pedidoActual.timestamp) {
-        fechaIngreso = new Date(pedidoActual.timestamp).toLocaleString('es-AR');
-      }
-
-      let html = '';
-
-      // Fecha
-      if (fechaIngreso) {
-        html += '<div class="pv-fecha">' + escapeHtml(fechaIngreso) + '</div>';
-      }
-
-      // Cliente info (clickeable para editar)
-      html += '<div class="cliente-section">';
-      html += '<div class="cliente-row">';
-      html += '<div class="cliente-card" style="cursor:pointer" onclick="abrirEditClientModal()"><label>Cliente</label><div class="value">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div></div>';
-      html += '<div class="cliente-card"><label>Localidad</label><div class="value">' + escapeHtml(cliente.localidad || 'N/A') + '</div></div>';
-
-      let whatsappLink = '';
-      if (cliente.telefono) {
-        let tel = cliente.telefono.replace(/[^\d]/g, '');
-        if (tel.startsWith('0')) tel = tel.substring(1);
-        if (!tel.startsWith('54')) tel = '54' + tel;
-        whatsappLink = 'https://api.whatsapp.com/send/?phone=' + tel;
-      }
-      html += '<div class="cliente-card"><label>Telefono</label><div class="value">' +
-        (cliente.telefono ? '<a href="' + whatsappLink + '" target="_blank">' + escapeHtml(cliente.telefono) + ' \u{1F4AC}</a>' : 'N/A') +
-        '</div></div>';
-      html += '</div>';
-
-      // Fila 2: Pago + Entrega + Estado
-      html += '<div class="cliente-row">';
-      html += '<div class="cliente-card"><label>Pago</label><div class="value tipoPagoDisplay">' + emojiPago(pedidoActual.tipoPago) + escapeHtml(pedidoActual.tipoPago || 'N/A') + '</div></div>';
-      html += '<div class="cliente-card"><label>Entrega</label><div class="value tipoEntregaDisplay">' + emojiEntrega(pedidoActual.tipoEntrega) + escapeHtml(pedidoActual.tipoEntrega || 'N/A') + '</div></div>';
-      html += '<div class="cliente-card"><label>Estado</label><div class="value"><span class="status-badge ' + getStatusClass(pedidoActual.status) + '">' + emojiStatus(pedidoActual.status) + escapeHtml(pedidoActual.status || 'N/A') + '</span></div></div>';
-      html += '</div>';
-      html += '</div>';
-
-      // Items (cards)
-      html += '<div class="items-header"><h2>Articulos</h2><span class="items-counter">' + items.length + ' items</span></div>';
-      html += '<div class="pv-items-list">';
-
-      let totalSubtotal = 0;
-      items.forEach((it, idx) => {
-        const unitPesos = Math.round(it.valorU || 0);
-        const sub = Math.round((it.cantidad || 0) * unitPesos);
-        totalSubtotal += sub;
-        const stockVal = window.sheetStockMap[it.codigo];
-        const sinStock = stockVal !== undefined && Number.isFinite(stockVal) && stockVal <= 0;
-        const sinStockClass = sinStock ? ' sin-stock' : '';
-        const sheetInfo = sheetsData[it.codigo] || {};
-        const imgUrl = sheetInfo.imagen || '';
-
-        html += '<div class="item-card' + sinStockClass + '">';
-
-        if (imgUrl) {
-          html += '<img class="item-img" src="' + escapeHtml(imgUrl) + '" alt="" onclick="pvOpenLightbox(\'' + escapeHtml(it.nombre || '') + '\')" loading="lazy">';
-        } else {
-          html += '<div class="item-img-placeholder">&#128247;</div>';
-        }
-
-        const stockClass = (stockVal !== null && stockVal !== undefined && Number.isFinite(stockVal))
-          ? (stockVal <= 0 ? ' stock-zero' : stockVal <= 10 ? ' stock-low' : ' stock-ok') : '';
-        const stockDisplay = Number.isFinite(stockVal)
-          ? '<span class="item-stock' + stockClass + '">stk:' + stockVal + '</span>' : '';
-
-        html += '<div class="item-info">';
-        // Línea 1: nombre
-        html += '<div class="item-name" onclick="pvOpenLightbox(\'' + escapeHtml(it.nombre || '') + '\')">' + escapeHtml(it.nombre || 'Sin nombre') + '</div>';
-        // Línea 2: código + stock
-        html += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
-        // Línea 3: valor + total
-        html += '<div class="pv-item-fin">';
-        if (admin && !bloqueado) {
-          html += '<input type="number" class="pv-valor-input" min="0" value="' + unitPesos + '" onchange="pvChangeValor(' + idx + ', this.value)">';
-        } else {
-          html += '<span class="pv-valor-static">$' + unitPesos.toLocaleString('es-AR') + '</span>';
-        }
-        html += '<span class="pv-total-item" id="pv-total-' + idx + '">= $' + sub.toLocaleString('es-AR') + '</span>';
-        html += '</div>';
-        html += '</div>';
-
-        if (!bloqueado) {
-          html += '<div class="qty-control">' +
-            '<button class="qty-btn" onclick="pvCambiarQty(' + idx + ',-1)">&#9660;</button>' +
-            '<span class="qty-value" id="pv-qty-' + idx + '">' + (it.cantidad || 1) + '</span>' +
-            '<button class="qty-btn" onclick="pvCambiarQty(' + idx + ',1)">&#9650;</button>' +
-            '</div>';
-        } else {
-          html += '<span class="qty-static">' + (it.cantidad || 1) + '</span>';
-        }
-
-        if (!bloqueado) {
-          html += '<button class="item-delete" onclick="pvDeleteItem(' + idx + ')">&times;</button>';
-        }
-
-        html += '</div>';
-      });
-      html += '</div>'; // pv-items-list
-
-      // Totals section
-      html += '<div class="pv-totals">';
-      html += '<div class="pv-total-row"><span id="pvTotal">Subtotal $ ' + totalSubtotal.toLocaleString('es-AR') + '</span></div>';
-
-      // Descuento
-      let descuento = window.cachedValues.descuento !== undefined ? window.cachedValues.descuento : (pagos.descuento || 0);
-      let porcentaje = window.cachedValues.porcentaje !== undefined ? window.cachedValues.porcentaje : (pagos.porcentajeDescuento || 0);
-      let recargo = window.cachedValues.recargo !== undefined ? window.cachedValues.recargo : (pagos.recargo || 0);
-      let porcentajeRecargo = window.cachedValues.porcentajeRecargo !== undefined ? window.cachedValues.porcentajeRecargo : (pagos.porcentajeRecargo || 0);
-      let envio = window.cachedValues.envio !== undefined ? window.cachedValues.envio : (pagos.envio || 0);
-
-      const ro = admin ? '' : ' readonly';
-      html += '<div class="pv-total-row">Descuento % <input type="number" class="pv-input-sm" id="pvPorcentajeInput" min="0" max="100" value="' + porcentaje + '"' + ro + '>';
-      html += ' $ <input type="number" class="pv-input-sm" id="pvDescuentoInput" min="0" value="' + descuento + '"' + ro + ' style="width:80px"></div>';
-
-      // Recargo
-      html += '<div class="pv-total-row">Recargo % <input type="number" class="pv-input-sm" id="pvPorcentajeRecargoInput" min="0" max="100" value="' + porcentajeRecargo + '"' + ro + '>';
-      html += ' $ <input type="number" class="pv-input-sm" id="pvRecargoInput" min="0" value="' + recargo + '"' + ro + ' style="width:80px"></div>';
-
-      // Envio
-      const showEnvio = (pedidoActual.tipoEntrega === 'Correo Argentino' || pedidoActual.tipoEntrega === 'Motomensajeria');
-      html += '<div class="pv-total-row" id="pvEnvioRow" style="display:' + (showEnvio ? 'flex' : 'none') + '">Envio $ <input type="number" class="pv-input-sm" id="pvEnvioInput" min="0" value="' + envio + '"' + ro + ' style="width:80px"></div>';
-
-      // Total final
-      let totalFinal = totalSubtotal - descuento + recargo + (showEnvio ? envio : 0);
-      if (totalFinal < 0) totalFinal = 0;
-      html += '<div class="pv-total-final" id="pvTotalFinal">TOTAL FINAL $ ' + totalFinal.toLocaleString('es-AR') + '</div>';
-      html += '</div>';
-
-      // Radio Pago
-      html += '<div class="pv-radio-group">';
-      html += '<div class="pv-radio-title">Pago</div>';
-      html += '<div class="pv-radio-row">';
-      html += '<label><input type="radio" name="pvTipoPago" value="Efectivo"' + (pedidoActual.tipoPago === 'Efectivo' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Efectivo</label>';
-      html += '<label><input type="radio" name="pvTipoPago" value="Transferencia"' + (pedidoActual.tipoPago === 'Transferencia' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Transferencia (+3%)</label>';
-      html += '</div>';
-
-      // Alias
-      const showAlias = admin && pedidoActual.tipoPago === 'Transferencia';
-      html += '<div class="pv-alias-row" id="pvAliasRow" style="display:' + (showAlias ? 'flex' : 'none') + '">';
-      html += '<span style="font-weight:700;min-width:60px">ALIAS</span>';
-      html += '<input type="text" class="pv-alias-input" id="pvAlias" maxlength="50" value="' + escapeHtml((pagos.alias) || '') + '" list="pvAliasDatalist">';
-      html += '<datalist id="pvAliasDatalist"></datalist>';
-      html += '</div>';
-      html += '</div>';
-
-      // Radio Entrega
-      html += '<div class="pv-radio-group">';
-      html += '<div class="pv-radio-title">Entrega</div>';
-      html += '<div class="pv-radio-row">';
-      const entregaOpts = ['Motomensajeria', 'Correo Argentino', 'Via Cargo'];
-      entregaOpts.forEach(opt => {
-        html += '<label><input type="radio" name="pvTipoEntrega" value="' + opt + '"' + (pedidoActual.tipoEntrega === opt ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> ' + opt + '</label>';
-      });
-      html += '</div>';
-      html += '</div>';
-
-
-      mainContent.innerHTML = '<div class="pv-content">' + html + '</div>';
-
-      // Wire up event listeners after render
-      setTimeout(() => { pvWireEvents(bloqueado); actualizarCalculosPV(); }, 0);
-    }
 
     // ==========================================
     // PEDIDO VIEW: Wire events
@@ -4422,7 +4267,7 @@
       if (!pedidoActual || !pedidoActual.items[idx]) return;
       pedidoActual.items[idx].valorU = parseFloat(val) || 0;
       programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
-      renderPedidoView();
+      renderUnificado();
     }
 
     function pvDeleteItem(idx) {
@@ -4430,7 +4275,7 @@
       if (!confirm('Eliminar "' + (pedidoActual.items[idx].nombre || 'articulo') + '"?')) return;
       pedidoActual.items.splice(idx, 1);
       programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
-      renderPedidoView();
+      renderUnificado();
     }
 
     function pvOpenLightbox(nombre) {
@@ -4572,6 +4417,7 @@
       const user = firebase.auth().currentUser;
       const updateData = {
         locked: true, status: 'CERRADO',
+        enPreparacion: 'listo',
         lastModifiedBy: admin && user ? 'admin' : 'usuario',
         lastModifiedEmail: admin && user ? user.email : '',
         tipoPago: tipoPago.value, tipoEntrega: tipoEntrega.value,
@@ -4618,6 +4464,7 @@
         const user = firebase.auth().currentUser;
         await db.ref('pedidos/' + pedidoId).update({
           locked: false, status: 'ABIERTO',
+          enPreparacion: 'si',
           lastModifiedBy: admin && user ? 'admin' : 'usuario',
           lastModifiedEmail: admin && user ? user.email : '',
           movimientosRegistrados: false,
@@ -4642,16 +4489,6 @@
 
       if (bloqueado) {
         pvReabrirPedido();
-      } else if (pedidoActual.enPreparacion === 'listo') {
-        // Toggle: volver a 'si' (era el comportamiento de Terminar cuando estaba en listo)
-        pedidoActual.enPreparacion = 'si';
-        actualizarBtnTerminar();
-        try {
-          await db.ref('pedidos/' + pedidoId).update({ enPreparacion: 'si' });
-        } catch (err) {
-          console.error('Error al actualizar enPreparacion:', err);
-          showToast('Error al guardar');
-        }
       } else {
         pvCerrarPedido();
       }
@@ -4922,7 +4759,7 @@
     });
 
     // ==========================================
-    // OVERRIDE: Realtime listener for both views
+    // OVERRIDE: Realtime listener unificado
     // ==========================================
     activarListenerTiempoReal = function(id) {
       const callback = (snap) => {
@@ -4963,16 +4800,15 @@
           }
         }
 
-        if (currentView === 'despacho') {
-          if (itemsChanged || clienteChanged || statusChanged) renderPedido();
-          if (notaChanged) notaSelect.value = nuevoPedido.nota || '';
-          if (enPreparacionChanged) actualizarBtnTerminar();
-        } else {
-          if (itemsChanged || clienteChanged || statusChanged || pagosChanged) {
-            actualizarValoresItems();
-            renderPedidoView();
-          }
+        if (itemsChanged || clienteChanged || statusChanged || pagosChanged) {
+          actualizarValoresItems();
+          renderUnificado();
         }
+        if (notaChanged) {
+          const ns = document.getElementById('notaSelect');
+          if (ns) ns.value = nuevoPedido.nota || '';
+        }
+        if (enPreparacionChanged) actualizarBtnTerminar();
         configurarPedidoFooterState();
       };
 
