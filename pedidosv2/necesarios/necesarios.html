@@ -331,7 +331,115 @@
       color: var(--text);
       transition: color .15s;
       line-height: 1.3;
+      cursor: default;
+      -webkit-user-select: none;
+      user-select: none;
     }
+    .longpress-tooltip {
+      position: fixed;
+      z-index: 9999;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+      max-width: 80vw;
+      white-space: normal;
+      word-break: break-word;
+      pointer-events: none;
+      animation: tooltipIn .15s var(--ease-out);
+    }
+    @keyframes tooltipIn {
+      from { opacity: 0; transform: scale(.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Modal detalle pedidos */
+    .detalle-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      background: rgba(0,0,0,.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn .2s var(--ease-out);
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .detalle-modal {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 40px rgba(0,0,0,.3);
+      width: 90vw;
+      max-width: 400px;
+      max-height: 75vh;
+      display: flex;
+      flex-direction: column;
+      animation: modalIn .25s var(--ease-out);
+    }
+    @keyframes modalIn { from { opacity: 0; transform: scale(.92) translateY(10px); } to { opacity: 1; transform: none; } }
+    .detalle-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detalle-header h3 {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      margin: 0 0 2px;
+      line-height: 1.3;
+    }
+    .detalle-header small {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .detalle-body {
+      padding: 12px 18px 18px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .detalle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .detalle-row:last-child { border-bottom: none; }
+    .detalle-cliente {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .detalle-cant {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-left: 12px;
+      flex-shrink: 0;
+    }
+    .detalle-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: none;
+      border: none;
+      font-size: 22px;
+      color: var(--text-muted);
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+    }
+    .detalle-close:hover { color: var(--text); }
     .item-code {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -643,7 +751,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let articulosMap = {}; // { codigo: { nombre, codigo, cantidadNecesaria } }
+    let articulosMap = {}; // { codigo: { nombre, codigo, cantidadNecesaria, pedidos: [{cliente, cantidad, pedidoId}] } }
     let pedidosCount = 0;
     let sheetsData = {}; // { codigo: { imagen, nombre } }
     let sheetsLoaded = false;
@@ -723,18 +831,23 @@
             if (p.enPreparacion === 'listo') return;
 
             pedidosCount++;
+            const clienteNombre = (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key);
+            const pedidoId = child.key;
             const items = p.items || [];
             items.forEach(it => {
               if (it.listo === 'y') return;
               const codigo = it.codigo || 'SIN_CODIGO';
+              const cant = parseInt(it.cantidad) || 0;
               if (!articulosMap[codigo]) {
                 articulosMap[codigo] = {
                   codigo: codigo,
                   nombre: it.nombre || codigo,
-                  cantidadNecesaria: 0
+                  cantidadNecesaria: 0,
+                  pedidos: []
                 };
               }
-              articulosMap[codigo].cantidadNecesaria += (parseInt(it.cantidad) || 0);
+              articulosMap[codigo].cantidadNecesaria += cant;
+              articulosMap[codigo].pedidos.push({ cliente: clienteNombre, cantidad: cant, pedidoId: pedidoId });
             });
           });
         };
@@ -829,7 +942,7 @@
         const stockDisplay = (stockVal !== null && Number.isFinite(stockVal))
           ? '<span class="item-stock' + stockClass + '">stk: ' + stockVal + '</span>' : '';
         html += '<div class="item-info">' +
-          '<div class="item-name">' + escapeHtml(art.nombre) + '</div>' +
+          '<div class="item-name" title="' + escapeHtml(art.nombre) + '">' + escapeHtml(art.nombre) + '</div>' +
           '<div class="item-code">' + escapeHtml(art.codigo) + stockDisplay + '</div>' +
           '</div>';
 
@@ -1053,6 +1166,115 @@
       win.focus();
       win.print();
     }
+
+    // ==========================================
+    // DOBLE CLICK — Detalle de pedidos por artículo
+    // ==========================================
+    function mostrarDetallePedidos(codigo) {
+      const art = articulosMap[codigo];
+      if (!art || !art.pedidos || art.pedidos.length === 0) return;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'detalle-overlay';
+
+      let filas = '';
+      art.pedidos.forEach(p => {
+        filas += '<div class="detalle-row">' +
+          '<span class="detalle-cliente">' + escapeHtml(p.cliente) + '</span>' +
+          '<span class="detalle-cant">' + p.cantidad + '</span>' +
+          '</div>';
+      });
+
+      overlay.innerHTML =
+        '<div class="detalle-modal" style="position:relative;">' +
+          '<button class="detalle-close">&times;</button>' +
+          '<div class="detalle-header">' +
+            '<h3>' + escapeHtml(art.nombre) + '</h3>' +
+            '<small>' + escapeHtml(art.codigo) + ' &mdash; Total: ' + art.cantidadNecesaria + '</small>' +
+          '</div>' +
+          '<div class="detalle-body">' + filas + '</div>' +
+        '</div>';
+
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.classList.contains('detalle-close')) overlay.remove();
+      });
+      document.body.appendChild(overlay);
+    }
+
+    document.getElementById('tableContainer').addEventListener('dblclick', function(e) {
+      const card = e.target.closest('.item-card');
+      if (!card) return;
+      const codigo = card.getAttribute('data-codigo');
+      if (codigo) mostrarDetallePedidos(codigo);
+    });
+
+    // ==========================================
+    // LONG-PRESS TOOLTIP para nombres truncados
+    // ==========================================
+    (function() {
+      let lpTimer = null;
+      let tooltip = null;
+      const LONG_PRESS_MS = 400;
+
+      function removeTooltip() {
+        if (tooltip) { tooltip.remove(); tooltip = null; }
+      }
+
+      function showTooltip(el, x, y) {
+        removeTooltip();
+        // Solo mostrar si el texto está realmente truncado
+        if (el.scrollWidth <= el.clientWidth) return;
+        tooltip = document.createElement('div');
+        tooltip.className = 'longpress-tooltip';
+        tooltip.textContent = el.textContent;
+        document.body.appendChild(tooltip);
+        // Posicionar encima del dedo/cursor
+        const rect = tooltip.getBoundingClientRect();
+        let left = x - rect.width / 2;
+        let top = y - rect.height - 12;
+        if (left < 8) left = 8;
+        if (left + rect.width > window.innerWidth - 8) left = window.innerWidth - rect.width - 8;
+        if (top < 8) top = y + 20;
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+      }
+
+      const container = document.getElementById('tableContainer');
+
+      container.addEventListener('touchstart', function(e) {
+        const el = e.target.closest('.item-name');
+        if (!el) return;
+        const touch = e.touches[0];
+        lpTimer = setTimeout(() => showTooltip(el, touch.clientX, touch.clientY), LONG_PRESS_MS);
+      }, { passive: true });
+
+      container.addEventListener('touchend', function() {
+        clearTimeout(lpTimer);
+        setTimeout(removeTooltip, 1500);
+      });
+
+      container.addEventListener('touchmove', function() {
+        clearTimeout(lpTimer);
+        removeTooltip();
+      });
+
+      // Mouse: mostrar en hover si truncado
+      container.addEventListener('mousedown', function(e) {
+        const el = e.target.closest('.item-name');
+        if (!el) return;
+        lpTimer = setTimeout(() => showTooltip(el, e.clientX, e.clientY), LONG_PRESS_MS);
+      });
+
+      container.addEventListener('mouseup', function() {
+        clearTimeout(lpTimer);
+        setTimeout(removeTooltip, 1500);
+      });
+
+      container.addEventListener('mouseleave', function() {
+        clearTimeout(lpTimer);
+        removeTooltip();
+      });
+    })();
   </script>
 </body>
 </html>
