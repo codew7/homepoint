@@ -264,6 +264,19 @@
     .list-header .lh-pendiente { width: 52px; }
     .list-header .lh-ok { width: 32px; }
 
+    /* Category header */
+    .category-header {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--accent);
+      padding: 14px 12px 6px;
+      margin-top: 4px;
+      border-bottom: 2px solid var(--accent);
+      margin-bottom: 8px;
+    }
+
     /* Item card */
     .item-card {
       background: var(--surface);
@@ -781,7 +794,8 @@
           sheetsData[codigo] = {
             imagen: imagenes[0] || '',
             nombre: (row[3] || '').trim(),
-            stock: stockRaw !== '' ? (parseInt(stockRaw, 10) || 0) : null
+            stock: stockRaw !== '' ? (parseInt(stockRaw, 10) || 0) : null,
+            categoria: (row[0] || '').trim()
           };
         });
 
@@ -892,7 +906,15 @@
     // ==========================================
     function renderTabla() {
       const articulos = Object.values(articulosMap);
-      articulos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      articulos.forEach(art => {
+        const si = sheetsData[art.codigo];
+        art._categoria = (si && si.categoria) ? si.categoria : 'Sin categoría';
+      });
+      articulos.sort((a, b) => {
+        const catCmp = a._categoria.localeCompare(b._categoria, 'es');
+        if (catCmp !== 0) return catCmp;
+        return a.nombre.localeCompare(b.nombre, 'es');
+      });
 
       document.getElementById('loadingState').style.display = 'none';
       const container = document.getElementById('tableContainer');
@@ -913,7 +935,12 @@
         '<span class="lh-col lh-ok">OK</span>' +
         '</div>';
 
+      let currentCat = null;
       articulos.forEach((art, i) => {
+        if (art._categoria !== currentCat) {
+          currentCat = art._categoria;
+          html += '<div class="category-header">' + escapeHtml(currentCat) + '</div>';
+        }
         const preparado = getPreparado(art.codigo);
         const verificado = getVerificado(art.codigo);
         const diff = art.cantidadNecesaria - preparado;
