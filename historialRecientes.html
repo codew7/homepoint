@@ -25,6 +25,128 @@
   <!-- Fin Firebase Auth Check -->
   <script>
     let pedidosCache = {};
+    // === ALIAS: Historial desde localStorage + Google Sheets ===
+    let aliasHistorial = [];
+    let aliasDesdeSheets = [];
+
+    function cargarHistorialAliasDesdeLocalStorage() {
+      try {
+        const aliasGuardados = localStorage.getItem('historialAlias');
+        aliasHistorial = aliasGuardados ? JSON.parse(aliasGuardados) : [];
+      } catch (error) {
+        aliasHistorial = [];
+      }
+    }
+
+    async function cargarAliasDesdeSheets() {
+      try {
+        if (typeof GOOGLE_SHEETS_CONFIG === 'undefined') return;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Alias!A2:A?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.values) {
+          aliasDesdeSheets = data.values.map(r => r[0]).filter(Boolean).map(a => a.trim().toUpperCase());
+        }
+      } catch (error) {
+        console.error('Error cargando alias desde Google Sheets:', error);
+      }
+    }
+
+    function guardarAliasEnLocalStorage(nuevoAlias) {
+      try {
+        if (!nuevoAlias || nuevoAlias.trim() === '') return;
+        const aliasLimpio = nuevoAlias.trim().toUpperCase();
+        let historial = [];
+        const aliasGuardados = localStorage.getItem('historialAlias');
+        if (aliasGuardados) historial = JSON.parse(aliasGuardados);
+        historial = historial.filter(a => a !== aliasLimpio);
+        historial.unshift(aliasLimpio);
+        historial = historial.slice(0, 15);
+        localStorage.setItem('historialAlias', JSON.stringify(historial));
+        aliasHistorial = historial;
+      } catch (error) {
+        console.error('Error guardando alias en localStorage:', error);
+      }
+    }
+
+    function obtenerListaAlias() {
+      const vistos = new Set();
+      const lista = [];
+      aliasHistorial.forEach(a => { if (!vistos.has(a)) { vistos.add(a); lista.push(a); } });
+      aliasDesdeSheets.forEach(a => { if (!vistos.has(a)) { vistos.add(a); lista.push(a); } });
+      return lista;
+    }
+
+    // Cargar alias al inicio
+    cargarHistorialAliasDesdeLocalStorage();
+    cargarAliasDesdeSheets();
+
+    // === MODAL WHATSAPP ===
+    let whatsappPedidoId = null;
+
+    function abrirModalWhatsapp(id) {
+      whatsappPedidoId = id;
+      const pedido = pedidosCache[id];
+      if (!pedido) { alert('Pedido no encontrado'); return; }
+
+      const aliasActual = (pedido.pagos && pedido.pagos.alias) ? pedido.pagos.alias.trim().toUpperCase() : '';
+      document.getElementById('waAliasInput').value = aliasActual;
+
+      // Poblar datalist
+      const datalist = document.getElementById('waAliasDatalist');
+      datalist.innerHTML = '';
+      obtenerListaAlias().forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        datalist.appendChild(opt);
+      });
+
+      document.getElementById('waModal').style.display = 'flex';
+      document.getElementById('waAliasInput').focus();
+    }
+
+    function cerrarModalWhatsapp() {
+      document.getElementById('waModal').style.display = 'none';
+      whatsappPedidoId = null;
+    }
+
+    async function enviarWhatsapp() {
+      if (!whatsappPedidoId) return;
+      const pedido = pedidosCache[whatsappPedidoId];
+      if (!pedido) { alert('Pedido no encontrado'); return; }
+
+      const aliasInput = document.getElementById('waAliasInput').value.trim().toUpperCase();
+      if (!aliasInput) { alert('Debe ingresar un alias'); return; }
+
+      const telefono = (pedido.cliente && pedido.cliente.telefono) ? pedido.cliente.telefono.replace(/\D/g, '') : '';
+      if (!telefono) { alert('El cliente no tiene teléfono registrado'); return; }
+
+      // Guardar alias en Firebase si es diferente al actual
+      const aliasActual = (pedido.pagos && pedido.pagos.alias) ? pedido.pagos.alias.trim().toUpperCase() : '';
+      if (aliasInput !== aliasActual) {
+        try {
+          await db.ref('pedidos/' + whatsappPedidoId + '/pagos/alias').set(aliasInput);
+          // Actualizar caché local
+          if (!pedidosCache[whatsappPedidoId].pagos) pedidosCache[whatsappPedidoId].pagos = {};
+          pedidosCache[whatsappPedidoId].pagos.alias = aliasInput;
+          guardarAliasEnLocalStorage(aliasInput);
+        } catch (e) {
+          console.error('Error guardando alias:', e);
+          alert('Error al guardar el alias en Firebase');
+          return;
+        }
+      }
+
+      // Formatear teléfono: asegurar prefijo 54 para Argentina
+      let tel = telefono;
+      if (!tel.startsWith('54')) tel = '54' + tel;
+
+      const url = `https://api.whatsapp.com/send/?phone=${tel}&text=${encodeURIComponent(aliasInput)}`;
+      window.open(url, '_blank');
+      cerrarModalWhatsapp();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
       // Calcular fecha de hoy en Argentina (UTC-3) antes de armar la query
       const now = new Date();
@@ -53,16 +175,12 @@
       document.getElementById('filtroNombre').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') aplicarFiltros();
       });
-      document.getElementById('filtroTipoCliente').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') aplicarFiltros();
-      });
     });
 
     function renderPedidos() {
       const tbody = document.getElementById('pedidosBody');
       let pedidos = pedidosCache;
       const filtroNombre = document.getElementById('filtroNombre').value.trim().toLowerCase();
-      const filtroTipo = document.getElementById('filtroTipoCliente').value;
 
       // Los registros ya vienen filtrados por fecha de hoy y createdby = admin desde Firebase
       let keys = Object.keys(pedidos).reverse();
@@ -70,11 +188,8 @@
       if (filtroNombre) {
         keys = keys.filter(id => (pedidos[id].cliente?.nombre || '').toLowerCase().includes(filtroNombre));
       }
-      if (filtroTipo) {
-        keys = keys.filter(id => (pedidos[id].cliente?.tipoCliente || '') === filtroTipo);
-      }
       if (keys.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6">No hay pedidos del día de hoy que coincidan con los filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">No hay pedidos del día de hoy que coincidan con los filtros.</td></tr>';
         return;
       }
 
@@ -83,7 +198,6 @@
         const p = pedidos[id];
         const fecha = p.fecha || '';
         const cliente = p.cliente || {};
-        const tipoCliente = cliente.tipoCliente || '';
         const vendedor = p.vendedor || 'No asignado';
         const isCancelado = (p.status || '').toUpperCase() === 'CANCELADO';
         const pagos = p.pagos || {};
@@ -94,13 +208,13 @@
           <tr${isCancelado ? ' style="background:#e0e0e0;color:#888;"' : ''}>
             <td>${fecha}</td>
             <td style="cursor:pointer;text-decoration:underline;color:#2a3d8f;" onclick="verPedido('${id}')">${cliente.nombre || ''}</td>
-            <td>${tipoCliente}</td>
             <td>${totalFinal}</td>
             <td>${vendedor}</td>
             <td>
-              <button onclick="verPedido('${id}')">Ver</button>
-              <button onclick="imprimirPedido('${id}')">Imprimir</button>
-              <button onclick="cancelarPedido('${id}')"${isCancelado ? ' disabled style=\"background:#ccc;cursor:not-allowed;\"' : ''}>Cancelar</button>
+              <button onclick="abrirModalWhatsapp('${id}')" style="background:#25D366;padding:6px 10px;" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16" style="vertical-align:middle;"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.116.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.116-.198-.012-.304.087-.403.089-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.325-.336-.445-.342-.116-.007-.248-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.13 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.116-.943-.05-.084-.182-.133-.38-.232z"/></svg></button>
+              <button onclick="verPedido('${id}')" style="background:#2a3d8f;padding:6px 10px;" title="Ver pedido"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16" style="vertical-align:middle;"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg></button>
+              <button onclick="imprimirPedido('${id}')" style="background:#555;padding:6px 10px;" title="Imprimir"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16" style="vertical-align:middle;"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/></svg></button>
+              <button onclick="cancelarPedido('${id}')" style="background:${isCancelado ? '#ccc' : '#f44336'};padding:6px 10px;${isCancelado ? 'cursor:not-allowed;' : ''}" title="Cancelar"${isCancelado ? ' disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16" style="vertical-align:middle;"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8z"/></svg></button>
             </td>
             </tr>
         `;
@@ -111,7 +225,6 @@
     }
     function limpiarFiltros() {
       document.getElementById('filtroNombre').value = '';
-      document.getElementById('filtroTipoCliente').value = '';
       renderPedidos();
     }
     function verPedido(id) {
@@ -185,7 +298,6 @@
             <div><span class='label'>Dirección:</span> ${direccion}</div>
             <div><span class='label'>DNI:</span> ${dni}</div>
             <div><span class='label'>Email:</span> ${email}</div>
-            <div><span class='label'>Tipo:</span> ${tipoCliente}</div>
             <hr style='margin:10px 0;'>
             <table>
               <thead>
@@ -198,11 +310,13 @@
             <table>
               <tr class='totales'><td>Subtotal</td><td style='text-align:right;'>$${subtotal}</td></tr>
               <tr class='totales'><td>Medio de Pago</td><td style='text-align:right;'>${medioPago}</td></tr>
-              <tr class='totales'><td>Recargo</td><td style='text-align:right;'>$${recargo}</td></tr>
-              <tr class='totales'><td>Descuento</td><td style='text-align:right;'>$${descuento}</td></tr>
-              <tr class='totales'><td>Costo de Envío</td><td style='text-align:right;'>$${envio}</td></tr>
+              ${Number(pagos.recargo) ? `<tr class='totales'><td>Recargo</td><td style='text-align:right;'>$${recargo}</td></tr>` : ''}
+              ${Number(pagos.descuento) ? `<tr class='totales'><td>Descuento</td><td style='text-align:right;'>$${descuento}</td></tr>` : ''}
+              ${Number(pagos.envio) ? `<tr class='totales'><td>Costo de Envío</td><td style='text-align:right;'>$${envio}</td></tr>` : ''}
               <tr class='totales'><td>Total</td><td style='text-align:right;font-size:1.1em;'>$${totalFinal}</td></tr>
             </table>
+            <hr style='margin:10px 0;'>
+            <div style="text-align:center;font-size:0.80em;font-weight:bold;color:#333;">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
           </div>
           <script>window.onload = function(){ window.print(); }<\/script>
         </body>
@@ -263,6 +377,9 @@
     }
     
     async function cancelarPedido(id) {
+      const clave = prompt('Ingrese la contraseña para cancelar el pedido:');
+      if (clave === null) return;
+      if (clave !== '2574') { alert('Contraseña incorrecta'); return; }
       if (!confirm('¿Seguro que desea cancelar este pedido? Esta acción es IRREVERSIBLE y el pedido no podrá ser modificado ni reactivado.')) return;
       
       try {
@@ -318,8 +435,8 @@
     tr:nth-child(even) { background: #f9f9f9; }
     button { margin: 0 2px; padding: 6px 12px; border-radius: 4px; border: none; background: #f44336; color: #fff; cursor: pointer; }
     button:hover { background: #d8382c; }
-    #filtroNombre, #filtroTipoCliente {
-      width: 220px; /* Puedes ajustar este valor según lo que necesites */
+    #filtroNombre {
+      width: 220px;
     }
   </style>
 </head>
@@ -330,11 +447,6 @@
   <main>
     <div style="margin-bottom: 16px; display: flex; gap: 20px; align-items: center;">
       <input type="text" id="filtroNombre" placeholder="Filtrar por nombre" style="padding: 6px; border-radius: 4px; border: 1px solid #ccc;">
-      <select id="filtroTipoCliente" style="padding: 6px; border-radius: 4px; border: 1px solid #ccc;">
-        <option value="">Todos los tipos</option>
-        <option value="consumidor final">Minorista</option>
-        <option value="mayorista">Mayorista</option>
-      </select>
       <button style="background:#39373f;" onclick="aplicarFiltros()">Filtrar</button>
       <button style="background:#888;" onclick="limpiarFiltros()">Limpiar</button>
     </div>
@@ -343,16 +455,46 @@
         <tr>
           <th>Fecha</th>
           <th>Nombre</th>
-          <th>Tipo de Cliente</th>
           <th>Total Final</th>
           <th>Vendedor</th>
           <th>Acciones</th>
         </tr>
       </thead>
       <tbody id="pedidosBody">
-        <tr><td colspan="6">Cargando...</td></tr>
+        <tr><td colspan="5">Cargando...</td></tr>
       </tbody>
     </table>
   </main>
+
+  <!-- Modal WhatsApp Alias -->
+  <div id="waModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:400px;box-shadow:0 8px 24px rgba(0,0,0,0.2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;font-size:1.2rem;color:#333;">Enviar Alias por WhatsApp</h3>
+        <button onclick="cerrarModalWhatsapp()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;padding:0;line-height:1;">&times;</button>
+      </div>
+      <label for="waAliasInput" style="font-weight:600;font-size:0.9rem;color:#555;display:block;margin-bottom:6px;">Alias</label>
+      <input type="text" id="waAliasInput" list="waAliasDatalist" placeholder="Ingrese o seleccione un alias" style="width:100%;padding:10px 12px;border:2px solid #ccc;border-radius:6px;font-size:1rem;text-transform:uppercase;box-sizing:border-box;margin-bottom:16px;">
+      <datalist id="waAliasDatalist"></datalist>
+      <button onclick="enviarWhatsapp()" style="width:100%;padding:12px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.116.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.116-.198-.012-.304.087-.403.089-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.325-.336-.445-.342-.116-.007-.248-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.13 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.116-.943-.05-.084-.182-.133-.38-.232z"/></svg>
+        Enviar WhatsApp
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Cerrar modal con Escape y enviar con Enter
+    document.addEventListener('keydown', function(e) {
+      if (document.getElementById('waModal').style.display === 'flex') {
+        if (e.key === 'Escape') cerrarModalWhatsapp();
+        if (e.key === 'Enter' && document.activeElement.id === 'waAliasInput') enviarWhatsapp();
+      }
+    });
+    // Cerrar modal al hacer clic fuera
+    document.getElementById('waModal').addEventListener('click', function(e) {
+      if (e.target === this) cerrarModalWhatsapp();
+    });
+  </script>
 </body>
 </html>

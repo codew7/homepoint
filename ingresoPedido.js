@@ -2506,7 +2506,6 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
           <div><span class='label'>Dirección:</span> ${direccion}</div>
           <div><span class='label'>DNI:</span> ${dni}</div>
           <div><span class='label'>Email:</span> ${email}</div>
-          <div><span class='label'>Tipo:</span> ${tipoCliente}</div>
           <hr style='margin:10px 0;'>
           <table>
             <thead>
@@ -2519,11 +2518,13 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
           <table>
             <tr class='totales'><td>Subtotal</td><td style='text-align:right;'>${subtotal}</td></tr>
             <tr class='totales'><td>Medio de Pago</td><td style='text-align:right;'>${medioPago}</td></tr>
-            <tr class='totales'><td>Recargo</td><td style='text-align:right;'>${recargo}</td></tr>
-            <tr class='totales'><td>Descuento</td><td style='text-align:right;'>${descuento}</td></tr>
-            <tr class='totales'><td>Costo de Envío</td><td style='text-align:right;'>${envio}</td></tr>
+            ${parseFloat(recargo) ? `<tr class='totales'><td>Recargo</td><td style='text-align:right;'>${recargo}</td></tr>` : ''}
+            ${parseFloat(descuento) ? `<tr class='totales'><td>Descuento</td><td style='text-align:right;'>${descuento}</td></tr>` : ''}
+            ${parseFloat(envio) ? `<tr class='totales'><td>Costo de Envío</td><td style='text-align:right;'>${envio}</td></tr>` : ''}
             <tr class='totales'><td>Total</td><td style='text-align:right;font-size:1.1em;'>${totalFinal}</td></tr>
           </table>
+          <hr style='margin:10px 0;'>
+          <div style="text-align:center;font-size:0.80em;font-weight:bold;color:#333;">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
         </div>
         <script>window.onload = function(){ window.print(); }<\/script>
       </body>
