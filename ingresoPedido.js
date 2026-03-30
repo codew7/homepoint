@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const recargoInput = document.getElementById('recargo');
   const descuentoInput = document.getElementById('descuento');
   const descuentoPorcentajeInput = document.getElementById('descuentoPorcentaje');
+  const recargoPorcentajeInput = document.getElementById('recargoPorcentaje');
   const envioInput = document.getElementById('envio');
   const messageDiv = document.getElementById('message');
 
@@ -744,6 +745,21 @@ function getTipoCliente() {
     let recargo = parseInt((recargoInput.value || '0').replace(/\D/g, '')) || 0;
     let descuento = parseInt((descuentoInput.value || '0').replace(/\D/g, '')) || 0;
     let envio = parseInt((envioInput.value || '0').replace(/\D/g, '')) || 0;
+    // Si hay porcentaje, calcular recargo automáticamente
+    if (recargoPorcentajeInput && recargoPorcentajeInput.value.trim() !== '') {
+      let porcentajeR = recargoPorcentajeInput.value.replace(/[^\d.]/g, '');
+      porcentajeR = parseFloat(porcentajeR);
+      if (!isNaN(porcentajeR) && porcentajeR > 0) {
+        recargo = Math.round(subtotal * (porcentajeR / 100));
+        if (recargoInput) {
+          recargoInput.value = recargo.toLocaleString('es-AR', {maximumFractionDigits:0});
+        }
+      } else {
+        if (recargoInput) {
+          recargoInput.value = '';
+        }
+      }
+    }
     // Si hay porcentaje, calcular descuento automáticamente
     if (descuentoPorcentajeInput && descuentoPorcentajeInput.value.trim() !== '') {
       let porcentaje = descuentoPorcentajeInput.value.replace(/[^\d.]/g, '');
@@ -1282,6 +1298,22 @@ function getTipoCliente() {
         descuentoPorcentajeInput.value = '';
       }
       calcularTotalFinal();
+    });
+  }
+
+  // Nuevo: actualizar recargo automáticamente al cambiar el porcentaje
+  if (typeof recargoPorcentajeInput !== 'undefined' && recargoPorcentajeInput) {
+    recargoPorcentajeInput.addEventListener('input', function() {
+      calcularTotalFinal();
+    });
+  }
+
+  // Si el usuario edita el campo recargo manualmente, limpiar el campo porcentaje de recargo
+  if (typeof recargoInput !== 'undefined' && recargoInput) {
+    recargoInput.addEventListener('input', function() {
+      if (typeof recargoPorcentajeInput !== 'undefined' && recargoPorcentajeInput && recargoInput.value.trim() !== '') {
+        recargoPorcentajeInput.value = '';
+      }
     });
   }
 
@@ -2058,6 +2090,17 @@ function getTipoCliente() {
     
   */
 
+  // Autocompletar recargo 6% al seleccionar Crédito
+  form.medioPago.addEventListener('change', function() {
+    if (this.value === 'Credito') {
+      recargoPorcentajeInput.value = '6';
+    } else {
+      recargoPorcentajeInput.value = '';
+      recargoInput.value = '';
+    }
+    calcularTotalFinal();
+  });
+
   // Llamar a la función después de cada cambio relevante solo si es necesario
   // Al modificar descuentos/envío (mantener directo)
   [recargoInput, descuentoInput, envioInput].forEach(input => {
@@ -2780,6 +2823,7 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     form.email.value = '';
     form.medioPago.value = '';
     form.recargo.value = '';
+    form.recargoPorcentaje.value = '';
     form.descuento.value = '';
     form.descuentoPorcentaje.value = '';
     form.envio.value = '';
