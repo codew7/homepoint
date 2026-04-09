@@ -2527,6 +2527,44 @@
     cargarSheets();
 
     // ==========================================
+    // ACTUALIZAR STOCK EN TIEMPO REAL
+    // ==========================================
+    async function actualizarStock() {
+      try {
+        // Solo fetches columnas C:K (codigo en col C=index 0, stock en col K=index 8)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Lista!C2:K?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const rows = data.values || [];
+        let hubocambios = false;
+        rows.forEach(row => {
+          const codigo = (row[0] || '').trim();
+          if (!codigo) return;
+          const stockRaw = (row[8] || '').trim();
+          const nuevoStock = stockRaw !== '' ? parseInt(stockRaw, 10) : null;
+          if (sheetsData[codigo]) {
+            if (sheetsData[codigo].stock !== nuevoStock) {
+              sheetsData[codigo].stock = nuevoStock;
+              hubocambios = true;
+            }
+          }
+          if (nuevoStock !== null) {
+            if (window.sheetStockMap[codigo] !== nuevoStock) {
+              window.sheetStockMap[codigo] = nuevoStock;
+              hubocambios = true;
+            }
+          }
+        });
+        if (hubocambios && pedidoActual) renderUnificado();
+      } catch (err) {
+        console.warn('Error actualizando stock:', err);
+      }
+    }
+
+    // Polling de stock cada 60 segundos
+    setInterval(actualizarStock, 60000);
+
+    // ==========================================
     // BUSCAR PEDIDO
     // ==========================================
     const pedidoInput = document.getElementById('pedidoInput');
