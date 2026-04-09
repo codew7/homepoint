@@ -114,6 +114,22 @@
             padding:2px 9px;border-radius:20px;
             font-weight:600;font-variant-numeric:tabular-nums;
         }
+        .install-btn{
+            display:none;
+            align-items:center;gap:6px;
+            padding:5px 11px;
+            border-radius:20px;
+            border:1.5px solid var(--primary);
+            background:var(--primary-soft);
+            color:var(--primary);
+            font-family:var(--font);
+            font-size:0.73rem;font-weight:600;
+            cursor:pointer;
+            transition:all 0.2s;
+            white-space:nowrap;
+        }
+        .install-btn:active{transform:scale(0.95);opacity:0.8}
+        .install-btn.visible{display:flex}
 
         /* ========= MAIN CONTENT ========= */
         .main-content{
@@ -629,6 +645,10 @@
             Etiquetas
         </h1>
         <div class="header-meta">
+            <button class="install-btn" id="installBtn" title="Instalar app">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v13M7 11l5 5 5-5"/><path d="M3 19h18"/></svg>
+                Instalar
+            </button>
             <span class="item-count" id="itemCount">0</span>
             <span class="online-dot" id="onlineDot" title="En linea"></span>
         </div>
@@ -1399,6 +1419,31 @@ init();
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');
 }
+
+// PWA Install button
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById('installBtn');
+
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.classList.add('visible');
+});
+
+installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+        installBtn.classList.remove('visible');
+    }
+    deferredInstallPrompt = null;
+});
+
+window.addEventListener('appinstalled', () => {
+    installBtn.classList.remove('visible');
+    deferredInstallPrompt = null;
+});
 </script>
 </body>
 </html>
