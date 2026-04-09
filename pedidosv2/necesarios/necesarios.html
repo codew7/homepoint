@@ -808,6 +808,36 @@
     }
 
     // ==========================================
+    // ACTUALIZAR STOCK EN TIEMPO REAL
+    // ==========================================
+    async function actualizarStock() {
+      try {
+        const url = 'https://sheets.googleapis.com/v4/spreadsheets/' +
+          GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID + '/values/Lista!C2:K?key=' + GOOGLE_SHEETS_CONFIG.API_KEY;
+        const res = await fetch(url);
+        const data = await res.json();
+        const rows = data.values || [];
+        let huboCambios = false;
+        rows.forEach(row => {
+          const codigo = (row[0] || '').trim();
+          if (!codigo) return;
+          const stockRaw = (row[8] || '').toString().trim();
+          const nuevoStock = stockRaw !== '' ? (parseInt(stockRaw, 10) || 0) : null;
+          if (sheetsData[codigo] && sheetsData[codigo].stock !== nuevoStock) {
+            sheetsData[codigo].stock = nuevoStock;
+            huboCambios = true;
+          }
+        });
+        if (huboCambios && Object.keys(articulosMap).length > 0) renderTabla();
+      } catch (err) {
+        console.warn('Error actualizando stock:', err);
+      }
+    }
+
+    // Polling de stock cada 60 segundos
+    setInterval(actualizarStock, 60000);
+
+    // ==========================================
     // LIGHTBOX
     // ==========================================
     const lightbox = document.getElementById('lightbox');
