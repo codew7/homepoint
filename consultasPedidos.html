@@ -480,6 +480,25 @@
     }
     .nota-block strong { color: var(--warning); }
 
+    /* ─── File Fallback ──────────────────────────────────────────── */
+    .file-fallback {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px 24px;
+      margin-bottom: 20px;
+      text-align: center;
+      border: 2px dashed var(--border);
+      transition: border-color var(--transition);
+    }
+    .file-fallback.drag-over { border-color: var(--primary); background: var(--primary-light); }
+    .file-fallback .icon { font-size: 36px; margin-bottom: 10px; }
+    .file-fallback h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+    .file-fallback p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+    .file-fallback-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .file-error { margin-top: 12px; font-size: 12px; color: var(--danger); background: var(--danger-light); padding: 8px 12px; border-radius: var(--radius-sm); display: none; }
+    .file-error.visible { display: block; }
+
     /* ─── Responsive ─────────────────────────────────────────────── */
     @media (max-width: 1100px) {
       .filters-grid {
@@ -523,6 +542,20 @@
 </header>
 
 <div class="container">
+
+  <!-- File Fallback (visible cuando falla Drive) -->
+  <div class="file-fallback" id="fileFallback" style="display:none"
+    ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+    <div class="icon">📂</div>
+    <h3>No se pudo conectar a Google Drive</h3>
+    <p>Arrastrá el archivo JSON de backup aquí, o usá el botón para seleccionarlo.</p>
+    <div class="file-fallback-actions">
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Seleccionar archivo JSON</button>
+      <button class="btn btn-outline" onclick="retryDrive()">🔄 Reintentar Drive</button>
+    </div>
+    <div class="file-error" id="fileError"></div>
+    <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFileInput(this)">
+  </div>
 
   <!-- Filters -->
   <div class="filters-card" id="filtersCard">
@@ -610,13 +643,14 @@ const loadingOverlay = $('loadingOverlay');
 // ═══════════════════════════════════════════════════════════════
 // URL del Apps Script que sirve el backup de Drive sin restricciones CORP.
 // Reemplazar con la URL de tu implementación en script.google.com
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwGFDp59AZ_BXuhB176uuG3SzXQnTECD1c75bY_nZmCTTw1tBSQIZp4vpETF1almeSdtQ/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzs8fJtVLkdUjOwx76miDSku6m-tVp371iqfxjepxgWydumKKHhd7w0zLHTMZxDo95Cw/exec';
 
 async function loadFromDrive() {
   $('loadingText').textContent = 'Descargando desde Google Drive…';
   loadingOverlay.classList.add('visible');
+  $('fileFallback').style.display = 'none';
   try {
-    const response = await fetch(APPS_SCRIPT_URL);
+    const response = await fetch(APPS_SCRIPT_URL, { redirect: 'follow' });
     if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
     const text = await response.text();
     if (text.trim().startsWith('<')) {
@@ -627,11 +661,67 @@ async function loadFromDrive() {
     $('headerSubtitle').textContent = `Archivo cargado desde Google Drive — procesando…`;
     parsePedidos(pedidosObj);
   } catch (err) {
-    alert('No se pudo cargar el archivo desde Google Drive:\n\n' + err.message);
+    console.error('Drive fetch error:', err);
+    $('headerSubtitle').textContent = 'No se pudo conectar a Google Drive — cargá el archivo manualmente';
+    $('fileFallback').style.display = 'block';
   } finally {
     loadingOverlay.classList.remove('visible');
     $('loadingText').textContent = 'Procesando archivo JSON…';
   }
+}
+
+function retryDrive() {
+  loadFromDrive();
+}
+
+// ─── File fallback handlers ───────────────────────────────────────────────
+function handleFileInput(input) {
+  const file = input.files[0];
+  if (file) readLocalFile(file);
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  $('fileFallback').classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  $('fileFallback').classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  $('fileFallback').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) readLocalFile(file);
+}
+
+function readLocalFile(file) {
+  if (!file.name.endsWith('.json')) {
+    showFileError('El archivo debe ser un JSON (.json)');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const raw = JSON.parse(e.target.result);
+      const pedidosObj = raw.pedidos || raw;
+      $('headerSubtitle').textContent = `Archivo local cargado: ${file.name}`;
+      $('fileFallback').style.display = 'none';
+      parsePedidos(pedidosObj);
+    } catch (err) {
+      showFileError('El archivo no es un JSON válido: ' + err.message);
+    }
+  };
+  reader.onerror = () => showFileError('Error al leer el archivo.');
+  reader.readAsText(file);
+}
+
+function showFileError(msg) {
+  const el = $('fileError');
+  el.textContent = msg;
+  el.classList.add('visible');
+  setTimeout(() => el.classList.remove('visible'), 5000);
 }
 
 // Cargar automáticamente desde Google Drive al iniciar
