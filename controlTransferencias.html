@@ -71,7 +71,7 @@
 
         .filters-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto auto;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto auto auto;
             gap: 15px;
             max-width: 1400px;
             margin: 0 auto;
@@ -320,6 +320,9 @@
                 <div>
                     <button type="button" id="verTodosBtn" class="clear-filters" style="background:#007bff; margin-left:5px;">Ver todos</button>
                 </div>
+                <div>
+                    <button type="button" id="recargarBtn" class="clear-filters" style="background:#28a745; margin-left:5px;">↻ Recargar</button>
+                </div>
             </div>
         </div>
 
@@ -333,6 +336,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Fecha</th>
                         <th>Cliente</th>
                         <th>Entrega</th>
@@ -449,10 +453,10 @@
             const filtroTotalFinal = document.getElementById('filtroTotalFinal').value.trim();
             const filtroEntrega = document.getElementById('filtroEntrega').value;
             filteredData = transferenciasData.filter(pedido => {
-                // Ocultar alias HOME.POINT y HOME.POINT.ENVIOS por defecto
+                // Ocultar alias HOMEPOINT y ENVIOS.HP por defecto
                 if (!mostrarTodos) {
                     const alias = (pedido.pagos?.alias || '').toUpperCase();
-                    if (alias === 'HOME.POINT' || alias === 'HOME.POINT.ENVIOS' || alias === 'HOMEPOINT' || alias === 'HOMEPOINT.2') return false;
+                    if (alias === 'HOMEPOINT' || alias === 'ENVIOS.HP') return false;
                 }
                 // Filtrar por fecha
                 if (fechaDesde && new Date(pedido.fecha) < new Date(fechaDesde)) return false;
@@ -480,8 +484,7 @@
             document.getElementById('filtroTotalFinal').value = '';
             document.getElementById('filtroEntrega').value = '';
             mostrarTodos = false;
-            filteredData = [...transferenciasData];
-            renderizarTabla();
+            aplicarFiltros();
         }
 
         // Función para obtener alias únicos y poblar el select
@@ -554,8 +557,12 @@
             if (telClean && !telClean.startsWith('54')) telClean = '54' + telClean;
             const whatsappDisabled = !telClean ? 'disabled' : '';
             const whatsappUrl = telClean ? `https://api.whatsapp.com/send/?phone=${telClean}` : '#';
+            const firebaseUrl = `https://console.firebase.google.com/project/pedidos-87064/database/pedidos-87064-default-rtdb/data/pedidos/${pedido.id}`;
             return `
                 <tr>
+                    <td class="id-column" style="font-size:11px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${pedido.id}">
+                        <a href="${firebaseUrl}" target="_blank" style="color:#888;text-decoration:none;" title="Ver en Firebase: ${pedido.id}">${pedido.id}</a>
+                    </td>
                     <td class="date-column">${formatearFecha(pedido.fecha || '')}</td>
                     <td class="client-column" data-pedido-id="${pedido.id}">${pedido.cliente?.nombre || 'Sin nombre'}</td>
                     <td>${pedido.entrega || ''}</td>
@@ -733,6 +740,7 @@
             const filtroEntrega = document.getElementById('filtroEntrega');
             const limpiarBtn = document.getElementById('limpiarFiltros');
             const verTodosBtn = document.getElementById('verTodosBtn');
+            const recargarBtn = document.getElementById('recargarBtn');
 
             // Event listeners para aplicar filtros en tiempo real
             fechaDesde.addEventListener('change', aplicarFiltros);
@@ -741,9 +749,18 @@
             filtroTotalFinal.addEventListener('input', aplicarFiltros);
             filtroEntrega.addEventListener('change', aplicarFiltros);
             limpiarBtn.addEventListener('click', limpiarFiltros);
+            recargarBtn.addEventListener('click', function() {
+                transferenciasData = [];
+                filteredData = [];
+                mostrarTodos = false;
+                verTodosBtn.textContent = 'Ver todos';
+                document.getElementById('tableContainer').style.display = 'none';
+                document.getElementById('noData').style.display = 'none';
+                cargarDatos();
+            });
             verTodosBtn.addEventListener('click', function() {
                 mostrarTodos = !mostrarTodos;
-                verTodosBtn.textContent = mostrarTodos ? 'Ocultar HOME.POINT' : 'Ver todos';
+                verTodosBtn.textContent = mostrarTodos ? 'Ocultar HOMEPOINT' : 'Ver todos';
                 aplicarFiltros();
             });
         }

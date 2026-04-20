@@ -1510,11 +1510,7 @@ function getTipoCliente() {
         let cotizacionCierre = (d.blue.value_sell || d.blue.sell);
         // Construir objeto pedido
         const costos = calcularCostos();
-        // Determinar tipo de entrega
-        let entrega = 'Local';
-        if (direccion && direccion.length > 3) {
-          entrega = 'Envios';
-        }
+        const entrega = 'Local';
 
         // Obtener fecha de creación solo al crear el pedido
         function getFechaActual() {
@@ -1899,11 +1895,7 @@ function getTipoCliente() {
         .then(d => {
           let cotizacionCierre = (d.blue.value_sell || d.blue.sell);
           const costos = calcularCostos();
-          // Determinar tipo de entrega
-          let entrega = 'Local';
-          if (form.direccion.value.trim() && form.direccion.value.trim().length > 7) {
-            entrega = 'Envios';
-          }
+          const entrega = 'Local';
           // Calcular gananciaSelec: suma de valorG de los artículos seleccionados
           const gananciaSelec = items
             .filter(it => it.seleccionado && it.seleccionado.toUpperCase() === 'SI')
