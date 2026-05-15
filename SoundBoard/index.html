@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SoundBoard Showroom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12h3l3-9 4 18 3-9h5" />
+      </svg>
+      <div>
+        <h1>SoundBoard <span class="accent">Showroom</span></h1>
+        <p class="subtitle">Sistema de avisos programados</p>
+      </div>
+    </div>
+    <nav class="header-actions">
+      <a href="upload.html" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        Subir audio
+      </a>
+    </nav>
+  </header>
+
+  <main class="dashboard">
+    <section class="dashboard-info">
+      <div class="info-card">
+        <span class="info-label">Audios totales</span>
+        <span class="info-value" id="stat-total">0</span>
+      </div>
+      <div class="info-card">
+        <span class="info-label">Activos</span>
+        <span class="info-value" id="stat-active">0</span>
+      </div>
+      <div class="info-card">
+        <span class="info-label">Reproduciendo</span>
+        <span class="info-value" id="stat-playing">0</span>
+      </div>
+      <div class="info-card info-card-log">
+        <span class="info-label">Última reproducción</span>
+        <span class="info-value info-value-sm" id="stat-last">—</span>
+      </div>
+    </section>
+
+    <section class="audio-grid-wrapper">
+      <div class="section-header">
+        <h2>Pistas</h2>
+        <div class="filter-tabs">
+          <button class="tab active" data-filter="all">Todas</button>
+          <button class="tab" data-filter="active">Activas</button>
+          <button class="tab" data-filter="inactive">Inactivas</button>
+        </div>
+      </div>
+      <div id="audio-grid" class="audio-grid">
+        <!-- Skeleton loaders -->
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+      <div id="empty-state" class="empty-state" hidden>
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+        <h3>No hay audios aún</h3>
+        <p>Empezá subiendo tu primer aviso para verlo aquí.</p>
+        <a href="upload.html" class="btn btn-primary">Subir primer audio</a>
+      </div>
+    </section>
+
+    <section class="play-log">
+      <h2>Historial reciente</h2>
+      <ul id="play-log-list" class="log-list">
+        <li class="log-empty">Sin reproducciones registradas todavía.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="status-bar">
+    <div class="status-left">
+      <span class="status-dot"></span>
+      <span id="status-clock" class="clock">--:--:--</span>
+    </div>
+    <div class="status-center">
+      <label for="master-volume" class="vol-label">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+        </svg>
+        Volumen general
+      </label>
+      <input type="range" id="master-volume" min="0" max="100" value="80" class="slider" />
+      <span id="master-volume-value" class="vol-value">80%</span>
+    </div>
+    <div class="status-right">
+      <span id="status-active-count">0 activos</span>
+    </div>
+  </footer>
+
+  <!-- Scheduler Modal -->
+  <div id="scheduler-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-content">
+      <header class="modal-header">
+        <h3>Programar reproducción</h3>
+        <button class="icon-btn" data-close aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </header>
+      <div class="modal-body">
+        <p class="modal-subtitle" id="scheduler-audio-name">—</p>
+
+        <div class="scheduler-section">
+          <div class="scheduler-section-head">
+            <h4>Horarios fijos</h4>
+            <button class="btn btn-ghost btn-sm" id="add-fixed-time">+ Añadir hora</button>
+          </div>
+          <div id="fixed-times-list" class="fixed-times-list"></div>
+          <div class="days-row">
+            <span class="days-label">Días:</span>
+            <div class="days-toggle" id="days-toggle">
+              <button data-day="1">L</button>
+              <button data-day="2">M</button>
+              <button data-day="3">X</button>
+              <button data-day="4">J</button>
+              <button data-day="5">V</button>
+              <button data-day="6">S</button>
+              <button data-day="0">D</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="scheduler-divider"></div>
+
+        <div class="scheduler-section">
+          <div class="scheduler-section-head">
+            <h4>Modo cíclico</h4>
+            <label class="switch">
+              <input type="checkbox" id="cyclic-enabled" />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+          <div class="cyclic-config">
+            <label>Intervalo</label>
+            <div class="interval-input">
+              <input type="number" id="cyclic-interval" min="1" max="1440" value="60" />
+              <span>minutos</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn btn-ghost" data-close>Cancelar</button>
+        <button class="btn btn-primary" id="save-schedule">Guardar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Delete confirmation modal -->
+  <div id="confirm-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-content modal-sm">
+      <header class="modal-header">
+        <h3>Eliminar audio</h3>
+      </header>
+      <div class="modal-body">
+        <p>¿Seguro que querés eliminar <strong id="confirm-name">este audio</strong>? Esta acción no se puede deshacer.</p>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn btn-ghost" data-close>Cancelar</button>
+        <button class="btn btn-danger" id="confirm-delete">Eliminar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Audio activation gate — browsers block Web Audio until a user gesture.
+       Scheduled announcements have no gesture of their own, so the operator
+       must click here once per page load to enable autonomous playback. -->
+  <div id="audio-gate" class="audio-gate">
+    <div class="audio-gate-card">
+      <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+      </svg>
+      <h2>Activá el sonido</h2>
+      <p>Los avisos programados sólo pueden reproducirse después de un primer click en la página. Tocá el botón para habilitar la reproducción automática durante esta sesión.</p>
+      <button class="btn btn-primary" id="audio-gate-btn">Activar sonido</button>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+  <script type="module" src="js/firebase-init.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
