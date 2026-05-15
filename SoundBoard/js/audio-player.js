@@ -1,3 +1,10 @@
+// Pequeño adelanto (s) para programar source.start() en el futuro inmediato.
+// Sin esto, start(0) cae a mitad de un render quantum del hilo de audio
+// (sobre todo tras un resume() o al encadenar desde onended) y se descartan
+// los primeros ms del buffer -> el audio sale cortado al inicio. 80ms es
+// inaudible para un aviso pero garantiza que la fuente quede programada antes.
+const START_LOOKAHEAD = 0.08;
+
 // Web Audio API based player with in-memory blob cache and sequential queue.
 class AudioPlayer {
   constructor() {
@@ -158,7 +165,7 @@ class AudioPlayer {
           this._drainQueue();
         }
       };
-      source.start(0);
+      source.start(this.ctx.currentTime + START_LOOKAHEAD);
       this._emit({ type: 'started', audioId: audio.id, trigger });
       if (onPlayed) {
         try { onPlayed(); } catch (e) { console.warn(e); }
