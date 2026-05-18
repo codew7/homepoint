@@ -40,6 +40,8 @@
             --accent-purple-dim: rgba(163, 125, 255, 0.12);
             --accent-rose: #ff6b8a;
             --accent-rose-dim: rgba(255, 107, 138, 0.12);
+            --accent-cyan: #2dd4d4;
+            --accent-cyan-dim: rgba(45, 212, 212, 0.12);
             --radius-sm: 8px;
             --radius-md: 12px;
             --radius-lg: 16px;
@@ -422,6 +424,8 @@
 
         .method-card.efectivo::before { background: var(--accent-green); }
         .method-card.transferencia::before { background: var(--accent-blue); }
+        .method-card.debito::before { background: var(--accent-rose); }
+        .method-card.credito::before { background: var(--accent-cyan); }
         .method-card.mercadopago::before { background: var(--accent-amber); }
         .method-card.parcial::before { background: var(--accent-purple); }
 
@@ -442,6 +446,14 @@
         .transferencia .method-icon {
             background: var(--accent-blue-dim);
             color: var(--accent-blue);
+        }
+        .debito .method-icon {
+            background: var(--accent-rose-dim);
+            color: var(--accent-rose);
+        }
+        .credito .method-icon {
+            background: var(--accent-cyan-dim);
+            color: var(--accent-cyan);
         }
         .mercadopago .method-icon {
             background: var(--accent-amber-dim);
@@ -480,6 +492,8 @@
 
         .efectivo .method-amount { color: var(--accent-green); }
         .transferencia .method-amount { color: var(--accent-blue); }
+        .debito .method-amount { color: var(--accent-rose); }
+        .credito .method-amount { color: var(--accent-cyan); }
         .mercadopago .method-amount { color: var(--accent-amber); }
         .parcial .method-amount { color: var(--accent-purple); }
 
@@ -515,6 +529,13 @@
         .alias-panel.open {
             opacity: 1;
             max-height: 600px;
+        }
+
+        /* Agrupa la tarjeta Transferencia con su panel de alias para que
+           el desglose quede justo debajo, como un solo item del grid */
+        .transf-group {
+            display: flex;
+            flex-direction: column;
         }
 
         .alias-list {
@@ -660,6 +681,14 @@
             background: var(--accent-blue-dim);
             color: var(--accent-blue);
         }
+        .order-method-badge.debito {
+            background: var(--accent-rose-dim);
+            color: var(--accent-rose);
+        }
+        .order-method-badge.credito {
+            background: var(--accent-cyan-dim);
+            color: var(--accent-cyan);
+        }
         .order-method-badge.mercadopago {
             background: var(--accent-amber-dim);
             color: var(--accent-amber);
@@ -712,6 +741,8 @@
         .delay-3 { animation-delay: 0.15s; }
         .delay-4 { animation-delay: 0.2s; }
         .delay-5 { animation-delay: 0.25s; }
+        .delay-6 { animation-delay: 0.3s; }
+        .delay-7 { animation-delay: 0.35s; }
 
         /* ─── Toast ─── */
         .toast {
@@ -761,6 +792,8 @@
 
         .percent-segment.efectivo { background: var(--accent-green); }
         .percent-segment.transferencia { background: var(--accent-blue); }
+        .percent-segment.debito { background: var(--accent-rose); }
+        .percent-segment.credito { background: var(--accent-cyan); }
         .percent-segment.mercadopago { background: var(--accent-amber); }
         .percent-segment.parcial { background: var(--accent-purple); }
 
@@ -788,6 +821,8 @@
 
         .percent-dot.efectivo { background: var(--accent-green); }
         .percent-dot.transferencia { background: var(--accent-blue); }
+        .percent-dot.debito { background: var(--accent-rose); }
+        .percent-dot.credito { background: var(--accent-cyan); }
         .percent-dot.mercadopago { background: var(--accent-amber); }
         .percent-dot.parcial { background: var(--accent-purple); }
 
@@ -868,13 +903,8 @@
                 </div>
             </div>
 
-            <!-- Payment Method Cards -->
+            <!-- Payment Method Cards (el desglose de alias se inyecta debajo de la tarjeta Transferencia) -->
             <div class="methods-grid" id="methodsGrid"></div>
-
-            <!-- Alias Panel (Transferencias drill-down) -->
-            <div class="alias-panel" id="aliasPanel">
-                <div class="alias-list" id="aliasList"></div>
-            </div>
 
             <!-- Orders list -->
             <div class="orders-section" id="ordersSection">
@@ -917,8 +947,6 @@
         const heroOrders = document.getElementById('heroOrders');
         const heroDate = document.getElementById('heroDate');
         const methodsGrid = document.getElementById('methodsGrid');
-        const aliasPanel = document.getElementById('aliasPanel');
-        const aliasList = document.getElementById('aliasList');
         const ordersList = document.getElementById('ordersList');
         const ordersCount = document.getElementById('ordersCount');
         const percentBar = document.getElementById('percentBar');
@@ -1001,8 +1029,8 @@
             if (!pedidosCache) return;
 
             const fechaSel = dateInput.value; // YYYY-MM-DD
-            aliasExpanded = false;
-            aliasPanel.classList.remove('open');
+            // No se reinicia aliasExpanded: el estado expandido/contraido
+            // del desglose de transferencias persiste al cambiar de fecha
 
             // Filter orders for selected date
             const pedidosDia = [];
@@ -1039,6 +1067,8 @@
             if (lower === 'efectivo') return 'efectivo';
             if (lower === 'transferencia') return 'transferencia';
             if (lower === 'mercadopago' || lower === 'mercado pago') return 'mercadopago';
+            if (lower === 'debito' || lower === 'débito') return 'debito';
+            if (lower === 'credito' || lower === 'crédito') return 'credito';
             return 'parcial';
         }
 
@@ -1049,7 +1079,6 @@
             if (pedidos.length === 0) {
                 heroCard.style.display = 'none';
                 methodsGrid.innerHTML = '';
-                aliasPanel.classList.remove('open');
                 ordersList.innerHTML = '';
                 ordersSection.style.display = 'none';
                 emptyState.style.display = 'block';
@@ -1061,7 +1090,7 @@
             ordersSection.style.display = '';
 
             // Aggregate by method
-            const metodos = { efectivo: { total: 0, count: 0 }, transferencia: { total: 0, count: 0 }, mercadopago: { total: 0, count: 0 }, parcial: { total: 0, count: 0 } };
+            const metodos = { efectivo: { total: 0, count: 0 }, transferencia: { total: 0, count: 0 }, debito: { total: 0, count: 0 }, credito: { total: 0, count: 0 }, mercadopago: { total: 0, count: 0 }, parcial: { total: 0, count: 0 } };
             const aliasMap = {};
             let totalGeneral = 0;
             let totalGanancia = 0;
@@ -1117,8 +1146,8 @@
                 return;
             }
 
-            const methods = ['efectivo', 'transferencia', 'mercadopago', 'parcial'];
-            const names = { efectivo: 'Efectivo', transferencia: 'Transferencia', mercadopago: 'MercadoPago', parcial: 'Parcial' };
+            const methods = ['efectivo', 'transferencia', 'debito', 'credito', 'mercadopago', 'parcial'];
+            const names = { efectivo: 'Efectivo', transferencia: 'Transferencia', debito: 'Débito', credito: 'Crédito', mercadopago: 'MercadoPago', parcial: 'Parcial' };
 
             let barHTML = '';
             let labelsHTML = '';
@@ -1139,6 +1168,8 @@
             const config = [
                 { key: 'efectivo', name: 'Efectivo', icon: 'bi-cash' },
                 { key: 'transferencia', name: 'Transferencia', icon: 'bi-bank' },
+                { key: 'debito', name: 'Débito', icon: 'bi-credit-card-2-front' },
+                { key: 'credito', name: 'Crédito', icon: 'bi-credit-card-2-back' },
                 { key: 'mercadopago', name: 'MercadoPago', icon: 'bi-credit-card' },
                 { key: 'parcial', name: 'Parcial', icon: 'bi-pie-chart' }
             ];
@@ -1151,30 +1182,37 @@
 
                 const isTransf = c.key === 'transferencia' && Object.keys(aliasMap).length > 0;
 
-                html += `<div class="method-card ${c.key} animate-in delay-${i + 2}" ${isTransf ? 'onclick="toggleAlias()"' : ''}>
+                const cardHTML = `<div class="method-card ${c.key} animate-in delay-${i + 2}" ${isTransf ? 'onclick="toggleAlias()"' : ''}>
                     <div class="method-icon"><i class="bi ${c.icon}"></i></div>
                     <div class="method-info">
                         <div class="method-name">${c.name}</div>
                         <div class="method-count">${data.count} pedido${data.count !== 1 ? 's' : ''}</div>
                     </div>
                     <div class="method-amount">${formatCurrency(data.total)}</div>
-                    ${isTransf ? '<i class="bi bi-chevron-down method-expand-icon" id="expandIcon"></i>' : ''}
+                    ${isTransf ? `<i class="bi bi-chevron-down method-expand-icon${aliasExpanded ? ' expanded' : ''}" id="expandIcon"></i>` : ''}
                 </div>`;
+
+                if (isTransf) {
+                    // El desglose de alias va dentro del mismo grupo, justo debajo
+                    // de la tarjeta Transferencia. Se aplica el estado persistido.
+                    html += `<div class="transf-group">
+                        ${cardHTML}
+                        <div class="alias-panel${aliasExpanded ? ' open' : ''}" id="aliasPanel">
+                            <div class="alias-list" id="aliasList">${buildAliasListHTML(aliasMap)}</div>
+                        </div>
+                    </div>`;
+                } else {
+                    html += cardHTML;
+                }
             });
 
             methodsGrid.innerHTML = html;
-
-            // Pre-render alias list
-            renderAliasList(aliasMap);
         }
 
-        function renderAliasList(aliasMap) {
+        function buildAliasListHTML(aliasMap) {
             const entries = Object.entries(aliasMap).sort((a, b) => b[1].total - a[1].total);
 
-            if (entries.length === 0) {
-                aliasList.innerHTML = '';
-                return;
-            }
+            if (entries.length === 0) return '';
 
             let html = '';
 
@@ -1192,13 +1230,14 @@
                 </div>`;
             });
 
-            aliasList.innerHTML = html;
+            return html;
         }
 
         function toggleAlias() {
             aliasExpanded = !aliasExpanded;
-            aliasPanel.classList.toggle('open', aliasExpanded);
+            const panel = document.getElementById('aliasPanel');
             const icon = document.getElementById('expandIcon');
+            if (panel) panel.classList.toggle('open', aliasExpanded);
             if (icon) icon.classList.toggle('expanded', aliasExpanded);
         }
 
@@ -1210,7 +1249,7 @@
             let html = '';
             sorted.forEach(p => {
                 const method = normalizarMedioPago(p.medioPago);
-                const methodLabel = { efectivo: 'Efectivo', transferencia: 'Transf.', mercadopago: 'MP', parcial: 'Parcial' }[method];
+                const methodLabel = { efectivo: 'Efectivo', transferencia: 'Transf.', debito: 'Débito', credito: 'Crédito', mercadopago: 'MP', parcial: 'Parcial' }[method];
 
                 html += `<div class="order-row">
                     <div class="order-client">${escapeHTML(p.cliente)}</div>
