@@ -210,6 +210,8 @@
   <!-- Agregar jQuery y Select2 JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <!-- QZ Tray: puente local para impresión ESC-POS (fuente nativa de la 3nStar RPT008) -->
+  <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script>
     // Inicializar Firebase solo una vez
     if (!firebase.apps.length) {
@@ -313,7 +315,8 @@
   <main id="mainContainer" class="container" style="display:none;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
       <img src="logo.png" alt="Logo" style="width:300px;height:auto;display:block;">
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" id="adminModeBtn" class="secondary" style="display:inline-block;padding:7px 18px;font-size:1rem;font-family:inherit;line-height:inherit;border:none;border-radius:6px;cursor:pointer;box-sizing:content-box;">Admin</button>
         <a href="historialRecientes.html" id="historialBtn" class="secondary" style="display:inline-block;text-decoration:none;padding:7px 18px;font-size:1rem;border:none;border-radius:6px;cursor:pointer;">Historial</a>
         <a href="ingresoPedido.html" id="nuevoBtn" class="secondary" style="display:inline-block;text-decoration:none;padding:7px 18px;font-size:1rem;border:none;border-radius:6px;cursor:pointer;">Nuevo</a>
       </div>
@@ -324,25 +327,33 @@
         <h2 id="datos-cliente-title">Datos del Cliente</h2>
         <div class="form-row">
           <label for="nombre">Nombre</label>
-          <input type="text" id="nombre" name="nombre" maxlength="50" autocomplete="name" style="width: 220px; display:inline-block; margin-right:10px;">
+          <input type="text" id="nombre" name="nombre" maxlength="50" autocomplete="name" value="n/a" style="width: 220px; display:inline-block; margin-right:10px;">
+          <button type="button" id="cargarClienteBtn" style="vertical-align:middle; padding:7px 14px; font-size:1rem; background:#28a745; color:#fff; border:none; border-radius:6px; cursor:pointer; margin-right:6px;">Cargar</button>
           <button type="button" id="editarClienteBtn" style="vertical-align:middle; padding:7px 18px; font-size:1rem; background:#6c4eb6; color:#fff; border:none; border-radius:6px; cursor:pointer;">Editar Cliente</button>
         </div>
-        <div class="form-row">
-          <label for="telefono">Teléfono</label>
-          <!-- Eliminado pattern para evitar error de regex; usar inputmode para orientación numérica -->
-          <input type="tel" id="telefono" name="telefono" maxlength="20" inputmode="tel" autocomplete="tel">
+        <div style="margin-left:140px; margin-bottom:0.75rem;">
+          <button type="button" id="toggleExtraClienteBtn" style="background:none;border:none;color:#6c4eb6;cursor:pointer;font-size:0.85rem;font-family:inherit;padding:0;display:flex;align-items:center;gap:4px;">
+            <span id="toggleExtraClienteArrow" style="font-size:0.75rem;">▶</span>
+            <span id="toggleExtraClienteLabel">Ver más datos</span>
+          </button>
         </div>
-        <div class="form-row">
-          <label for="direccion">Dirección</label>
-          <input type="text" id="direccion" name="direccion" maxlength="100" autocomplete="street-address">
-        </div>
-        <div class="form-row">
-          <label for="dni">DNI</label>
-          <input type="text" id="dni" name="dni" maxlength="15" pattern="^\d{7,15}$" autocomplete="off">
-        </div>
-        <div class="form-row">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" maxlength="50" autocomplete="email">
+        <div id="extraClienteFields" style="display:none;">
+          <div class="form-row">
+            <label for="telefono">Teléfono</label>
+            <input type="tel" id="telefono" name="telefono" maxlength="20" inputmode="tel" autocomplete="tel">
+          </div>
+          <div class="form-row">
+            <label for="direccion">Dirección</label>
+            <input type="text" id="direccion" name="direccion" maxlength="100" autocomplete="street-address">
+          </div>
+          <div class="form-row">
+            <label for="dni">DNI</label>
+            <input type="text" id="dni" name="dni" maxlength="15" pattern="^\d{7,15}$" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" maxlength="50" autocomplete="email">
+          </div>
         </div>
       </section>
 
@@ -489,7 +500,7 @@
             </select>
           </div>
           <div class="form-row" id="aliasRow" style="display: none;">
-            <label for="alias">ALIAS*</label>
+            <label for="alias">ALIAS</label>
             <input type="text" id="alias" name="alias" maxlength="50" style="width:100%; text-transform: uppercase;">
           </div>
         </div>
@@ -619,6 +630,19 @@
     </script>
 
   </main>
+  <!-- Modal contraseña Admin -->
+  <div id="adminPassOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:10000; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:16px; padding:2rem; width:100%; max-width:340px; box-shadow:0 20px 40px rgba(0,0,0,0.2); animation:fadeInUp 0.25s ease forwards;">
+      <h3 style="margin:0 0 1.2rem 0; font-size:1.1rem; color:#1e293b; text-align:center;">Acceso Administrador</h3>
+      <div id="adminPassError" style="display:none; background:#fef2f2; border:1px solid #fecaca; color:#dc2626; padding:0.6rem 0.75rem; border-radius:8px; font-size:0.85rem; margin-bottom:0.8rem;">Contraseña incorrecta</div>
+      <input type="password" id="adminPassInput" placeholder="Contraseña" style="width:100%; padding:10px 14px; border:2px solid #e2e8f0; border-radius:10px; font-size:1rem; box-sizing:border-box; transition:border-color 0.2s;" onfocus="this.style.borderColor='#6c4eb6'" onblur="this.style.borderColor='#e2e8f0'">
+      <div style="display:flex; gap:8px; margin-top:1rem;">
+        <button type="button" id="adminPassCancelBtn" style="flex:1; padding:10px; border:2px solid #e2e8f0; background:#fff; border-radius:10px; font-size:0.95rem; cursor:pointer;">Cancelar</button>
+        <button type="button" id="adminPassConfirmBtn" style="flex:1; padding:10px; background:#6c4eb6; color:#fff; border:none; border-radius:10px; font-size:0.95rem; font-weight:600; cursor:pointer;">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="ingresoPedido.js"></script>
 </body>
 </html>

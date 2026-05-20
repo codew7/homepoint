@@ -170,12 +170,13 @@ document.addEventListener('DOMContentLoaded', function() {
       overlay.style.display = 'none';
     }
     
-    // Rehabilitar controles del formulario
+    // Rehabilitar controles del formulario (excepto tipoCliente, siempre de solo lectura)
     if (form) {
       Array.from(form.elements).forEach(el => {
         el.disabled = false;
       });
     }
+    radiosTipoCliente.forEach(radio => { radio.disabled = true; });
   }
 
   // === COTIZACIÓN DÓLAR ===
@@ -266,6 +267,40 @@ document.addEventListener('DOMContentLoaded', function() {
   let radiosTipoCliente = [];
   // Insertar radios de tipo de cliente debajo de Datos del Cliente
   const clienteSection = document.querySelector('section[aria-labelledby="datos-cliente-title"]');
+  const extraClienteFields = document.getElementById('extraClienteFields');
+
+  // Toggle para mostrar/ocultar campos extra del cliente
+  (function() {
+    const btn    = document.getElementById('toggleExtraClienteBtn');
+    const arrow  = document.getElementById('toggleExtraClienteArrow');
+    const label  = document.getElementById('toggleExtraClienteLabel');
+    if (!btn || !extraClienteFields) return;
+    btn.addEventListener('click', function() {
+      const abierto = extraClienteFields.style.display !== 'none';
+      extraClienteFields.style.display = abierto ? 'none' : '';
+      arrow.textContent = abierto ? '▶' : '▼';
+      label.textContent = abierto ? 'Ver más datos' : 'Ocultar datos';
+    });
+  })();
+
+  window.expandirExtraCliente = function() {
+    if (!extraClienteFields) return;
+    extraClienteFields.style.display = '';
+    const arrow = document.getElementById('toggleExtraClienteArrow');
+    const label = document.getElementById('toggleExtraClienteLabel');
+    if (arrow) arrow.textContent = '▼';
+    if (label) label.textContent = 'Ocultar datos';
+  };
+
+  window.contraerExtraCliente = function() {
+    if (!extraClienteFields) return;
+    extraClienteFields.style.display = 'none';
+    const arrow = document.getElementById('toggleExtraClienteArrow');
+    const label = document.getElementById('toggleExtraClienteLabel');
+    if (arrow) arrow.textContent = '▶';
+    if (label) label.textContent = 'Ver más datos';
+  };
+
   if (clienteSection && !document.getElementById('tipoClienteRow')) {
     const tipoClienteRow = document.createElement('div');
     tipoClienteRow.className = 'form-row';
@@ -276,8 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <label style="margin-left:10px;"><input type="radio" name="tipoCliente" value="mayorista" checked> Mayorista</label>
       <label style="margin-left:10px;"><input type="radio" name="tipoCliente" value="admin"> Administrador</label>
     `;
-    clienteSection.appendChild(tipoClienteRow);
-    // Guardar referencia a los radios
+    (extraClienteFields || clienteSection).appendChild(tipoClienteRow);
     radiosTipoCliente = Array.from(tipoClienteRow.querySelectorAll('input[type="radio"][name="tipoCliente"]'));
   } else if (clienteSection) {
     radiosTipoCliente = Array.from(document.querySelectorAll('input[type="radio"][name="tipoCliente"]'));
@@ -1435,14 +1469,6 @@ function getTipoCliente() {
       showPopup('Debe seleccionar el Medio de Pago.', '❗', false);
       enviandoPedido = false; return;
     }
-    // Validar ALIAS si el medio de pago es Transferencia o Parcial
-    if (medioPago === 'Transferencia' || medioPago === 'Parcial') {
-      const alias = form.alias ? form.alias.value.trim().toUpperCase() : '';
-      if (!alias) {
-        showPopup('Debe completar el campo ALIAS para transferencias y pagos parciales.', '❗', false);
-        enviandoPedido = false; return;
-      }
-    }
     if (!vendedor) {
       showPopup('Debe completar el campo Vendedor.', '❗', false);
       enviandoPedido = false; return;
@@ -1622,6 +1648,8 @@ function getTipoCliente() {
                 function() { // Sí imprimir
                   generarReciboYImprimir();
                   showPopup('Pedido ingresado', '✅', true);
+                  if (window.desactivarModoAdmin) window.desactivarModoAdmin();
+                  if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
                   items = [];
                   renderItems();
@@ -1629,6 +1657,8 @@ function getTipoCliente() {
                 },
                 function() { // No imprimir
                   showPopup('Pedido ingresado', '✅', true);
+                  if (window.desactivarModoAdmin) window.desactivarModoAdmin();
+                  if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
                   items = [];
                   renderItems();
@@ -1728,6 +1758,8 @@ function getTipoCliente() {
     db.ref('pedidos/' + pedidoId).once('value').then(snap => {
       const pedido = snap.val();
       if (!pedido) return;
+      // Expandir campos extra al cargar un pedido existente
+      if (window.expandirExtraCliente) window.expandirExtraCliente();
       // Rellenar datos del cliente
       form.nombre.value = pedido.cliente?.nombre || '';
       form.telefono.value = pedido.cliente?.telefono || '';
@@ -1882,12 +1914,6 @@ function getTipoCliente() {
       const vendedor = form.vendedor ? form.vendedor.value.trim() : '';
       const alias = form.alias ? form.alias.value.trim().toUpperCase() : '';
       
-      // Validar ALIAS si el medio de pago es Transferencia o Parcial
-      if ((form.medioPago.value === 'Transferencia' || form.medioPago.value === 'Parcial') && !alias) {
-        messageDiv.textContent = 'Debe completar el campo ALIAS para transferencias y pagos parciales.';
-        messageDiv.style.color = 'red';
-        return;
-      }
       
       // Obtener cotización blue en tiempo real
       fetch('https://api.bluelytics.com.ar/v2/latest')
@@ -2145,6 +2171,8 @@ if (!datalistClientes) {
 form.nombre.setAttribute('list', 'clientesDatalist');
 
 // Cargar clientes desde Firebase
+let mostrarClientesAdmin = false;
+
 function cargarClientes() {
   db.ref('clientes').once('value').then(snap => {
     clientesRegistrados = [];
@@ -2152,7 +2180,7 @@ function cargarClientes() {
     datalistClientes.innerHTML = '';
     snap.forEach(child => {
       const cli = child.val();
-      if (cli && cli.nombre) {
+      if (cli && cli.nombre && (mostrarClientesAdmin || cli.tipoCliente !== 'admin')) {
         clientesRegistrados.push(cli);
         clientesPorNombre[cli.nombre.toLowerCase()] = cli;
         const opt = document.createElement('option');
@@ -2162,7 +2190,35 @@ function cargarClientes() {
     });
   });
 }
-cargarClientes();
+// El botón "Cargar" dispara la carga de clientes desde Firebase
+const cargarClienteBtn = document.getElementById('cargarClienteBtn');
+if (cargarClienteBtn) {
+  cargarClienteBtn.addEventListener('click', function() {
+    cargarClienteBtn.disabled = true;
+    cargarClienteBtn.textContent = 'Cargando...';
+    db.ref('clientes').once('value').then(snap => {
+      clientesRegistrados = [];
+      clientesPorNombre = {};
+      datalistClientes.innerHTML = '';
+      snap.forEach(child => {
+        const cli = child.val();
+        if (cli && cli.nombre && (mostrarClientesAdmin || cli.tipoCliente !== 'admin')) {
+          clientesRegistrados.push(cli);
+          clientesPorNombre[cli.nombre.toLowerCase()] = cli;
+          const opt = document.createElement('option');
+          opt.value = cli.nombre;
+          datalistClientes.appendChild(opt);
+        }
+      });
+      cargarClienteBtn.textContent = 'Cargado';
+      cargarClienteBtn.disabled = true;
+      cargarClienteBtn.style.background = '#6c757d';
+    }).catch(() => {
+      cargarClienteBtn.textContent = 'Cargar';
+      cargarClienteBtn.disabled = false;
+    });
+  });
+}
 
 // === ALIAS: Autocompletar con historial desde localStorage + Google Sheets ===
 let aliasHistorial = [];
@@ -2281,7 +2337,7 @@ cargarAliasDesdeSheets();
 // Al salir del input nombre, validar si existe
 form.nombre.addEventListener('blur', function() {
   const nombre = form.nombre.value.trim().toLowerCase();
-  if (!nombre) return;
+  if (!nombre || nombre === 'n/a') return;
   if (clientesPorNombre[nombre]) {
     // Autocompletar datos
     const cli = clientesPorNombre[nombre];
@@ -2441,7 +2497,350 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
   document.addEventListener('keydown', keyHandler);
 }
 
-// Botón Imprimir
+  // ====================================================================
+  // IMPRESIÓN ESC-POS (fuente nativa FONTA de la 3nStar RPT008 vía QZ Tray)
+  // ====================================================================
+  // El navegador no puede mandar bytes ESC-POS por window.print() (siempre
+  // rasteriza). QZ Tray es una app local que recibe la orden desde la web y
+  // envía texto crudo a la impresora, que lo dibuja con su generador interno
+  // FONTA: nítido y definido, no un mapa de bits.
+
+  // Nombre exacto de la impresora como figura en Windows.
+  // null = usar la impresora por defecto del sistema.
+  const POS_PRINTER_NAME = 'POS-80C';
+
+  // Ancho de línea de FONTA a 72 mm según el selftest: 48 caracteres.
+  const POS_COLS = 48;
+
+  // Helper: convierte cualquier valor a entero formateado es-AR (sin decimales)
+  function soloEntero(val) {
+    if (val === null || val === undefined || val === '') return '';
+    let n;
+    if (typeof val === 'number') {
+      n = val;
+    } else {
+      const clean = String(val).replace(/[^\d,.-]/g, '');
+      // Formato es-AR: '.' separador de miles, ',' decimal
+      n = parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+    }
+    if (isNaN(n)) return String(val);
+    return Math.round(n).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+  }
+
+  // Helper: últimos 5 dígitos de cada código de barras asignado
+  function ultimos5BC(cb) {
+    if (!cb) return '';
+    return String(cb)
+      .split(',')
+      .map(s => s.replace(/\D/g, '').slice(-5))
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  // Normaliza a ASCII/PC437 (Page0, code page por defecto de la impresora):
+  // sin esto, acentos y ñ saldrían como basura en modo texto.
+  function posPlain(val) {
+    if (val === null || val === undefined) return '';
+    return String(val)
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[¿¡]/g, '')
+      .replace(/[^\x00-\x7F]/g, '');
+  }
+
+  // Helpers de formato a 48 columnas
+  function posSep() { return '-'.repeat(POS_COLS) + '\n'; }
+
+  function posFila(izq, der) {
+    izq = posPlain(izq); der = posPlain(der);
+    const espacio = POS_COLS - izq.length - der.length;
+    if (espacio < 1) {
+      izq = izq.slice(0, Math.max(0, POS_COLS - der.length - 1));
+      return izq + ' ' + der + '\n';
+    }
+    return izq + ' '.repeat(espacio) + der + '\n';
+  }
+
+  function posWrap(texto) {
+    texto = posPlain(texto);
+    let out = '';
+    while (texto.length > POS_COLS) {
+      out += texto.slice(0, POS_COLS) + '\n';
+      texto = texto.slice(POS_COLS);
+    }
+    return out + texto + '\n';
+  }
+
+  // Comandos ESC-POS como bytes hex / texto plano (formato que entiende QZ)
+  const escCmd = (hex) => ({ type: 'raw', format: 'hex', data: hex });
+  const escTxt = (s) => ({ type: 'raw', format: 'plain', data: s });
+
+  // Construye el documento ESC-POS completo del recibo.
+  // conLogo=false omite la imagen (el logo es lo único raster; si la
+  // impresora/QZ no lo puede procesar, igual sale todo el texto nativo).
+  function construirESCPOS(d, conLogo) {
+    const data = [];
+    data.push(escCmd('1B40'));   // ESC @  -> reset
+    data.push(escCmd('1B7400')); // ESC t 0 -> code page PC437 (Page0)
+    data.push(escCmd('1B5200')); // ESC R 0 -> juego de caracteres USA
+
+    // Encabezado centrado
+    data.push(escCmd('1B6101')); // centrar
+    if (conLogo) {
+      try {
+        const logoUrl = new URL('logo.png', window.location.href).href;
+        data.push({ type: 'raw', format: 'image', flavor: 'file', data: logoUrl,
+                    options: { language: 'ESCPOS', dotDensity: 'double' } });
+        data.push(escTxt('\n'));
+      } catch (e) { /* sin logo, el ticket igual sale */ }
+    } else {
+      data.push(escCmd('1D2111')); // GS ! 0x11 -> doble alto y ancho
+      data.push(escTxt('HOMEPOINT\n'));
+      data.push(escCmd('1D2100')); // GS ! 0x00 -> tamaño normal
+    }
+    data.push(escTxt('\n'));
+    data.push(escTxt('Velez Sarsfield 4127, Munro\n'));
+    data.push(escTxt('Tel. 11 2189-1006\n'));
+    data.push(escTxt('\n')); // línea en blanco antes del título
+    data.push(escCmd('1B4501')); // negrita on
+    data.push(escTxt('PRESUPUESTO\n'));
+    data.push(escCmd('1B4500')); // negrita off
+    data.push(escTxt(posPlain(d.fecha) + '\n'));
+
+    // Cuerpo alineado a la izquierda
+    data.push(escCmd('1B6100'));
+    data.push(escTxt(posSep()));
+    data.push(escTxt(posWrap('Nombre: ' + d.nombre)));
+    data.push(escTxt(posWrap('Telefono: ' + d.telefono)));
+    data.push(escTxt(posSep()));
+
+    d.items.forEach(it => {
+      const cant = it.cantidad || 0;
+      const vU = it.valorU || 0;
+      const vTotal = cant * vU;
+      const bc = ultimos5BC(it.codigoBarras);
+      data.push(escCmd('1B4501'));
+      data.push(escTxt(posWrap((it.nombre || '').toUpperCase())));
+      data.push(escCmd('1B4500'));
+      data.push(escTxt(posFila(cant + ' x ' + soloEntero(vU), soloEntero(vTotal))));
+      data.push(escTxt(posWrap('COD.' + (it.codigo || '') + (bc ? ' - ' + bc : ''))));
+    });
+
+    data.push(escTxt(posSep()));
+    data.push(escTxt(posFila('Subtotal', soloEntero(d.subtotal))));
+    data.push(escTxt(posFila('Medio de Pago', d.medioPago)));
+    if (parseFloat(d.recargo)) data.push(escTxt(posFila('Recargo', soloEntero(d.recargo))));
+    if (parseFloat(d.descuento)) data.push(escTxt(posFila('Descuento', soloEntero(d.descuento))));
+    if (parseFloat(d.envio)) data.push(escTxt(posFila('Costo de Envio', soloEntero(d.envio))));
+    data.push(escCmd('1B4501'));
+    data.push(escTxt(posFila('TOTAL', '$ ' + soloEntero(d.totalFinal))));
+    data.push(escCmd('1B4500'));
+
+    data.push(escTxt(posSep()));
+    data.push(escCmd('1B6101')); // centrar leyenda
+    data.push(escCmd('1B4501'));
+    data.push(escTxt(posWrap('- DOCUMENTO NO VALIDO COMO FACTURA -')));
+    data.push(escCmd('1B4500'));
+
+    data.push(escTxt('\n\n\n'));
+    data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
+    return data;
+  }
+
+  // QZ Tray — certificado propio (importar C:\Users\alero\.claude\qz-cert.pem en Site Manager para eliminar el diálogo).
+  let qzConfigurado = false;
+  function configurarQZ() {
+    if (qzConfigurado || typeof qz === 'undefined') return;
+    const QZ_CERT = `-----BEGIN CERTIFICATE-----
+MIIDXTCCAkWgAwIBAgIUPMCoqhpYQ4z55zCYiyngpH47VAwwDQYJKoZIhvcNAQEL
+BQAwPjELMAkGA1UEBhMCQVIxEjAQBgNVBAoMCUhvbWVQb2ludDEbMBkGA1UEAwwS
+SG9tZVBvaW50IEFkbWluIFFaMB4XDTI2MDUxOTE2NTAxOFoXDTM2MDUxNjE2NTAx
+OFowPjELMAkGA1UEBhMCQVIxEjAQBgNVBAoMCUhvbWVQb2ludDEbMBkGA1UEAwwS
+SG9tZVBvaW50IEFkbWluIFFaMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+AQEA0G3Pek2EDxsUuyRoqYttHqkmudOhJ56FrUqqdks01dB52+kfoElM995N4Xqm
+GkBTkPLV30lUkEF1W5xKdCe3DcTp0qcZpIDf2468SKlvyi4WI9ji8rIBB4b/jN6l
+ECKUooi4iEeihKQ2WY2o7d7vhD52ITvJ9rKXJ1TWe9yyaW2sz3b7DfGKqZv+VwWY
+bQfZwLtymkGOi0IIplHwWmRoQdrl3rXE8tOIeB7Br15vKbIoXGwkV6W4rVmg+ngA
+M0BYqmcg08hRXZqUZ1nmyNsRrXijTv6D8qLvefO7D3eqIKXs0okmacGWZzfGLGnD
+YlEXTAVnMNmolKaRSVNVbF230wIDAQABo1MwUTAdBgNVHQ4EFgQUJbmYNOzALjUF
+zMY93JIwa2M6bi8wHwYDVR0jBBgwFoAUJbmYNOzALjUFzMY93JIwa2M6bi8wDwYD
+VR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAYO72+pxaqZifKkimB0tw
+mvKuqEfOOiXBawh7xBlLaTvHDaVH6v6ABqj7S73vSRBiD00oFKf5FQ42I+O1bUoN
+QYdIsxA2Q8ka7HaxMTB5v4ZBvbyXWLrRIavwY5XI2JWzArvZ8oTKB/gHF5lo9yDI
+nfvKQ9SL9y+GfwHOGkmUaw2ViScT17KdMJzSWoE37Qasp50Du+boRdmOgL0fN4nL
+zRY73MMEek1ny+DkbJ2OR7vmF2FSHaPqJzZb+UCINC3Pbf5KxqUPn+K2CEfT53hW
+3ALNhGIFw9E7pN6IE5LEdNkZCwpZRDksRo3UeBVcowsdmKzZ7Uwbe1dzxygzaLxX
+tw==
+-----END CERTIFICATE-----`;
+    const QZ_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDQbc96TYQPGxS7
+JGipi20eqSa506EnnoWtSqp2SzTV0Hnb6R+gSUz33k3heqYaQFOQ8tXfSVSQQXVb
+nEp0J7cNxOnSpxmkgN/bjrxIqW/KLhYj2OLysgEHhv+M3qUQIpSiiLiIR6KEpDZZ
+jajt3u+EPnYhO8n2spcnVNZ73LJpbazPdvsN8Yqpm/5XBZhtB9nAu3KaQY6LQgim
+UfBaZGhB2uXetcTy04h4HsGvXm8psihcbCRXpbitWaD6eAAzQFiqZyDTyFFdmpRn
+WebI2xGteKNO/oPyou9587sPd6ogpezSiSZpwZZnN8YsacNiURdMBWcw2aiUppFJ
+U1VsXbfTAgMBAAECggEACsutQ+3w6aFi9QCBRUrZ940WWuipv7YXwW6NHrxte6el
+MC1GfJRfXrVOfl/Oa6yqR2c0ibCwJxqk2/5f4t1Nv3JUFBugmeMs9R/TA8Z26ldx
+wSCSPLTYlc25vc+oaAoKfdKsEC75rXod8IyEU/HIoSZlEvqYTuVYK+ragybevNQf
+69UNrSovGjHuwDj3+tyZh0V7/Tp9Ch3iDRxFEZeqXtH0C8g4SxR0pTafyAIasyhV
+q6Y2ETEJWMVNUIIyrqtvWIQsewV6ykwUns09Qi6mFbBtz8uCLPsSyV7FccpOuWEk
+evL37yDL6HwdzA/xDnBST+eZeaRqBkB9rZs4W0kjpQKBgQD7fBZdudKO1/63AND4
+0DeVW/g3XZ6JiqBNFTtY1Q3pZRKbJhS+fSrZdReI7/7SZg9Tpgp9L6ih0aGe/Xqm
+Utz2SHQEk9D5nr8aTmn6E/YK956XuW1h6OGAdvxYfnnJibMIzT6yVVDYlFY1olj/
+VzXsmT0NM1JO/T4MCCfAKicEfwKBgQDUK9LU5NE/SaLwXslUK+jccTSP6cGUn+D0
+2IVTsccrh1lnD1ZlMoUR+5RTXAV5cyBzDL3ogvhpHTTaS8LGrJsw6c9wUvlbAVis
+hZ9WhXcC/U62ww5wZXFb+ShrYqrOLIv1Ul62Ixdoi2wofUOzT13tyGVgfuAtdeJ5
+QY4US/FSrQKBgQCKNi5MoH26B7dzeD1hIX4K1hrawtcInGlxM8QEFEOrC+Nn5Uvt
+TPkpvhKLLesMUw8FV/HXz0OMe5upt4Gau1u49yTcBykIp1g76vCPgjzs1h4RINWe
+w9B7O+l/8TKZstX0dmiIth7SiOPAYlMrMhDu0WEeSiBoTQG2txyxnfkHnQKBgHP9
+kUD55rrmksE90GrHpoH9EXMro7yQuvaf+CONKQlO8T06UUz5lW4DT09TG1sN6Ut8
+R8X487zjTqWYjV73tc/DwrfxZIiv775BPp6aUDm+KW4YrKgdjR9u0v4B7sbP66Ot
+6EFCZeWtcu+fq4c3eG4qA+IA+qVfsPQBNp859S/xAoGBALKK0Wx/OHaWPrAaThP0
+swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
+0YPZcP39H64LvTr+s65TtMrhCs5eNKd5hiGAB0T5Ctardy4f5liqQ8EqNa7YzcR/
+8xJFkCasp5SwyHnKysUl8ViY
+-----END PRIVATE KEY-----`;
+    qz.security.setCertificatePromise((resolve) => resolve(QZ_CERT));
+    qz.security.setSignatureAlgorithm('SHA512');
+    qz.security.setSignaturePromise(function(toSign) {
+      return function(resolve, reject) {
+        const pem = QZ_KEY.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+        const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+        crypto.subtle.importKey('pkcs8', der.buffer,
+          { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['sign'])
+          .then(function(key) {
+            return crypto.subtle.sign('RSASSA-PKCS1-v1_5', key,
+              new TextEncoder().encode(toSign));
+          })
+          .then(function(sig) {
+            const bytes = new Uint8Array(sig);
+            let str = '';
+            for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+            resolve(btoa(str));
+          })
+          .catch(reject);
+      };
+    });
+    qzConfigurado = true;
+  }
+
+  async function conectarQZ() {
+    if (typeof qz === 'undefined') throw new Error('La librería de QZ Tray no se cargó');
+    configurarQZ();
+    if (qz.websocket.isActive()) return;
+    await qz.websocket.connect();
+  }
+
+  async function seleccionarImpresoraPOS() {
+    if (POS_PRINTER_NAME) return POS_PRINTER_NAME;
+    let lista = await qz.printers.find();
+    if (!Array.isArray(lista)) lista = [lista];
+    const m = lista.find(n => /3n[\s-]?star|rpt[\s-]?008|pos[\s-]?80|thermal|ticket/i.test(n));
+    if (m) return m;
+    return await qz.printers.getDefault();
+  }
+
+  async function imprimirReciboESCPOS(d) {
+    await conectarQZ();
+    const printerName = await seleccionarImpresoraPOS();
+    if (!printerName) throw new Error('No se encontró ninguna impresora');
+    const config = qz.configs.create(printerName, { encoding: 'CP437' });
+    try {
+      // Intento 1: con logo (imagen raster)
+      await qz.print(config, construirESCPOS(d, true));
+    } catch (eLogo) {
+      // Intento 2: sin logo (solo texto nativo). Si esto también falla,
+      // se propaga el error y el llamador ofrece el respaldo HTML.
+      console.warn('Print con logo falló, reintentando sin logo:', eLogo);
+      await qz.print(config, construirESCPOS(d, false));
+    }
+  }
+
+  // Respaldo: impresión HTML clásica (rasterizada por el navegador).
+  function imprimirReciboHTML(d) {
+    let itemsHtml = '';
+    d.items.forEach(it => {
+      const cant = it.cantidad || 0;
+      const vU = it.valorU || 0;
+      const vTotal = cant * vU;
+      const bc = ultimos5BC(it.codigoBarras);
+      itemsHtml += `
+        <div class="item">
+          <div class="item-nombre">${(it.nombre || '').toUpperCase()}</div>
+          <div class="item-linea">
+            <span>${cant} x ${soloEntero(vU)}</span>
+            <span>${soloEntero(vTotal)}</span>
+          </div>
+          <div class="item-cod">COD.${it.codigo || ''}${bc ? ' - ' + bc : ''}</div>
+        </div>`;
+    });
+    const reciboHtml = `
+      <html>
+      <head>
+        <title>Orden de Pedido</title>
+        <style>
+          /* 3nStar RPT008: ancho de papel 80mm, área imprimible 72mm (ver selftest).
+             El cuadro se limita a 72mm para que nada se recorte ni se reescale. */
+          @page { size: 80mm auto; margin: 0; }
+          html, body { margin: 0; padding: 0; }
+          /* Tamaño de fuente único para todo el ticket: la variación de
+             tamaños se elimina; solo se conserva negrita para jerarquía. */
+          body { font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .recibo-box { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 6px 4px; background: #fff; box-sizing: border-box; }
+          .logo { display: block; margin: 0 auto 6px auto; max-width: 60mm; max-height: 22mm; object-fit: contain; }
+          .local { text-align: center; }
+          .titulo { text-align: center; font-weight: bold; margin: 1.4em 0 4px 0; }
+          .fecha { text-align: center; margin-bottom: 6px; }
+          .datos { }
+          .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+          .item { margin-bottom: 6px; }
+          .item-nombre { font-weight: bold; word-break: break-word; }
+          .item-linea { display: flex; justify-content: space-between; }
+          .item-cod { color: #000; }
+          .tot { padding: 2px 2px; }
+          .tot-fila { display: flex; justify-content: space-between; padding: 1px 0; }
+          .tot-final { font-weight: bold; }
+          .legend { text-align: center; font-weight: bold; margin-top: 12px; }
+          @media print { button { display: none !important; } }
+        </style>
+      </head>
+      <body>
+        <div class='recibo-box'>
+          <img src="logo.png" alt="Logo" class="logo">
+          <div class="local">Vélez Sársfield 4127, Munro</div>
+          <div class="local">Tel. 11 2189-1006</div>
+          <div class="titulo">ORDEN DE PEDIDO</div>
+          <div class="fecha">${d.fecha}</div>
+          <hr class="sep">
+          <div class="datos">
+            <div>Nombre: ${d.nombre}</div>
+            <div>Telefono: ${d.telefono}</div>
+          </div>
+          <hr class="sep">
+          ${itemsHtml}
+          <hr class="sep">
+          <div class="tot">
+            <div class="tot-fila"><span>Subtotal</span><span>${soloEntero(d.subtotal)}</span></div>
+            <div class="tot-fila"><span>Medio de Pago</span><span>${d.medioPago}</span></div>
+            ${parseFloat(d.recargo) ? `<div class="tot-fila"><span>Recargo</span><span>${soloEntero(d.recargo)}</span></div>` : ''}
+            ${parseFloat(d.descuento) ? `<div class="tot-fila"><span>Descuento</span><span>${soloEntero(d.descuento)}</span></div>` : ''}
+            ${parseFloat(d.envio) ? `<div class="tot-fila"><span>Costo de Envio</span><span>${soloEntero(d.envio)}</span></div>` : ''}
+            <div class="tot-fila tot-final"><span>TOTAL</span><span>$ ${soloEntero(d.totalFinal)}</span></div>
+          </div>
+          <hr class="sep">
+          <div class="legend">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
+        </div>
+        <script>window.onload = function(){ window.print(); }<\/script>
+      </body>
+      </html>
+    `;
+    // Una única pasada por posPlain() normaliza TODO el ticket a ASCII/PC437.
+    const w = window.open('', '_blank', 'width=600,height=800');
+    w.document.write(posPlain(reciboHtml));
+    w.document.close();
+  }
+
+  // Botón Imprimir
   const imprimirBtn = document.querySelector('.actions button.secondary');
   if (imprimirBtn) {
     imprimirBtn.addEventListener('click', function() {
@@ -2449,83 +2848,49 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     });
   }
 
+  // Toma una "foto" sincrónica de los datos del formulario ANTES de cualquier
+  // await (los llamadores hacen form.reset() / items=[] justo después), y
+  // dispara la impresión asíncrona con ese snapshot.
   function generarReciboYImprimir() {
-    // Obtener datos del formulario
-    const nombre = form.nombre.value.trim();
-    const telefono = form.telefono.value.trim();
-    const direccion = form.direccion.value.trim();
-    const dni = form.dni.value.trim();
-    const email = form.email.value.trim();
-    const tipoCliente = document.querySelector('input[name="tipoCliente"]:checked')?.value || '';
-    const medioPago = form.medioPago.value;
-    const alias = form.alias ? form.alias.value.trim().toUpperCase() : '';
-    const subtotal = form.subtotal.value;
-    const recargo = form.recargo.value;
-    const descuento = form.descuento.value;
-    const envio = form.envio.value;
-    const totalFinal = form.totalFinal.value;
-    // Items
-    let itemsHtml = '';
-    items.forEach(it => {
-      itemsHtml += `<tr><td>${it.codigo||''}</td><td>${it.nombre||''}</td><td style='text-align:right;'>${it.cantidad||''}</td><td style='text-align:right;'>${it.valorU||''}</td><td style='text-align:right;'>${(it.cantidad*it.valorU)||''}</td></tr>`;
-    });
-    // Recibo HTML
-    const reciboHtml = `
-      <html>
-      <head>
-        <title>Orden de Pedido</title>
-        <style>
-          body { font-family: 'Courier New', Courier, monospace; color: #111; background: #fff; }
-          .recibo-box { margin: 0 auto; border: 1px dashed #333; padding: 24px 18px; background: #fff; }
-          h2 { text-align: left; font-size: 1.3em; margin: 0 0 12px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-          th, td { border-bottom: 1px dotted #aaa; padding: 4px 2px; font-size: 0.90em; }
-          th { background: #eee; font-weight: bold; text-align: left; }
-          .totales td { border: none; font-weight: bold; }
-          .label { width: 110px; display: inline-block; }
-          @media print { button { display: none !important; } }
-        </style>
-      </head>
-      <body>
-        <div class='recibo-box'>
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <h2 style="margin:0;">Orden de Pedido</h2>
-            <img src="logo.png" alt="Logo" style="height:48px;max-width:180px;object-fit:contain;">
-          </div>
-          <div style="font-size:0.90em; margin-bottom: 5px;">${new Date().toLocaleString('es-AR', { hour12: false })}</div>
-          <div><span class='label'>Nombre:</span> ${nombre}</div>
-          <div><span class='label'>Teléfono:</span> ${telefono}</div>
-          <div><span class='label'>Dirección:</span> ${direccion}</div>
-          <div><span class='label'>DNI:</span> ${dni}</div>
-          <div><span class='label'>Email:</span> ${email}</div>
-          <hr style='margin:10px 0;'>
-          <table>
-            <thead>
-              <tr><th>Cod</th><th>Artículo</th><th>Cant</th><th>Valor</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-          <table>
-            <tr class='totales'><td>Subtotal</td><td style='text-align:right;'>${subtotal}</td></tr>
-            <tr class='totales'><td>Medio de Pago</td><td style='text-align:right;'>${medioPago}</td></tr>
-            ${parseFloat(recargo) ? `<tr class='totales'><td>Recargo</td><td style='text-align:right;'>${recargo}</td></tr>` : ''}
-            ${parseFloat(descuento) ? `<tr class='totales'><td>Descuento</td><td style='text-align:right;'>${descuento}</td></tr>` : ''}
-            ${parseFloat(envio) ? `<tr class='totales'><td>Costo de Envío</td><td style='text-align:right;'>${envio}</td></tr>` : ''}
-            <tr class='totales'><td>Total</td><td style='text-align:right;font-size:1.1em;'>${totalFinal}</td></tr>
-          </table>
-          <hr style='margin:10px 0;'>
-          <div style="text-align:center;font-size:0.80em;font-weight:bold;color:#333;">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
-        </div>
-        <script>window.onload = function(){ window.print(); }<\/script>
-      </body>
-      </html>
-    `;
-    // Abrir ventana e imprimir
-    const w = window.open('', '_blank', 'width=600,height=800');
-    w.document.write(reciboHtml);
-    w.document.close();
+    const d = {
+      nombre: form.nombre.value.trim(),
+      telefono: form.telefono.value.trim(),
+      medioPago: form.medioPago.value,
+      subtotal: form.subtotal.value,
+      recargo: form.recargo.value,
+      descuento: form.descuento.value,
+      envio: form.envio.value,
+      totalFinal: form.totalFinal.value,
+      fecha: new Date().toLocaleString('es-AR', { hour12: false }),
+      items: items.map(it => ({
+        nombre: it.nombre, codigo: it.codigo, codigoBarras: it.codigoBarras,
+        cantidad: it.cantidad, valorU: it.valorU
+      }))
+    };
+    imprimirComprobante(d);
+  }
+
+  async function imprimirComprobante(d) {
+    try {
+      // Camino principal: modo texto ESC-POS con la fuente nativa FONTA
+      await imprimirReciboESCPOS(d);
+    } catch (e) {
+      // El fallback NO es silencioso: mostramos el motivo real para poder
+      // diagnosticar por qué no entró el modo ESC-POS.
+      console.error('Fallo impresión ESC-POS:', e);
+      let motivo = (e && e.message) ? e.message : String(e);
+      if (typeof qz === 'undefined') {
+        motivo = 'La librería de QZ Tray no se cargó (¿sin internet o CDN bloqueado?).';
+      } else if (!qz.websocket.isActive()) {
+        motivo = 'No se pudo conectar con QZ Tray. Verificá que QZ Tray esté instalado y CORRIENDO (ícono en la bandeja del sistema).\n\nDetalle técnico: ' + motivo;
+      }
+      const usarHTML = confirm(
+        'No se pudo imprimir en modo ESC-POS (fuente nativa).\n\n' +
+        motivo + '\n\n' +
+        '¿Querés imprimir con el método HTML de respaldo (menos nítido)?'
+      );
+      if (usarHTML) imprimirReciboHTML(d);
+    }
   }
 
   // Inicializar tabla vacía
@@ -2798,8 +3163,9 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
   // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===
   function restablecerFormulario() {
     // Confirmar con el usuario si hay datos
-    const hayDatos = items.length > 0 || 
-                     form.nombre.value.trim() !== '' || 
+    const nombreActual = form.nombre.value.trim().toLowerCase();
+    const hayDatos = items.length > 0 ||
+                     (nombreActual !== '' && nombreActual !== 'n/a') ||
                      form.telefono.value.trim() !== '' ||
                      form.direccion.value.trim() !== '';
     
@@ -2809,7 +3175,7 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     }
     
     // Limpiar campos del formulario
-    form.nombre.value = '';
+    form.nombre.value = 'n/a';
     form.telefono.value = '';
     form.direccion.value = '';
     form.dni.value = '';
@@ -2852,6 +3218,8 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
       setTimeout(() => form.nombre.focus(), 100);
     }
     
+    if (window.desactivarModoAdmin) window.desactivarModoAdmin();
+    if (window.contraerExtraCliente) window.contraerExtraCliente();
     console.log('✅ Formulario restablecido correctamente');
   }
 
@@ -2863,4 +3231,62 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
       restablecerFormulario();
     });
   }
+
+  // === MODAL CONTRASEÑA ADMIN ===
+  (function() {
+    const ADMIN_PASS = '47623212';
+    const overlay = document.getElementById('adminPassOverlay');
+    const input   = document.getElementById('adminPassInput');
+    const errDiv  = document.getElementById('adminPassError');
+    const btnConf = document.getElementById('adminPassConfirmBtn');
+    const btnCanc = document.getElementById('adminPassCancelBtn');
+    const adminBtn = document.getElementById('adminModeBtn');
+
+    function abrirModal() {
+      input.value = '';
+      errDiv.style.display = 'none';
+      overlay.style.display = 'flex';
+      setTimeout(() => input.focus(), 80);
+    }
+
+    function cerrarModal() {
+      overlay.style.display = 'none';
+    }
+
+    function confirmar() {
+      if (input.value === ADMIN_PASS) {
+        mostrarClientesAdmin = true;
+        cargarClientes();
+        adminBtn.style.background = '#6c4eb6';
+        adminBtn.style.color = '#fff';
+        cerrarModal();
+      } else {
+        errDiv.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    window.desactivarModoAdmin = function() {
+      if (!mostrarClientesAdmin) return;
+      mostrarClientesAdmin = false;
+      cargarClientes();
+      adminBtn.style.background = '';
+      adminBtn.style.color = '';
+    };
+
+    adminBtn.addEventListener('click', abrirModal);
+    btnConf.addEventListener('click', confirmar);
+    btnCanc.addEventListener('click', cerrarModal);
+
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) cerrarModal();
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
+      else if (e.key === 'Escape') cerrarModal();
+    });
+  })();
+
 });
