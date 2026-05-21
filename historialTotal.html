@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pedidos del Día</title>
+  <title>Historial Total</title>
   <link rel="icon" href="faviconnegro.png" type="image/png">
   <link rel="stylesheet" href="styles.css">
   <!-- Firebase Auth Check -->
@@ -199,18 +199,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      // Calcular fecha de hoy en Argentina (UTC-3) antes de armar la query
-      const now = new Date();
-      const argentinaTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
-      const fechaHoy = argentinaTime.toISOString().split('T')[0]; // YYYY-MM-DD
-
-      // Query optimizada: solo descarga registros del día de hoy desde Firebase.
-      // orderByChild('fecha') con startAt/endAt limita los datos en el servidor.
-      // createdby = admin se filtra en cliente (no requiere descarga extra).
       db.ref('pedidos')
         .orderByChild('fecha')
-        .startAt(fechaHoy)
-        .endAt(fechaHoy + '\uf8ff')
         .on('value', snap => {
           pedidosCache = {};
           snap.forEach(child => {
@@ -228,24 +218,37 @@
       });
     });
 
+    const PAGE_SIZE = 300;
+    let paginaActual = 1;
+
     function renderPedidos() {
       const tbody = document.getElementById('pedidosBody');
       let pedidos = pedidosCache;
       const filtroNombre = document.getElementById('filtroNombre').value.trim().toLowerCase();
 
-      // Los registros ya vienen filtrados por fecha de hoy y createdby = admin desde Firebase
       let keys = Object.keys(pedidos).reverse();
 
       if (filtroNombre) {
         keys = keys.filter(id => (pedidos[id].cliente?.nombre || '').toLowerCase().includes(filtroNombre));
       }
       if (keys.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7">No hay pedidos del día de hoy que coincidan con los filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">No hay pedidos que coincidan con los filtros.</td></tr>';
+        renderPaginacion(0, 0);
         return;
       }
 
+      const totalPaginas = Math.ceil(keys.length / PAGE_SIZE);
+      if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+      if (paginaActual < 1) paginaActual = 1;
+
+      const inicio = (paginaActual - 1) * PAGE_SIZE;
+      const fin = inicio + PAGE_SIZE;
+      const keysPagina = keys.slice(inicio, fin);
+
+      renderPaginacion(keys.length, totalPaginas);
+
       tbody.innerHTML = '';
-      keys.forEach(id => {
+      keysPagina.forEach(id => {
         const p = pedidos[id];
         const fecha = p.fecha || '';
         const cliente = p.cliente || {};
@@ -261,7 +264,6 @@
           <tr${isCancelado ? ' style="background:#e0e0e0;color:#888;"' : ''}>
             <td>${fecha}</td>
             <td style="cursor:pointer;text-decoration:underline;color:#2a3d8f;" onclick="verPedido('${id}')">${cliente.nombre || ''}</td>
-            <td style="max-width:180px;white-space:pre-wrap;word-break:break-word;">${p.nota || ''}</td>
             <td>${totalFinal}</td>
             <td>${pagos.medioPago || ''}</td>
             <td>${vendedor}</td>
@@ -275,11 +277,36 @@
         `;
       });
     }
+    function renderPaginacion(total, totalPaginas) {
+      const cont = document.getElementById('paginacionCont');
+      if (!cont) return;
+      if (totalPaginas <= 1) { cont.innerHTML = total > 0 ? `<span style="color:#666;font-size:0.9rem;">${total} registro${total !== 1 ? 's' : ''}</span>` : ''; return; }
+      const inicio = (paginaActual - 1) * PAGE_SIZE + 1;
+      const fin = Math.min(paginaActual * PAGE_SIZE, total);
+      let html = `<span style="color:#666;font-size:0.9rem;">Mostrando ${inicio}–${fin} de ${total}</span>`;
+      html += `<button onclick="irPagina(1)" ${paginaActual === 1 ? 'disabled' : ''} style="background:#5c5866;padding:5px 10px;">«</button>`;
+      html += `<button onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''} style="background:#5c5866;padding:5px 10px;">‹</button>`;
+      const desde = Math.max(1, paginaActual - 5);
+      const hasta = Math.min(totalPaginas, paginaActual + 5);
+      for (let p = desde; p <= hasta; p++) {
+        html += `<button onclick="irPagina(${p})" style="background:${p === paginaActual ? '#39373f' : '#5c5866'};padding:5px 10px;font-weight:${p === paginaActual ? 'bold' : 'normal'};">${p}</button>`;
+      }
+      html += `<button onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''} style="background:#5c5866;padding:5px 10px;">›</button>`;
+      html += `<button onclick="irPagina(${totalPaginas})" ${paginaActual === totalPaginas ? 'disabled' : ''} style="background:#5c5866;padding:5px 10px;">»</button>`;
+      cont.innerHTML = html;
+    }
+    function irPagina(n) {
+      paginaActual = n;
+      renderPedidos();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     function aplicarFiltros() {
+      paginaActual = 1;
       renderPedidos();
     }
     function limpiarFiltros() {
       document.getElementById('filtroNombre').value = '';
+      paginaActual = 1;
       renderPedidos();
     }
     function verPedido(id) {
@@ -833,7 +860,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 </head>
 <body>
 <header>
-  <h1>📦 Historial Reciente 📝</h1>
+  <h1>📦 Historial Total 📝</h1>
 </header>
   <main>
     <div style="margin-bottom: 16px; display: flex; gap: 20px; align-items: center;">
@@ -846,7 +873,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         <tr>
           <th>Fecha</th>
           <th>Nombre</th>
-          <th>Nota</th>
           <th>Total</th>
           <th>Pago</th>
           <th>Vendedor</th>
@@ -854,9 +880,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         </tr>
       </thead>
       <tbody id="pedidosBody">
-        <tr><td colspan="6">Cargando...</td></tr>
+        <tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>
       </tbody>
     </table>
+    <div id="paginacionCont" style="margin-top:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"></div>
   </main>
 
   <!-- Modal WhatsApp Alias -->

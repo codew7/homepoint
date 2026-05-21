@@ -2180,7 +2180,7 @@ function cargarClientes() {
     datalistClientes.innerHTML = '';
     snap.forEach(child => {
       const cli = child.val();
-      if (cli && cli.nombre && (mostrarClientesAdmin || cli.tipoCliente !== 'admin')) {
+      if (cli && cli.nombre && (mostrarClientesAdmin ? cli.tipoCliente === 'admin' : cli.tipoCliente !== 'admin')) {
         clientesRegistrados.push(cli);
         clientesPorNombre[cli.nombre.toLowerCase()] = cli;
         const opt = document.createElement('option');
@@ -2202,7 +2202,7 @@ if (cargarClienteBtn) {
       datalistClientes.innerHTML = '';
       snap.forEach(child => {
         const cli = child.val();
-        if (cli && cli.nombre && (mostrarClientesAdmin || cli.tipoCliente !== 'admin')) {
+        if (cli && cli.nombre && (mostrarClientesAdmin ? cli.tipoCliente === 'admin' : cli.tipoCliente !== 'admin')) {
           clientesRegistrados.push(cli);
           clientesPorNombre[cli.nombre.toLowerCase()] = cli;
           const opt = document.createElement('option');
@@ -2402,6 +2402,11 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     modal.querySelector('h2').textContent = esEdicion ? 'Editar cliente' : 'Registrar nuevo cliente';
     modal.querySelector('button[type="submit"]').textContent = esEdicion ? 'Guardar' : 'Registrar';
   }
+  // Cerrar al hacer clic en el fondo oscuro (fuera del cuadro)
+  const overlayDiv = modal.firstElementChild;
+  overlayDiv.onclick = function(e) {
+    if (e.target === overlayDiv) { modal.remove(); cleanup(); }
+  };
   // Cancelar
   modal.querySelector('#cancelarNuevoCliente').onclick = function() {
     modal.remove();
@@ -2481,13 +2486,14 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
   };
   // Soporte Enter/Escape
   function keyHandler(e) {
-    if (modal.style.display !== 'flex') return;
+    if (!document.getElementById('modalRegistroCliente')) return;
     // Solo confirmar con Enter si el foco está en un input o textarea
     if (e.key === 'Enter' && document.activeElement.tagName !== 'BUTTON') {
       modal.querySelector('button[type="submit"]').click();
       e.preventDefault();
     } else if (e.key === 'Escape') {
-      modal.querySelector('#cancelarNuevoCliente').click();
+      modal.remove();
+      cleanup();
       e.preventDefault();
     }
   }
