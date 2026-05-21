@@ -1207,6 +1207,9 @@
         // Cache de pedidos descargados del JSON de Drive (evita re-descargar al cambiar filtros)
         let pedidosCache = null;
 
+        // Cache de pedidos de años anteriores descargados desde Firebase
+        let firebasePedidosCache = {};
+
         // Variables para gastos (siguen en Firebase)
         let gastosData = [];
         let gastosAgrupados = {};
@@ -1473,14 +1476,75 @@
                     const pedidos = data.pedidos || data;
                     if (pedidos && Object.keys(pedidos).length > 0) {
                         procesarPedidos(pedidos, year);
+                        // Si Drive no tiene registros para el año solicitado, buscar en Firebase
+                        if (!datosFacturacion.facturacion.some(v => v > 0)) {
+                            cargarPedidosDesdeFirebase(year);
+                        } else {
+                            mostrarDatos();
+                        }
+                    } else {
+                        cargarPedidosDesdeFirebase(year);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al cargar datos desde Drive:', error);
+                    cargarPedidosDesdeFirebase(year);
+                });
+        }
+
+        function reinicializarDatosFacturacion(numPeriodos) {
+            datosFacturacion = {
+                facturacion: new Array(numPeriodos).fill(0),
+                consumidorFinal: new Array(numPeriodos).fill(0),
+                mayorista: new Array(numPeriodos).fill(0),
+                gastos: new Array(numPeriodos).fill(0),
+                gananciaNeta: new Array(numPeriodos).fill(0),
+                gananciaPercent: new Array(numPeriodos).fill(0),
+                ventasGeneradas: new Array(numPeriodos).fill(0),
+                ventasConsumidorFinal: new Array(numPeriodos).fill(0),
+                ventasMayoristas: new Array(numPeriodos).fill(0),
+                gananciaBruta: new Array(numPeriodos).fill(0),
+                gananciaBrutaConsumidor: new Array(numPeriodos).fill(0),
+                gananciaBrutaMayorista: new Array(numPeriodos).fill(0),
+                gananciaSeleccionados: new Array(numPeriodos).fill(0),
+                facturacionEfectivo: new Array(numPeriodos).fill(0),
+                facturacionTransferencia: new Array(numPeriodos).fill(0),
+                facturacionTarjeta: new Array(numPeriodos).fill(0),
+                facturacionOtros: new Array(numPeriodos).fill(0),
+                gananciaPercentConsumidor: new Array(numPeriodos).fill(0),
+                gananciaPercentMayorista: new Array(numPeriodos).fill(0)
+            };
+        }
+
+        function cargarPedidosDesdeFirebase(year) {
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) loadingText.textContent = `Buscando datos de ${year} en Firebase...`;
+            mostrarLoading(true);
+
+            // Usar caché si ya se descargó en esta sesión
+            if (firebasePedidosCache[year]) {
+                reinicializarDatosFacturacion(periodoLabels.length);
+                procesarPedidos(firebasePedidosCache[year], year);
+                mostrarDatos();
+                return;
+            }
+
+            db.ref(String(year)).once('value')
+                .then(snapshot => {
+                    if (snapshot.exists()) {
+                        const val = snapshot.val();
+                        const pedidos = val.pedidos || val;
+                        firebasePedidosCache[year] = pedidos;
+                        reinicializarDatosFacturacion(periodoLabels.length);
+                        procesarPedidos(pedidos, year);
                         mostrarDatos();
                     } else {
                         mostrarSinDatos();
                     }
                 })
                 .catch(error => {
-                    console.error('Error al cargar datos desde Drive:', error);
-                    mostrarNotificacion('Error al cargar datos desde Google Drive', 'error');
+                    console.error(`Error al cargar ${year} desde Firebase:`, error);
+                    mostrarNotificacion(`No se encontraron datos para ${year}`, 'error');
                     mostrarSinDatos();
                 });
         }
