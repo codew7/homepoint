@@ -2183,10 +2183,13 @@ function cargarClientes() {
       if (cli && cli.nombre && (mostrarClientesAdmin ? cli.tipoCliente === 'admin' : cli.tipoCliente !== 'admin')) {
         clientesRegistrados.push(cli);
         clientesPorNombre[cli.nombre.toLowerCase()] = cli;
-        const opt = document.createElement('option');
-        opt.value = cli.nombre;
-        datalistClientes.appendChild(opt);
       }
+    });
+    clientesRegistrados.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    clientesRegistrados.forEach(cli => {
+      const opt = document.createElement('option');
+      opt.value = cli.nombre;
+      datalistClientes.appendChild(opt);
     });
   });
 }
@@ -2196,6 +2199,7 @@ if (cargarClienteBtn) {
   cargarClienteBtn.addEventListener('click', function() {
     cargarClienteBtn.disabled = true;
     cargarClienteBtn.textContent = 'Cargando...';
+    if (form.nombre.value.trim() === 'n/a') form.nombre.value = '';
     db.ref('clientes').once('value').then(snap => {
       clientesRegistrados = [];
       clientesPorNombre = {};
@@ -2205,10 +2209,13 @@ if (cargarClienteBtn) {
         if (cli && cli.nombre && (mostrarClientesAdmin ? cli.tipoCliente === 'admin' : cli.tipoCliente !== 'admin')) {
           clientesRegistrados.push(cli);
           clientesPorNombre[cli.nombre.toLowerCase()] = cli;
-          const opt = document.createElement('option');
-          opt.value = cli.nombre;
-          datalistClientes.appendChild(opt);
         }
+      });
+      clientesRegistrados.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+      clientesRegistrados.forEach(cli => {
+        const opt = document.createElement('option');
+        opt.value = cli.nombre;
+        datalistClientes.appendChild(opt);
       });
       cargarClienteBtn.textContent = 'Cargado';
       cargarClienteBtn.disabled = true;
@@ -3263,6 +3270,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (input.value === ADMIN_PASS) {
         mostrarClientesAdmin = true;
         cargarClientes();
+        if (form.nombre.value.trim() === 'n/a') form.nombre.value = '';
         adminBtn.style.background = '#6c4eb6';
         adminBtn.style.color = '#fff';
         cerrarModal();
