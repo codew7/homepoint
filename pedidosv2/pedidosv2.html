@@ -3077,7 +3077,7 @@
       actualizarProgreso();
 
       // Wire up financial event listeners
-      setTimeout(() => { pvWireEvents(bloqueado); actualizarCalculosPV(); }, 0);
+      setTimeout(() => { pvWireEvents(bloqueado); actualizarCalculosPV(); actualizarEstadoBtnImpresion(); }, 0);
     }
 
     // ==========================================
@@ -3765,8 +3765,20 @@
 
     btnImpresion.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (btnImpresion.disabled) return;
       printMenu.classList.toggle('active');
     });
+
+    function actualizarEstadoBtnImpresion() {
+      const pagoOk = !!document.querySelector('input[name="pvTipoPago"]:checked');
+      const entregaOk = !!document.querySelector('input[name="pvTipoEntrega"]:checked');
+      const ok = pagoOk && entregaOk;
+      btnImpresion.disabled = !ok;
+      btnImpresion.style.opacity = ok ? '' : '0.5';
+      btnImpresion.style.cursor = ok ? '' : 'not-allowed';
+      if (!ok) printMenu.classList.remove('active');
+    }
+    window.actualizarEstadoBtnImpresion = actualizarEstadoBtnImpresion;
 
     document.addEventListener('click', (e) => {
       if (!printMenu.contains(e.target) && e.target !== btnImpresion) {
@@ -4255,6 +4267,7 @@
           const aliasRow = document.getElementById('pvAliasRow');
           if (aliasRow) aliasRow.style.display = (admin && r.value === 'Transferencia') ? 'flex' : 'none';
 
+          if (window.actualizarEstadoBtnImpresion) window.actualizarEstadoBtnImpresion();
         });
       });
 
@@ -4275,6 +4288,7 @@
           }
           actualizarCalculosPV();
           actualizarEstadoBtnDespachar();
+          if (window.actualizarEstadoBtnImpresion) window.actualizarEstadoBtnImpresion();
         });
       });
 
