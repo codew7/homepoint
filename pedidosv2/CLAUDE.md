@@ -1,151 +1,96 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance para Claude Code en este repositorio.
 
-## Project Overview
+## Proyecto
 
-Order management system for "HomePoint" distributor. Static HTML webapp (no build tools, no bundler) that connects to Firebase Realtime Database and Google Sheets as a product catalog.
+Sistema de gestión de pedidos para distribuidor "HomePoint". App web HTML estática (sin bundler) que conecta a Firebase Realtime Database y Google Sheets como catálogo de productos.
 
-## Architecture
+## Arquitectura
 
-- **pedidos.html** — Main order management app (admin + customer facing). ~3300 lines, single-file with inline CSS/JS. Handles order creation, editing, payments, dispatch, printing, and WhatsApp messaging.
-- **despachos.html** — Dispatch/packing assistant app (tablet-optimized). Single-file with inline CSS/JS. Features: Firebase authentication (requires login), QR scanning, item packing checklist with localStorage, real-time Firebase listener for order updates, quantity controls with arrow buttons, "Listo" toggle indicator (localStorage), PWA installation support. Modern Clean Industrial UI design with Plus Jakarta Sans typography, progress bar, and glassmorphism effects.
-- **manifest.json** — Web App Manifest for PWA installation (Android/iOS/Windows).
-- **sw.js** — Service worker for PWA (caches app shell, network-first strategy for performance).
-- **config.js** — Shared configuration: Firebase credentials (`firebaseConfig`) and Google Sheets API config (`GOOGLE_SHEETS_CONFIG` with `API_KEY`, `SPREADSHEET_ID`, `RANGO`).
+- **pedidosv2.html** — Unified order management + dispatch/packing app (tablet-optimized). Single-file con CSS/JS inline. Features: Firebase Auth, QR scanning, unified view con item packing checklist + controles financieros, Firebase realtime listener, quantity controls, progress bar, PWA installable.
+- **manifest.json** — Web App Manifest para PWA (Android/iOS/Windows).
+- **sw.js** — Service Worker (caches app shell, network-first strategy).
+- **config.js** — Shared config: Firebase credentials + Google Sheets API (API_KEY, SPREADSHEET_ID, RANGO).
 
 ## Data Layer
 
-**Firebase Realtime Database** — `pedidos/{id}` nodes contain: `cliente` (nombre, telefono, localidad, provincia, direccion, dni, email), `items[]` (codigo, nombre, cantidad, valorU, valorC, listo='y'|'n'), `status`, `locked`, `pagos`, `timestamp`, `enPreparacion` ('si' | 'listo'), `nota`, `notaFecha`. Order statuses: ABIERTO → CERRADO → DESPACHADO/ENTREGADO | CANCELADO. `movimientos/{id}` tracks inventory movements (SALIDA).
+**Firebase Realtime Database** — `pedidos/{id}` nodes contienen: `cliente` (nombre, telefono, localidad, provincia, direccion, dni, email), `items[]` (codigo, nombre, cantidad, valorU, valorC, listo='y'|'n'), `status`, `locked`, `pagos`, `timestamp`, `enPreparacion` ('si'|'listo'), `nota`, `notaFecha`. Statuses: ABIERTO → CERRADO → DESPACHADO/ENTREGADO | CANCELADO.
 
-**Google Sheets** (read-only catalog via Sheets API v4) — Sheet "Lista", row 2 onwards. Key columns: A=Categoria, B=Imagen URL, C=Codigo, D=Nombre, G=valorU (sale price), H=valorC (cost), K=Stock, L=Codigo de barras.
+**Google Sheets** (read-only) — Sheet "Lista", row 2+. Columnas: A=Categoria, B=Imagen URL, C=Codigo, D=Nombre, G=valorU, H=valorC, K=Stock, L=Codigo de barras.
 
-## Development
+## Tech Stack
 
-No build step. Open HTML files directly in browser or serve with any static server. Firebase and html5-qrcode are loaded via CDN. Both HTML files import `config.js` via `<script src="config.js">`.
+- Vanilla JS (sin frameworks)
+- Firebase SDK v10.12.0 (compat mode)
+- Google Sheets API v4
+- Sin build step — open HTML directly en browser o serve con static server
 
-**Firebase SDK**: v10.12.0 compat mode (`firebase-app-compat.js`, `firebase-database-compat.js`, `firebase-auth-compat.js`).
-
-## Despachos.html Features
+## Características Principales
 
 ### Authentication
-- **Firebase Auth required**: Uses `firebase.auth().onAuthStateChanged(user => {...})` to gate access. Unauthenticated users are redirected to `../Admin/login.html?redirect=<URL>` with return link.
-- **Loading overlay**: Fixed position div with spinner (`z-index: 99999`) blocks UI interaction while Firebase verifies auth state. Fade-out transition (`.3s ease-out`) when auth resolves.
-- **Reuses existing login page**: Auth flows through `../Admin/login.html` (email/password login with support for `?redirect=` parameter). No separate auth UI in despachos.html.
+- Firebase Auth required. `firebase.auth().onAuthStateChanged()` gates access.
+- Unauthenticated users → redirect a `../Admin/login.html?redirect=<URL>`.
+- Loading overlay full-screen (z-index 99999) con spinner durante auth verification.
 
-### Core Features
-- **Real-time updates**: Firebase `on('value', ...)` listener detects changes from other users/pedidos.html and re-renders. Stops listening when order is CANCELADO or DESPACHADO/ENTREGADO.
-- **localStorage storage**:
-  - `despachos_{pedidoId}.comentario` — dispatch comments (not saved to Firebase)
-  - `despachos_{pedidoId}.tamano` — package size (not saved to Firebase)
-  - `despachos_{pedidoId}.peso` — package weight (not saved to Firebase)
-- **Nota field**: Saved to Firebase as `nota` + `notaFecha` (timestamp). Same field as pedidos.html for sync, but date not displayed in despachos.
-- **Quantity controls**: Custom arrow buttons (▼/▲) in pill-shaped container. Updates counter in real-time via `cambiarQty(idx, delta)`.
-- **Status badges**: Color-coded by status — ABIERTO (blue) | CERRADO (amber) | CANCELADO (red) | DESPACHADO/ENTREGADO (green).
-- **Progress bar**: Single-line layout showing "PROGRESO [====---] 100%" at top. Visual indicator with colored fill (amber → green at 100%). Updates in real-time as items are checked.
-- **Layout**: Cliente info split into 2 rows — (1) Nombre+Teléfono | (2) Pago+Entrega+Estado. Each card uses flexbox with hover shadows.
-- **PWA Installation**: `manifest.json` + `sw.js` enable "Add to Home Screen" on Android/iOS. Custom install button (📲) appears in header when `beforeinstallprompt` event fires.
-- **Item packing states**: Each item has a `listo` field in Firebase ('y' = packed, 'n' = pending). Checkbox state is read/written in real-time from Firebase, not localStorage. Allows multi-device sync.
-- **Item grouping**: Items are grouped into two sections: "Pendientes" (listo ≠ 'y') displayed first, "Listos" (listo === 'y') displayed below. Reorganizes automatically when checkbox state changes.
-- **Listo button**: Acts as a true/false toggle (inactive/active states) for `enPreparacion` field. Controls packing workflow (si/listo).
-- **Editable when locked**: `isBlocked` only checks status (CANCELADO/DESPACHADO/ENTREGADO), not `locked` field. Allows internal team to edit locked orders.
-- **Checkbox animation**: Bouncing effect (`scale(.7)` → `1.15` → `1`) when item is marked as packed.
-- **Staggered item load**: Items fade in with 30ms delay between each for visual flow.
-- **enPreparacion field**: Written to Firebase the first time any item checkbox is checked (`enPreparacion: 'si'`). Toggled to `'listo'` via the "Terminar" button in the footer. The realtime listener detects external changes to this field and updates the button accordingly.
-- **Pedidos panel badge**: Orders with `enPreparacion === 'si'` show an "⚙️ En prep." amber badge in the pedidos list panel.
-- **Terminar button**: Third footer action button (alongside "+ Agregar" and "Impresion"). Default state: neutral border/grey text labeled "Terminar". When `enPreparacion === 'listo'`: green background, white text, labeled "Listo". Clicking toggles between `'listo'` and `'si'` in Firebase. All three footer buttons use `flex: 1` for equal symmetric widths.
+### Real-time + Packing
+- **Firebase listener**: `on('value', ...)` detects cambios de otros users y re-renders.
+- **Item packing**: Cada item tiene `listo` field ('y'|'n') en Firebase. Checkbox state sincroniza multi-device.
+- **Item grouping**: Pendientes (listo ≠ 'y') | Listos (listo === 'y'). Auto-reorganiza al checkear.
+- **Cerrar Pedido**: Button deshabilitado (50% opacity) hasta que todos items tengan `listo === 'y'`. On click: `status: 'CERRADO'`, `locked: true`, `enPreparacion: 'listo'`. Reabrir: `status: 'ABIERTO'`, `locked: false`, `enPreparacion: 'si'`.
 
-## Design System (Despachos.html)
+### Financial
+- Subtotal, descuento (%), recargo (%), envío, TOTAL FINAL.
+- TOTAL FINAL clickeable → copia cotización a clipboard (subtotal, descuentos, recargos, total, medio de pago, alias si Transferencia).
+- Auto-save via `programarActualizacion()` (2s debounce).
 
-**Aesthetic**: Clean Industrial — premium warehouse management tool with modern, functional design.
+### Pago + Entrega
+- Radio buttons: Efectivo | Transferencia
+- Radio buttons: Motomensajeria | Correo | Via Cargo
+- Motomensajeria muestra campo Envío (como Correo Argentino).
 
-**Typography**:
-- UI: `Plus Jakarta Sans` (geometric, distinctive, readable)
-- Codes/numbers: `JetBrains Mono` (monospace, high legibility)
+### Impresión
+- **Rótulos**: Destinatario (nombre, dirección, localidad, provincia, teléfono, DNI, entrega) + Remitente (nombre, teléfono) + QR. Checkboxes PS/PAGO/LISTO para tildar a mano.
+  - CSS: `@page { margin: 0; }`. Minimized padding. Texto hace wrap completo (sin ellipsis).
+- **Facturas**: Compact layout con márgenes mínimos.
 
-**Color Palette** (CSS custom properties):
-- Background: `#f0f0ee` (warm white)
-- Surface: `#ffffff` (cards/modals)
-- Text primary: `#1a1a1a`, secondary: `#6b6b6b`, muted: `#9e9e9e`
-- Accent: `#e67e22` (ámbar, primary action)
-- Success: `#2d9f6f` (green, packed items)
-- Danger: `#d94f4f` (red, delete)
-- Header gradient: `#0f172a` → `#1e293b` (dark blue)
+### PWA
+- `manifest.json` + `sw.js` → "Add to Home Screen" en Android/iOS.
+- Custom install button (📲) en header cuando `beforeinstallprompt` event fires.
 
-**Visual Details**:
-- Border radius: `var(--radius-sm)` 8px | `--radius-md` 14px | `--radius-lg` 20px | `--radius-xl` 28px
-- Shadows: subtle (`--shadow-sm`) to dramatic (`--shadow-lg`), with glow effects on accent elements
-- Animations: `var(--ease-out)` cubic-bezier(.22, 1, .36, 1) for snappy transitions
-- Glassmorphism: Footer with `backdrop-filter: blur(16px)` for frosted glass effect
-- Loading overlay: Full-screen spinner with `z-index: 99999` during auth verification
+### UI
+- **Design**: Clean Industrial — premium warehouse tool.
+- **Typography**: Plus Jakarta Sans (UI) | JetBrains Mono (codes/numbers).
+- **Color**: `--accent` #e67e22 (amber), `--success` #2d9f6f (green), `--danger` #d94f4f (red).
+- **Header**: Gradient #0f172a → #1e293b. Glassmorphic search. Action buttons.
+- **Progress bar**: Single-line "PROGRESO [====---] 100%". Colored fill (amber → green at 100%).
+- **localStorage**: Cliente info editable, comentarios despacho, tamaño paquete, peso (local only, no Firebase).
 
-**Header**:
-- Gradient background with subtle vertical line texture pattern
-- Brand mark (orange box with "D" logo)
-- Glassmorphic search input with focus states
-- Search displays client name (not order ID) for easy recognition. Recent orders dropdown shows client name + ID.
-- Action buttons with hover transitions
+## Convenciones
 
-**Item Cards**:
-- Left border accent (transparent → green when checked)
-- Image thumbnail with hover zoom and lightbox support
-- Monospace code display with subtle styling
-- Checkbox with spring bounce animation on check
-- Quantity controls in bordered pill shape
-- Delete button with danger color on hover
+- All UI text: Spanish.
+- Single-file approach — CSS/JS inline.
+- Vanilla JS only, sin frameworks.
+- Firebase: batched updates donde posible (`ref.update()`).
+- Google Sheets: fetched once, cached en memory (maps by codigo).
+- WhatsApp: `https://api.whatsapp.com/send/?phone=` + formato argentino (54 prefix, sin 0 leading).
+- z-index: auth (99999) > modals (800-900) > header/footer (10) > content (default).
 
-**Print Documents**:
-- **Factura (Invoice)**: Minimized margins (`@page { margin: 0; }`), compact padding (8px 6px). Displays order details, items, and totals.
-- **Rótulo (Label)**: Minimized margins, all fields on single lines (white-space: nowrap). Displays recipient info, sender info, QR code, and delivery type. Fields use text-overflow: ellipsis if content exceeds width.
+## Recent Changes (2026-03-28)
 
-## Conventions
+- **Merged Despacho + Pedido** → single unified view (`renderUnificado()`).
+- **Items editable prices** + item total en cada línea.
+- **enPreparacion sync**: Cerrar Pedido setea `'listo'`, Reabrir setea `'si'`.
+- **Firebase packing checkbox**: `listo` field multi-device sync.
+- **Button state**: Cerrar Pedido disabled hasta todos items checked.
 
-- All UI text in Spanish. Respond always in Spanish.
-- Single-file approach: each HTML page contains all its CSS and JS inline.
-- Vanilla JS only — no frameworks, no npm dependencies.
-- Firebase writes use batched updates where possible (`ref.update()` with object).
-- Google Sheets data is fetched once and cached in memory (maps keyed by product codigo).
-- localStorage is used for client-side state that shouldn't persist to Firebase (dispatch comments, tamano, peso, faltantes list).
-- WhatsApp links use `https://api.whatsapp.com/send/?phone=` format with Argentine phone formatting (prefix 54, strip leading 0).
-- Emoji maps use lowercase string matching (e.g., `includes('correo')` matches "Correo Argentino").
-- CSS animations use CSS custom properties for timing (`--ease-out`, `--ease-spring`) for consistency.
-- z-index scale: auth overlay (99999) > modals (800-900) > header/footer (10) > content (default).
+## Recent Changes (2026-04-09)
 
-## Recent Changes (Session: 2026-03-12)
+- **Rótulos checkboxes**: Added 3 hand-checkable boxes (PS, PAGO, LISTO) al pie.
+- **Rótulos text wrapping**: Eliminado `white-space: nowrap; text-overflow: ellipsis`. Texto ahora hace wrap completo sin truncado.
 
-### Item Packing State Management
-- **Migrated checkbox storage from localStorage to Firebase**: Each item now has a `listo` field ('y' = packed, 'n' = pending) stored in Firebase `items[]` array.
-- **Real-time synchronization**: Checkbox states sync across devices via Firebase listener. Changes are written to `items` array and persisted immediately.
-- **Implementation**:
-  - `isItemChecked(codigo)` reads from `pedidoActual.items` (Firebase data)
-  - `toggleCheck(idx, checked)` writes `listo: 'y'|'n'` to Firebase and calls `renderPedido()` immediately for UI reorganization
+## Recent Changes (2026-06-01)
 
-### Item Grouping
-- **Two-section layout**: Items now grouped into "Pendientes" (listo ≠ 'y', displayed first) and "Listos" (listo === 'y', displayed below).
-- **Dynamic reorganization**: When checkbox state changes, items automatically move between groups via `renderPedido()`.
-- **Group headers**: Each section displays a count badge (e.g., "Pendientes (5)", "Listos (3)").
-
-### User Interface Improvements
-- **Search bar displays client name**: Search input now shows client name instead of order ID for better readability. Works for all selection methods (QR, dropdown, panel, URL parameter).
-  - Implemented via `pedidoInput.value = nombreCliente` in `cargarPedido()`.
-  - Recent orders dropdown includes `data-nombre` attribute for quick lookup.
-
-- **Progress bar single-line layout**: Progress indicator now displays in one line: `PROGRESO [====---] 100%`
-  - `.progress-section` uses `display: flex` with `align-items: center` and `gap: 12px`
-  - `.progress-bar-track` uses `flex: 1` to fill available space
-  - Bar height reduced to 3px for cleaner appearance
-
-### Print Document Enhancements
-- **Minimized print margins**: Both factura and rótulo now use `@page { margin: 0; }` for edge-to-edge printing.
-  - Factura body padding: 4px | recibo-box padding: 8px 6px
-  - Rótulo grid padding: 2mm | gap between rótulos: 2mm
-
-- **Rótulo field line wrapping prevention**: All recipient/sender fields now stay on single lines using:
-  - `.rotulo-field`: `white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`
-  - `.rotulo-value`: `white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 110px);`
-  - Long values are truncated with "..." rather than wrapping to new lines
-
-### Technical Notes
-- Checkbox animations and progress updates still work correctly with new Firebase-backed storage
-- Real-time listener (`activarListenerTiempoReal`) automatically detects item changes and re-renders when external edits occur
-- `actualizarProgreso()` continues to work unchanged, filtering `items` based on new Firebase `listo` field
+- **Transferencia sin recargo automático**: Eliminada la lógica que auto-cargaba 3% al seleccionar Transferencia (cambio de radio ya no setea `porcentajeRecargo`). Label del radio actualizado a "Transferencia" (sin "+3%").
+- **Voucher en cotización copiada**: `pvBuildCotizacionTexto()` agrega al final (separado por renglón en blanco) "VOUCHER DESCUENTO - $<15% del Total Final, redondeado> (valido hasta <hoy + 31 días, formato d/m/aaaa>)".
+- **Descuento/Recargo $ manual**: Los inputs `$` de descuento y recargo aceptan ingreso manual cuando el campo `%` adjunto está en 0. Los handlers de `pvDescuentoInput`/`pvRecargoInput` ya no back-calculan el porcentaje (eso pisaba el valor tipeado al re-aplicar el % redondeado). Si `%` > 0, el `$` sigue siendo autocalculado.

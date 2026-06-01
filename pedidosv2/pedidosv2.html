@@ -3051,7 +3051,7 @@
       html += '<div class="pv-radio-title">Pago</div>';
       html += '<div class="pv-radio-row">';
       html += '<label><input type="radio" name="pvTipoPago" value="Efectivo"' + (pedidoActual.tipoPago === 'Efectivo' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Efectivo</label>';
-      html += '<label><input type="radio" name="pvTipoPago" value="Transferencia"' + (pedidoActual.tipoPago === 'Transferencia' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Transferencia (+3%)</label>';
+      html += '<label><input type="radio" name="pvTipoPago" value="Transferencia"' + (pedidoActual.tipoPago === 'Transferencia' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Transferencia</label>';
       html += '</div>';
 
       const showAlias = admin && pedidoActual.tipoPago === 'Transferencia';
@@ -4123,6 +4123,11 @@
       texto += '\n- Total $ ' + totalFinal.toLocaleString('es-AR');
       texto += '\n- Medio de Pago: ' + medioPago;
       if (medioPago === 'Transferencia' && aliasValue) texto += '\n- ALIAS: ' + aliasValue;
+      const voucher = Math.round(totalFinal * 0.15);
+      const vence = new Date();
+      vence.setDate(vence.getDate() + 31);
+      const vencStr = vence.getDate() + '/' + (vence.getMonth() + 1) + '/' + vence.getFullYear();
+      texto += '\n\n- VOUCHER DESCUENTO - $' + voucher.toLocaleString('es-AR') + ' (valido hasta ' + vencStr + ')';
       return texto;
     }
 
@@ -4221,9 +4226,7 @@
       });
       if (dI) dI.addEventListener('input', () => {
         const desc = parseInt(dI.value, 10) || 0;
-        const sub = pvCalcSubtotal();
-        const porc = sub > 0 ? Math.round((desc / sub) * 100) : 0;
-        pI.value = porc;
+        const porc = parseFloat(pI.value) || 0;
         actualizarCalculosPV();
         programarActualizacion('pedidos/' + pedidoId + '/pagos', { descuento: desc, porcentajeDescuento: porc });
       });
@@ -4233,11 +4236,7 @@
       });
       if (rI) rI.addEventListener('input', () => {
         const rec = parseInt(rI.value, 10) || 0;
-        const sub = pvCalcSubtotal();
-        const env = parseFloat(eI.value) || 0;
-        const base = sub + env;
-        const porc = base > 0 ? Math.round((rec / base) * 100) : 0;
-        prI.value = porc;
+        const porc = parseFloat(prI.value) || 0;
         actualizarCalculosPV();
         programarActualizacion('pedidos/' + pedidoId + '/pagos', { recargo: rec, porcentajeRecargo: porc });
       });
@@ -4256,19 +4255,6 @@
           const aliasRow = document.getElementById('pvAliasRow');
           if (aliasRow) aliasRow.style.display = (admin && r.value === 'Transferencia') ? 'flex' : 'none';
 
-          // 3% recargo auto para Transferencia, limpiar para Efectivo
-          const prInput = document.getElementById('pvPorcentajeRecargoInput');
-          const recInput = document.getElementById('pvRecargoInput');
-          if (prInput) {
-            if (r.value === 'Transferencia') {
-              prInput.value = '3';
-            } else {
-              prInput.value = '0';
-              if (recInput) recInput.value = '0';
-            }
-            actualizarCalculosPV();
-            programarActualizacion('pedidos/' + pedidoId + '/pagos', { porcentajeRecargo: parseFloat(prInput.value) || 0, recargo: recInput ? (parseFloat(recInput.value) || 0) : 0 });
-          }
         });
       });
 
