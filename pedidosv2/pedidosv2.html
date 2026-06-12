@@ -2346,6 +2346,50 @@
     const db = firebase.database();
 
     // ==========================================
+    // PANTALLA COMPLETA AUTOMATICA (solo movil)
+    // ==========================================
+    // La Fullscreen API exige un gesto del usuario: no se puede invocar al
+    // cargar. Por eso se solicita en la primera interaccion (toque/click).
+    (function setupAutoFullscreen() {
+      // Detectar movil/tablet (touch). En desktop no hacemos nada.
+      const esMovil = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        || (('ontouchstart' in window) && window.matchMedia('(pointer: coarse)').matches);
+      if (!esMovil) return;
+
+      // Si ya esta en modo PWA standalone (instalada), no hace falta fullscreen.
+      const esStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.matchMedia('(display-mode: fullscreen)').matches
+        || window.navigator.standalone === true;
+      if (esStandalone) return;
+
+      function pedirFullscreen() {
+        const el = document.documentElement;
+        const fn = el.requestFullscreen || el.webkitRequestFullscreen
+          || el.mozRequestFullScreen || el.msRequestFullscreen;
+        // iOS Safari no soporta Fullscreen API; ahi el modo standalone (PWA)
+        // es la unica via real, ya configurada via apple-mobile-web-app-capable.
+        if (!fn) return;
+        try {
+          const p = fn.call(el);
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch (e) { /* gesto invalido o bloqueado: se reintenta al proximo toque */ }
+      }
+
+      function alPrimerToque() {
+        pedirFullscreen();
+        // Si entro en fullscreen, dejamos de escuchar; si no, reintentamos.
+        const enFs = document.fullscreenElement || document.webkitFullscreenElement;
+        if (enFs) {
+          document.removeEventListener('touchend', alPrimerToque);
+          document.removeEventListener('click', alPrimerToque);
+        }
+      }
+
+      document.addEventListener('touchend', alPrimerToque, { passive: true });
+      document.addEventListener('click', alPrimerToque);
+    })();
+
+    // ==========================================
     // AUTENTICACION (inline)
     // ==========================================
     function showLogin() {
@@ -4020,101 +4064,24 @@
     let deferredPrompt = null;
     const btnInstall = document.getElementById('btnInstall');
 
-    // La app ya corre instalada (no hay nada que instalar).
-    function pwaInstalada() {
-      return window.matchMedia('(display-mode: standalone)').matches
-          || window.navigator.standalone === true; // iOS
-    }
-
-    // iOS (iPhone/iPad). iPadOS moderno se reporta como "MacIntel" con touch.
-    function esIOS() {
-      const ua = window.navigator.userAgent;
-      const clasico = /iPad|iPhone|iPod/.test(ua);
-      const iPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-      return clasico || iPadOS;
-    }
-
-    // Muestra/oculta el boton segun si la app ya esta instalada.
-    function actualizarBotonInstalar() {
-      btnInstall.style.display = pwaInstalada() ? 'none' : 'block';
-    }
-
-    // Chromium (Android/desktop): el navegador avisa que se puede instalar.
-    // Guardamos el evento para usar el prompt nativo en el click.
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      actualizarBotonInstalar();
+      btnInstall.style.display = 'block';
     });
 
     btnInstall.addEventListener('click', async () => {
-      // Camino nativo (Android/Chromium): prompt de instalacion del navegador.
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        if (outcome === 'accepted') btnInstall.style.display = 'none';
-        return;
-      }
-      // Sin prompt nativo disponible: instrucciones manuales segun plataforma.
-      // (iOS nunca dispara el evento; Chrome Android deja de dispararlo tras
-      //  instalar/desinstalar una vez, o si ya se descarto antes.)
-      if (esIOS()) mostrarInstruccionesIOS();
-      else mostrarInstruccionesAndroid();
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      btnInstall.style.display = 'none';
     });
 
     window.addEventListener('appinstalled', () => {
       deferredPrompt = null;
       btnInstall.style.display = 'none';
     });
-
-    // El boton se muestra siempre que la app no este instalada, sin depender
-    // de beforeinstallprompt (que es poco fiable en Android tras un ciclo de
-    // instalar/desinstalar y nunca existe en iOS).
-    actualizarBotonInstalar();
-    // Si la app se abre/instala en standalone mientras la pestania sigue viva.
-    const mqStandalone = window.matchMedia('(display-mode: standalone)');
-    if (mqStandalone.addEventListener) {
-      mqStandalone.addEventListener('change', actualizarBotonInstalar);
-    }
-
-    // Modal generico de instrucciones de instalacion.
-    function mostrarModalInstrucciones(titulo, pasosHtml) {
-      if (document.getElementById('installModal')) return;
-      const backdrop = document.createElement('div');
-      backdrop.id = 'installModal';
-      backdrop.className = 'modal-backdrop active';
-      backdrop.innerHTML = `
-        <div class="modal-box" style="text-align:left">
-          <p style="text-align:center;margin-bottom:18px">${titulo}</p>
-          <ol style="font-size:14px;line-height:1.9;color:var(--text-secondary);padding-left:20px;margin-bottom:24px">
-            ${pasosHtml}
-          </ol>
-          <div class="modal-btns">
-            <button class="btn-primary" id="installModalOk">Entendido</button>
-          </div>
-        </div>`;
-      document.body.appendChild(backdrop);
-      const cerrar = () => backdrop.remove();
-      backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) cerrar(); });
-      backdrop.querySelector('#installModalOk').addEventListener('click', cerrar);
-    }
-
-    // Pasos para "Agregar a inicio" en iPhone / iPad (Safari).
-    function mostrarInstruccionesIOS() {
-      mostrarModalInstrucciones('Instalar en iPhone / iPad', `
-        <li>Toc&aacute; el bot&oacute;n <strong>Compartir</strong> (&#x2191; dentro de un cuadro) en la barra de Safari.</li>
-        <li>Eleg&iacute; <strong>&ldquo;Agregar a pantalla de inicio&rdquo;</strong>.</li>
-        <li>Confirm&aacute; tocando <strong>Agregar</strong>.</li>`);
-    }
-
-    // Pasos para instalar manualmente en Android (Chrome y similares).
-    function mostrarInstruccionesAndroid() {
-      mostrarModalInstrucciones('Instalar la app', `
-        <li>Abr&iacute; el men&uacute; del navegador (&#8942; arriba a la derecha).</li>
-        <li>Toc&aacute; <strong>&ldquo;Instalar app&rdquo;</strong> o <strong>&ldquo;Agregar a pantalla de inicio&rdquo;</strong>.</li>
-        <li>Confirm&aacute; tocando <strong>Instalar</strong>.</li>`);
-    }
 
     // ==========================================
     // REGISTRO SERVICE WORKER (PWA)
