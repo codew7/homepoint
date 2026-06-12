@@ -1109,12 +1109,28 @@
 
     function limpiarTodo() {
       if (!confirm('¿Limpiar todos los valores de Disponibles y Verificados?')) return;
-      Object.keys(articulosMap).forEach(codigo => {
-        localStorage.removeItem('armado_preparado_' + codigo);
-        localStorage.removeItem('armado_verificado_' + codigo);
-      });
+      // Barrer TODAS las claves de localStorage con los prefijos, sin importar
+      // si el artículo está visible, filtrado o ya no presente en articulosMap.
+      const aEliminar = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('armado_preparado_') || k.startsWith('armado_verificado_'))) {
+          aEliminar.push(k);
+        }
+      }
+      aEliminar.forEach(k => localStorage.removeItem(k));
       renderTabla();
     }
+
+    // ==========================================
+    // CONFIRMAR RECARGA / CIERRE ACCIDENTAL
+    // ==========================================
+    window.addEventListener('beforeunload', function(e) {
+      e.preventDefault();
+      // Requerido por algunos navegadores para disparar el cartel nativo.
+      e.returnValue = '';
+      return '';
+    });
 
     // ==========================================
     // PWA: SERVICE WORKER + INSTALACION
