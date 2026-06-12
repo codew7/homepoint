@@ -4034,24 +4034,33 @@
       return clasico || iPadOS;
     }
 
+    // Muestra/oculta el boton segun si la app ya esta instalada.
+    function actualizarBotonInstalar() {
+      btnInstall.style.display = pwaInstalada() ? 'none' : 'block';
+    }
+
     // Chromium (Android/desktop): el navegador avisa que se puede instalar.
+    // Guardamos el evento para usar el prompt nativo en el click.
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      if (!pwaInstalada()) btnInstall.style.display = 'block';
+      actualizarBotonInstalar();
     });
 
     btnInstall.addEventListener('click', async () => {
       // Camino nativo (Android/Chromium): prompt de instalacion del navegador.
       if (deferredPrompt) {
         deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
+        const { outcome } = await deferredPrompt.userChoice;
         deferredPrompt = null;
-        btnInstall.style.display = 'none';
+        if (outcome === 'accepted') btnInstall.style.display = 'none';
         return;
       }
-      // iOS no expone API de instalacion: mostramos instrucciones manuales.
+      // Sin prompt nativo disponible: instrucciones manuales segun plataforma.
+      // (iOS nunca dispara el evento; Chrome Android deja de dispararlo tras
+      //  instalar/desinstalar una vez, o si ya se descarto antes.)
       if (esIOS()) mostrarInstruccionesIOS();
+      else mostrarInstruccionesAndroid();
     });
 
     window.addEventListener('appinstalled', () => {
@@ -4059,34 +4068,52 @@
       btnInstall.style.display = 'none';
     });
 
-    // En iOS beforeinstallprompt nunca se dispara: mostramos el boton al
-    // cargar (salvo que ya este instalada) para ofrecer las instrucciones.
-    if (esIOS() && !pwaInstalada()) {
-      btnInstall.style.display = 'block';
+    // El boton se muestra siempre que la app no este instalada, sin depender
+    // de beforeinstallprompt (que es poco fiable en Android tras un ciclo de
+    // instalar/desinstalar y nunca existe en iOS).
+    actualizarBotonInstalar();
+    // Si la app se abre/instala en standalone mientras la pestania sigue viva.
+    const mqStandalone = window.matchMedia('(display-mode: standalone)');
+    if (mqStandalone.addEventListener) {
+      mqStandalone.addEventListener('change', actualizarBotonInstalar);
     }
 
-    // Modal con los pasos de "Agregar a inicio" para iOS.
-    function mostrarInstruccionesIOS() {
-      if (document.getElementById('iosInstallModal')) return;
+    // Modal generico de instrucciones de instalacion.
+    function mostrarModalInstrucciones(titulo, pasosHtml) {
+      if (document.getElementById('installModal')) return;
       const backdrop = document.createElement('div');
-      backdrop.id = 'iosInstallModal';
+      backdrop.id = 'installModal';
       backdrop.className = 'modal-backdrop active';
       backdrop.innerHTML = `
         <div class="modal-box" style="text-align:left">
-          <p style="text-align:center;margin-bottom:18px">Instalar en iPhone / iPad</p>
+          <p style="text-align:center;margin-bottom:18px">${titulo}</p>
           <ol style="font-size:14px;line-height:1.9;color:var(--text-secondary);padding-left:20px;margin-bottom:24px">
-            <li>Toc&aacute; el bot&oacute;n <strong>Compartir</strong> (&#x2191; dentro de un cuadro) en la barra de Safari.</li>
-            <li>Eleg&iacute; <strong>&ldquo;Agregar a pantalla de inicio&rdquo;</strong>.</li>
-            <li>Confirm&aacute; tocando <strong>Agregar</strong>.</li>
+            ${pasosHtml}
           </ol>
           <div class="modal-btns">
-            <button class="btn-primary" id="iosInstallOk">Entendido</button>
+            <button class="btn-primary" id="installModalOk">Entendido</button>
           </div>
         </div>`;
       document.body.appendChild(backdrop);
       const cerrar = () => backdrop.remove();
       backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) cerrar(); });
-      backdrop.querySelector('#iosInstallOk').addEventListener('click', cerrar);
+      backdrop.querySelector('#installModalOk').addEventListener('click', cerrar);
+    }
+
+    // Pasos para "Agregar a inicio" en iPhone / iPad (Safari).
+    function mostrarInstruccionesIOS() {
+      mostrarModalInstrucciones('Instalar en iPhone / iPad', `
+        <li>Toc&aacute; el bot&oacute;n <strong>Compartir</strong> (&#x2191; dentro de un cuadro) en la barra de Safari.</li>
+        <li>Eleg&iacute; <strong>&ldquo;Agregar a pantalla de inicio&rdquo;</strong>.</li>
+        <li>Confirm&aacute; tocando <strong>Agregar</strong>.</li>`);
+    }
+
+    // Pasos para instalar manualmente en Android (Chrome y similares).
+    function mostrarInstruccionesAndroid() {
+      mostrarModalInstrucciones('Instalar la app', `
+        <li>Abr&iacute; el men&uacute; del navegador (&#8942; arriba a la derecha).</li>
+        <li>Toc&aacute; <strong>&ldquo;Instalar app&rdquo;</strong> o <strong>&ldquo;Agregar a pantalla de inicio&rdquo;</strong>.</li>
+        <li>Confirm&aacute; tocando <strong>Instalar</strong>.</li>`);
     }
 
     // ==========================================
