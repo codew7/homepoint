@@ -27,6 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script>
     let pedidosCache = {};
+    let terminoBusqueda = ''; // Término aplicado (solo se actualiza al presionar Buscar/Enter)
     // === ALIAS: Historial desde localStorage + Google Sheets ===
     let aliasHistorial = [];
     let aliasDesdeSheets = [];
@@ -343,30 +344,35 @@
       if (appIniciada) return;
       appIniciada = true;
       // Carga en tiempo real de los pedidos WhatsApp pendientes.
-      // Se acota por `fecha` (índice rápido, igual que historialRecientes.html y
-      // cargarEntregados): un pedido pendiente nunca lleva más de 10 días sin
-      // retirarse, así que esta ventana los cubre sin traer todo el histórico de
-      // entregados. El filtro vendedor='WhatsApp' y esPendiente() se hace en cliente.
-      const VENTANA_DIAS_PENDIENTES = 10;
-      const limite = new Date(Date.now() - VENTANA_DIAS_PENDIENTES * 24 * 60 * 60 * 1000);
-      const limiteStr = limite.toISOString().split('T')[0]; // YYYY-MM-DD
-
+      // Se acota en el servidor por `vendedor === 'WhatsApp'` (en lugar de una
+      // ventana de tiempo), así Firebase solo transfiere los pedidos de ese canal.
+      // Requiere índice en las reglas de Firebase: "pedidos": { ".indexOn": "vendedor" }.
+      // El resto del filtro (esDespachado / esPendiente) se hace en cliente.
       db.ref('pedidos')
-        .orderByChild('fecha')
-        .startAt(limiteStr)
+        .orderByChild('vendedor')
+        .equalTo('WhatsApp')
         .on('value', snap => {
           pedidosCache = {};
           snap.forEach(child => {
             const v = child.val();
-            if (v.vendedor === 'WhatsApp' && esDespachado(v)) pedidosCache[child.key] = v;
+            if (esDespachado(v)) pedidosCache[child.key] = v;
           });
           renderPedidos();
         });
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      // Filtro en tiempo real (id, nombre, nota)
-      document.getElementById('filtroBusqueda').addEventListener('input', renderPedidos);
+      // Búsqueda manual: se aplica solo al presionar Enter o el botón "Buscar".
+      const inputBusqueda = document.getElementById('filtroBusqueda');
+      // El campo arranca readonly para que el navegador no lo interprete como usuario/login
+      // ni lo autocomplete al cargar. Se habilita recién cuando el usuario interactúa.
+      const habilitarBusqueda = () => inputBusqueda.removeAttribute('readonly');
+      inputBusqueda.addEventListener('focus', habilitarBusqueda);
+      inputBusqueda.addEventListener('pointerdown', habilitarBusqueda);
+      inputBusqueda.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); buscar(); }
+      });
+      document.getElementById('btnBuscar').addEventListener('click', buscar);
       // El modal de acceso (#loginModal) ya está visible; la app arranca tras elegir rol.
     });
 
@@ -381,6 +387,11 @@
       return (p.retiro || '').toString().trim().toLowerCase() === 'y';
     }
 
+    // Pedido marcado como pagado (pagos.pago = 'y').
+    function estaPagado(p) {
+      return ((p.pagos && p.pagos.pago) || '').toString().trim().toLowerCase() === 'y';
+    }
+
     // Esta vista solo opera con pedidos cuyo status es 'DESPACHADO/ENTREGADO'.
     function esDespachado(p) {
       return (p.status || '').toString().trim().toUpperCase() === 'DESPACHADO/ENTREGADO';
@@ -390,6 +401,9 @@
     let vistaActual = 'pendientes';
     // Caché de entregados: se llena SOLO al presionar el botón (descarga on-demand).
     let entregadosCache = {};
+    // Paginación (solo vista de entregados): 50 registros por página.
+    const ENTREGADOS_POR_PAGINA = 50;
+    let paginaEntregados = 0;
 
     function toggleVista() {
       vistaActual = vistaActual === 'pendientes' ? 'entregados' : 'pendientes';
@@ -398,7 +412,7 @@
       if (vistaActual === 'entregados') {
         btn.classList.add('activo');
         txt.textContent = 'Ver pendientes';
-        cargarEntregados();   // descarga bajo demanda, acotada a 15 días
+        cargarEntregados();   // descarga bajo demanda, acotada a 1 día
       } else {
         btn.classList.remove('activo');
         txt.textContent = 'Entregados';
@@ -406,35 +420,34 @@
       }
     }
 
-    // Descarga puntual (.once) de los pedidos entregados de los últimos 15 días.
-    // No deja un listener abierto: solo se consulta al presionar el botón, para
-    // no transferir el histórico de entregados de forma permanente y ahorrar
-    // recursos de Firebase. La ventana se acota en el servidor por el campo fecha.
+    // Descarga puntual (.once) de los pedidos entregados, acotada en el servidor
+    // por `vendedor === 'WhatsApp'` (mismo criterio que la carga inicial, en lugar
+    // de una ventana de tiempo). No deja un listener abierto: solo se consulta al
+    // presionar el botón. El resultado se pagina en cliente de a 50 registros.
+    // Requiere índice en las reglas de Firebase: "pedidos": { ".indexOn": "vendedor" }.
     async function cargarEntregados() {
       const tbody = document.getElementById('pedidosBody');
       const contador = document.getElementById('contadorPedidos');
       tbody.innerHTML = '<tr><td colspan="7" class="estado-vacio">Cargando entregados...</td></tr>';
       contador.textContent = 'Cargando...';
-
-      const limite = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
-      const limiteStr = limite.toISOString().split('T')[0]; // YYYY-MM-DD
+      paginaEntregados = 0;
 
       try {
         const snap = await db.ref('pedidos')
-          .orderByChild('fecha')
-          .startAt(limiteStr)
+          .orderByChild('vendedor')
+          .equalTo('WhatsApp')
           .once('value');
         entregadosCache = {};
         snap.forEach(child => {
           const v = child.val();
-          if (v.vendedor === 'WhatsApp' && esDespachado(v) && esEntregado(v)) {
+          if (esDespachado(v) && esEntregado(v)) {
             entregadosCache[child.key] = v;
           }
         });
       } catch (e) {
         console.error('Error cargando entregados:', e);
         tbody.innerHTML = '<tr><td colspan="7" class="estado-vacio">Error al cargar los pedidos entregados.</td></tr>';
-        contador.textContent = '0 entregados (15 días)';
+        contador.textContent = '0 entregados';
         return;
       }
       renderPedidos();
@@ -459,13 +472,18 @@
       const contador = document.getElementById('contadorPedidos');
       const esVistaEntregados = vistaActual === 'entregados';
       const pedidos = esVistaEntregados ? entregadosCache : pedidosCache;
-      const q = document.getElementById('filtroBusqueda').value.trim().toLowerCase();
+      const q = terminoBusqueda;
 
-      // En entregados, entregadosCache ya viene filtrado (retiro='y' + 15 días).
+      // En entregados, entregadosCache ya viene filtrado (retiro='y' + 1 día).
       // En pendientes, se filtra esPendiente sobre el listener en tiempo real.
       let keys = esVistaEntregados
         ? Object.keys(pedidos).reverse()
         : Object.keys(pedidos).filter(id => esPendiente(pedidos[id])).reverse();
+
+      // El rol Entregas solo ve pedidos pagados (pagos.pago = 'y').
+      if (rolUsuario === 'entregas') {
+        keys = keys.filter(id => estaPagado(pedidos[id]));
+      }
 
       if (q) {
         keys = keys.filter(id => {
@@ -477,16 +495,32 @@
       }
 
       contador.textContent = esVistaEntregados
-        ? `${keys.length} entregado${keys.length !== 1 ? 's' : ''} (15 días)`
+        ? `${keys.length} entregado${keys.length !== 1 ? 's' : ''}`
         : `${keys.length} pedido${keys.length !== 1 ? 's' : ''} pendiente${keys.length !== 1 ? 's' : ''}`;
 
+      const paginacionEl = document.getElementById('paginacion');
+
       if (keys.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="estado-vacio">${esVistaEntregados ? 'No hay pedidos entregados en los últimos 15 días que coincidan con la búsqueda.' : 'No hay pedidos de WhatsApp pendientes que coincidan con la búsqueda.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="estado-vacio">${esVistaEntregados ? 'No hay pedidos entregados que coincidan con la búsqueda.' : 'No hay pedidos de WhatsApp pendientes que coincidan con la búsqueda.'}</td></tr>`;
+        if (paginacionEl) paginacionEl.style.display = 'none';
         return;
       }
 
+      // Paginación de a 50: solo aplica a la vista de entregados.
+      let keysVisibles = keys;
+      if (esVistaEntregados) {
+        const totalPaginas = Math.ceil(keys.length / ENTREGADOS_POR_PAGINA);
+        if (paginaEntregados > totalPaginas - 1) paginaEntregados = totalPaginas - 1;
+        if (paginaEntregados < 0) paginaEntregados = 0;
+        const inicio = paginaEntregados * ENTREGADOS_POR_PAGINA;
+        keysVisibles = keys.slice(inicio, inicio + ENTREGADOS_POR_PAGINA);
+        renderPaginacion(keys.length, totalPaginas);
+      } else if (paginacionEl) {
+        paginacionEl.style.display = 'none';
+      }
+
       tbody.innerHTML = '';
-      keys.forEach(id => {
+      keysVisibles.forEach(id => {
         const p = pedidos[id];
         const fecha = p.fecha || '';
         const cliente = p.cliente || {};
@@ -565,8 +599,38 @@
       });
     }
 
+    // Dibuja los controles de paginación de la vista de entregados.
+    function renderPaginacion(total, totalPaginas) {
+      const el = document.getElementById('paginacion');
+      if (!el) return;
+      if (totalPaginas <= 1) { el.style.display = 'none'; return; }
+      const desde = paginaEntregados * ENTREGADOS_POR_PAGINA + 1;
+      const hasta = Math.min((paginaEntregados + 1) * ENTREGADOS_POR_PAGINA, total);
+      el.style.display = 'flex';
+      el.innerHTML = `
+        <button class="btn-pag" onclick="cambiarPagina(-1)"${paginaEntregados === 0 ? ' disabled' : ''}>‹ Anteriores</button>
+        <span class="pag-info">${desde}–${hasta} de ${total} · pág. ${paginaEntregados + 1}/${totalPaginas}</span>
+        <button class="btn-pag" onclick="cambiarPagina(1)"${paginaEntregados >= totalPaginas - 1 ? ' disabled' : ''}>Siguientes ›</button>
+      `;
+    }
+
+    function cambiarPagina(delta) {
+      paginaEntregados += delta;
+      renderPedidos();
+      const card = document.querySelector('.tabla-card');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function buscar() {
+      terminoBusqueda = document.getElementById('filtroBusqueda').value.trim().toLowerCase();
+      paginaEntregados = 0;
+      renderPedidos();
+    }
+
     function limpiarFiltros() {
       document.getElementById('filtroBusqueda').value = '';
+      terminoBusqueda = '';
+      paginaEntregados = 0;
       renderPedidos();
       document.getElementById('filtroBusqueda').focus();
     }
@@ -1254,18 +1318,30 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       border-color: var(--brand);
       box-shadow: 0 0 0 3px rgba(92, 88, 102, 0.12);
     }
-    .btn-limpiar {
-      padding: 11px 18px;
+    .btn-buscar {
+      padding: 11px 20px;
       border: none;
       border-radius: 10px;
-      background: var(--brand-dark);
+      background: var(--brand);
       color: #fff;
       font-size: 0.92rem;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.15s;
     }
-    .btn-limpiar:hover { background: #2a282f; }
+    .btn-buscar:hover { background: var(--brand-dark); }
+    .btn-limpiar {
+      padding: 11px 18px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--brand-dark);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-limpiar:hover { background: #f3f2f4; }
     .btn-toggle {
       padding: 11px 16px;
       border: 1.5px solid var(--entregar);
@@ -1301,6 +1377,29 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       overflow: hidden;
     }
     .tabla-scroll { overflow-x: auto; }
+    .paginacion {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 14px 12px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .btn-pag {
+      padding: 8px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--brand-dark);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-pag:hover:not(:disabled) { background: #f3f2f4; border-color: var(--brand); }
+    .btn-pag:disabled { opacity: 0.45; cursor: default; }
+    .pag-info { font-size: 0.85rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
     table {
       width: 100%;
       min-width: 880px;
@@ -1554,8 +1653,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   <div class="toolbar">
     <div class="search-wrap">
       <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
-      <input type="text" id="filtroBusqueda" placeholder="Buscar por ID, nombre o nota..." autocomplete="off">
+      <!-- Campos señuelo: absorben el autocompletado de usuario/contraseña que algunos navegadores fuerzan -->
+      <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;opacity:0;height:0;width:0;pointer-events:none;">
+      <input type="password" name="password" autocomplete="current-password" tabindex="-1" aria-hidden="true" style="position:absolute;opacity:0;height:0;width:0;pointer-events:none;">
+      <input type="search" id="filtroBusqueda" name="filtroBusqueda_nofill" placeholder="Buscar por ID, nombre o nota..." readonly autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" data-form-type="other" data-lpignore="true" data-1p-ignore aria-autocomplete="none">
     </div>
+    <button class="btn-buscar" id="btnBuscar">Buscar</button>
     <button class="btn-limpiar" onclick="limpiarFiltros()">Limpiar</button>
     <button class="btn-toggle" id="btnVistaEntregados" onclick="toggleVista()">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l1.094 1.093 3.473-3.425a.267.267 0 0 1 .02-.022z"/><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/></svg>
@@ -1583,6 +1686,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         </tbody>
       </table>
     </div>
+    <div id="paginacion" class="paginacion" style="display:none;"></div>
   </div>
 </main>
 
