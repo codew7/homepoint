@@ -131,6 +131,12 @@
     }
     .header-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
     .header-btn:active { transform: scale(.94); }
+    .header-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .header-btn.active:hover { background: #d4711f; }
 
     /* STATS BAR */
     .stats-bar {
@@ -693,9 +699,10 @@
     <div class="header">
       <div class="brand-mark"><img src="favicon.png" alt="Logo"></div>
       <h1>Articulos Necesarios</h1>
+      <button class="header-btn" id="filtroOkBtn" onclick="toggleFiltroSinOK()">&#9744; Faltan</button>
       <button class="header-btn" onclick="recargarDatos()">&#x21bb; Recargar</button>
+      <button class="header-btn" onclick="limpiarTodo()">&#129529; Limpiar</button>
       <button class="header-btn" onclick="imprimirReporte()">&#128424; Imprimir</button>
-      <button class="header-btn" onclick="limpiarTodo()">Limpiar</button>
     </div>
 
     <!-- Stats -->
@@ -768,6 +775,7 @@
     let pedidosCount = 0;
     let sheetsData = {}; // { codigo: { imagen, nombre } }
     let sheetsLoaded = false;
+    let filtroSinOK = false; // muestra solo artículos con OK sin tildar
 
     // Cargar sheets y datos en paralelo
     Promise.all([cargarSheets(), cargarDatos()]);
@@ -1024,6 +1032,7 @@
 
       container.innerHTML = html;
       actualizarStats();
+      filtrarTabla();
     }
 
     // ==========================================
@@ -1073,6 +1082,9 @@
       card.classList.toggle('card-done', checked || diffVal <= 0);
 
       actualizarStats();
+
+      // Si el filtro "Sin OK" está activo y se acaba de tildar, ocultar la fila
+      if (filtroSinOK) filtrarTabla();
     }
 
     function actualizarStats() {
@@ -1099,8 +1111,37 @@
       document.querySelectorAll('.art-row').forEach(row => {
         const nombre = row.getAttribute('data-nombre') || '';
         const codigo = row.getAttribute('data-codigo') || '';
-        row.style.display = (!q || nombre.includes(q) || codigo.toLowerCase().includes(q)) ? '' : 'none';
+        const coincideBusqueda = (!q || nombre.includes(q) || codigo.toLowerCase().includes(q));
+        const pasaFiltroOk = !filtroSinOK || !getVerificado(codigo);
+        row.style.display = (coincideBusqueda && pasaFiltroOk) ? '' : 'none';
       });
+      ocultarCategoriasVacias();
+    }
+
+    // Oculta los encabezados de categoría que no tienen artículos visibles
+    function ocultarCategoriasVacias() {
+      const container = document.getElementById('tableContainer');
+      const hijos = Array.from(container.children);
+      hijos.forEach((el, idx) => {
+        if (!el.classList.contains('category-header')) return;
+        let hayVisible = false;
+        for (let j = idx + 1; j < hijos.length; j++) {
+          if (hijos[j].classList.contains('category-header')) break;
+          if (hijos[j].classList.contains('art-row') && hijos[j].style.display !== 'none') {
+            hayVisible = true;
+            break;
+          }
+        }
+        el.style.display = hayVisible ? '' : 'none';
+      });
+    }
+
+    function toggleFiltroSinOK() {
+      filtroSinOK = !filtroSinOK;
+      const btn = document.getElementById('filtroOkBtn');
+      btn.classList.toggle('active', filtroSinOK);
+      btn.innerHTML = (filtroSinOK ? '☑' : '☐') + ' Faltan';
+      filtrarTabla();
     }
 
     function recargarDatos() {
