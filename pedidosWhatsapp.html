@@ -211,16 +211,47 @@
       err.textContent = '';
       err.style.display = 'none';
       const btn = document.getElementById('entregadoBtnConfirmar');
-      btn.disabled = false;
-      btn.innerHTML = entregadoBtnTextoOriginal;
+
+      // Aviso de pago pendiente: para cualquier rol cuando el pedido no está pagado.
+      const noPagado = ((pedido.pagos && pedido.pagos.pago) || '').toString().trim().toLowerCase() !== 'y';
+      const requiereAviso = noPagado;
+      const banner = document.getElementById('entregadoAdvertenciaPago');
+      const checkWrap = document.getElementById('entregadoConfirmaPagoWrap');
+      const check = document.getElementById('entregadoConfirmaPago');
+      check.checked = false;
+      banner.style.display = requiereAviso ? 'flex' : 'none';
+      checkWrap.style.display = requiereAviso ? 'flex' : 'none';
+      if (requiereAviso) {
+        btn.innerHTML = entregadoBtnTextoConfirmar;
+        setBtnEntregarHabilitado(false);   // arranca gris/deshabilitado
+        check.onchange = () => setBtnEntregarHabilitado(check.checked);
+      } else {
+        btn.innerHTML = entregadoBtnTextoOriginal;
+        setBtnEntregarHabilitado(true);
+        check.onchange = null;
+      }
 
       document.getElementById('entregadoModal').style.display = 'flex';
       setTimeout(() => input.focus(), 50);
     }
 
+    // Alterna el aspecto del botón "Entregar igualmente": gris si está deshabilitado,
+    // verde si está habilitado (tras tildar la confirmación de pago).
+    function setBtnEntregarHabilitado(habilitado) {
+      const btn = document.getElementById('entregadoBtnConfirmar');
+      btn.disabled = !habilitado;
+      btn.style.background = habilitado ? '#1faa59' : '#b0b3ba';
+      btn.style.cursor = habilitado ? 'pointer' : 'not-allowed';
+    }
+
     function cerrarModalEntregado() {
       document.getElementById('entregadoModal').style.display = 'none';
       entregadoPedidoId = null;
+      // Estado limpio para el próximo pedido.
+      const check = document.getElementById('entregadoConfirmaPago');
+      if (check) { check.checked = false; check.onchange = null; }
+      document.getElementById('entregadoAdvertenciaPago').style.display = 'none';
+      document.getElementById('entregadoConfirmaPagoWrap').style.display = 'none';
     }
 
     function mostrarErrorEntregado(msg) {
@@ -230,6 +261,7 @@
     }
 
     let entregadoBtnTextoOriginal = 'Confirmar entrega';
+    let entregadoBtnTextoConfirmar = 'Entregar igualmente';
 
     async function confirmarEntregado() {
       if (!entregadoPedidoId) return;
@@ -240,6 +272,15 @@
       // El código se expresa siempre en mayúsculas; se compara sin distinguir may/min.
       if (code !== esperado) {
         mostrarErrorEntregado('Código incorrecto. Verificá los últimos 5 caracteres del pedido.');
+        return;
+      }
+
+      // Guard de seguridad: ningún rol puede entregar un pedido no pagado
+      // sin tildar la confirmación explícita (cubre también el atajo Enter).
+      const pedido = pedidosCache[entregadoPedidoId] || entregadosCache[entregadoPedidoId];
+      const noPagado = (((pedido && pedido.pagos && pedido.pagos.pago) || '')).toString().trim().toLowerCase() !== 'y';
+      if (noPagado && !document.getElementById('entregadoConfirmaPago').checked) {
+        mostrarErrorEntregado('Pedido sin pago confirmado. Tildá la casilla para entregar igualmente.');
         return;
       }
 
@@ -277,7 +318,9 @@
       let tel = telefonoDigits;
       if (!tel.startsWith('54')) tel = '54' + tel;
 
-      const texto = `Tu pedido fue ingresado. Por favor, para poder retirarlo indica en caja el código ${code}`;
+      const nombre = (pedido.cliente && pedido.cliente.nombre) ? pedido.cliente.nombre.toString().trim() : '';
+      const saludo = nombre ? `${nombre}, tu` : 'Tu';
+      const texto = `${saludo} pedido fue ingresado. Por favor, para poder retirarlo indica en caja el código ${code}`;
       const url = `https://api.whatsapp.com/send/?phone=${tel}&text=${encodeURIComponent(texto)}`;
       window.open(url, '_blank');
     }
@@ -305,7 +348,7 @@
 
     function validarClaveVendedor() {
       const clave = document.getElementById('loginClaveInput').value;
-      if (clave === '123') {
+      if (clave === '2381') {
         ingresarComoRol('vendedor');
       } else {
         document.getElementById('loginError').style.display = 'block';
@@ -385,11 +428,6 @@
     // Pedido ya entregado por esta vista (retiro = 'y').
     function esEntregado(p) {
       return (p.retiro || '').toString().trim().toLowerCase() === 'y';
-    }
-
-    // Pedido marcado como pagado (pagos.pago = 'y').
-    function estaPagado(p) {
-      return ((p.pagos && p.pagos.pago) || '').toString().trim().toLowerCase() === 'y';
     }
 
     // Esta vista solo opera con pedidos cuyo status es 'DESPACHADO/ENTREGADO'.
@@ -480,11 +518,6 @@
         ? Object.keys(pedidos).reverse()
         : Object.keys(pedidos).filter(id => esPendiente(pedidos[id])).reverse();
 
-      // El rol Entregas solo ve pedidos pagados (pagos.pago = 'y').
-      if (rolUsuario === 'entregas') {
-        keys = keys.filter(id => estaPagado(pedidos[id]));
-      }
-
       if (q) {
         keys = keys.filter(id => {
           const p = pedidos[id];
@@ -538,6 +571,8 @@
         const codigoRetiro = id.slice(-5).toUpperCase();
         // El rol Entregas no opera banco/clave/pago.
         const esEntregas = rolUsuario === 'entregas';
+        // Solo el rol Vendedor puede editar nombre y teléfono del cliente.
+        const esVendedor = rolUsuario === 'vendedor';
         const waActivo = waHabilitado && !esEntregas;
         const claveActiva = claveHabilitada && !esEntregas;
 
@@ -548,15 +583,24 @@
           <tr${rowClass ? ` class="${rowClass}"` : ''}>
             <td class="col-fecha">${fecha}</td>
             <td class="col-nombre" title="ID: ${id}">
-              <span class="nombre-link" onclick="verPedido('${id}')">${cliente.nombre || ''}</span>
+              ${esVendedor
+                ? `<span class="nombre-edit" onclick="editarNombre('${id}')" title="Editar nombre del cliente">
+                ${cliente.nombre ? cliente.nombre : '<span class="telefono-vacio">Agregar</span>'}
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>
+              </span>`
+                : `<span class="nombre-link" onclick="verPedido('${id}')">${cliente.nombre || ''}</span>`}
             </td>
             <td class="col-telefono">
-              <span class="telefono-edit" onclick="editarTelefono('${id}')" title="Editar teléfono del cliente">
+              ${esVendedor
+                ? `<span class="telefono-edit" onclick="editarTelefono('${id}')" title="Editar teléfono del cliente">
                 ${telefono ? telefono : '<span class="telefono-vacio">Agregar</span>'}
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>
-              </span>
+              </span>`
+                : `${telefono ? telefono : '<span class="telefono-vacio">—</span>'}`}
             </td>
-            <td class="col-nota">${p.nota || ''}</td>
+            <td class="col-nota">${esVendedor
+                ? `<span class="nota-edit" onclick="editarNota('${id}')" title="Editar nota del pedido">${p.nota ? p.nota : '<span class="telefono-vacio">Agregar</span>'}<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg></span>`
+                : `${p.nota || ''}`}</td>
             <td class="col-total">${totalFinal}</td>
             <td class="col-pago">${pagos.medioPago || ''}</td>
             <td class="col-acciones">
@@ -641,7 +685,61 @@
 
     // Edición manual del teléfono del cliente -> pedidos/{id}/cliente/telefono.
     // Pide el nuevo valor y luego un confirm explícito para evitar cambios por error.
+    async function editarNota(id) {
+      if (rolUsuario !== 'vendedor') return;   // solo Vendedor edita
+      const pedido = pedidosCache[id] || entregadosCache[id];
+      if (!pedido) { alert('Pedido no encontrado'); return; }
+
+      const actual = (pedido.nota || '').toString();
+      const ingresado = prompt('Nota del pedido:', actual);
+      if (ingresado === null) return;                 // canceló
+      const nuevo = ingresado.trim();
+      if (nuevo === actual.trim()) return;            // sin cambios reales
+
+      const mensaje = nuevo
+        ? `¿Confirmás guardar la nota para este pedido?\n\n"${nuevo}"`
+        : '¿Confirmás borrar la nota de este pedido?';
+      if (!confirm(mensaje)) return;
+
+      try {
+        await db.ref('pedidos/' + id + '/nota').set(nuevo);
+        pedido.nota = nuevo;
+        renderPedidos();
+      } catch (e) {
+        console.error('Error al guardar la nota:', e);
+        alert('Error al guardar la nota en Firebase. Reintentá.');
+      }
+    }
+
+    async function editarNombre(id) {
+      if (rolUsuario !== 'vendedor') return;   // solo Vendedor edita
+      const pedido = pedidosCache[id] || entregadosCache[id];
+      if (!pedido) { alert('Pedido no encontrado'); return; }
+
+      const actual = (pedido.cliente && pedido.cliente.nombre) ? pedido.cliente.nombre.toString() : '';
+      const ingresado = prompt('Nombre del cliente:', actual);
+      if (ingresado === null) return;                 // canceló
+      const nuevo = ingresado.trim();
+      if (nuevo === actual.trim()) return;            // sin cambios reales
+
+      const mensaje = nuevo
+        ? `¿Confirmás guardar el nombre "${nuevo}" para este pedido?\n\nSe modificará el dato del cliente en la base.`
+        : '¿Confirmás borrar el nombre de este pedido?';
+      if (!confirm(mensaje)) return;
+
+      try {
+        await db.ref('pedidos/' + id + '/cliente/nombre').set(nuevo);
+        if (!pedido.cliente) pedido.cliente = {};
+        pedido.cliente.nombre = nuevo;
+        renderPedidos();
+      } catch (e) {
+        console.error('Error al guardar el nombre:', e);
+        alert('Error al guardar el nombre en Firebase. Reintentá.');
+      }
+    }
+
     async function editarTelefono(id) {
+      if (rolUsuario !== 'vendedor') return;   // solo Vendedor edita
       const pedido = pedidosCache[id] || entregadosCache[id];
       if (!pedido) { alert('Pedido no encontrado'); return; }
 
@@ -1439,6 +1537,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       white-space: pre-wrap;
       word-break: break-word;
       color: var(--text);
+      text-align: left;
     }
     .col-total { white-space: nowrap; font-weight: 700; }
     .col-pago { white-space: nowrap; color: var(--muted); }
@@ -1454,6 +1553,23 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     .telefono-edit:hover { color: #1c2a66; }
     .telefono-edit svg { opacity: 0.6; }
     .telefono-vacio { color: var(--muted); font-style: italic; }
+    .nombre-edit {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      color: var(--ver);
+      border-bottom: 1px dotted var(--ver);
+    }
+    .nombre-edit:hover { color: #1c2a66; }
+    .nombre-edit svg { opacity: 0.6; flex-shrink: 0; }
+    .nota-edit {
+      cursor: pointer;
+      color: var(--ver);
+      border-bottom: 1px dotted var(--ver);
+    }
+    .nota-edit:hover { color: #1c2a66; }
+    .nota-edit svg { opacity: 0.6; vertical-align: middle; margin-left: 4px; }
     .row-cancelado { background: #f0f0f0 !important; color: #9a9a9a; }
     .row-cancelado .nombre-link { color: #9a9a9a; border-bottom-color: #9a9a9a; }
     .row-entregado { background: #f1f2f4 !important; }
@@ -1786,9 +1902,18 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     </div>
     <div id="entregadoError" style="display:none;color:#e8523f;font-size:0.85rem;font-weight:600;margin-bottom:10px;"></div>
 
+    <div id="entregadoAdvertenciaPago" style="display:none;align-items:flex-start;gap:9px;background:#fdecea;border:1.5px solid #e8523f;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="#e8523f" viewBox="0 0 16 16" style="flex-shrink:0;margin-top:1px;"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+      <span style="font-size:0.85rem;color:#b3261e;font-weight:600;line-height:1.4;">Este pedido <strong>NO figura como pagado</strong>. Verificá el cobro antes de entregar.</span>
+    </div>
+    <label id="entregadoConfirmaPagoWrap" style="display:none;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;font-size:0.88rem;color:#444;font-weight:600;">
+      <input type="checkbox" id="entregadoConfirmaPago" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;accent-color:#e8523f;">
+      Confirmo que el pago fue verificado
+    </label>
+
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button onclick="cerrarModalEntregado()" style="flex:1;padding:11px;background:#fff;color:#555;border:2px solid #ccc;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;">Cancelar</button>
-      <button id="entregadoBtnConfirmar" onclick="confirmarEntregado()" style="flex:2;padding:11px;background:#1faa59;color:#fff;border:none;border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background 0.15s;" onmouseover="this.style.background='#198f4a'" onmouseout="this.style.background='#1faa59'">
+      <button id="entregadoBtnConfirmar" onclick="confirmarEntregado()" style="flex:2;padding:11px;background:#1faa59;color:#fff;border:none;border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background 0.15s;" onmouseover="if(!this.disabled)this.style.background='#198f4a'" onmouseout="if(!this.disabled)this.style.background='#1faa59'">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="white" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l1.094 1.093 3.473-3.425a.267.267 0 0 1 .02-.022z"/></svg>
         Confirmar entrega
       </button>
