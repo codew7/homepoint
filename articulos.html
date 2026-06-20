@@ -253,6 +253,16 @@ body{
 .ocr-spin{width:30px;height:30px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
 .ocr-bar{width:64%;height:6px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
 .ocr-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--lime));border-radius:4px;transition:width .25s}
+/* selección manual de la zona de texto para OCR */
+.sel-layer{position:absolute;inset:0;display:none;cursor:crosshair;touch-action:none;z-index:2}
+.photo-stage.can-ocr .sel-layer{display:block}
+.sel-box{position:absolute;border:2px solid var(--lime);background:rgba(124,179,66,.14);box-shadow:0 0 0 9999px rgba(14,20,36,.34);display:none}
+.sel-box.show{display:block}
+.sel-box::after{content:"";position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 2px #fff}
+.ocr-pick{margin-top:12px;display:none;flex-direction:column;gap:9px}
+.ocr-pick.show{display:flex}
+.ocr-pick-hint{font-size:.82rem;color:var(--muted);text-align:center;margin:0 0 2px}
+.ocr-pick-hint b{color:var(--text)}
 .photo-actions{display:flex;gap:9px;margin-top:14px}
 .photo-actions .btn{flex:1;padding:13px;border-radius:var(--r-sm);font-weight:700;font-size:.88rem}
 .btn-outline{background:var(--card);border:1px solid var(--border-2);color:var(--text)}
@@ -322,6 +332,28 @@ input[type=number]{-moz-appearance:textfield}
 #reader img[alt="Info icon"],#reader span{display:none!important}
 #reader #html5-qrcode-anchor-scan-type-change{display:none!important}
 .scanner-hint{color:rgba(255,255,255,.55);font-size:.84rem;margin-top:24px;text-align:center}
+
+/* ====== CÁMARA (captura cuadrada) ====== */
+.cam{position:fixed;inset:0;z-index:950;background:#0e0f13;display:none;flex-direction:column}
+.cam.active{display:flex;animation:rise .3s ease}
+.cam-top{padding:max(16px,env(safe-area-inset-top)) 20px 14px;display:flex;align-items:center;justify-content:space-between}
+.cam-top span{color:#fff;font-size:.9rem;font-weight:600}
+.cam-x{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:1.4rem;cursor:pointer;transition:background .16s}
+.cam-x:active{background:rgba(255,255,255,.25)}
+.cam-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;gap:20px}
+.cam-frame{position:relative;width:100%;max-width:460px;aspect-ratio:1/1;border-radius:20px;overflow:hidden;background:#000;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.cam-frame video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.cam-corner{position:absolute;width:30px;height:30px;border:3px solid var(--lime);pointer-events:none}
+.cam-corner.tl{top:12px;left:12px;border-right:0;border-bottom:0;border-top-left-radius:9px}
+.cam-corner.tr{top:12px;right:12px;border-left:0;border-bottom:0;border-top-right-radius:9px}
+.cam-corner.bl{bottom:12px;left:12px;border-right:0;border-top:0;border-bottom-left-radius:9px}
+.cam-corner.br{bottom:12px;right:12px;border-left:0;border-top:0;border-bottom-right-radius:9px}
+.cam-hint{color:rgba(255,255,255,.6);font-size:.84rem;text-align:center;max-width:420px}
+.cam-ctrl{display:flex;align-items:center;justify-content:center;gap:40px;padding:18px 20px max(20px,env(safe-area-inset-bottom))}
+.cam-shot{width:74px;height:74px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);box-shadow:0 0 0 2px #0e0f13 inset;cursor:pointer;transition:transform .12s}
+.cam-shot:active{transform:scale(.92)}
+.cam-mini{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s}
+.cam-mini:active{background:rgba(255,255,255,.25)}
 
 /* ====== SELECTOR MODAL ====== */
 .sheet-overlay{position:fixed;inset:0;z-index:950;background:rgba(14,20,36,.42);backdrop-filter:blur(5px);display:none;align-items:flex-end;justify-content:center}
@@ -466,21 +498,33 @@ input[type=number]{-moz-appearance:textfield}
             <div>Sin foto todavía</div>
           </div>
           <img id="photoImg" alt="Foto del artículo">
+          <div class="sel-layer" id="selLayer">
+            <div class="sel-box" id="selBox"></div>
+          </div>
           <div class="ocr-overlay">
             <div class="ocr-spin"></div>
-            <div>Leyendo texto de la caja…</div>
+            <div>Leyendo el texto seleccionado…</div>
             <div class="ocr-bar"><i id="ocrBar"></i></div>
           </div>
         </div>
 
-        <input type="file" accept="image/*" capture="environment" class="hidden-file" id="photoFile">
+        <div class="ocr-pick" id="ocrPick">
+          <p class="ocr-pick-hint">Arrastrá un recuadro sobre el <b>nombre del producto</b> y tocá leer.</p>
+          <button class="btn btn-outline" id="readSelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M20 17v2a1 1 0 0 1-1 1h-2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Leer texto seleccionado
+          </button>
+        </div>
+
+        <input type="file" accept="image/*" class="hidden-file" id="photoFile">
         <div class="photo-actions">
           <button class="btn btn-outline" id="takePhotoBtn">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-            Tomar / elegir foto
+            Tomar foto
           </button>
         </div>
-        <div class="hint" style="margin-top:12px">La foto se recorta a 1080×1080. Tras capturarla leemos el texto de la caja para el campo <b>NombreCaja</b>.</div>
+        <button class="btn btn-ghost" id="pickPhotoBtn" style="margin-top:11px">Elegir de galería</button>
+        <div class="hint" style="margin-top:12px">La cámara se abre en formato cuadrado: encuadrá el artículo dentro del recuadro. Después marcá la zona del texto que querés leer para el campo <b>NombreCaja</b>.</div>
 
         <div class="nav-row">
           <button class="btn btn-back" id="back2">Atrás</button>
@@ -599,6 +643,30 @@ input[type=number]{-moz-appearance:textfield}
     <div class="scanner-hint">Mantené el código dentro del recuadro</div>
   </div>
 </div>
+
+<!-- ===== CÁMARA (captura cuadrada) ===== -->
+<div class="cam" id="cam">
+  <div class="cam-top">
+    <span>Encuadrá el artículo</span>
+    <button class="cam-x" id="camClose">&times;</button>
+  </div>
+  <div class="cam-body">
+    <div class="cam-frame">
+      <video id="camVideo" playsinline autoplay muted></video>
+      <span class="cam-corner tl"></span><span class="cam-corner tr"></span>
+      <span class="cam-corner bl"></span><span class="cam-corner br"></span>
+    </div>
+    <div class="cam-hint">Acomodá el producto completo dentro del cuadro. Se guardará exactamente lo que ves, sin partes cortadas.</div>
+  </div>
+  <div class="cam-ctrl">
+    <button class="cam-mini" id="camFlip" title="Cambiar cámara" aria-label="Cambiar cámara">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="cam-shot" id="camShot" aria-label="Capturar foto"></button>
+    <span style="width:48px" aria-hidden="true"></span>
+  </div>
+</div>
+<canvas id="camCanvas" style="display:none"></canvas>
 
 <!-- ===== SELECTOR MODAL (varios artículos por barcode) ===== -->
 <div class="sheet-overlay" id="selectorOverlay">
@@ -719,7 +787,8 @@ const state = {
   existingFotoUrl: '', // foto previa (modo edición) si no se reemplaza
   photoSkipped: false,
   disponible: true,
-  ocrGuess: ''        // último valor sugerido por OCR (para saber si el usuario lo editó)
+  ocrGuess: '',       // último valor sugerido por OCR (para saber si el usuario lo editó)
+  squareCanvas: null  // canvas cuadrado en alta resolución (fuente para recortar la región de OCR)
 };
 
 // ============================================================
@@ -844,10 +913,14 @@ function resetArticleState(keepBarcode){
   state.photoSkipped = false;
   state.disponible = true;
   state.ocrGuess = '';
+  state.squareCanvas = null;
   if (!keepBarcode) state.barcode = '';
   // limpiar UI de foto
-  $('photoStage').classList.remove('has-img','ocr-running');
+  $('photoStage').classList.remove('has-img','ocr-running','can-ocr');
   $('photoImg').src = '';
+  $('ocrPick').classList.remove('show');
+  $('selBox').classList.remove('show');
+  selRect = null;
   // limpiar form
   $('fNombre').value = '';
   $('fNombreCaja').value = '';
@@ -985,41 +1058,120 @@ $('scannerClose').addEventListener('click', closeScanner);
 // ============================================================
 //  PASO 2 — Foto + recorte 1080x1080 + OCR
 // ============================================================
-$('takePhotoBtn').addEventListener('click', () => $('photoFile').click());
+$('takePhotoBtn').addEventListener('click', openCamera);
+$('pickPhotoBtn').addEventListener('click', () => $('photoFile').click());
 $('photoFile').addEventListener('change', e => {
   const file = e.target.files && e.target.files[0];
   if (file) handlePhoto(file);
   e.target.value = '';
 });
+
+// ---- Cámara en vivo con visor CUADRADO (WYSIWYG: lo que se ve es lo que se guarda) ----
+let camStream = null;
+let camFacing = 'environment';
+
+$('camClose').addEventListener('click', closeCamera);
+$('camShot').addEventListener('click', captureCamera);
+$('camFlip').addEventListener('click', async () => {
+  camFacing = (camFacing === 'environment') ? 'user' : 'environment';
+  await startCamStream();
+});
+
+async function openCamera(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    // sin API de cámara (desktop sin webcam, navegador viejo) → selector de archivos
+    $('photoFile').click();
+    return;
+  }
+  $('cam').classList.add('active');
+  await startCamStream();
+}
+
+async function startCamStream(){
+  stopCamStream();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: camFacing }, width: { ideal: 1920 }, height: { ideal: 1920 } },
+      audio: false
+    });
+    const v = $('camVideo');
+    v.srcObject = camStream;
+    v.style.transform = (camFacing === 'user') ? 'scaleX(-1)' : 'none';
+    await v.play().catch(() => {});
+  } catch (err){
+    console.error('Cámara:', err);
+    closeCamera();
+    toast('No se pudo abrir la cámara. Elegí una foto.', 'err');
+    $('photoFile').click();
+  }
+}
+
+function stopCamStream(){
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const v = $('camVideo');
+  if (v) v.srcObject = null;
+}
+
+function closeCamera(){
+  $('cam').classList.remove('active');
+  stopCamStream();
+}
+
+// Captura el cuadrado central del video — coincide exactamente con lo que el
+// visor (object-fit:cover sobre contenedor cuadrado) le muestra al usuario.
+function captureCamera(){
+  const v = $('camVideo');
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw || !vh){ toast('La cámara aún no está lista', 'err'); return; }
+  const side = Math.min(vw, vh);
+  const sx = (vw - side) / 2, sy = (vh - side) / 2;
+  const canvas = $('camCanvas');
+  canvas.width = side; canvas.height = side;
+  const ctx = canvas.getContext('2d');
+  if (camFacing === 'user'){ ctx.save(); ctx.translate(side, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(v, sx, sy, side, side, 0, 0, side, side);
+  if (camFacing === 'user') ctx.restore();
+  canvas.toBlob(b => {
+    if (!b){ toast('No se pudo capturar la foto', 'err'); return; }
+    closeCamera();
+    handlePhoto(b);
+  }, 'image/jpeg', 0.95);
+}
 $('skipPhotoBtn').addEventListener('click', () => { state.photoSkipped = true; state.photoBlob = null; setStep(3); });
 $('next2').addEventListener('click', () => setStep(3));
 $('back2').addEventListener('click', () => setStep(1));
 
 async function handlePhoto(file){
   try {
-    const blob = await processPhoto(file);
+    const square = await buildSquareCanvas(file);   // cuadrado en alta resolución
+    state.squareCanvas = square;
+    const blob = await squareToBlob(square, 1080);  // versión 1080 para subir a Storage
     state.photoBlob = blob;
     state.photoSkipped = false;
     state.existingFotoUrl = ''; // reemplaza la previa si estábamos editando
+    if (state.photoDataUrl) { try { URL.revokeObjectURL(state.photoDataUrl); } catch(_){} }
     const url = URL.createObjectURL(blob);
     state.photoDataUrl = url;
     $('photoImg').src = url;
-    $('photoStage').classList.add('has-img');
-    // OCR sobre la imagen ORIGINAL completa (mejor resolución y sin recorte que corte el nombre)
-    runOCR(file);
+    $('photoStage').classList.add('has-img', 'can-ocr');
+    // NO se corre OCR automático: el usuario marca la zona del texto a leer.
+    state.ocrGuess = '';
+    setSelRect({ x: 0.1, y: 0.37, w: 0.8, h: 0.26 }); // recuadro inicial sugerido (centro)
+    $('ocrPick').classList.add('show');
   } catch (err){
     console.error('Error procesando foto:', err);
     toast('No se pudo procesar la imagen', 'err');
   }
 }
 
-// recorte cuadrado centrado a 1080x1080
-function processPhoto(file){
+// Recorte cuadrado centrado en alta resolución (hasta 2200px). Sirve de fuente
+// tanto para la versión 1080 que se sube como para recortar la región del OCR.
+function buildSquareCanvas(file){
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const S = 1080;
       const side = Math.min(img.width, img.height);
+      const S = Math.min(side, 2200);
       const sx = (img.width - side) / 2;
       const sy = (img.height - side) / 2;
       const canvas = document.createElement('canvas');
@@ -1029,12 +1181,91 @@ function processPhoto(file){
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, S, S);
       ctx.drawImage(img, sx, sy, side, side, 0, 0, S, S);
-      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/jpeg', 0.9);
       URL.revokeObjectURL(img.src);
+      resolve(canvas);
     };
     img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
     img.src = URL.createObjectURL(file);
   });
+}
+
+function squareToBlob(square, S){
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = S; canvas.height = S;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(square, 0, 0, S, S);
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/jpeg', 0.9);
+  });
+}
+
+// ---- Selección manual de la zona de texto (recuadro arrastrable sobre la foto) ----
+let selRect = null; // {x,y,w,h} normalizado 0..1 respecto al cuadrado
+let selDrag = null;
+const selLayer = $('selLayer'), selBox = $('selBox');
+
+function setSelRect(r){
+  selRect = r;
+  selBox.classList.add('show');
+  selBox.style.left   = (r.x * 100) + '%';
+  selBox.style.top    = (r.y * 100) + '%';
+  selBox.style.width  = (r.w * 100) + '%';
+  selBox.style.height = (r.h * 100) + '%';
+}
+
+function pointFrac(e){
+  const r = selLayer.getBoundingClientRect();
+  const cx = (e.clientX - r.left) / r.width;
+  const cy = (e.clientY - r.top) / r.height;
+  const clamp = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  return { x: clamp(cx), y: clamp(cy) };
+}
+
+selLayer.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  try { selLayer.setPointerCapture(e.pointerId); } catch(_){}
+  const p = pointFrac(e);
+  selDrag = { x0: p.x, y0: p.y };
+  setSelRect({ x: p.x, y: p.y, w: 0, h: 0 });
+});
+selLayer.addEventListener('pointermove', e => {
+  if (!selDrag) return;
+  const p = pointFrac(e);
+  setSelRect({
+    x: Math.min(selDrag.x0, p.x),
+    y: Math.min(selDrag.y0, p.y),
+    w: Math.abs(p.x - selDrag.x0),
+    h: Math.abs(p.y - selDrag.y0)
+  });
+});
+function endSelDrag(){ selDrag = null; }
+selLayer.addEventListener('pointerup', endSelDrag);
+selLayer.addEventListener('pointercancel', endSelDrag);
+
+$('readSelBtn').addEventListener('click', () => {
+  if (!state.squareCanvas){ toast('Primero tomá una foto', 'err'); return; }
+  let r = selRect;
+  // sin selección útil → leer toda la imagen como respaldo
+  if (!r || r.w < 0.03 || r.h < 0.03) r = { x: 0, y: 0, w: 1, h: 1 };
+  runOCRRegion(r);
+});
+
+// Recorta la región seleccionada del cuadrado en alta resolución y la pasa al OCR.
+async function runOCRRegion(r){
+  const src = state.squareCanvas;
+  const S = src.width;
+  let sx = Math.round(r.x * S), sy = Math.round(r.y * S);
+  let sw = Math.round(r.w * S), sh = Math.round(r.h * S);
+  sx = Math.max(0, Math.min(sx, S - 1));
+  sy = Math.max(0, Math.min(sy, S - 1));
+  sw = Math.max(8, Math.min(sw, S - sx));
+  sh = Math.max(8, Math.min(sh, S - sy));
+  const crop = document.createElement('canvas');
+  crop.width = sw; crop.height = sh;
+  crop.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+  const blob = await new Promise(res => crop.toBlob(res, 'image/png'));
+  await runOCR(blob);
 }
 
 // Worker de Tesseract reutilizable (cargarlo es lento; se crea una sola vez)
@@ -1052,8 +1283,8 @@ async function getOCRWorker(){
         }
       }
     });
-    // PSM 3 = segmentación automática de página: detecta varios bloques de texto
-    await w.setParameters({ tessedit_pageseg_mode: '3' });
+    // PSM 6 = bloque uniforme de texto: ideal para la región que marca el usuario
+    await w.setParameters({ tessedit_pageseg_mode: '6' });
     ocrWorker = w;
     return w;
   })();
@@ -1067,7 +1298,7 @@ function preprocessForOCR(file){
     const img = new Image();
     img.onload = () => {
       let w = img.width, h = img.height;
-      const minDim = 1200, maxDim = 2200;
+      const minDim = 900, maxDim = 3000;
       let scale = 1;
       if (Math.min(w, h) < minDim) scale = minDim / Math.min(w, h);
       if (Math.max(w, h) * scale > maxDim) scale = maxDim / Math.max(w, h);
@@ -1109,74 +1340,38 @@ function preprocessForOCR(file){
   });
 }
 
-async function runOCR(file){
-  if (typeof Tesseract === 'undefined') return;
+async function runOCR(blob){
+  if (typeof Tesseract === 'undefined'){ toast('OCR no disponible', 'err'); return; }
   const stage = $('photoStage');
   const bar = $('ocrBar');
   bar.style.width = '0%';
   stage.classList.add('ocr-running');
   try {
-    const pre = await preprocessForOCR(file);
+    const pre = await preprocessForOCR(blob);
     const worker = await getOCRWorker();
     const { data } = await worker.recognize(pre);
-    const guess = pickProductName(data);
-    const cur = $('fNombreCaja').value.trim();
-    // No pisar lo que el usuario escribió a mano; sí reemplazar una sugerencia previa de OCR
-    if (guess && (!cur || cur === state.ocrGuess)){
-      $('fNombreCaja').value = guess;
-      state.ocrGuess = guess;
+    const text = cleanRegionText((data && data.text) || '');
+    if (text){
+      // el usuario pidió leer esta zona explícitamente → escribimos lo detectado
+      $('fNombreCaja').value = text;
+      state.ocrGuess = text;
+      toast('Texto leído', 'ok');
+    } else {
+      toast('No se detectó texto en la zona marcada', 'err');
     }
   } catch (err){
     console.error('OCR error:', err);
+    toast('No se pudo leer el texto', 'err');
   } finally {
     stage.classList.remove('ocr-running');
   }
 }
 
-// Elige el nombre del producto priorizando el texto MÁS GRANDE y de mayor confianza
-// (en una caja, el nombre/marca suele ser la tipografía más prominente), no el más denso.
-function pickProductName(data){
-  const rawLines = (data && data.lines) ? data.lines : null;
-  if (rawLines && rawLines.length){
-    const lines = rawLines.map(ln => {
-      const text = (ln.text || '').replace(/\s+/g, ' ').trim();
-      const h = ln.bbox ? (ln.bbox.y1 - ln.bbox.y0) : 0;
-      return { text, h, conf: ln.confidence || 0 };
-    }).filter(l => {
-      const letters = (l.text.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g) || []).length;
-      return letters >= 3 && l.conf >= 35;
-    });
-    if (lines.length){
-      const maxH = Math.max.apply(null, lines.map(l => l.h)) || 1;
-      lines.forEach(l => {
-        const letters = (l.text.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g) || []).length;
-        const digits = (l.text.match(/[0-9]/g) || []).length;
-        // tamaño tipográfico domina; confianza y cantidad de letras ajustan; números penalizan
-        l.score = (l.h / maxH) * 3 + (l.conf / 100) * 1.5 + letters * 0.03 - digits * 0.15;
-      });
-      lines.sort((a, b) => b.score - a.score);
-      let best = lines[0].text;
-      if (best.length > 60) best = best.slice(0, 60).trim();
-      return best;
-    }
-  }
-  return pickFromPlainText((data && data.text) || '');
-}
-
-// Respaldo cuando no hay geometría de líneas disponible
-function pickFromPlainText(text){
-  const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(l => l.length >= 3);
-  if (!lines.length) return '';
-  const score = l => {
-    const letters = (l.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g) || []).length;
-    const digits = (l.match(/[0-9]/g) || []).length * 0.4;
-    const upper = (l.match(/[A-ZÁÉÍÓÚÑ]/g) || []).length;
-    return letters + upper * 0.5 - digits;
-  };
-  lines.sort((a, b) => score(b) - score(a));
-  let best = lines[0];
-  if (best.length > 60) best = best.slice(0, 60).trim();
-  return best;
+// Limpia el texto reconocido en la región: une líneas y colapsa espacios.
+function cleanRegionText(raw){
+  let t = (raw || '').replace(/\s+/g, ' ').trim();
+  if (t.length > 80) t = t.slice(0, 80).trim();
+  return t;
 }
 
 // ============================================================
