@@ -445,7 +445,7 @@ table.art tr.aged > td{background:#e8eaef}
 table.art{border-collapse:collapse;width:100%;font-size:.82rem;white-space:nowrap}
 table.art th,table.art td{padding:9px 11px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
 table.art thead th{position:sticky;top:0;background:var(--card-2);font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;z-index:1}
-table.art tbody tr:hover{background:var(--primary-soft)}
+table.art tbody tr:hover > td{background:var(--lime-soft)}
 table.art tbody tr.dirty{background:var(--lime-soft)}
 table.art td.codcol{font-family:var(--mono);font-weight:700;color:var(--text-2);white-space:nowrap;cursor:help}
 table.art .thumb{width:38px;height:38px;border-radius:8px;object-fit:cover;background:var(--card-2);display:block;cursor:zoom-in;transition:transform .18s ease,box-shadow .18s ease;transform-origin:center;position:relative}
@@ -467,8 +467,12 @@ table.art .thumb:hover,table.art .thumb.zoom{transform:scale(2);z-index:30;box-s
 .tsw:has(.tsw-input:disabled){cursor:default}
 .tsw-lbl{font-size:.78rem;font-weight:700;color:var(--text-2);min-width:18px}
 .tsw-input:checked ~ .tsw-lbl{color:var(--lime-600)}
-.row-save{border:none;background:var(--lime-600);color:#fff;border-radius:8px;padding:7px 13px;font-size:.78rem;font-weight:700;cursor:pointer;opacity:.4;pointer-events:none;transition:opacity .16s}
+.row-actions{display:flex;align-items:center;gap:7px}
+.row-icon{border:none;border-radius:8px;width:34px;height:32px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:opacity .16s,background .16s,color .16s}
+.row-save{background:var(--lime-600);color:#fff;opacity:.4;pointer-events:none}
 tr.dirty .row-save{opacity:1;pointer-events:auto}
+.row-del{background:var(--danger-soft);color:var(--danger-600)}
+.row-del:hover{background:var(--danger);color:#fff}
 .tabla-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:.9rem}
 
 @media (max-width:400px){
@@ -668,10 +672,10 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
             </div>
           </div>
           <div>
-            <label class="flbl">ValorUSD <small>(calculado)</small></label>
+            <label class="flbl">PrecioUSD <small>(calculado)</small></label>
             <div class="prefix-wrap">
               <span class="pfx">$</span>
-              <input type="text" class="inp calc" id="fValor" value="0.00" readonly tabindex="-1">
+              <input type="text" class="inp calc" id="fPrecio" value="0.00" readonly tabindex="-1">
             </div>
             <div class="field-note">Costo ÷ (1 − Ganancia/100)</div>
           </div>
@@ -749,7 +753,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         <thead>
           <tr>
             <th>Código</th><th>Foto</th><th>Cód. barras</th><th>Nombre</th>
-            <th>Categoría</th><th>Costo USD</th><th>Ganancia %</th><th>Valor USD</th>
+            <th>Categoría</th><th>Costo USD</th><th>Ganancia %</th><th>Precio USD</th>
             <th>Disponible</th><th></th>
           </tr>
         </thead>
@@ -1110,7 +1114,7 @@ function resetArticleState(keepBarcode){
   $('fCategoria').value = '';
   $('fCosto').value = '';
   $('fGanancia').value = '';
-  $('fValor').value = '0.00';
+  $('fPrecio').value = '0.00';
   $('fCantidad').value = '';
   setDisponible(true);
   document.querySelectorAll('.inp.invalid').forEach(el => el.classList.remove('invalid'));
@@ -1346,7 +1350,7 @@ function closeScanner(){
 $('scannerClose').addEventListener('click', closeScanner);
 
 // ============================================================
-//  PASO 2 — Foto + recorte 800x800
+//  PASO 2 — Foto + recorte 512x512
 // ============================================================
 // Tocar el recuadro de la foto (placeholder o imagen ya cargada) abre la cámara
 $('photoStage').addEventListener('click', openCamera);
@@ -1435,7 +1439,7 @@ $('back2').addEventListener('click', () => setStep(1));
 async function handlePhoto(file){
   try {
     const square = await buildSquareCanvas(file);   // cuadrado en alta resolución
-    const blob = await squareToBlob(square, 800);  // versión 800x800 para subir a Storage
+    const blob = await squareToBlob(square, 512);  // versión 512x512 para subir a Storage
     state.photoBlob = blob;
     state.photoSkipped = false;
     state.existingFotoUrl = ''; // reemplaza la previa si estábamos editando
@@ -1481,7 +1485,7 @@ function squareToBlob(square, S){
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(square, 0, 0, S, S);
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/jpeg', 0.9);
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/jpeg', 0.85);
   });
 }
 
@@ -1513,7 +1517,7 @@ function setDisponible(val){
 function calcValor(){
   const costo = parseFloat($('fCosto').value);
   const gan = parseInt($('fGanancia').value, 10);
-  const out = $('fValor');
+  const out = $('fPrecio');
   if (isNaN(costo) || isNaN(gan)){ out.value = '0.00'; out.classList.remove('bad'); return; }
   if (gan >= 100){ out.value = '— (ganancia ≥ 100%)'; out.classList.add('bad'); return; }
   const valor = costo / (1 - gan / 100);
@@ -1521,7 +1525,7 @@ function calcValor(){
   out.value = (isFinite(valor) ? valor : 0).toFixed(2);
 }
 
-function getValorUSD(){
+function getPrecioUSD(){
   const costo = parseFloat($('fCosto').value);
   const gan = parseInt($('fGanancia').value, 10);
   if (isNaN(costo) || isNaN(gan) || gan >= 100) return null;
@@ -1558,7 +1562,7 @@ function buildReview(){
   if (preview){ img.src = preview; img.classList.remove('empty'); img.alt = ''; }
   else { img.src = PLACEHOLDER_IMG; img.classList.add('empty'); }
 
-  const valor = getValorUSD();
+  const valor = getPrecioUSD();
   const costo = parseFloat($('fCosto').value);
   const gan = parseInt($('fGanancia').value, 10);
   const rows = [
@@ -1566,7 +1570,7 @@ function buildReview(){
     ['Categoría', $('fCategoria').value || '—', ''],
     ['CostoUSD', '$' + (isNaN(costo) ? '0.00' : costo.toFixed(2)), 'mono'],
     ['Ganancia', (isNaN(gan) ? '0' : gan) + '%', 'mono'],
-    ['ValorUSD', valor != null ? '$' + valor.toFixed(2) : '—', 'mono pos'],
+    ['PrecioUSD', valor != null ? '$' + valor.toFixed(2) : '—', 'mono pos'],
     ['Cantidad', $('fCantidad').value || '0', 'mono'],
     ['Disponible', state.disponible ? 'Sí' : 'No', state.disponible ? 'pos' : 'neg']
   ];
@@ -1591,7 +1595,7 @@ async function guardarArticulo(){
   const btn = $('saveBtn');
   if (btn.disabled) return;
 
-  const valor = getValorUSD();
+  const valor = getPrecioUSD();
   if (valor == null){ toast('Revisá CostoUSD y Ganancia', 'err'); setStep(3); return; }
 
   btn.disabled = true;
@@ -1625,7 +1629,7 @@ async function guardarArticulo(){
       Nombre: $('fNombre').value.trim(),
       Categoria: $('fCategoria').value.trim(),
       CostoUSD: parseFloat($('fCosto').value),
-      ValorUSD: valor,
+      PrecioUSD: valor,
       GananciaPorc: parseInt($('fGanancia').value, 10),
       Cantidad: parseInt($('fCantidad').value, 10),
       Disponible: !!state.disponible,
@@ -1775,9 +1779,16 @@ function renderTable(){
       <td><select class="cell-inp" data-f="Categoria" disabled>${catOpts(a.Categoria || '')}</select></td>
       <td><input class="cell-inp num" data-f="CostoUSD" type="number" step="0.01" min="0" value="${a.CostoUSD != null ? a.CostoUSD : ''}" disabled></td>
       <td><input class="cell-inp num" data-f="GananciaPorc" type="number" step="1" min="0" max="99" value="${a.GananciaPorc != null ? a.GananciaPorc : ''}" disabled></td>
-      <td><input class="cell-inp num calc" data-f="ValorUSD" value="${a.ValorUSD != null ? Number(a.ValorUSD).toFixed(2) : ''}" disabled readonly></td>
+      <td><input class="cell-inp num calc" data-f="PrecioUSD" value="${(a.PrecioUSD != null ? a.PrecioUSD : a.ValorUSD) != null ? Number(a.PrecioUSD != null ? a.PrecioUSD : a.ValorUSD).toFixed(2) : ''}" disabled readonly></td>
       <td><label class="tsw"><input type="checkbox" class="tsw-input" data-f="Disponible"${a.Disponible !== false ? ' checked' : ''} aria-label="Disponible"><span class="tsw-track"></span><span class="tsw-lbl">${a.Disponible !== false ? 'Sí' : 'No'}</span></label></td>
-      <td><button class="row-save" data-codigo="${escapeHtml(id)}">Guardar</button></td>`;
+      <td><div class="row-actions">
+        <button class="row-icon row-save" data-codigo="${escapeHtml(id)}" title="Guardar cambios" aria-label="Guardar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+        <button class="row-icon row-del" data-codigo="${escapeHtml(id)}" title="Eliminar artículo" aria-label="Eliminar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </div></td>`;
     tbody.appendChild(tr);
   });
 
@@ -1788,7 +1799,7 @@ function renderTable(){
 // listeners delegados sobre el tbody
 $('artTbody').addEventListener('input', e => {
   const inp = e.target.closest('.cell-inp');
-  if (!inp || inp.dataset.f === 'ValorUSD') return;
+  if (!inp || inp.dataset.f === 'PrecioUSD') return;
   const tr = inp.closest('tr');
   tr.classList.add('dirty');
   if (inp.dataset.f === 'CostoUSD' || inp.dataset.f === 'GananciaPorc') recalcRowValor(tr);
@@ -1811,6 +1822,8 @@ $('artTbody').addEventListener('click', e => {
     img._zoomTimer = setTimeout(() => img.classList.remove('zoom'), 1600);
     return;
   }
+  const del = e.target.closest('.row-del');
+  if (del){ deleteRow(del.dataset.codigo); return; }
   const btn = e.target.closest('.row-save');
   if (btn) saveRow(btn.dataset.codigo);
 });
@@ -1818,7 +1831,7 @@ $('artTbody').addEventListener('click', e => {
 function recalcRowValor(tr){
   const cost = parseFloat(tr.querySelector('[data-f="CostoUSD"]').value);
   const gan = parseInt(tr.querySelector('[data-f="GananciaPorc"]').value, 10);
-  const out = tr.querySelector('[data-f="ValorUSD"]');
+  const out = tr.querySelector('[data-f="PrecioUSD"]');
   if (isNaN(cost) || isNaN(gan) || gan >= 100){ out.value = ''; return; }
   out.value = (cost / (1 - gan / 100)).toFixed(2);
 }
@@ -1826,7 +1839,7 @@ function recalcRowValor(tr){
 function applyEditableState(){
   $('artTable').classList.toggle('editing', tableEditable);
   document.querySelectorAll('#artTbody .cell-inp').forEach(inp => {
-    if (inp.dataset.f === 'ValorUSD') { inp.disabled = true; return; }
+    if (inp.dataset.f === 'PrecioUSD') { inp.disabled = true; return; }
     inp.disabled = !tableEditable;
   });
   // El selector Disponible queda siempre habilitado (con o sin modo edición)
@@ -1925,13 +1938,14 @@ async function saveRow(codigo){
     Categoria: categoria,
     CostoUSD: costo,
     GananciaPorc: gan,
-    ValorUSD: valor,
+    PrecioUSD: valor,
+    ValorUSD: null, // limpia el campo viejo en registros existentes
     Disponible: get('Disponible').checked,
     Timestamp: firebase.database.ServerValue.TIMESTAMP
   };
 
   const btn = tr.querySelector('.row-save');
-  btn.disabled = true; btn.textContent = '…';
+  btn.disabled = true;
   procesoCriticoEnEjecucion = true;
   showBlock('Guardando cambios…');
   try {
@@ -1947,7 +1961,7 @@ async function saveRow(codigo){
     }
 
     articulosCache[codigo] = { ...articulosCache[codigo], ...updates, Timestamp: Date.now() };
-    get('ValorUSD').value = valor.toFixed(2);
+    get('PrecioUSD').value = valor.toFixed(2);
     tr.classList.remove('dirty');
     toast(`#${codigo} actualizado`, 'ok');
   } catch (err){
@@ -1956,7 +1970,44 @@ async function saveRow(codigo){
   } finally {
     procesoCriticoEnEjecucion = false;
     hideBlock();
-    btn.disabled = false; btn.textContent = 'Guardar';
+    btn.disabled = false;
+  }
+}
+
+// Eliminar un artículo (DB + foto en Storage). Requiere clave de confirmación.
+const CLAVE_ELIMINAR = '2574';
+async function deleteRow(codigo){
+  const tr = document.querySelector(`#artTbody tr[data-codigo="${codigo}"]`);
+  if (!tr) return;
+  const a = articulosCache[codigo] || {};
+  const clave = prompt(`Eliminar artículo #${codigo}${a.Nombre ? ' · ' + a.Nombre : ''}\n\nIngresá la clave para confirmar:`);
+  if (clave === null) return; // cancelado
+  if (clave.trim() !== CLAVE_ELIMINAR){ toast('Clave incorrecta. No se eliminó.', 'err'); return; }
+
+  procesoCriticoEnEjecucion = true;
+  showBlock('Eliminando artículo…');
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
+
+    const ref = articulosRef.child(codigo);
+    await conTimeout(ref.remove(), 15000, 'Timeout: la eliminación tardó demasiado.');
+    // verificación de eliminación
+    const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar la eliminación.');
+    if (check.exists()) throw new Error('La verificación de la eliminación falló.');
+
+    // borrar la foto del Storage (best-effort: puede no existir)
+    try { await storage.ref('articulos/' + codigo + '.jpg').delete(); } catch (_){}
+
+    delete articulosCache[codigo];
+    renderTable(); // refresca filas, contador, estado vacío y filtros
+    toast(`#${codigo} eliminado`, 'ok');
+  } catch (err){
+    console.error('Error eliminando fila:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
   }
 }
 
