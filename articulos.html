@@ -16,9 +16,6 @@
 <!-- Barcode scanner -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-<!-- OCR -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
 <!-- Config (pedidos-87064 + Google Sheets) -->
 <script src="config.js"></script>
 
@@ -245,24 +242,6 @@ body{
 .photo-placeholder{text-align:center;color:var(--faint);padding:20px}
 .photo-placeholder svg{margin-bottom:10px;opacity:.7}
 .photo-placeholder div{font-size:.84rem;font-weight:500}
-.photo-stage .ocr-overlay{
-  position:absolute;inset:0;background:rgba(14,20,36,.72);backdrop-filter:blur(2px);color:#fff;
-  display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-size:.84rem;font-weight:500;
-}
-.photo-stage.ocr-running .ocr-overlay{display:flex}
-.ocr-spin{width:30px;height:30px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
-.ocr-bar{width:64%;height:6px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
-.ocr-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--lime));border-radius:4px;transition:width .25s}
-/* selección manual de la zona de texto para OCR */
-.sel-layer{position:absolute;inset:0;display:none;cursor:crosshair;touch-action:none;z-index:2}
-.photo-stage.can-ocr .sel-layer{display:block}
-.sel-box{position:absolute;border:2px solid var(--lime);background:rgba(124,179,66,.14);box-shadow:0 0 0 9999px rgba(14,20,36,.34);display:none}
-.sel-box.show{display:block}
-.sel-box::after{content:"";position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 2px #fff}
-.ocr-pick{margin-top:12px;display:none;flex-direction:column;gap:9px}
-.ocr-pick.show{display:flex}
-.ocr-pick-hint{font-size:.82rem;color:var(--muted);text-align:center;margin:0 0 2px}
-.ocr-pick-hint b{color:var(--text)}
 .photo-actions{display:flex;gap:9px;margin-top:14px}
 .photo-actions .btn{flex:1;padding:13px;border-radius:var(--r-sm);font-weight:700;font-size:.88rem}
 .btn-outline{background:var(--card);border:1px solid var(--border-2);color:var(--text)}
@@ -377,6 +356,19 @@ input[type=number]{-moz-appearance:textfield}
 .sheet-newico{width:44px;height:44px;border-radius:10px;flex-shrink:0;background:var(--lime);color:#fff;display:flex;align-items:center;justify-content:center}
 .sheet-new .nm{color:var(--lime-600)}
 .sheet-new .cd{color:var(--lime-600);opacity:.8;font-family:var(--font)}
+/* búsqueda por nombre dentro del sheet */
+.sheet-search{padding:13px 16px;border-bottom:1px solid var(--border)}
+.sheet-search .inp{width:100%}
+.sheet-empty{padding:26px 20px;text-align:center;color:var(--muted);font-size:.86rem}
+
+/* ====== CÓDIGOS DE BARRAS (chips) ====== */
+.bc-add{display:flex;gap:9px}
+.bc-add .inp{flex:1;min-width:0}
+.bc-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.bc-chips:empty{display:none}
+.bc-chip{display:inline-flex;align-items:center;gap:8px;background:var(--primary-soft);color:var(--text);border:1px solid var(--border-2);border-radius:999px;padding:6px 7px 6px 13px;font-family:var(--mono);font-size:.8rem;font-weight:600}
+.bc-chip .x{width:19px;height:19px;border-radius:50%;border:none;background:var(--border-2);color:var(--text-2);font-size:.95rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .14s}
+.bc-chip .x:active{background:var(--danger);color:#fff}
 
 /* ====== SUCCESS ====== */
 .success-screen{position:fixed;inset:0;z-index:980;background:radial-gradient(700px 460px at 50% 30%, rgba(124,179,66,.13), transparent 70%),var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
@@ -579,12 +571,19 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
 
         <div class="or">o ingresá manual</div>
 
-        <div class="row">
+        <div class="bc-add">
           <input type="text" class="inp mono" id="barcodeInput" placeholder="Código de barras…" inputmode="numeric" autocomplete="off">
-          <button class="btn btn-dark" id="barcodeBtn">OK</button>
+          <button class="btn btn-dark" id="barcodeBtn">Agregar</button>
+        </div>
+        <div class="bc-chips" id="bcChips1"></div>
+        <div class="hint" id="bcHint1" style="margin-top:11px;display:none">Podés agregar varios códigos para el mismo artículo.</div>
+
+        <div class="nav-row" id="step1Nav" style="display:none">
+          <button class="btn btn-next" id="next1">Continuar</button>
         </div>
 
-        <button class="btn btn-ghost" id="noBarcodeBtn">Artículo sin código de barras →</button>
+        <button class="btn btn-ghost" id="nameSearchBtn" style="margin-top:11px">¿El producto ya existe? Buscar por nombre</button>
+        <button class="btn btn-ghost" id="noBarcodeBtn" style="margin-top:11px">Artículo sin código de barras →</button>
       </div>
     </div>
   </section>
@@ -604,22 +603,6 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
             <div>Sin foto todavía</div>
           </div>
           <img id="photoImg" alt="Foto del artículo">
-          <div class="sel-layer" id="selLayer">
-            <div class="sel-box" id="selBox"></div>
-          </div>
-          <div class="ocr-overlay">
-            <div class="ocr-spin"></div>
-            <div>Leyendo el texto seleccionado…</div>
-            <div class="ocr-bar"><i id="ocrBar"></i></div>
-          </div>
-        </div>
-
-        <div class="ocr-pick" id="ocrPick">
-          <p class="ocr-pick-hint">Arrastrá un recuadro sobre el <b>nombre del producto</b> y tocá leer.</p>
-          <button class="btn btn-outline" id="readSelBtn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M20 17v2a1 1 0 0 1-1 1h-2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-            Leer texto seleccionado
-          </button>
         </div>
 
         <input type="file" accept="image/*" class="hidden-file" id="photoFile">
@@ -630,7 +613,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
           </button>
         </div>
         <button class="btn btn-ghost" id="pickPhotoBtn" style="margin-top:11px">Elegir de galería</button>
-        <div class="hint" style="margin-top:12px">La cámara se abre en formato cuadrado: encuadrá el artículo dentro del recuadro. Después marcá la zona del texto que querés leer para el campo <b>NombreCaja</b>.</div>
+        <div class="hint" style="margin-top:12px">La cámara se abre en formato cuadrado: encuadrá el artículo completo dentro del recuadro para que no queden partes cortadas.</div>
 
         <div class="nav-row">
           <button class="btn btn-back" id="back2">Atrás</button>
@@ -655,15 +638,18 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
             <input type="text" class="inp" id="fNombre" placeholder="Nombre del artículo" autocomplete="off">
           </div>
           <div>
-            <label class="flbl">NombreCaja <small>(OCR)</small></label>
-            <input type="text" class="inp" id="fNombreCaja" placeholder="Texto detectado en la caja" autocomplete="off">
-            <div class="field-note">Detectado automáticamente — editalo si hace falta.</div>
-          </div>
-          <div>
             <label class="flbl">Categoría <span class="req">*</span></label>
             <select class="inp" id="fCategoria">
               <option value="">Cargando categorías…</option>
             </select>
+          </div>
+          <div>
+            <label class="flbl">Códigos de barras</label>
+            <div class="bc-add">
+              <input type="text" class="inp mono" id="bcInput3" placeholder="Agregar otro código…" inputmode="numeric" autocomplete="off">
+              <button type="button" class="btn btn-dark" id="bcAdd3">Agregar</button>
+            </div>
+            <div class="bc-chips" id="bcChips3"></div>
           </div>
           <div class="f-2">
             <div>
@@ -758,7 +744,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
       <table class="art" id="artTable">
         <thead>
           <tr>
-            <th>Código</th><th>Foto</th><th>Cód. barras</th><th>Nombre</th><th>NombreCaja</th>
+            <th>Código</th><th>Foto</th><th>Cód. barras</th><th>Nombre</th>
             <th>Categoría</th><th>Costo USD</th><th>Ganancia %</th><th>Valor USD</th>
             <th>Cantidad</th><th>Disponible</th><th></th>
           </tr>
@@ -812,6 +798,17 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
   <div class="sheet">
     <h3 id="selectorTitle">Artículos con este código</h3>
     <div class="sheet-list" id="selectorList"></div>
+  </div>
+</div>
+
+<!-- ===== BÚSQUEDA POR NOMBRE (asociar código a artículo existente) ===== -->
+<div class="sheet-overlay" id="nameSearchOverlay">
+  <div class="sheet">
+    <h3 id="nameSearchTitle">Buscar artículo por nombre</h3>
+    <div class="sheet-search">
+      <input type="text" class="inp" id="nameSearchInput" placeholder="Escribí parte del nombre…" autocomplete="off">
+    </div>
+    <div class="sheet-list" id="nameSearchList"></div>
   </div>
 </div>
 
@@ -920,14 +917,12 @@ let currentStep = 1;
 const state = {
   editing: false,
   codigo: '',          // string 5 cifras
-  barcode: '',
+  barcodes: [],        // lista de códigos de barras del artículo (se guarda como CSV)
   photoBlob: null,     // nueva foto (blob) a subir
   photoDataUrl: '',    // preview local
   existingFotoUrl: '', // foto previa (modo edición) si no se reemplaza
   photoSkipped: false,
   disponible: true,
-  ocrGuess: '',       // último valor sugerido por OCR (para saber si el usuario lo editó)
-  squareCanvas: null, // canvas cuadrado en alta resolución (fuente para recortar la región de OCR)
   allowDup: false     // true si el usuario eligió crear un artículo nuevo con un barcode ya existente
 };
 
@@ -1018,31 +1013,78 @@ function setStep(n){
 $('scanHero').addEventListener('click', startScanner);
 $('barcodeBtn').addEventListener('click', () => submitBarcode($('barcodeInput').value));
 $('barcodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitBarcode($('barcodeInput').value); });
-$('noBarcodeBtn').addEventListener('click', () => proceedWithBarcode(''));
+$('bcAdd3').addEventListener('click', () => { addBarcode($('bcInput3').value); });
+$('bcInput3').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addBarcode($('bcInput3').value); } });
+$('next1').addEventListener('click', () => enterNewMode());
+$('noBarcodeBtn').addEventListener('click', () => enterNewMode());
 
-async function submitBarcode(val){
-  const code = String(val || '').trim();
-  if (!code){ toast('Ingresá un código o usá el escáner', 'err'); return; }
-  proceedWithBarcode(code);
+// click delegado sobre los chips (quitar)
+['bcChips1','bcChips3'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('click', e => {
+    const x = e.target.closest('.x');
+    if (x) removeBarcode(x.dataset.bc);
+  });
+});
+
+// ---- Lista de códigos de barras (chips) ----
+function normalizeCode(v){ return String(v || '').trim(); }
+
+function renderBarcodeChips(){
+  const html = state.barcodes.map(c =>
+    `<span class="bc-chip">${escapeHtml(c)}<button type="button" class="x" data-bc="${escapeHtml(c)}" aria-label="Quitar">&times;</button></span>`
+  ).join('');
+  ['bcChips1','bcChips3'].forEach(id => { const el = $(id); if (el) el.innerHTML = html; });
+  updateStep1Nav();
 }
 
-async function proceedWithBarcode(barcode){
+function updateStep1Nav(){
+  const has = state.barcodes.length > 0;
+  $('step1Nav').style.display = has ? '' : 'none';
+  $('bcHint1').style.display = has ? '' : 'none';
+  // si ya hay códigos, el botón "sin código de barras" pierde sentido
+  $('noBarcodeBtn').style.display = has ? 'none' : '';
+}
+
+// agrega un código a state.barcodes (con avisos, sin bloquear)
+function addBarcode(code, opts){
+  opts = opts || {};
+  const c = normalizeCode(code);
+  if (!c){ toast('Ingresá un código', 'err'); return false; }
+  if (state.barcodes.includes(c)){ toast('Ese código ya está en la lista', 'err'); return false; }
+  if (!opts.silentOwner){
+    const owners = findByBarcode(c).filter(a => String(a.Codigo || a.key) !== String(state.codigo));
+    if (owners.length){
+      toast('Ojo: ese código ya está en el artículo #' + (owners[0].Codigo || owners[0].key), 'err');
+    }
+  }
+  state.barcodes.push(c);
+  $('barcodeInput').value = '';
+  $('bcInput3').value = '';
+  renderBarcodeChips();
+  return true;
+}
+
+function removeBarcode(code){
+  const c = normalizeCode(code);
+  state.barcodes = state.barcodes.filter(x => x !== c);
+  renderBarcodeChips();
+}
+
+// Entrada de un código en el PASO 1 (manual o por escáner)
+async function submitBarcode(val){
+  const code = normalizeCode(val);
+  if (!code){ toast('Ingresá un código o usá el escáner', 'err'); return; }
   showBlock('Verificando código…');
-  // refrescar cache para evitar falsos negativos en duplicados
-  await loadArticulos();
+  await loadArticulos();   // cache fresca para detectar duplicados
   hideBlock();
 
-  state.barcode = barcode;
-  resetArticleState(true);
-
-  if (barcode){
-    const matches = findByBarcode(barcode);
-    // Aunque haya una sola coincidencia, mostramos el selector para que el usuario
-    // pueda elegir el artículo correcto o registrar uno nuevo con el mismo código.
-    if (matches.length){ openSelector(matches, barcode); return; }
+  // El PRIMER código que matchea un artículo existente → desambiguar (editar o registrar nuevo)
+  if (state.barcodes.length === 0){
+    const matches = findByBarcode(code);
+    if (matches.length){ openSelector(matches, code); return; }
   }
-  // Sin coincidencias → artículo nuevo directo
-  enterNewMode(barcode);
+  addBarcode(code);
 }
 
 function resetArticleState(keepBarcode){
@@ -1053,19 +1095,17 @@ function resetArticleState(keepBarcode){
   state.existingFotoUrl = '';
   state.photoSkipped = false;
   state.disponible = true;
-  state.ocrGuess = '';
-  state.squareCanvas = null;
   state.allowDup = false;
-  if (!keepBarcode) state.barcode = '';
+  if (!keepBarcode) state.barcodes = [];
   // limpiar UI de foto
-  $('photoStage').classList.remove('has-img','ocr-running','can-ocr');
+  $('photoStage').classList.remove('has-img');
   $('photoImg').src = '';
-  $('ocrPick').classList.remove('show');
-  $('selBox').classList.remove('show');
-  selRect = null;
+  // limpiar códigos de barras
+  $('barcodeInput').value = '';
+  $('bcInput3').value = '';
+  renderBarcodeChips();
   // limpiar form
   $('fNombre').value = '';
-  $('fNombreCaja').value = '';
   $('fCategoria').value = '';
   $('fCosto').value = '';
   $('fGanancia').value = '';
@@ -1075,20 +1115,21 @@ function resetArticleState(keepBarcode){
   document.querySelectorAll('.inp.invalid').forEach(el => el.classList.remove('invalid'));
 }
 
-function enterNewMode(barcode){
+function enterNewMode(){
   state.editing = false;
   state.codigo = getNextCodigo();
-  renderBanner('new', state.codigo, barcode);
+  renderBanner('new', state.codigo);
+  renderBarcodeChips();
   setStep(2);
 }
 
 function enterEditMode(rec){
   state.editing = true;
   state.codigo = rec.Codigo || rec.key;
-  state.barcode = rec.CodigoBarras || state.barcode;
+  state.barcodes = String(rec.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean);
+  renderBarcodeChips();
   // precargar
   $('fNombre').value = rec.Nombre || '';
-  $('fNombreCaja').value = rec.NombreCaja || '';
   if (rec.Categoria){
     if (!categorias.includes(rec.Categoria)){
       const opt = document.createElement('option');
@@ -1108,21 +1149,28 @@ function enterEditMode(rec){
     $('photoImg').src = rec.Foto;
     $('photoStage').classList.add('has-img');
   }
-  renderBanner('edit', state.codigo, state.barcode);
+  renderBanner('edit', state.codigo);
   setStep(2);
 }
 
-function renderBanner(type, codigo, barcode){
+function barcodesLabel(){
+  const n = state.barcodes.length;
+  if (n === 0) return 'sin código de barras';
+  if (n === 1) return '1 código de barras';
+  return n + ' códigos de barras';
+}
+
+function renderBanner(type, codigo){
   const slot = $('bannerSlot');
   if (type === 'edit'){
     slot.innerHTML = `<div class="banner edit">
       <span class="bico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
-      <span>Editando artículo existente · <span class="code">#${escapeHtml(codigo)}</span></span>
+      <span>Editando artículo existente · <span class="code">#${escapeHtml(codigo)}</span> · ${barcodesLabel()}</span>
     </div>`;
   } else {
     slot.innerHTML = `<div class="banner new">
       <span class="bico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
-      <span>Artículo nuevo · código asignado <span class="code">#${escapeHtml(codigo)}</span>${barcode ? '' : ' · sin código de barras'}</span>
+      <span>Artículo nuevo · código asignado <span class="code">#${escapeHtml(codigo)}</span> · ${barcodesLabel()}</span>
     </div>`;
   }
 }
@@ -1140,7 +1188,7 @@ function openSelector(matches, barcode){
     <div class="sheet-item" data-idx="${i}">
       <img class="sheet-thumb" src="${m.Foto ? escapeHtml(m.Foto) : PLACEHOLDER_IMG}" alt="" onerror="imgFallback(this)">
       <div class="sheet-tx">
-        <div class="nm">${escapeHtml(m.Nombre || m.NombreCaja || 'Sin nombre')}</div>
+        <div class="nm">${escapeHtml(m.Nombre || 'Sin nombre')}</div>
         <div class="cd">#${escapeHtml(m.Codigo || m.key)}${m.Categoria ? ' · ' + escapeHtml(m.Categoria) : ''}</div>
       </div>
       <span class="sheet-go">${chev}</span>
@@ -1169,13 +1217,74 @@ function openSelector(matches, barcode){
   $('selectorOverlay').classList.add('active');
 }
 
-// alta nueva permitiendo deliberadamente un código de barras ya existente
+// "Registrar artículo nuevo" desde el selector: siembra el código como chip y permite
+// seguir agregando más en el paso 1 (permitiendo deliberadamente un código ya existente).
 function startNewWithBarcode(barcode){
-  state.barcode = barcode || '';
   state.allowDup = true;
-  enterNewMode(barcode);
+  const c = normalizeCode(barcode);
+  if (c && !state.barcodes.includes(c)) state.barcodes.push(c);
+  renderBarcodeChips();
+  toast('Agregá más códigos o tocá Continuar', 'ok');
 }
 $('selectorOverlay').addEventListener('click', e => { if (e.target === $('selectorOverlay')) $('selectorOverlay').classList.remove('active'); });
+
+// ---- Buscar artículo por nombre y asociarle el código tipeado (decisión: asociar a existente) ----
+let pendingAssocCode = '';
+
+$('nameSearchBtn').addEventListener('click', async () => {
+  pendingAssocCode = normalizeCode($('barcodeInput').value);
+  showBlock('Cargando artículos…');
+  await loadArticulos();
+  hideBlock();
+  $('nameSearchTitle').textContent = pendingAssocCode
+    ? `Asociar el código ${pendingAssocCode} a…`
+    : 'Buscar artículo por nombre';
+  $('nameSearchInput').value = '';
+  renderNameResults('');
+  $('nameSearchOverlay').classList.add('active');
+  setTimeout(() => $('nameSearchInput').focus(), 60);
+});
+$('nameSearchInput').addEventListener('input', () => renderNameResults($('nameSearchInput').value));
+$('nameSearchOverlay').addEventListener('click', e => { if (e.target === $('nameSearchOverlay')) $('nameSearchOverlay').classList.remove('active'); });
+
+function renderNameResults(q){
+  const list = $('nameSearchList');
+  const query = String(q || '').trim().toLowerCase();
+  let items = Object.entries(articulosCache).map(([key, a]) => ({ key, ...a }));
+  if (query) items = items.filter(a => String(a.Nombre || '').toLowerCase().includes(query));
+  items.sort((x, y) => String(x.Nombre || '').localeCompare(String(y.Nombre || '')));
+  items = items.slice(0, 40);
+
+  if (!items.length){
+    list.innerHTML = `<div class="sheet-empty">${query ? 'Sin resultados' : 'Escribí parte del nombre para buscar…'}</div>`;
+    return;
+  }
+  const chev = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+  list.innerHTML = items.map(a => {
+    const nCodes = String(a.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean).length;
+    return `
+    <div class="sheet-item" data-key="${escapeHtml(a.key)}">
+      <img class="sheet-thumb" src="${a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG}" alt="" onerror="imgFallback(this)">
+      <div class="sheet-tx">
+        <div class="nm">${escapeHtml(a.Nombre || 'Sin nombre')}</div>
+        <div class="cd">#${escapeHtml(a.Codigo || a.key)}${nCodes ? ' · ' + nCodes + ' cód.' : ''}${a.Categoria ? ' · ' + escapeHtml(a.Categoria) : ''}</div>
+      </div>
+      <span class="sheet-go">${chev}</span>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.sheet-item').forEach(el => {
+    el.addEventListener('click', () => {
+      $('nameSearchOverlay').classList.remove('active');
+      const key = el.dataset.key;
+      enterEditMode({ key, ...articulosCache[key] });
+      if (pendingAssocCode){
+        if (addBarcode(pendingAssocCode, { silentOwner: true })) toast('Código agregado al artículo', 'ok');
+        pendingAssocCode = '';
+      }
+    });
+  });
+}
 
 // ============================================================
 //  Scanner (html5-qrcode)
@@ -1215,7 +1324,7 @@ function onScan(decodedText){
   scanBusy = true;
   if (navigator.vibrate) navigator.vibrate(60);
   const code = String(decodedText).trim();
-  closeScanner().then(() => { $('barcodeInput').value = code; proceedWithBarcode(code); });
+  closeScanner().then(() => { submitBarcode(code); });
 }
 
 function closeScanner(){
@@ -1228,7 +1337,7 @@ function closeScanner(){
 $('scannerClose').addEventListener('click', closeScanner);
 
 // ============================================================
-//  PASO 2 — Foto + recorte 1080x1080 + OCR
+//  PASO 2 — Foto + recorte 1080x1080
 // ============================================================
 $('takePhotoBtn').addEventListener('click', openCamera);
 $('pickPhotoBtn').addEventListener('click', () => $('photoFile').click());
@@ -1316,7 +1425,6 @@ $('back2').addEventListener('click', () => setStep(1));
 async function handlePhoto(file){
   try {
     const square = await buildSquareCanvas(file);   // cuadrado en alta resolución
-    state.squareCanvas = square;
     const blob = await squareToBlob(square, 1080);  // versión 1080 para subir a Storage
     state.photoBlob = blob;
     state.photoSkipped = false;
@@ -1325,19 +1433,14 @@ async function handlePhoto(file){
     const url = URL.createObjectURL(blob);
     state.photoDataUrl = url;
     $('photoImg').src = url;
-    $('photoStage').classList.add('has-img', 'can-ocr');
-    // NO se corre OCR automático: el usuario marca la zona del texto a leer.
-    state.ocrGuess = '';
-    setSelRect({ x: 0.1, y: 0.37, w: 0.8, h: 0.26 }); // recuadro inicial sugerido (centro)
-    $('ocrPick').classList.add('show');
+    $('photoStage').classList.add('has-img');
   } catch (err){
     console.error('Error procesando foto:', err);
     toast('No se pudo procesar la imagen', 'err');
   }
 }
 
-// Recorte cuadrado centrado en alta resolución (hasta 2200px). Sirve de fuente
-// tanto para la versión 1080 que se sube como para recortar la región del OCR.
+// Recorte cuadrado centrado en alta resolución (hasta 2200px), fuente de la versión 1080 que se sube.
 function buildSquareCanvas(file){
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -1370,180 +1473,6 @@ function squareToBlob(square, S){
     ctx.drawImage(square, 0, 0, S, S);
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/jpeg', 0.9);
   });
-}
-
-// ---- Selección manual de la zona de texto (recuadro arrastrable sobre la foto) ----
-let selRect = null; // {x,y,w,h} normalizado 0..1 respecto al cuadrado
-let selDrag = null;
-const selLayer = $('selLayer'), selBox = $('selBox');
-
-function setSelRect(r){
-  selRect = r;
-  selBox.classList.add('show');
-  selBox.style.left   = (r.x * 100) + '%';
-  selBox.style.top    = (r.y * 100) + '%';
-  selBox.style.width  = (r.w * 100) + '%';
-  selBox.style.height = (r.h * 100) + '%';
-}
-
-function pointFrac(e){
-  const r = selLayer.getBoundingClientRect();
-  const cx = (e.clientX - r.left) / r.width;
-  const cy = (e.clientY - r.top) / r.height;
-  const clamp = v => v < 0 ? 0 : v > 1 ? 1 : v;
-  return { x: clamp(cx), y: clamp(cy) };
-}
-
-selLayer.addEventListener('pointerdown', e => {
-  e.preventDefault();
-  try { selLayer.setPointerCapture(e.pointerId); } catch(_){}
-  const p = pointFrac(e);
-  selDrag = { x0: p.x, y0: p.y };
-  setSelRect({ x: p.x, y: p.y, w: 0, h: 0 });
-});
-selLayer.addEventListener('pointermove', e => {
-  if (!selDrag) return;
-  const p = pointFrac(e);
-  setSelRect({
-    x: Math.min(selDrag.x0, p.x),
-    y: Math.min(selDrag.y0, p.y),
-    w: Math.abs(p.x - selDrag.x0),
-    h: Math.abs(p.y - selDrag.y0)
-  });
-});
-function endSelDrag(){ selDrag = null; }
-selLayer.addEventListener('pointerup', endSelDrag);
-selLayer.addEventListener('pointercancel', endSelDrag);
-
-$('readSelBtn').addEventListener('click', () => {
-  if (!state.squareCanvas){ toast('Primero tomá una foto', 'err'); return; }
-  let r = selRect;
-  // sin selección útil → leer toda la imagen como respaldo
-  if (!r || r.w < 0.03 || r.h < 0.03) r = { x: 0, y: 0, w: 1, h: 1 };
-  runOCRRegion(r);
-});
-
-// Recorta la región seleccionada del cuadrado en alta resolución y la pasa al OCR.
-async function runOCRRegion(r){
-  const src = state.squareCanvas;
-  const S = src.width;
-  let sx = Math.round(r.x * S), sy = Math.round(r.y * S);
-  let sw = Math.round(r.w * S), sh = Math.round(r.h * S);
-  sx = Math.max(0, Math.min(sx, S - 1));
-  sy = Math.max(0, Math.min(sy, S - 1));
-  sw = Math.max(8, Math.min(sw, S - sx));
-  sh = Math.max(8, Math.min(sh, S - sy));
-  const crop = document.createElement('canvas');
-  crop.width = sw; crop.height = sh;
-  crop.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
-  const blob = await new Promise(res => crop.toBlob(res, 'image/png'));
-  await runOCR(blob);
-}
-
-// Worker de Tesseract reutilizable (cargarlo es lento; se crea una sola vez)
-let ocrWorker = null;
-let ocrWorkerPromise = null;
-async function getOCRWorker(){
-  if (ocrWorker) return ocrWorker;
-  if (ocrWorkerPromise) return ocrWorkerPromise;
-  ocrWorkerPromise = (async () => {
-    const w = await Tesseract.createWorker('spa+eng', 1, {
-      logger: m => {
-        if (m.status === 'recognizing text'){
-          const bar = $('ocrBar');
-          if (bar) bar.style.width = Math.round(m.progress * 100) + '%';
-        }
-      }
-    });
-    // PSM 6 = bloque uniforme de texto: ideal para la región que marca el usuario
-    await w.setParameters({ tessedit_pageseg_mode: '6' });
-    ocrWorker = w;
-    return w;
-  })();
-  return ocrWorkerPromise;
-}
-
-// Preprocesa la imagen para OCR: escala (sin texto diminuto), escala de grises
-// y estiramiento de contraste. Tesseract rinde mucho mejor con esto que con el JPEG crudo.
-function preprocessForOCR(file){
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let w = img.width, h = img.height;
-      const minDim = 900, maxDim = 3000;
-      let scale = 1;
-      if (Math.min(w, h) < minDim) scale = minDim / Math.min(w, h);
-      if (Math.max(w, h) * scale > maxDim) scale = maxDim / Math.max(w, h);
-      const cw = Math.max(1, Math.round(w * scale));
-      const ch = Math.max(1, Math.round(h * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = cw; canvas.height = ch;
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, cw, ch);
-      URL.revokeObjectURL(img.src);
-      const imgData = ctx.getImageData(0, 0, cw, ch);
-      const d = imgData.data;
-      const n = d.length / 4;
-      const lum = new Float32Array(n);
-      // histograma para recorte de percentiles (más robusto que min/max absolutos)
-      const hist = new Uint32Array(256);
-      for (let i = 0, j = 0; i < d.length; i += 4, j++){
-        const g = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-        lum[j] = g;
-        hist[g | 0]++;
-      }
-      const lowCut = n * 0.02, highCut = n * 0.98;
-      let acc = 0, lo = 0, hi = 255;
-      for (let v = 0; v < 256; v++){ acc += hist[v]; if (acc >= lowCut){ lo = v; break; } }
-      acc = 0;
-      for (let v = 255; v >= 0; v--){ acc += hist[v]; if (acc >= (n - highCut)){ hi = v; break; } }
-      const range = Math.max(1, hi - lo);
-      for (let i = 0, j = 0; i < d.length; i += 4, j++){
-        let v = (lum[j] - lo) / range * 255;
-        v = v < 0 ? 0 : v > 255 ? 255 : v;
-        d[i] = d[i+1] = d[i+2] = v;
-      }
-      ctx.putImageData(imgData, 0, 0);
-      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/png');
-    };
-    img.onerror = () => reject(new Error('No se pudo cargar la imagen para OCR'));
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-async function runOCR(blob){
-  if (typeof Tesseract === 'undefined'){ toast('OCR no disponible', 'err'); return; }
-  const stage = $('photoStage');
-  const bar = $('ocrBar');
-  bar.style.width = '0%';
-  stage.classList.add('ocr-running');
-  try {
-    const pre = await preprocessForOCR(blob);
-    const worker = await getOCRWorker();
-    const { data } = await worker.recognize(pre);
-    const text = cleanRegionText((data && data.text) || '');
-    if (text){
-      // el usuario pidió leer esta zona explícitamente → escribimos lo detectado
-      $('fNombreCaja').value = text;
-      state.ocrGuess = text;
-      toast('Texto leído', 'ok');
-    } else {
-      toast('No se detectó texto en la zona marcada', 'err');
-    }
-  } catch (err){
-    console.error('OCR error:', err);
-    toast('No se pudo leer el texto', 'err');
-  } finally {
-    stage.classList.remove('ocr-running');
-  }
-}
-
-// Limpia el texto reconocido en la región: une líneas y colapsa espacios.
-function cleanRegionText(raw){
-  let t = (raw || '').replace(/\s+/g, ' ').trim();
-  if (t.length > 80) t = t.slice(0, 80).trim();
-  return t;
 }
 
 // ============================================================
@@ -1625,8 +1554,7 @@ function buildReview(){
   const costo = parseFloat($('fCosto').value);
   const gan = parseInt($('fGanancia').value, 10);
   const rows = [
-    ['Código de barras', state.barcode || 'Sin código', 'mono'],
-    ['NombreCaja (OCR)', $('fNombreCaja').value.trim() || '—', ''],
+    ['Códigos de barras', state.barcodes.length ? state.barcodes.join(', ') : 'Sin código', 'mono'],
     ['Categoría', $('fCategoria').value || '—', ''],
     ['CostoUSD', '$' + (isNaN(costo) ? '0.00' : costo.toFixed(2)), 'mono'],
     ['Ganancia', (isNaN(gan) ? '0' : gan) + '%', 'mono'],
@@ -1669,17 +1597,8 @@ async function guardarArticulo(){
     // recalcular cache + código para nuevos (minimiza colisiones)
     await loadArticulos();
     if (!state.editing){
-      // si el barcode ya existe y el usuario NO eligió explícitamente duplicarlo,
-      // ofrecemos las opciones (elegir existente o confirmar uno nuevo)
-      if (!state.allowDup){
-        const dup = state.barcode ? findByBarcode(state.barcode) : [];
-        if (dup.length){
-          hideBlock();
-          toast('Ese código de barras ya existe. Elegí una opción.', 'err');
-          openSelector(dup, state.barcode);
-          return;
-        }
-      }
+      // Los duplicados entre artículos ya se avisan al escanear/agregar y al desambiguar
+      // con el selector en el paso 1 (decisión: avisar pero permitir). Acá solo asignamos código.
       state.codigo = getNextCodigo();
     }
 
@@ -1693,10 +1612,9 @@ async function guardarArticulo(){
     showBlock('Guardando artículo…');
     const registro = {
       Codigo: state.codigo,
-      CodigoBarras: state.barcode || '',
+      CodigoBarras: state.barcodes.join(','),
       Foto: fotoUrl || '',
       Nombre: $('fNombre').value.trim(),
-      NombreCaja: $('fNombreCaja').value.trim(),
       Categoria: $('fCategoria').value.trim(),
       CostoUSD: parseFloat($('fCosto').value),
       ValorUSD: valor,
@@ -1818,9 +1736,8 @@ function renderTable(){
     tr.innerHTML = `
       <td class="codcol">#${escapeHtml(a.Codigo || id)}</td>
       <td><img class="thumb" src="${foto}" alt="" onerror="imgFallback(this)"></td>
-      <td><input class="cell-inp" data-f="CodigoBarras" value="${escapeHtml(a.CodigoBarras || '')}" disabled></td>
+      <td><input class="cell-inp" data-f="CodigoBarras" value="${escapeHtml(a.CodigoBarras || '')}" title="Separá varios códigos con comas" disabled></td>
       <td><input class="cell-inp" data-f="Nombre" value="${escapeHtml(a.Nombre || '')}" disabled></td>
-      <td><input class="cell-inp" data-f="NombreCaja" value="${escapeHtml(a.NombreCaja || '')}" disabled></td>
       <td><select class="cell-inp" data-f="Categoria" disabled>${catOpts(a.Categoria || '')}</select></td>
       <td><input class="cell-inp num" data-f="CostoUSD" type="number" step="0.01" min="0" value="${a.CostoUSD != null ? a.CostoUSD : ''}" disabled></td>
       <td><input class="cell-inp num" data-f="GananciaPorc" type="number" step="1" min="0" max="99" value="${a.GananciaPorc != null ? a.GananciaPorc : ''}" disabled></td>
@@ -1907,7 +1824,7 @@ function filterTable(){
   document.querySelectorAll('#artTbody tr').forEach(tr => {
     if (!q){ tr.style.display = ''; return; }
     const a = articulosCache[tr.dataset.codigo] || {};
-    const hay = [a.Codigo, a.Nombre, a.NombreCaja, a.CodigoBarras]
+    const hay = [a.Codigo, a.Nombre, a.CodigoBarras]
       .map(v => String(v || '').toLowerCase()).join(' ');
     tr.style.display = hay.includes(q) ? '' : 'none';
   });
@@ -1934,9 +1851,8 @@ async function saveRow(codigo){
 
   const valor = +(costo / (1 - gan / 100)).toFixed(4);
   const updates = {
-    CodigoBarras: get('CodigoBarras').value.trim(),
+    CodigoBarras: [...new Set(get('CodigoBarras').value.split(',').map(s => s.trim()).filter(Boolean))].join(','),
     Nombre: nombre,
-    NombreCaja: get('NombreCaja').value.trim(),
     Categoria: categoria,
     CostoUSD: costo,
     GananciaPorc: gan,
