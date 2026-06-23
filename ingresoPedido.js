@@ -1592,12 +1592,9 @@ function getTipoCliente() {
             bloquearInterfaz('Actualizando pedido y restaurando inventario...');
             
             try {
-              // Primero, esperar a que se completen los movimientos de inventario
-              await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
-              
-              // Luego, actualizar el pedido
-              await db.ref('pedidos/' + pedidoId).set(pedidoObj);
-              
+              // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
+              await guardarPedidoConMovimientos(pedidoId, pedidoObj, items);
+
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
               enviandoPedido = false;
@@ -1629,12 +1626,11 @@ function getTipoCliente() {
           // BLOQUEAR INTERFAZ durante proceso crítico
           bloquearInterfaz('Registrando pedido y actualizando inventario...');
           
-          // Usar push para obtener el id generado
+          // Usar push para obtener el id generado (sin escribir todavía)
           const pedidoRef = db.ref('pedidos').push();
-          pedidoRef.set(pedidoObj)
+          // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
+          guardarPedidoConMovimientos(pedidoRef.key, pedidoObj, items)
             .then(async () => {
-              // Registrar movimientos de inventario usando el id generado
-              await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoRef.key);
               // Guardar alias en localStorage si se usó uno
               if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
                 guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
@@ -1963,10 +1959,9 @@ function getTipoCliente() {
             // BLOQUEAR INTERFAZ durante proceso crítico
             bloquearInterfaz('Guardando cambios y actualizando inventario...');
             
-            db.ref('pedidos/' + pedidoId).set(pedidoObj)
+            // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
+            guardarPedidoConMovimientos(pedidoId, pedidoObj, items)
               .then(async () => {
-                // Registrar movimientos de inventario también en edición
-                await registrarMovimientosInventario(items, pedidoObj.cotizacionCierre, pedidoId);
                 // Guardar alias en localStorage si se usó uno
                 if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
                   guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
@@ -3064,113 +3059,86 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
 
   // --- REGISTRO DE MOVIMIENTOS DE INVENTARIO ---
-  async function registrarMovimientosInventario(items, cotizacionCierre, pedidoId) {
-    console.log('===== INICIO registrarMovimientosInventario =====');
-    console.log('PedidoId:', pedidoId);
-    console.log('Items a procesar:', items.length);
-    
-    if (!Array.isArray(items) || !cotizacionCierre || !pedidoId) {
-      console.error('❌ Parámetros inválidos:', { items: Array.isArray(items), cotizacionCierre, pedidoId });
-      throw new Error('Parámetros inválidos en registrarMovimientosInventario');
+  // === GUARDADO ATÓMICO: pedido + movimientos en una sola operación ===
+  // Antes el pedido se escribía primero (status DESPACHADO/ENTREGADO) y los movimientos
+  // se escribían después, uno por uno, en escrituras separadas. Si el contexto se
+  // interrumpía entre medio (cierre/recarga de ventana, navegación, suspensión, corte de
+  // red) quedaba el pedido guardado SIN movimientos, de forma aleatoria y sin aviso.
+  // Firebase garantiza que un update multi-ruta es atómico: todas las rutas se confirman
+  // en el servidor, o ninguna. Así el pedido y sus movimientos se graban juntos (todo o nada).
+  async function guardarPedidoConMovimientos(pedidoId, pedidoObj, items) {
+    console.log('===== INICIO guardarPedidoConMovimientos =====');
+    console.log('PedidoId:', pedidoId, '| Items a procesar:', Array.isArray(items) ? items.length : 'N/A');
+
+    if (!pedidoId || !pedidoObj || !Array.isArray(items)) {
+      throw new Error('Parámetros inválidos en guardarPedidoConMovimientos');
     }
-    
-    // Array para acumular errores
+
     const errores = [];
-    
-    try {
-      // 1. Obtener movimientos previos de este pedido
-      console.log('🔍 Buscando movimientos previos para pedidoId:', pedidoId);
-      const snapshot = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
-      const movimientosPrevios = [];
-      
-      snapshot.forEach(child => {
-        movimientosPrevios.push({
-          key: child.key,
-          ...child.val()
-        });
-      });
-      
-      console.log(`📋 Encontrados ${movimientosPrevios.length} movimientos previos`);
-      
-      // 2. Los movimientos previos serán eliminados (no se restaura stock)
-      if (movimientosPrevios.length > 0) {
-        console.log(`🔄 Encontrados ${movimientosPrevios.length} movimientos previos del pedido ${pedidoId}`);
-      } else {
-        console.log('ℹ️ No hay movimientos previos (pedido nuevo)');
+    const rootUpdates = {};
+
+    // 1. Marcar para eliminación los movimientos previos de este pedido (caso edición).
+    const snapshot = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+    snapshot.forEach(child => { rootUpdates['movimientos/' + child.key] = null; });
+
+    // 2. Construir los nuevos movimientos (mismas validaciones, id y campos que antes).
+    let exitosos = 0;
+    for (const item of items) {
+      if (!item || !item.codigo || !item.nombre || !item.cantidad || !item.valorU) {
+        console.warn('⚠️ Item inválido, saltando:', item);
+        errores.push(`Item inválido: ${item?.nombre || 'sin nombre'}`);
+        continue;
       }
-      
-      // 3. Eliminar movimientos previos
-      if (movimientosPrevios.length > 0) {
-        const updates = {};
-        movimientosPrevios.forEach(mov => {
-          updates[mov.key] = null;
-        });
-        console.log('🗑️ Eliminando movimientos previos...');
-        await db.ref('movimientos').update(updates);
-        console.log(`✓ Eliminados ${movimientosPrevios.length} movimientos previos del pedido ${pedidoId}`);
-      }
-      
-      // 4. Registrar los nuevos movimientos
-      console.log(`📝 Registrando ${items.length} nuevos movimientos...`);
-      let exitosos = 0;
-      
-      for (const item of items) {
-        try {
-          if (!item || !item.codigo || !item.nombre || !item.cantidad || !item.valorU) {
-            console.warn('⚠️ Item inválido, saltando:', item);
-            errores.push(`Item inválido: ${item?.nombre || 'sin nombre'}`);
-            continue;
-          }
-          
-          const timestamp = Date.now();
-          const now = new Date();
-          const pad = n => n.toString().padStart(2, '0');
-          const id = `mov_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}_${item.codigo}_${pedidoId}`;
-          
-          const movimiento = {
-            timestamp: timestamp,
-            codigo: item.codigo,
-            nombre: item.nombre,
-            cantidad: parseInt(item.cantidad, 10) || 0,
-            tipo: 'SALIDA',
-            pedidoId: pedidoId
-          };
-          
-          // Registrar movimiento (sin actualización de stock)
-          console.log(`  📦 Registrando movimiento: ${item.codigo} -${item.cantidad}`);
-          await db.ref('movimientos/' + id).set(movimiento);
-          exitosos++;
-          
-        } catch (err) {
-          console.error('❌ Error registrando movimiento de inventario:', err, item);
-          errores.push(`Error en item ${item.codigo}: ${err.message}`);
-        }
-      }
-      
-      // Reporte final
-      console.log(`✅ Proceso completado: ${exitosos}/${items.length} movimientos exitosos para el pedido ${pedidoId}`);
-      
-      if (errores.length > 0) {
-        console.warn('⚠️ Se encontraron errores durante el proceso:');
-        errores.forEach((error, idx) => {
-          console.warn(`  ${idx + 1}. ${error}`);
-        });
-        
-        // Mostrar notificación al usuario si hay errores
-        const mensajeErrores = errores.length === 1 
-          ? '⚠️ Hubo 1 error durante la actualización de stock.' 
-          : `⚠️ Hubo ${errores.length} errores durante la actualización de stock.`;
-        
-        showPopup(mensajeErrores + '\nRevise la consola para más detalles.', '⚠️', true);
-      }
-      
-      console.log('===== FIN registrarMovimientosInventario =====');
-      
-    } catch (error) {
-      console.error('❌ Error crítico en registrarMovimientosInventario:', error);
-      showPopup('Error crítico al procesar inventario. Contacte al administrador.', '❌', false);
-      throw error;
+
+      const now = new Date();
+      const pad = n => n.toString().padStart(2, '0');
+      let id = `mov_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}_${item.codigo}_${pedidoId}`;
+      // Evitar que dos movimientos con mismo id (mismo codigo/segundo) se pisen dentro del mismo update.
+      let movPath = 'movimientos/' + id;
+      if (rootUpdates[movPath]) movPath = 'movimientos/' + id + '_' + exitosos;
+
+      rootUpdates[movPath] = {
+        timestamp: Date.now(),
+        codigo: item.codigo,
+        nombre: item.nombre,
+        cantidad: parseInt(item.cantidad, 10) || 0,
+        tipo: 'SALIDA',
+        pedidoId: pedidoId
+      };
+      exitosos++;
     }
+
+    if (exitosos === 0) {
+      throw new Error('No se generaron movimientos válidos para el pedido.');
+    }
+
+    // 3. Incluir el pedido en la MISMA operación (sobrescribe el nodo = equivale a .set()).
+    rootUpdates['pedidos/' + pedidoId] = pedidoObj;
+
+    // 4. Commit atómico: pedido + movimientos juntos (todo o nada).
+    console.log(`📝 Commit atómico: pedido + ${exitosos} movimientos...`);
+    await db.ref().update(rootUpdates);
+
+    // 5. Verificación defensiva: confirmar que los movimientos quedaron registrados.
+    const verif = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+    let verifCount = 0;
+    verif.forEach(() => { verifCount++; });
+    if (verifCount < exitosos) {
+      throw new Error(`Movimientos incompletos (${verifCount}/${exitosos}).`);
+    }
+    console.log(`✅ Confirmados ${verifCount} movimientos para el pedido ${pedidoId}`);
+
+    // 6. Aviso de artículos omitidos (no aborta: el pedido y sus movimientos válidos ya quedaron).
+    if (errores.length > 0) {
+      console.warn('⚠️ Artículos omitidos en movimientos:', errores);
+      const msg = errores.length === 1
+        ? '⚠️ 1 artículo no generó movimiento de inventario (datos incompletos).'
+        : `⚠️ ${errores.length} artículos no generaron movimiento de inventario (datos incompletos).`;
+      showPopup(msg + '\nRevise la consola para más detalles.', '⚠️', true);
+    }
+
+    console.log('===== FIN guardarPedidoConMovimientos =====');
+    return { exitosos, errores };
   }
 
   // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===
