@@ -2763,7 +2763,7 @@
         // Verificar status bloqueado
         isBlocked = pedido.status === 'CANCELADO' || pedido.status === 'DESPACHADO/ENTREGADO';
         if (isBlocked) {
-          statusBar.textContent = 'Pedido ' + pedido.status + ' - Solo lectura';
+          statusBar.textContent = 'Pedido ' + pedido.status + ' - Solo lectura' + textoConstanciaMovimientos(pedido);
           statusBar.className = 'status-bar blocked';
           statusBar.style.display = 'block';
         }
@@ -2825,7 +2825,7 @@
           const statusBar = document.getElementById('statusBar');
           isBlocked = nuevoPedido.status === 'CANCELADO' || nuevoPedido.status === 'DESPACHADO/ENTREGADO';
           if (isBlocked) {
-            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura';
+            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura' + textoConstanciaMovimientos(nuevoPedido);
             statusBar.className = 'status-bar blocked';
             statusBar.style.display = 'block';
             footer.style.display = 'none';
@@ -2873,6 +2873,14 @@
       if (v.includes('via'))        return '\u{1F69B} ';
       if (v.includes('retiro'))     return '\u{1F3EA} ';
       return '';
+    }
+
+    // Constancia visible de que los movimientos quedaron registrados al despachar.
+    function textoConstanciaMovimientos(pedido) {
+      if (!pedido || pedido.status !== 'DESPACHADO/ENTREGADO') return '';
+      return pedido.movimientosRegistrados
+        ? ' ✔ Movimientos registrados'
+        : ' ⚠ Movimientos NO registrados';
     }
 
     function emojiStatus(valor) {
@@ -4470,25 +4478,6 @@
     });
 
     // ==========================================
-    // PEDIDO VIEW: Registrar movimientos
-    // ==========================================
-    async function registrarMovimientoSalidaDesdePedido(pid) {
-      const snap = await db.ref('pedidos/' + pid).once('value');
-      const pedido = snap.val();
-      if (!pedido || !Array.isArray(pedido.items) || !pedido.items.length) throw new Error('No hay articulos para registrar en movimientos.');
-      const movRef = db.ref('movimientos');
-      const ts = Date.now();
-      const updates = {};
-      for (const it of pedido.items) {
-        if (!it.nombre) continue;
-        const key = movRef.push().key;
-        updates[key] = { timestamp: ts, pedidoId: pid, nombre: it.nombre, cantidad: it.cantidad || 0, codigo: it.codigo || '', tipo: 'SALIDA' };
-      }
-      if (Object.keys(updates).length === 0) throw new Error('No hay articulos validos para registrar.');
-      await movRef.update(updates);
-    }
-
-    // ==========================================
     // PEDIDO VIEW: Footer button state
     // ==========================================
     function configurarPedidoFooterState() {
@@ -4683,13 +4672,6 @@
           return;
         }
 
-        await db.ref('pedidos/' + pedidoId).update({
-          items: pedidoActual.items,
-          status: 'DESPACHADO/ENTREGADO',
-          locked: true,
-          fecha: getFechaActual()
-        });
-
         // Pagos
         let subtotal = 0, costos = 0;
         pedidoActual.items.forEach(it => {
@@ -4710,13 +4692,38 @@
         }
         const pagoData = { medioPago, subtotal, costos, ganancia: subtotal - costos, totalFinal, descuento: descPago, envio: envPago };
         if (alias) pagoData.alias = alias;
-        await db.ref('pedidos/' + pedidoId + '/pagos').set(pagoData);
 
-        await registrarMovimientoSalidaDesdePedido(pedidoId);
-        await db.ref('pedidos/' + pedidoId).update({ movimientosRegistrados: true });
+        // Escritura atomica multi-ruta: pedido + pagos + movimientos en una sola operacion.
+        // Firebase garantiza que un update multi-ruta es todo-o-nada en el servidor, eliminando
+        // la ventana donde el pedido quedaba ENTREGADO pero los movimientos no se grababan.
+        const ts = Date.now();
+        const movRef = db.ref('movimientos');
+        const rootUpdates = {};
+        rootUpdates['pedidos/' + pedidoId + '/items'] = pedidoActual.items;
+        rootUpdates['pedidos/' + pedidoId + '/status'] = 'DESPACHADO/ENTREGADO';
+        rootUpdates['pedidos/' + pedidoId + '/locked'] = true;
+        rootUpdates['pedidos/' + pedidoId + '/fecha'] = getFechaActual();
+        rootUpdates['pedidos/' + pedidoId + '/pagos'] = pagoData;
+        rootUpdates['pedidos/' + pedidoId + '/movimientosRegistrados'] = true;
+
+        let movCount = 0;
+        for (const it of pedidoActual.items) {
+          if (!it.nombre) continue;
+          const key = movRef.push().key;
+          rootUpdates['movimientos/' + key] = { timestamp: ts, pedidoId: pedidoId, nombre: it.nombre, cantidad: it.cantidad || 0, codigo: it.codigo || '', tipo: 'SALIDA', entrega: 'Envios' };
+          movCount++;
+        }
+        if (movCount === 0) throw new Error('No hay articulos validos para registrar en movimientos.');
+
+        await db.ref().update(rootUpdates);
+
+        // Verificacion defensiva: confirmar que los movimientos quedaron registrados.
+        const verify = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+        const verifCount = verify.exists() ? Object.keys(verify.val()).length : 0;
+        if (verifCount < movCount) throw new Error('Movimientos incompletos (' + verifCount + '/' + movCount + ')');
 
         desbloquearInterfaz();
-        showToast('Pedido despachado correctamente');
+        showToast('Despachado ✔ ' + movCount + ' movimientos registrados');
       } catch (err) {
         desbloquearInterfaz();
         despachoYaEjecutado = false;
@@ -4904,7 +4911,7 @@
           const statusBar = document.getElementById('statusBar');
           isBlocked = nuevoPedido.status === 'CANCELADO' || nuevoPedido.status === 'DESPACHADO/ENTREGADO';
           if (isBlocked) {
-            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura';
+            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura' + textoConstanciaMovimientos(nuevoPedido);
             statusBar.className = 'status-bar blocked';
             statusBar.style.display = 'block';
             footer.style.display = 'none';
