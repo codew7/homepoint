@@ -370,6 +370,34 @@
       font-size: 14px;
       font-weight: 500;
     }
+    .pedidos-panel-fecha {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      margin-left: auto;
+    }
+    .historial-search {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+    }
+    .historial-search input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .historial-search input:focus {
+      border-color: var(--accent);
+    }
     .badge-en-preparacion {
       display: inline-flex;
       align-items: center;
@@ -2134,6 +2162,7 @@
       <div class="search-dropdown" id="searchDropdown"></div>
     </div>
     <div class="header-actions">
+      <button class="header-btn" id="btnHistorial">Historial</button>
       <button class="header-btn" id="btnPedidos">Examinar</button>
       <button class="header-btn header-btn--accent" id="btnQR">QR</button>
       <button id="btnInstall" style="display:none" title="Instalar app">&#128242;</button>
@@ -2266,6 +2295,22 @@
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
         <div class="pedidos-panel-empty">Presiona "Pedidos" para cargar</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL HISTORIAL (DESPACHADOS WEB) -->
+  <div class="pedidos-panel" id="historialPanel">
+    <div class="pedidos-panel-box">
+      <div class="pedidos-panel-header">
+        <h3>Historial despachos</h3>
+        <button class="pedidos-panel-close" id="historialPanelClose">&times;</button>
+      </div>
+      <div class="historial-search">
+        <input type="text" id="historialSearch" placeholder="Buscar por cliente..." autocomplete="off">
+      </div>
+      <div class="pedidos-panel-list" id="historialPanelList">
+        <div class="pedidos-panel-empty">Presiona "Historial" para cargar</div>
       </div>
     </div>
   </div>
@@ -3777,6 +3822,99 @@
       if (!item) return;
       const id = item.dataset.id;
       pedidosPanel.classList.remove('active');
+      cargarPedido(id);
+    });
+
+    // ==========================================
+    // PANEL HISTORIAL (DESPACHADOS WEB, ULTIMOS 45 DIAS)
+    // ==========================================
+    const historialPanel = document.getElementById('historialPanel');
+    const historialPanelList = document.getElementById('historialPanelList');
+    const historialSearch = document.getElementById('historialSearch');
+    let historialCache = [];
+
+    document.getElementById('btnHistorial').addEventListener('click', () => {
+      historialPanel.classList.add('active');
+      historialSearch.value = '';
+      cargarHistorial();
+    });
+
+    document.getElementById('historialPanelClose').addEventListener('click', () => {
+      historialPanel.classList.remove('active');
+    });
+
+    historialPanel.addEventListener('click', (e) => {
+      if (e.target === historialPanel) historialPanel.classList.remove('active');
+    });
+
+    async function cargarHistorial() {
+      historialPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando historial...</div>';
+
+      try {
+        // Limite servidor: solo pedidos creados desde la web (un unico orderByChild indexable).
+        const snap = await db.ref('pedidos')
+          .orderByChild('createdby')
+          .equalTo('web')
+          .once('value');
+
+        // Filtros en memoria sobre el conjunto ya reducido: status + ventana 45 dias.
+        const CUTOFF_MS = Date.now() - 45 * 24 * 60 * 60 * 1000;
+        historialCache = [];
+
+        snap.forEach(child => {
+          const p = child.val();
+          if (p.status !== 'DESPACHADO/ENTREGADO') return;
+          const ts = p.timestamp || 0;
+          if (ts < CUTOFF_MS) return;
+          historialCache.push({
+            id: child.key,
+            nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre',
+            timestamp: ts
+          });
+        });
+
+        // Mas recientes primero (por fecha de registro).
+        historialCache.sort((a, b) => b.timestamp - a.timestamp);
+
+        renderHistorial('');
+      } catch (err) {
+        console.error('Error cargando historial:', err);
+        historialPanelList.innerHTML = '<div class="pedidos-panel-empty">Error al cargar historial</div>';
+      }
+    }
+
+    function renderHistorial(filtro) {
+      if (historialCache.length === 0) {
+        historialPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay despachos en los ultimos 45 dias</div>';
+        return;
+      }
+
+      const lista = filtro
+        ? historialCache.filter(p => p.nombre.toLowerCase().includes(filtro))
+        : historialCache;
+
+      if (lista.length === 0) {
+        historialPanelList.innerHTML = '<div class="pedidos-panel-empty">Sin resultados</div>';
+        return;
+      }
+
+      historialPanelList.innerHTML = lista.map(p =>
+        '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
+        '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+        '<span class="pedidos-panel-fecha">' + escapeHtml(new Date(p.timestamp).toLocaleDateString('es-AR')) + '</span>' +
+        '</div>'
+      ).join('');
+    }
+
+    historialSearch.addEventListener('input', (e) => {
+      renderHistorial(e.target.value.trim().toLowerCase());
+    });
+
+    historialPanelList.addEventListener('click', (e) => {
+      const item = e.target.closest('.pedidos-panel-item');
+      if (!item) return;
+      const id = item.dataset.id;
+      historialPanel.classList.remove('active');
       cargarPedido(id);
     });
 
