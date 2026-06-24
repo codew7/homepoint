@@ -2565,8 +2565,8 @@
     // ==========================================
     // CARGAR GOOGLE SHEETS (una sola vez)
     // ==========================================
-    async function cargarSheets() {
-      if (sheetsLoaded) return;
+    async function cargarSheets(force = false) {
+      if (sheetsLoaded && !force) return;
       try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
         const res = await fetch(url);
@@ -4646,6 +4646,9 @@
       if (!tipoPago || !tipoEntrega) { showToast('Seleccione pago y entrega'); return; }
       if (!confirm('Cerrar definitivamente el pedido?')) return;
 
+      // Re-consultar Google Sheets para tomar el costo (valorC) mas actual al momento de cerrar
+      await cargarSheets(true);
+
       // Actualizar valorC/valorU
       if (pedidoActual.items) {
         pedidoActual.items.forEach(item => {
@@ -4787,6 +4790,9 @@
 
         bloquearInterfaz('Procesando despacho...');
 
+        // Re-consultar Google Sheets para tomar el costo (valorC) mas actual al momento de despachar
+        await cargarSheets(true);
+
         // Actualizar valorC/valorU
         if (pedidoActual.items) {
           pedidoActual.items.forEach(item => {
@@ -4828,7 +4834,7 @@
           const ai = document.getElementById('pvAlias');
           if (ai && ai.value.trim()) alias = ai.value.trim().toUpperCase();
         }
-        const pagoData = { medioPago, subtotal, costos, ganancia: subtotal - costos, totalFinal, descuento: descPago, envio: envPago };
+        const pagoData = { medioPago, subtotal, costos, ganancia: subtotal - descPago - costos, totalFinal, descuento: descPago, envio: envPago };
         if (alias) pagoData.alias = alias;
 
         // Escritura atomica multi-ruta: pedido + pagos + movimientos en una sola operacion.
