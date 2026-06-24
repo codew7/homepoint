@@ -847,20 +847,6 @@
       gap: 6px;
       flex-wrap: wrap;
     }
-    .pv-valor-input {
-      width: 68px;
-      padding: 2px 5px;
-      border: 1.5px solid var(--border);
-      border-radius: 6px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      background: var(--surface-warm);
-      color: var(--text);
-      outline: none;
-      transition: border-color .2s var(--ease-out);
-    }
-    .pv-valor-input:focus { border-color: var(--accent); }
     .pv-valor-static {
       font-family: var(--font-mono);
       font-size: 11px;
@@ -3067,13 +3053,9 @@
             ? '<span class="item-stock' + stockClass + '">stk: ' + stockVal + '</span>' : '';
           groupHtml += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
 
-          // Precio + total del item
+          // Precio + total del item (valorU no editable: siempre proviene de Google Sheets)
           groupHtml += '<div class="pv-item-fin">';
-          if (admin && !bloqueado) {
-            groupHtml += '<input type="number" class="pv-valor-input" min="0" value="' + unitPesos + '" onchange="pvChangeValor(' + idx + ', this.value)">';
-          } else {
-            groupHtml += '<span class="pv-valor-static">$' + unitPesos.toLocaleString('es-AR') + '</span>';
-          }
+          groupHtml += '<span class="pv-valor-static">$' + unitPesos.toLocaleString('es-AR') + '</span>';
           groupHtml += '<span class="pv-total-item" id="pv-total-' + idx + '">= $' + sub.toLocaleString('es-AR') + '</span>';
           groupHtml += '</div>';
 
@@ -4524,13 +4506,6 @@
       }
     }
 
-    function pvChangeValor(idx, val) {
-      if (!pedidoActual || !pedidoActual.items[idx]) return;
-      pedidoActual.items[idx].valorU = parseFloat(val) || 0;
-      programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
-      renderUnificado();
-    }
-
     function pvDeleteItem(idx) {
       if (!pedidoActual || !pedidoActual.items[idx]) return;
       if (!confirm('Eliminar "' + (pedidoActual.items[idx].nombre || 'articulo') + '"?')) return;
@@ -4654,7 +4629,7 @@
         pedidoActual.items.forEach(item => {
           if (item.codigo && sheetValorMap[item.codigo]) {
             item.valorC = sheetValorMap[item.codigo].valorC;
-            if (item.valorU === undefined || item.valorU === null || item.valorU === '') item.valorU = sheetValorMap[item.codigo].valorU;
+            item.valorU = sheetValorMap[item.codigo].valorU;
           }
         });
       }
