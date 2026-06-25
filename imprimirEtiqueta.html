@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f7f8fb">
+<title>Imprimir Etiquetas · HomePoint</title>
+<link rel="icon" href="faviconnegro.png" type="image/png">
+
+<!-- PDF Generation -->
+<script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+
+<!-- Config (Google Sheets credentials) -->
+<script src="config.js"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --card-2:#f8f9fc;
+  --card-3:#f1f3f9;
+  --text:#0e1424;
+  --text-2:#3a4256;
+  --muted:#7a8398;
+  --faint:#a9b0c1;
+  --border:#e8eaf1;
+  --border-2:#dfe2ec;
+  --primary:#2b2f37;
+  --primary-600:#181b21;
+  --primary-soft:#eef0f3;
+  --primary-soft-2:#e0e3e9;
+  --primary-glow:rgba(31,35,42,.26);
+  --lime:#7cb342;
+  --lime-600:#5a9216;
+  --lime-soft:#eef6e2;
+  --success:#7cb342;
+  --success-600:#5a9216;
+  --success-soft:#eef6e2;
+  --danger:#f43f5e;
+  --danger-600:#e11d48;
+  --danger-soft:#fdebee;
+  --amber:#f59e0b;
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',monospace;
+  --r:20px;
+  --r-md:16px;
+  --r-sm:12px;
+  --r-xs:10px;
+  --sh-sm:0 1px 2px rgba(14,20,36,.05),0 1px 3px rgba(14,20,36,.04);
+  --sh:0 4px 14px -4px rgba(14,20,36,.10),0 2px 6px -2px rgba(14,20,36,.06);
+  --sh-lg:0 18px 44px -16px rgba(14,20,36,.22),0 6px 16px -8px rgba(14,20,36,.10);
+  --sh-primary:0 10px 26px -8px var(--primary-glow);
+}
+
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-feature-settings:'cv01','ss01'}
+body{
+  min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  background:
+    radial-gradient(900px 480px at 50% -10%, rgba(31,35,42,.06), transparent 70%),
+    radial-gradient(700px 420px at 100% 0%, rgba(124,179,66,.07), transparent 65%),
+    var(--bg);
+  background-attachment:fixed;
+}
+::selection{background:var(--primary-soft-2);color:var(--primary-600)}
+
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ====== TOPBAR ====== */
+.topbar{
+  position:sticky;top:0;z-index:60;
+  background:rgba(246,247,251,.78);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--border);
+  padding:max(11px,env(safe-area-inset-top)) 16px 11px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{
+  width:36px;height:36px;border-radius:11px;flex-shrink:0;border:none;padding:0;
+  background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);
+  display:flex;align-items:center;justify-content:center;
+}
+.brand .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.brand .tt b{font-weight:800;font-size:1rem;letter-spacing:-.02em}
+.brand .tt span{font-size:.68rem;color:var(--muted);font-weight:500;margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.conn{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--muted);padding:5px 10px 5px 8px;background:var(--card);border:1px solid var(--border);border-radius:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-soft);position:relative}
+.dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--success);animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite}
+@keyframes ping{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(2.6);opacity:0}}
+.dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.dot.off::after{display:none}
+
+/* ====== LAYOUT ====== */
+.wrap{max-width:min(1180px,96vw);margin:0 auto;padding:18px 16px 130px}
+
+/* ====== HEAD ====== */
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 16px}
+.page-head .ttl{display:flex;flex-direction:column;gap:4px}
+.page-head h1{font-size:1.4rem;font-weight:800;letter-spacing:-.03em}
+.page-head .count{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+
+/* ====== CARD ====== */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.card + .card{margin-top:14px}
+
+/* ====== SETTINGS + PREVIEW ====== */
+.config-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:16px}
+@media(min-width:760px){.config-grid{grid-template-columns:1.1fr .9fr}}
+
+.cfg-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);padding:18px 20px}
+.cfg-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.cfg-title svg{color:var(--lime-600)}
+.settings-row{display:flex;gap:12px;flex-wrap:wrap}
+.setting-field{flex:1;min-width:78px;display:flex;flex-direction:column;gap:6px}
+.setting-field label{font-size:.72rem;color:var(--text-2);font-weight:600}
+.setting-field .sf-wrap{position:relative}
+.setting-field input{
+  width:100%;padding:11px 12px;background:var(--card);
+  border:1px solid var(--border-2);border-radius:var(--r-sm);
+  color:var(--text);font-family:var(--mono);font-size:.92rem;font-weight:600;
+  outline:none;text-align:center;transition:border-color .18s,box-shadow .18s;
+}
+.setting-field input:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.setting-field .sf-unit{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:.66rem;color:var(--faint);pointer-events:none}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.cfg-note{font-size:.74rem;color:var(--muted);margin-top:12px;line-height:1.5}
+
+/* ====== PREVIEW ====== */
+.preview-card{display:flex;flex-direction:column}
+.preview-stage{flex:1;display:flex;align-items:center;justify-content:center;padding:6px 0 2px;min-height:140px}
+.label-preview{
+  width:300px;height:120px;background:#fff;border-radius:6px;color:#000;
+  display:flex;flex-direction:column;font-family:'Plus Jakarta Sans',Arial,sans-serif;
+  flex-shrink:0;position:relative;overflow:hidden;border:1px solid #cfd3dd;box-shadow:var(--sh-sm);
+}
+.label-preview .lp-top{display:flex;justify-content:space-between;align-items:center;gap:4px;background:#f5f5f5;padding:6px 10px;border-bottom:1px solid #ddd}
+.label-preview .lp-name{font-size:11px;font-weight:700;line-height:1.25;flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.label-preview .lp-price-row{flex:1;display:flex;align-items:center;padding:0 10px}
+.label-preview .lp-currency{font-size:24px;font-weight:700;color:#333;margin-right:2px;align-self:center}
+.label-preview .lp-price{font-size:56px;font-weight:800;line-height:1;letter-spacing:-2px;color:#000}
+.label-preview .lp-bottom{display:flex;justify-content:space-between;align-items:flex-end;font-size:7px;color:#999;padding:0 10px 5px;gap:6px}
+.label-preview .lp-date{font-family:var(--mono)}
+.preview-empty{color:var(--faint);font-size:.84rem;text-align:center;padding:24px}
+
+/* ====== TABLE TOOLS ====== */
+.tabla-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:13px}
+.inp{
+  width:100%;padding:12px 14px;background:var(--card);
+  border:1px solid var(--border-2);border-radius:var(--r-sm);
+  font-family:var(--font);font-size:.92rem;color:var(--text);outline:none;
+  transition:border-color .18s,box-shadow .18s;
+}
+.inp:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.inp::placeholder{color:var(--faint)}
+.tbl-search{flex:1;min-width:180px}
+.tool-btn{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--card);
+  border-radius:10px;padding:11px 15px;font-family:var(--font);font-size:.82rem;font-weight:700;
+  color:var(--text-2);white-space:nowrap;cursor:pointer;transition:all .16s;
+}
+.tool-btn:hover{border-color:var(--border-2)}
+.tool-btn:active{background:var(--card-2)}
+.tool-btn.danger:hover{border-color:var(--danger);color:var(--danger-600);background:var(--danger-soft)}
+
+/* ====== TABLE ====== */
+.tabla-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
+table.art{border-collapse:collapse;width:100%;font-size:.84rem}
+table.art th,table.art td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+table.art thead th{position:sticky;top:0;background:var(--card-2);font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;z-index:1;white-space:nowrap}
+table.art tbody tr{cursor:pointer;transition:background .12s}
+table.art tbody tr:hover > td{background:var(--lime-soft)}
+table.art tbody tr.sel > td{background:#eaf4dc}
+table.art tbody tr.sel:hover > td{background:#e2efce}
+table.art tbody tr:last-child td{border-bottom:none}
+table.art td.codcol{font-family:var(--mono);font-weight:700;color:var(--text-2);white-space:nowrap}
+table.art .thumb{width:40px;height:40px;border-radius:8px;object-fit:cover;background:var(--card-2);display:block}
+table.art td.namecol{font-weight:600;color:var(--text);max-width:340px;min-width:160px}
+table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--success-600);white-space:nowrap;text-align:right}
+.col-check{width:46px;text-align:center!important}
+
+/* custom checkbox */
+.cbx{position:relative;display:inline-flex;width:21px;height:21px;cursor:pointer;vertical-align:middle}
+.cbx input{position:absolute;opacity:0;width:0;height:0}
+.cbx .box{width:21px;height:21px;border-radius:6px;border:1.8px solid var(--border-2);background:var(--card);transition:all .16s;display:flex;align-items:center;justify-content:center}
+.cbx .box svg{opacity:0;transform:scale(.5);transition:all .16s;color:#fff}
+.cbx input:checked + .box{background:var(--lime);border-color:var(--lime)}
+.cbx input:checked + .box svg{opacity:1;transform:scale(1)}
+.cbx input:indeterminate + .box{background:var(--lime);border-color:var(--lime)}
+.cbx input:indeterminate + .box svg{opacity:1;transform:scale(1)}
+
+.tabla-empty{padding:44px 20px;text-align:center;color:var(--muted);font-size:.9rem}
+
+/* ====== PAGER ====== */
+.tabla-pager{display:none;align-items:center;justify-content:space-between;gap:12px;margin:14px 2px 0;flex-wrap:wrap}
+.tabla-pager.show{display:flex}
+.pager-info{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.pager-btns{display:flex;align-items:center;gap:9px}
+.pager-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-2);background:var(--card);border-radius:10px;padding:9px 14px;font-family:var(--font);font-size:.82rem;font-weight:700;color:var(--text-2);cursor:pointer;transition:all .16s}
+.pager-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.pager-btn:disabled{opacity:.4;cursor:not-allowed}
+.pager-pages{font-size:.8rem;font-weight:700;color:var(--text-2);min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* ====== ACTION BAR (sticky) ====== */
+.action-bar{
+  position:fixed;left:0;right:0;bottom:0;z-index:80;
+  background:rgba(255,255,255,.86);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-top:1px solid var(--border);
+  padding:12px 16px max(12px,env(safe-area-inset-bottom));
+  transform:translateY(140%);transition:transform .34s cubic-bezier(.2,.8,.25,1);
+}
+.action-bar.show{transform:translateY(0)}
+.action-inner{max-width:min(1180px,96vw);margin:0 auto;display:flex;align-items:center;gap:12px}
+.action-info{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.action-info b{font-size:1.05rem;font-weight:800;letter-spacing:-.01em}
+.action-info span{font-size:.74rem;color:var(--muted);font-weight:500}
+.action-spacer{flex:1}
+.btn{font-family:var(--font);cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s,background .18s,opacity .18s}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn-clear{background:var(--card);border:1px solid var(--border-2);color:var(--text-2);border-radius:var(--r-sm);padding:13px 16px;font-weight:700;font-size:.88rem}
+.btn-clear:hover{border-color:var(--danger);color:var(--danger-600)}
+.btn-generate{background:linear-gradient(135deg,var(--primary),#383d47);color:#fff;box-shadow:var(--sh-primary);border-radius:var(--r-sm);padding:13px 22px;font-weight:700;font-size:.95rem}
+.btn-generate:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:520px){
+  .action-info b{font-size:.95rem}
+  .btn-clear{padding:13px 12px}
+  .btn-generate{padding:13px 16px;font-size:.88rem}
+}
+
+/* ====== BLOCK / SPINNER ====== */
+.block{position:fixed;inset:0;z-index:1050;background:rgba(246,247,251,.72);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.block.active{display:flex}
+.spinner{width:44px;height:44px;border:3.5px solid var(--border-2);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.block-text{font-size:.88rem;font-weight:600;color:var(--text-2)}
+
+/* ====== TOAST ====== */
+.toast{position:fixed;left:50%;bottom:max(96px,calc(env(safe-area-inset-bottom) + 88px));transform:translateX(-50%) translateY(160px);z-index:1100;background:var(--text);color:#fff;border-radius:14px;padding:13px 20px;font-size:.86rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:9px;max-width:calc(100vw - 28px);transition:transform .4s cubic-bezier(.34,1.4,.64,1)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{background:linear-gradient(135deg,var(--danger-600),#fb5577)}
+.toast.ok{background:linear-gradient(135deg,var(--success-600),#8bc34a)}
+
+/* ====== SUCCESS STAMP ====== */
+.success-stamp{position:fixed;inset:0;z-index:2000;display:none;align-items:center;justify-content:center;background:rgba(14,20,36,.28);pointer-events:none}
+.success-stamp.active{display:flex}
+.stamp{width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,var(--success),#9ccc65);box-shadow:0 18px 40px -10px rgba(124,179,66,.55);display:flex;align-items:center;justify-content:center;animation:stamp-pop .6s cubic-bezier(.34,1.56,.64,1)}
+.stamp svg{width:54px;height:54px;color:#fff}
+@keyframes stamp-pop{0%{transform:scale(0) rotate(-16deg);opacity:0}60%{transform:scale(1.12) rotate(5deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+
+@media (max-width:480px){
+  .page-head h1{font-size:1.2rem}
+  table.art th,table.art td{padding:9px 9px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+    </span>
+    <span class="tt"><b>Imprimir Etiquetas</b><span>Selección por artículo</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="conn"><span class="dot" id="connDot"></span><span id="connTxt">online</span></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <div class="ttl">
+      <h1>Etiquetas de precio</h1>
+      <span class="count" id="pageCount">Cargando artículos…</span>
+    </div>
+  </div>
+
+  <!-- ===== CONFIG + PREVIEW ===== -->
+  <div class="config-grid">
+    <div class="cfg-card">
+      <div class="cfg-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        Configuración de etiqueta
+      </div>
+      <div class="settings-row">
+        <div class="setting-field">
+          <label for="settingWidth">Ancho</label>
+          <div class="sf-wrap">
+            <input type="number" id="settingWidth" value="70" min="20" max="300" step="1">
+            <span class="sf-unit">mm</span>
+          </div>
+        </div>
+        <div class="setting-field">
+          <label for="settingHeight">Alto</label>
+          <div class="sf-wrap">
+            <input type="number" id="settingHeight" value="30" min="20" max="300" step="1">
+            <span class="sf-unit">mm</span>
+          </div>
+        </div>
+        <div class="setting-field">
+          <label for="settingPerLabel">Artículos por hoja</label>
+          <div class="sf-wrap">
+            <input type="number" id="settingPerLabel" value="1" min="1" max="20" step="1">
+          </div>
+        </div>
+      </div>
+      <div class="cfg-note">Cada artículo seleccionado genera una etiqueta. Con “Artículos por hoja” mayor a 1, se agrupan varias etiquetas en la misma página separadas por una línea de corte.</div>
+    </div>
+
+    <div class="cfg-card preview-card">
+      <div class="cfg-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        Vista previa
+      </div>
+      <div class="preview-stage">
+        <div class="label-preview" id="labelPreview" style="display:none">
+          <div class="lp-top">
+            <div class="lp-name" id="previewName">Nombre del artículo</div>
+          </div>
+          <div class="lp-price-row">
+            <span class="lp-currency">$</span>
+            <span class="lp-price" id="previewPrice">0</span>
+          </div>
+          <div class="lp-bottom">
+            <span id="previewCode">COD</span>
+            <span class="lp-date" id="previewDate"></span>
+          </div>
+        </div>
+        <div class="preview-empty" id="previewEmpty">Seleccioná un artículo de la tabla para ver su etiqueta.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOOLS ===== -->
+  <div class="tabla-tools">
+    <input type="text" class="inp tbl-search" id="tablaSearch" placeholder="Buscar por nombre, código o cód. de barras…" autocomplete="off">
+  </div>
+
+  <!-- ===== TABLE ===== -->
+  <div class="tabla-scroll">
+    <table class="art" id="artTable">
+      <thead>
+        <tr>
+          <th class="col-check">
+            <label class="cbx" title="Seleccionar todo (página)">
+              <input type="checkbox" id="headCheck">
+              <span class="box"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </label>
+          </th>
+          <th>Código</th>
+          <th>Foto</th>
+          <th>Nombre</th>
+          <th style="text-align:right">Precio</th>
+        </tr>
+      </thead>
+      <tbody id="artTbody"></tbody>
+    </table>
+  </div>
+  <div class="tabla-empty" id="tablaEmpty" style="display:none">No hay artículos.</div>
+
+  <!-- ===== PAGER ===== -->
+  <div class="tabla-pager" id="tablaPager">
+    <span class="pager-info" id="pagerInfo"></span>
+    <div class="pager-btns">
+      <button class="pager-btn" id="pagerPrev">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Anterior
+      </button>
+      <span class="pager-pages" id="pagerPages"></span>
+      <button class="pager-btn" id="pagerNext">
+        Siguiente
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== ACTION BAR ===== -->
+<div class="action-bar" id="actionBar">
+  <div class="action-inner">
+    <div class="action-info">
+      <b id="selCount">0 seleccionados</b>
+      <span id="selHint">Listos para imprimir</span>
+    </div>
+    <div class="action-spacer"></div>
+    <button class="btn btn-clear" id="clearSelBtn">Limpiar</button>
+    <button class="btn btn-generate" id="generateBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Generar PDF
+    </button>
+  </div>
+</div>
+
+<!-- ===== BLOCK ===== -->
+<div class="block" id="block">
+  <div class="spinner"></div>
+  <div class="block-text" id="blockText">Cargando…</div>
+</div>
+
+<!-- ===== SUCCESS STAMP ===== -->
+<div class="success-stamp" id="successStamp">
+  <div class="stamp">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  State
+// ============================================================
+let articulos = [];          // from Google Sheets: { codigo, nombre, imagen, precio, codigoBarras }
+const selected = new Map();  // codigo -> articulo (selección global, persiste entre filtros/páginas)
+let lastPreviewCodigo = null;
+
+let labelSettings = { width: 70, height: 30, perLabel: 1 };
+
+const $ = id => document.getElementById(id);
+
+// ============================================================
+//  Settings (persisted in sessionStorage)
+// ============================================================
+function loadSettings(){
+  try{
+    const saved = sessionStorage.getItem('labelSettings');
+    if(saved){
+      const p = JSON.parse(saved);
+      labelSettings.width = p.width || 70;
+      labelSettings.height = p.height || 30;
+      labelSettings.perLabel = p.perLabel || 1;
+    }
+  }catch(_){}
+  $('settingWidth').value = labelSettings.width;
+  $('settingHeight').value = labelSettings.height;
+  $('settingPerLabel').value = labelSettings.perLabel;
+}
+function saveSettings(){
+  labelSettings.width = Math.max(20, Math.min(300, parseInt($('settingWidth').value) || 70));
+  labelSettings.height = Math.max(20, Math.min(300, parseInt($('settingHeight').value) || 30));
+  labelSettings.perLabel = Math.max(1, Math.min(20, parseInt($('settingPerLabel').value) || 1));
+  sessionStorage.setItem('labelSettings', JSON.stringify(labelSettings));
+}
+
+// ============================================================
+//  Google Sheets — Product Catalog (misma estructura que etiquetas.html)
+// ============================================================
+// Optimización: limitamos el rango a las columnas realmente usadas (A–L en lugar de A–Z)
+// para reducir el tamaño de la respuesta. Los valores se piden formateados (precio) y sin
+// metadatos extra mediante fields=values.
+const RANGO_OPT = (GOOGLE_SHEETS_CONFIG.RANGO || 'Lista!A2:Z').replace(/:[A-Z]+(\d*)$/, ':L$1');
+const SHEETS_URL = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(RANGO_OPT)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE&fields=values&key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+
+async function loadSheets(){
+  const res = await fetch(SHEETS_URL, { cache: 'no-store' });
+  if(!res.ok) throw new Error('Sheets error');
+  const data = await res.json();
+  articulos = (data.values || []).map(row => {
+    const imgRaw = (row[1] || '').trim();
+    const precioRaw = (row[6] || '').trim();   // Column G = index 6
+    const cbRaw = (row[11] || '').trim();       // Column L = index 11 (barcodes)
+    return {
+      imagen: imgRaw.split(',')[0].trim(),
+      codigo: (row[2] || '').trim(),            // Column C
+      nombre: (row[3] || '').trim(),            // Column D
+      precio: precioRaw,
+      codigoBarras: cbRaw
+    };
+  }).filter(a => a.codigo && a.nombre);
+  // orden por código (descendente / invertido)
+  articulos.sort((x, y) => String(y.codigo).localeCompare(String(x.codigo), 'es', { numeric:true }));
+}
+
+// ============================================================
+//  Tabla + paginación + búsqueda
+// ============================================================
+const PAGE_SIZE = 50;
+let page = 0;
+let filtered = [];
+
+const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect fill='%23f1f3f9' width='40' height='40'/%3E%3Cpath d='M13 26l4-5 3 4 4-6 5 7z' fill='%23c4cad6'/%3E%3Ccircle cx='15' cy='15' r='2.5' fill='%23c4cad6'/%3E%3C/svg%3E";
+
+function recomputeFiltered(){
+  const q = $('tablaSearch').value.trim().toLowerCase();
+  filtered = articulos.filter(a => {
+    if(!q) return true;
+    const hay = [a.codigo, a.nombre, a.codigoBarras].map(v => String(v || '').toLowerCase()).join(' ');
+    return hay.includes(q);
+  });
+}
+
+function renderTable(){
+  recomputeFiltered();
+  page = 0;
+  renderPage();
+}
+
+function renderPage(){
+  const tbody = $('artTbody');
+  tbody.innerHTML = '';
+
+  const total = articulos.length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  page = Math.min(Math.max(0, page), totalPages - 1);
+  const start = page * PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + PAGE_SIZE);
+
+  // contador
+  let countTxt;
+  if(!total){ countTxt = '0 artículos'; }
+  else if(!filtered.length){ countTxt = `Sin coincidencias · ${total} en total`; }
+  else {
+    const noun = filtered.length === 1 ? 'artículo' : 'artículos';
+    const range = `${start + 1}–${start + pageItems.length}`;
+    countTxt = filtered.length === total ? `${range} de ${total} ${noun}` : `${range} de ${filtered.length} ${noun} (filtrado de ${total})`;
+  }
+  $('pageCount').textContent = countTxt;
+
+  $('tablaEmpty').textContent = total ? 'Sin resultados para tu búsqueda.' : 'No hay artículos.';
+  $('tablaEmpty').style.display = pageItems.length ? 'none' : 'block';
+  $('artTable').style.display = pageItems.length ? '' : 'none';
+
+  pageItems.forEach(a => {
+    const isSel = selected.has(a.codigo);
+    const tr = document.createElement('tr');
+    tr.dataset.codigo = a.codigo;
+    if(isSel) tr.classList.add('sel');
+    const foto = a.imagen ? escapeAttr(a.imagen) : PLACEHOLDER_IMG;
+    tr.innerHTML = `
+      <td class="col-check">
+        <label class="cbx" onclick="event.stopPropagation()">
+          <input type="checkbox" class="row-check" data-codigo="${escapeAttr(a.codigo)}"${isSel ? ' checked' : ''}>
+          <span class="box"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </label>
+      </td>
+      <td class="codcol">#${escapeHtml(a.codigo)}</td>
+      <td><img class="thumb" src="${foto}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
+      <td class="namecol">${escapeHtml(a.nombre)}</td>
+      <td class="pricecol">$${formatPriceDisplay(a.precio)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  renderPager(totalPages);
+  syncHeadCheck();
+}
+
+function renderPager(totalPages){
+  const pager = $('tablaPager');
+  if(totalPages <= 1){ pager.classList.remove('show'); return; }
+  pager.classList.add('show');
+  $('pagerInfo').textContent = `${filtered.length} artículos · ${PAGE_SIZE} por página`;
+  $('pagerPages').textContent = `Página ${page + 1} / ${totalPages}`;
+  $('pagerPrev').disabled = page <= 0;
+  $('pagerNext').disabled = page >= totalPages - 1;
+}
+
+function gotoPage(p){
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  p = Math.min(Math.max(0, p), totalPages - 1);
+  if(p === page) return;
+  page = p;
+  renderPage();
+  document.querySelector('.tabla-scroll').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function imgFallback(el){ el.onerror = null; el.src = PLACEHOLDER_IMG; }
+
+// ============================================================
+//  Selección
+// ============================================================
+function toggleSelect(codigo, on){
+  const art = articulos.find(a => a.codigo === codigo);
+  if(!art) return;
+  if(on){
+    selected.set(codigo, art);
+    lastPreviewCodigo = codigo;
+    updatePreview(art);
+  } else {
+    selected.delete(codigo);
+    if(lastPreviewCodigo === codigo){
+      const next = selected.size ? [...selected.values()][selected.size - 1] : null;
+      if(next){ lastPreviewCodigo = next.codigo; updatePreview(next); }
+      else { lastPreviewCodigo = null; hidePreview(); }
+    }
+  }
+  // reflejar en fila visible
+  const tr = document.querySelector(`#artTbody tr[data-codigo="${cssEscape(codigo)}"]`);
+  if(tr){
+    tr.classList.toggle('sel', on);
+    const cb = tr.querySelector('.row-check');
+    if(cb) cb.checked = on;
+  }
+  updateActionBar();
+  syncHeadCheck();
+}
+
+function syncHeadCheck(){
+  const boxes = [...document.querySelectorAll('#artTbody .row-check')];
+  const head = $('headCheck');
+  if(!boxes.length){ head.checked = false; head.indeterminate = false; return; }
+  const checked = boxes.filter(b => b.checked).length;
+  head.checked = checked === boxes.length;
+  head.indeterminate = checked > 0 && checked < boxes.length;
+}
+
+function updateActionBar(){
+  const n = selected.size;
+  $('selCount').textContent = n + (n === 1 ? ' seleccionado' : ' seleccionados');
+  $('generateBtn').disabled = n === 0;
+  $('actionBar').classList.toggle('show', n > 0);
+}
+
+// ============================================================
+//  Preview
+// ============================================================
+function updatePreview(item){
+  $('labelPreview').style.display = 'flex';
+  $('previewEmpty').style.display = 'none';
+  $('previewName').textContent = item.nombre;
+  $('previewCode').textContent = formatCodigoLinea(item);
+  $('previewPrice').textContent = formatPriceDisplay(item.precio);
+  $('previewDate').textContent = getTodayString();
+}
+function hidePreview(){
+  $('labelPreview').style.display = 'none';
+  $('previewEmpty').style.display = 'block';
+}
+
+function formatPriceDisplay(precio){
+  if(!precio) return '0';
+  let clean = precio.toString().replace(/[$\s,]/g, '');
+  const num = parseFloat(clean);
+  if(isNaN(num)) return precio;
+  return Math.round(num).toLocaleString('es-AR');
+}
+
+// Código + código de barras (columna L), separados por guion medio.
+// Si hay varios códigos de barras (separados por coma), se usa el primero.
+function formatCodigoLinea(item){
+  const cb = (item.codigoBarras || '').split(',')[0].trim();
+  return cb ? item.codigo + ' - ' + cb : item.codigo;
+}
+
+function getTodayString(){
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear());
+  return dd + '/' + mm + '/' + yy;
+}
+
+// ============================================================
+//  PDF Generation — jsPDF (idéntico a etiquetas.html)
+// ============================================================
+function generatePDF(){
+  const items = [...selected.values()];
+  if(items.length === 0) return;
+  saveSettings();
+
+  const btn = $('generateBtn');
+  btn.disabled = true;
+  const prevHTML = btn.innerHTML;
+  btn.innerHTML = '<span style="opacity:.8">Generando…</span>';
+
+  try{
+    const { jsPDF } = window.jspdf;
+    const w = labelSettings.width;
+    const h = labelSettings.height;
+    const perLabel = labelSettings.perLabel;
+    const orientation = w >= h ? 'landscape' : 'portrait';
+    const format = [w, h];
+
+    const doc = new jsPDF({ orientation, unit:'mm', format });
+    const today = getTodayString();
+
+    // Agrupar en páginas
+    const pages = [];
+    for(let i = 0; i < items.length; i += perLabel){
+      pages.push(items.slice(i, i + perLabel));
+    }
+
+    pages.forEach((pageItems, pageIdx) => {
+      if(pageIdx > 0) doc.addPage(format, orientation);
+
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, w, h, 'F');
+
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.35);
+      doc.rect(0.5, 0.5, w - 1, h - 1);
+
+      const itemCount = pageItems.length;
+      const gapMm = itemCount > 1 ? 5 : 0;
+      const totalGaps = Math.max(0, itemCount - 1) * gapMm;
+      const slotH = (h - 1 - totalGaps) / itemCount;
+
+      pageItems.forEach((item, slotIdx) => {
+        const yOffset = 0.5 + slotIdx * (slotH + gapMm);
+        if(slotIdx > 0){
+          const lineY = yOffset - gapMm / 2;
+          doc.setDrawColor(180, 180, 180);
+          doc.setLineWidth(0.2);
+          doc.line(1.5, lineY, w - 1.5, lineY);
+        }
+        drawArticleInSlot(doc, item, 0.5, yOffset, w - 1, slotH, today);
+      });
+    });
+
+    doc.save('etiquetas.pdf');
+    showSuccessStamp();
+    showToast('PDF generado con ' + items.length + ' etiqueta(s) en ' + pages.length + ' página(s)', 'ok');
+
+  }catch(err){
+    console.error('PDF generation error:', err);
+    showToast('Error al generar PDF: ' + err.message, 'err');
+  }finally{
+    btn.disabled = selected.size === 0;
+    btn.innerHTML = prevHTML;
+  }
+}
+
+function drawArticleInSlot(doc, item, x, y, slotW, slotH, today){
+  const MM2PT = 2.835;
+  const NAME_H_MM = 3;
+  const PRICE_H_MM = 15;
+  const BOTTOM_H_MM = 3;
+
+  const namePt = NAME_H_MM * MM2PT;
+  const pricePt = PRICE_H_MM * MM2PT;
+  const bottomPt = BOTTOM_H_MM * MM2PT;
+
+  const pad = 2;
+
+  // === TOP BAND: nombre ===
+  const topBandH = NAME_H_MM + 2;
+  doc.setFillColor(245, 245, 245);
+  doc.rect(x, y, slotW, topBandH, 'F');
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.15);
+  doc.line(x, y + topBandH, x + slotW, y + topBandH);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(namePt);
+  doc.setTextColor(20, 20, 20);
+  const usableW = slotW - pad * 2;
+  let displayName = item.nombre;
+  while(doc.getTextWidth(displayName) > usableW && displayName.length > 1){
+    displayName = displayName.slice(0, -1);
+  }
+  if(displayName.length < item.nombre.length) displayName += '…';
+  const nameBaseline = y + topBandH / 2 + (namePt / MM2PT) * 0.35;
+  doc.text(displayName, x + pad, nameBaseline);
+
+  // === PRICE ZONE ===
+  const priceText = formatPriceDisplay(item.precio);
+  const bottomStripH = BOTTOM_H_MM + 1.5;
+  const priceZoneTop = y + topBandH;
+  const priceZoneH = slotH - topBandH - bottomStripH;
+
+  doc.setFont('helvetica', 'bold');
+
+  const currSizePt = pricePt * 0.45;
+  doc.setFontSize(currSizePt);
+  doc.setTextColor(50, 50, 50);
+  const dollarW = doc.getTextWidth('$ ');
+  const priceBaseline = priceZoneTop + priceZoneH / 2 + (pricePt / MM2PT) * 0.32;
+  doc.text('$', x + pad, priceBaseline);
+
+  doc.setFontSize(pricePt);
+  doc.setTextColor(0, 0, 0);
+  doc.text(priceText, x + pad + dollarW, priceBaseline);
+
+  // === BOTTOM STRIP: codigo + fecha ===
+  const bottomYmm = y + slotH - 1;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(bottomPt);
+  doc.setTextColor(130, 130, 130);
+  doc.text(formatCodigoLinea(item), x + pad, bottomYmm);
+  doc.text(today, x + slotW - pad, bottomYmm, { align:'right' });
+}
+
+// ============================================================
+//  UI Helpers
+// ============================================================
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
+function escapeAttr(str){ return String(str == null ? '' : str).replace(/"/g, '&quot;'); }
+function cssEscape(str){ return String(str).replace(/["\\]/g, '\\$&'); }
+
+let toastTimer;
+function showToast(msg, type){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function showSuccessStamp(){
+  const s = $('successStamp');
+  s.classList.add('active');
+  setTimeout(() => s.classList.remove('active'), 900);
+}
+function showBlock(txt){ $('blockText').textContent = txt || 'Cargando…'; $('block').classList.add('active'); }
+function hideBlock(){ $('block').classList.remove('active'); }
+
+// ============================================================
+//  Online / Offline
+// ============================================================
+function updateOnlineStatus(){
+  const dot = $('connDot'), txt = $('connTxt');
+  if(navigator.onLine){ dot.classList.remove('off'); txt.textContent = 'online'; }
+  else { dot.classList.add('off'); txt.textContent = 'offline'; }
+}
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+// ============================================================
+//  Event Listeners
+// ============================================================
+// Buscar
+let searchTimer;
+$('tablaSearch').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderTable, 180);
+});
+
+// Click en fila → toggle (excepto sobre el checkbox, que ya hace stopPropagation)
+$('artTbody').addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if(!tr) return;
+  const codigo = tr.dataset.codigo;
+  toggleSelect(codigo, !selected.has(codigo));
+});
+
+// Cambios directos en el checkbox de fila
+$('artTbody').addEventListener('change', e => {
+  const cb = e.target.closest('.row-check');
+  if(!cb) return;
+  toggleSelect(cb.dataset.codigo, cb.checked);
+});
+
+// Header checkbox → selecciona/deselecciona la página actual
+$('headCheck').addEventListener('change', function(){
+  const on = this.checked;
+  document.querySelectorAll('#artTbody .row-check').forEach(cb => {
+    if(cb.checked !== on) toggleSelect(cb.dataset.codigo, on);
+  });
+});
+
+// Limpiar selección
+$('clearSelBtn').addEventListener('click', () => {
+  selected.clear();
+  lastPreviewCodigo = null;
+  hidePreview();
+  renderPage();
+  updateActionBar();
+});
+
+// Generar PDF
+$('generateBtn').addEventListener('click', generatePDF);
+
+// Paginación
+$('pagerPrev').addEventListener('click', () => gotoPage(page - 1));
+$('pagerNext').addEventListener('click', () => gotoPage(page + 1));
+
+// Settings
+['settingWidth', 'settingHeight', 'settingPerLabel'].forEach(id => {
+  $(id).addEventListener('change', saveSettings);
+});
+
+// ============================================================
+//  Init
+// ============================================================
+async function init(){
+  loadSettings();
+  showBlock('Cargando artículos…');
+  try{
+    await loadSheets();
+    renderTable();
+  }catch(err){
+    console.error('Init error:', err);
+    showToast('Error al cargar artículos desde Google Sheets', 'err');
+    $('pageCount').textContent = 'Error al cargar datos';
+  }finally{
+    hideBlock();
+  }
+  updateActionBar();
+}
+
+init();
+</script>
+</body>
+</html>

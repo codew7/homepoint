@@ -417,6 +417,7 @@ input[type=number]{-moz-appearance:textfield}
 .menu-ico{width:52px;height:52px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff}
 .menu-ico.new{background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary)}
 .menu-ico.list{background:linear-gradient(135deg,var(--lime-600),var(--lime))}
+.menu-ico.tags{background:linear-gradient(135deg,#d97706,var(--amber))}
 .menu-tx{flex:1;min-width:0}
 .menu-tx b{display:block;font-size:1.04rem;font-weight:800;letter-spacing:-.02em}
 .menu-tx span{display:block;font-size:.82rem;color:var(--muted);margin-top:3px}
@@ -474,6 +475,16 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
 .row-del{background:var(--danger-soft);color:var(--danger-600)}
 .row-del:hover{background:var(--danger);color:#fff}
 .tabla-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:.9rem}
+/* ====== PAGINADOR ====== */
+.tabla-pager{display:none;align-items:center;justify-content:space-between;gap:12px;margin:14px 2px 0;flex-wrap:wrap}
+.tabla-pager.show{display:flex}
+.pager-info{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.pager-btns{display:flex;align-items:center;gap:9px}
+.pager-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-2);background:var(--card);border-radius:10px;padding:9px 14px;font-family:var(--font);font-size:.82rem;font-weight:700;color:var(--text-2);cursor:pointer;transition:all .16s}
+.pager-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.pager-btn:active:not(:disabled){background:var(--card-2)}
+.pager-btn:disabled{opacity:.4;cursor:not-allowed}
+.pager-pages{font-size:.8rem;font-weight:700;color:var(--text-2);min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
 
 @media (max-width:400px){
   .f-2{grid-template-columns:1fr}
@@ -546,6 +557,13 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </span>
         <span class="menu-tx"><b>Ver artículos registrados</b><span>Tabla con todos los campos, editable manualmente.</span></span>
+        <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </button>
+      <button class="menu-card" id="goPrintLabels">
+        <span class="menu-ico tags">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        </span>
+        <span class="menu-tx"><b>Imprimir etiquetas de precio</b><span>Seleccioná artículos y generá las etiquetas en PDF.</span></span>
         <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
       </button>
     </div>
@@ -759,6 +777,20 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         </thead>
         <tbody id="artTbody"></tbody>
       </table>
+    </div>
+    <div class="tabla-pager" id="tablaPager">
+      <span class="pager-info" id="pagerInfo"></span>
+      <div class="pager-btns">
+        <button class="pager-btn" id="pagerPrev">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Anterior
+        </button>
+        <span class="pager-pages" id="pagerPages"></span>
+        <button class="pager-btn" id="pagerNext">
+          Siguiente
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
     </div>
     <div class="tabla-empty" id="tablaEmpty" style="display:none">No hay artículos registrados todavía.</div>
   </section>
@@ -1270,7 +1302,7 @@ function renderNameResults(q){
     const nCodes = String(a.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean).length;
     return `
     <div class="sheet-item" data-key="${escapeHtml(a.key)}">
-      <img class="sheet-thumb" src="${a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG}" alt="" onerror="imgFallback(this)">
+      <img class="sheet-thumb" src="${a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)">
       <div class="sheet-tx">
         <div class="nm">${escapeHtml(a.Nombre || 'Sin nombre')}</div>
         <div class="cd">#${escapeHtml(a.Codigo || a.key)}${nCodes ? ' · ' + nCodes + ' cód.' : ''}${a.Categoria ? ' · ' + escapeHtml(a.Categoria) : ''}</div>
@@ -1701,6 +1733,7 @@ function goHome(){
 
 $('goNew').addEventListener('click', startNewArticulo);
 $('goList').addEventListener('click', openTabla);
+$('goPrintLabels').addEventListener('click', () => { window.location.href = 'imprimirEtiqueta.html'; });
 $('homeBtn').addEventListener('click', goHome);
 $('brandHome').addEventListener('click', goHome);
 
@@ -1716,6 +1749,7 @@ async function openTabla(){
   hideBlock();
   // asegurar categorías para los selectores
   if (!categorias.length) await loadCategorias();
+  tablaPage = 0;
   renderTable();
 }
 
@@ -1747,16 +1781,69 @@ function esAntiguo(ts){
 }
 let agedOnly = false; // estado del filtro "Antiguos"
 
-function renderTable(){
-  const tbody = $('artTbody');
-  tbody.innerHTML = '';
-  const items = Object.entries(articulosCache)
+// ====== Paginación de la tabla ======
+const TABLA_PAGE_SIZE = 100;   // filas por página
+let tablaPage = 0;             // página actual (0-based)
+let tablaFiltered = [];        // items tras búsqueda/filtro, ya ordenados
+
+// Lista completa ordenada por Código
+function tablaSortedItems(){
+  return Object.entries(articulosCache)
     .map(([key, a]) => ({ key, ...a }))
     .sort((x, y) => String(x.Codigo).localeCompare(String(y.Codigo)));
+}
 
-  $('tablaCount').textContent = items.length + (items.length === 1 ? ' artículo' : ' artículos');
-  $('tablaEmpty').style.display = items.length ? 'none' : 'block';
-  $('artTable').style.display = items.length ? '' : 'none';
+// Recalcula tablaFiltered aplicando búsqueda + filtro de antigüedad
+function recomputeFiltered(){
+  const q = $('tablaSearch').value.trim().toLowerCase();
+  tablaFiltered = tablaSortedItems().filter(a => {
+    if (agedOnly && !esAntiguo(a.Timestamp)) return false;
+    if (q){
+      const hay = [a.Codigo, a.Nombre, a.CodigoBarras]
+        .map(v => String(v || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// Re-render completo: recalcula el filtrado y dibuja la página vigente (clamp incluido)
+function renderTable(){
+  recomputeFiltered();
+  renderTablaPage();
+}
+
+function renderTablaPage(){
+  const tbody = $('artTbody');
+  tbody.innerHTML = '';
+
+  const total = Object.keys(articulosCache).length;
+  const filtered = tablaFiltered.length;
+  const totalPages = Math.max(1, Math.ceil(filtered / TABLA_PAGE_SIZE));
+  tablaPage = Math.min(Math.max(0, tablaPage), totalPages - 1);
+
+  const start = tablaPage * TABLA_PAGE_SIZE;
+  const pageItems = tablaFiltered.slice(start, start + TABLA_PAGE_SIZE);
+
+  // Contador
+  let countTxt;
+  if (!total){
+    countTxt = '0 artículos';
+  } else if (!filtered){
+    countTxt = `Sin coincidencias · ${total} en total`;
+  } else {
+    const noun = filtered === 1 ? 'artículo' : 'artículos';
+    const range = `${start + 1}–${start + pageItems.length}`;
+    countTxt = filtered === total
+      ? `${range} de ${total} ${noun}`
+      : `${range} de ${filtered} ${noun} (filtrado de ${total})`;
+  }
+  $('tablaCount').textContent = countTxt;
+
+  // Estado vacío / sin resultados
+  $('tablaEmpty').textContent = total ? 'Sin resultados para tu búsqueda.' : 'No hay artículos registrados todavía.';
+  $('tablaEmpty').style.display = pageItems.length ? 'none' : 'block';
+  $('artTable').style.display = pageItems.length ? '' : 'none';
 
   const catOpts = (cur) => {
     const list = [...categorias];
@@ -1765,7 +1852,7 @@ function renderTable(){
       `<option value="${escapeHtml(c)}"${c === cur ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
   };
 
-  items.forEach(a => {
+  pageItems.forEach(a => {
     const id = a.key; // clave real del nodo en RTDB
     const tr = document.createElement('tr');
     tr.dataset.codigo = id;
@@ -1773,7 +1860,7 @@ function renderTable(){
     const foto = a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG;
     tr.innerHTML = `
       <td class="codcol" title="Registrado: ${fmtFechaGMT3(a.Timestamp)}&#10;Cantidad: ${a.Cantidad != null ? a.Cantidad : 0}">#${escapeHtml(a.Codigo || id)}</td>
-      <td><img class="thumb" src="${foto}" alt="" onerror="imgFallback(this)"></td>
+      <td><img class="thumb" src="${foto}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
       <td><input class="cell-inp" data-f="CodigoBarras" value="${escapeHtml(a.CodigoBarras || '')}" title="Separá varios códigos con comas" disabled></td>
       <td><input class="cell-inp" data-f="Nombre" value="${escapeHtml(a.Nombre || '')}" disabled></td>
       <td><select class="cell-inp" data-f="Categoria" disabled>${catOpts(a.Categoria || '')}</select></td>
@@ -1793,8 +1880,33 @@ function renderTable(){
   });
 
   applyEditableState();
-  filterTable();
+  renderPager(totalPages);
 }
+
+// Dibuja/oculta los controles de paginación
+function renderPager(totalPages){
+  const pager = $('tablaPager');
+  if (totalPages <= 1){ pager.classList.remove('show'); return; }
+  pager.classList.add('show');
+  $('pagerInfo').textContent = `${tablaFiltered.length} artículos · ${TABLA_PAGE_SIZE} por página`;
+  $('pagerPages').textContent = `Página ${tablaPage + 1} / ${totalPages}`;
+  $('pagerPrev').disabled = tablaPage <= 0;
+  $('pagerNext').disabled = tablaPage >= totalPages - 1;
+}
+
+// Cambia de página, advirtiendo si hay filas con cambios sin guardar
+function gotoTablaPage(p){
+  const totalPages = Math.max(1, Math.ceil(tablaFiltered.length / TABLA_PAGE_SIZE));
+  p = Math.min(Math.max(0, p), totalPages - 1);
+  if (p === tablaPage) return;
+  const dirty = document.querySelectorAll('#artTbody tr.dirty').length;
+  if (dirty && !confirm(`Hay ${dirty} fila(s) con cambios sin guardar en esta página. ¿Cambiar de página y descartarlos?`)) return;
+  tablaPage = p;
+  renderTablaPage();
+  document.querySelector('.tabla-scroll').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('pagerPrev').addEventListener('click', () => gotoTablaPage(tablaPage - 1));
+$('pagerNext').addEventListener('click', () => gotoTablaPage(tablaPage + 1));
 
 // listeners delegados sobre el tbody
 $('artTbody').addEventListener('input', e => {
@@ -1871,19 +1983,10 @@ $('agedFilter').addEventListener('click', () => {
   $('agedFilter').classList.toggle('on', agedOnly);
   filterTable();
 });
+// Al buscar o cambiar de filtro: recalcula el conjunto y vuelve a la primera página
 function filterTable(){
-  const q = $('tablaSearch').value.trim().toLowerCase();
-  document.querySelectorAll('#artTbody tr').forEach(tr => {
-    let show = true;
-    if (agedOnly && !tr.classList.contains('aged')) show = false;
-    if (show && q){
-      const a = articulosCache[tr.dataset.codigo] || {};
-      const hay = [a.Codigo, a.Nombre, a.CodigoBarras]
-        .map(v => String(v || '').toLowerCase()).join(' ');
-      show = hay.includes(q);
-    }
-    tr.style.display = show ? '' : 'none';
-  });
+  tablaPage = 0;
+  renderTable();
 }
 
 // Guardado inmediato del selector Disponible (no requiere el botón Guardar)
