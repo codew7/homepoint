@@ -228,9 +228,16 @@
       });
     });
 
+    // === PAGINACIÓN ===
+    // Los pedidos del día ya vienen descargados y filtrados (fecha de hoy +
+    // createdby = admin). La paginación es 100% en cliente: solo se renderizan
+    // 50 filas por página, evitando construir cientos de nodos del DOM de una.
+    const PAGE_SIZE = 50;
+    let paginaActual = 1;
+
     function renderPedidos() {
       const tbody = document.getElementById('pedidosBody');
-      let pedidos = pedidosCache;
+      const pedidos = pedidosCache;
       const filtroNombre = document.getElementById('filtroNombre').value.trim().toLowerCase();
 
       // Los registros ya vienen filtrados por fecha de hoy y createdby = admin desde Firebase
@@ -239,13 +246,25 @@
       if (filtroNombre) {
         keys = keys.filter(id => (pedidos[id].cliente?.nombre || '').toLowerCase().includes(filtroNombre));
       }
-      if (keys.length === 0) {
+
+      const totalRegistros = keys.length;
+      const totalPaginas = Math.max(1, Math.ceil(totalRegistros / PAGE_SIZE));
+      // Mantener la página dentro de rango (p. ej. si llegaron/cancelaron pedidos en vivo)
+      if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+      if (paginaActual < 1) paginaActual = 1;
+
+      if (totalRegistros === 0) {
         tbody.innerHTML = '<tr><td colspan="7">No hay pedidos del día de hoy que coincidan con los filtros.</td></tr>';
+        renderPaginacion(0, 1, 1);
         return;
       }
 
-      tbody.innerHTML = '';
-      keys.forEach(id => {
+      const inicio = (paginaActual - 1) * PAGE_SIZE;
+      const keysPagina = keys.slice(inicio, inicio + PAGE_SIZE);
+
+      // Render optimizado: se arma un array de filas y se asigna innerHTML una
+      // sola vez (un único reflow), en lugar de reconcatenar innerHTML por fila.
+      const filas = keysPagina.map(id => {
         const p = pedidos[id];
         const fecha = p.fecha || '';
         const cliente = p.cliente || {};
@@ -254,10 +273,9 @@
         const pagos = p.pagos || {};
         // totalFinal y subtotal pueden ser string o number, se fuerza a number si es posible
         const totalFinal = pagos.totalFinal !== undefined ? `$${Number(pagos.totalFinal).toLocaleString('es-AR', {maximumFractionDigits:0})}` : '';
-        const subtotal = pagos.subtotal !== undefined ? `$${Number(pagos.subtotal).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2})}` : '';
         const medioPagoNorm = (pagos.medioPago || '').toString().trim().toLowerCase();
         const waHabilitado = medioPagoNorm === 'transferencia' || medioPagoNorm === 'parcial';
-        tbody.innerHTML += `
+        return `
           <tr${isCancelado ? ' style="background:#e0e0e0;color:#888;"' : ''}>
             <td>${fecha}</td>
             <td style="cursor:pointer;text-decoration:underline;color:#2a3d8f;" onclick="verPedido('${id}')">${cliente.nombre || ''}</td>
@@ -274,12 +292,47 @@
             </tr>
         `;
       });
+      tbody.innerHTML = filas.join('');
+
+      renderPaginacion(totalRegistros, paginaActual, totalPaginas);
     }
+
+    // Dibuja la barra de paginación (info + botones anterior/siguiente)
+    function renderPaginacion(totalRegistros, pagina, totalPaginas) {
+      const cont = document.getElementById('paginacion');
+      if (!cont) return;
+      if (totalRegistros === 0) {
+        cont.innerHTML = '';
+        return;
+      }
+      const desde = (pagina - 1) * PAGE_SIZE + 1;
+      const hasta = Math.min(pagina * PAGE_SIZE, totalRegistros);
+      const prevDisabled = pagina <= 1;
+      const nextDisabled = pagina >= totalPaginas;
+      cont.innerHTML = `
+        <span style="color:#444;font-size:0.9rem;">Mostrando ${desde}-${hasta} de ${totalRegistros}</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="paginaAnterior()" style="background:${prevDisabled ? '#ccc' : '#39373f'};${prevDisabled ? 'cursor:not-allowed;' : ''}"${prevDisabled ? ' disabled' : ''}>‹ Anterior</button>
+          <span style="color:#444;font-size:0.9rem;">Página ${pagina} de ${totalPaginas}</span>
+          <button onclick="paginaSiguiente()" style="background:${nextDisabled ? '#ccc' : '#39373f'};${nextDisabled ? 'cursor:not-allowed;' : ''}"${nextDisabled ? ' disabled' : ''}>Siguiente ›</button>
+        </div>
+      `;
+    }
+
+    function paginaAnterior() {
+      if (paginaActual > 1) { paginaActual--; renderPedidos(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    }
+    function paginaSiguiente() {
+      paginaActual++; renderPedidos(); window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     function aplicarFiltros() {
+      paginaActual = 1; // al cambiar el filtro, volver a la primera página
       renderPedidos();
     }
     function limpiarFiltros() {
       document.getElementById('filtroNombre').value = '';
+      paginaActual = 1;
       renderPedidos();
     }
     function verPedido(id) {
@@ -854,9 +907,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         </tr>
       </thead>
       <tbody id="pedidosBody">
-        <tr><td colspan="6">Cargando...</td></tr>
+        <tr><td colspan="7">Cargando...</td></tr>
       </tbody>
     </table>
+    <div id="paginacion" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-top:18px;"></div>
   </main>
 
   <!-- Modal WhatsApp Alias -->
