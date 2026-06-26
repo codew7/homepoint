@@ -27,9 +27,15 @@
   <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script>
     let pedidosCache = {};
-    // === ALIAS: Historial desde localStorage + Google Sheets ===
-    let aliasHistorial = [];
-    let aliasDesdeSheets = [];
+    // === ALIAS: Registro/lectura desde el nodo "alias" de Firebase RTDB (+ cache en localStorage) ===
+    let aliasHistorial = [];      // cache offline en localStorage
+    let aliasDesdeFirebase = [];  // alias registrados en el nodo "alias" de RTDB
+
+    // Convertir un alias a una clave válida para Firebase RTDB.
+    // Las claves no admiten . # $ / [ ] ; el alias original se guarda como valor.
+    function aliasAClave(alias) {
+      return alias.replace(/[.#$/\[\]]/g, c => '~' + c.charCodeAt(0) + '~');
+    }
 
     function cargarHistorialAliasDesdeLocalStorage() {
       try {
@@ -40,18 +46,29 @@
       }
     }
 
-    async function cargarAliasDesdeSheets() {
+    // Suscribirse al nodo "alias" de Firebase RTDB
+    function cargarAliasDesdeFirebase() {
       try {
-        if (typeof GOOGLE_SHEETS_CONFIG === 'undefined') return;
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Alias!A2:A?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
-        const resp = await fetch(url);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (data.values) {
-          aliasDesdeSheets = data.values.map(r => r[0]).filter(Boolean).map(a => a.trim().toUpperCase());
-        }
+        db.ref('alias').on('value', snap => {
+          const val = snap.val() || {};
+          aliasDesdeFirebase = Object.values(val)
+            .map(v => (v || '').toString().trim().toUpperCase())
+            .filter(v => v !== '');
+        });
       } catch (error) {
-        console.error('Error cargando alias desde Google Sheets:', error);
+        console.error('Error cargando alias desde Firebase:', error);
+      }
+    }
+
+    // Registrar un alias en el nodo "alias" de Firebase (una sola vez, sin duplicados).
+    // La clave saneada garantiza unicidad: si ya existe, set lo sobrescribe sin duplicar.
+    function registrarAliasEnFirebase(nuevoAlias) {
+      try {
+        if (!nuevoAlias || nuevoAlias.trim() === '') return;
+        const aliasLimpio = nuevoAlias.trim().toUpperCase();
+        db.ref('alias/' + aliasAClave(aliasLimpio)).set(aliasLimpio);
+      } catch (error) {
+        console.error('Error registrando alias en Firebase:', error);
       }
     }
 
@@ -59,6 +76,8 @@
       try {
         if (!nuevoAlias || nuevoAlias.trim() === '') return;
         const aliasLimpio = nuevoAlias.trim().toUpperCase();
+        // Registrar en el nodo "alias" de Firebase (fuente compartida)
+        registrarAliasEnFirebase(aliasLimpio);
         let historial = [];
         const aliasGuardados = localStorage.getItem('historialAlias');
         if (aliasGuardados) historial = JSON.parse(aliasGuardados);
@@ -72,17 +91,21 @@
       }
     }
 
+    // Lista combinada (Firebase + cache local) sin duplicados y ordenada alfabéticamente
     function obtenerListaAlias() {
       const vistos = new Set();
       const lista = [];
-      aliasHistorial.forEach(a => { if (!vistos.has(a)) { vistos.add(a); lista.push(a); } });
-      aliasDesdeSheets.forEach(a => { if (!vistos.has(a)) { vistos.add(a); lista.push(a); } });
+      [...aliasDesdeFirebase, ...aliasHistorial].forEach(alias => {
+        const a = (alias || '').trim().toUpperCase();
+        if (a !== '' && !vistos.has(a)) { vistos.add(a); lista.push(a); }
+      });
+      lista.sort((a, b) => a.localeCompare(b, 'es'));
       return lista;
     }
 
     // Cargar alias al inicio
     cargarHistorialAliasDesdeLocalStorage();
-    cargarAliasDesdeSheets();
+    cargarAliasDesdeFirebase();
 
     // === MODAL WHATSAPP ===
     let whatsappPedidoId = null;
@@ -395,7 +418,7 @@
     // Construye el documento ESC-POS completo del recibo.
     // conLogo=false omite la imagen (el logo es lo único raster; si la
     // impresora/QZ no lo puede procesar, igual sale todo el texto nativo).
-    function construirESCPOS(pedido, conLogo) {
+    function construirESCPOS(pedido, conLogo, id) {
       const cliente = pedido.cliente || {};
       const nombre = cliente.nombre || '';
       const telefono = cliente.telefono || '';
@@ -486,6 +509,12 @@
       data.push(escCmd('1B4501'));
       data.push(escTxt(posWrap('- DOCUMENTO NO VALIDO COMO FACTURA -')));
       data.push(escCmd('1B4500'));
+
+      // ID de pedido, discreto y centrado al pie del ticket
+      if (id) {
+        data.push(escTxt('\n'));
+        data.push(escTxt(posWrap('ID: ' + id)));
+      }
 
       data.push(escTxt('\n\n\n'));
       data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
@@ -585,19 +614,19 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return await qz.printers.getDefault();
     }
 
-    async function imprimirReciboESCPOS(pedido) {
+    async function imprimirReciboESCPOS(pedido, id) {
       await conectarQZ();
       const printerName = await seleccionarImpresoraPOS();
       if (!printerName) throw new Error('No se encontró ninguna impresora');
       const config = qz.configs.create(printerName, { encoding: 'CP437' });
       try {
         // Intento 1: con logo (imagen raster)
-        await qz.print(config, construirESCPOS(pedido, true));
+        await qz.print(config, construirESCPOS(pedido, true, id));
       } catch (eLogo) {
         // Intento 2: sin logo (solo texto nativo). Si esto también falla,
         // se propaga el error y el llamador ofrece el respaldo HTML.
         console.warn('Print con logo falló, reintentando sin logo:', eLogo);
-        await qz.print(config, construirESCPOS(pedido, false));
+        await qz.print(config, construirESCPOS(pedido, false, id));
       }
     }
 
@@ -610,7 +639,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
       try {
         // Camino principal: modo texto ESC-POS con la fuente nativa FONTA
-        await imprimirReciboESCPOS(pedido);
+        await imprimirReciboESCPOS(pedido, id);
       } catch (e) {
         // El fallback NO es silencioso: mostramos el motivo real para poder
         // diagnosticar por qué no entró el modo ESC-POS.
@@ -626,11 +655,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           motivo + '\n\n' +
           '¿Querés imprimir con el método HTML de respaldo (menos nítido)?'
         );
-        if (usarHTML) generarReciboYImprimir(pedido);
+        if (usarHTML) generarReciboYImprimir(pedido, id);
       }
     }
     
-    function generarReciboYImprimir(pedido) {
+    function generarReciboYImprimir(pedido, id) {
       // Obtener datos del pedido
       const cliente = pedido.cliente || {};
       const nombre = cliente.nombre || '';
@@ -731,6 +760,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             .tot-fila { display: flex; justify-content: space-between; padding: 1px 0; }
             .tot-final { font-weight: bold; }
             .legend { text-align: center; font-weight: bold; margin-top: 12px; }
+            .pedido-id { text-align: center; margin-top: 10px; font-size: 9px; color: #555; }
             @media print { button { display: none !important; } }
           </style>
         </head>
@@ -759,6 +789,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             </div>
             <hr class="sep">
             <div class="legend">- DOCUMENTO NO VALIDO COMO FACTURA -</div>
+            ${id ? `<div class="pedido-id">ID: ${id}</div>` : ''}
           </div>
           <script>window.onload = function(){ window.print(); }<\/script>
         </body>
