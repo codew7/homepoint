@@ -1642,7 +1642,7 @@ function getTipoCliente() {
               // Mostrar modal de impresión DESPUÉS de guardar exitosamente
               mostrarModalImprimirOrden(
                 function() { // Sí imprimir
-                  generarReciboYImprimir();
+                  generarReciboYImprimir(pedidoRef.key);
                   showPopup('Pedido ingresado', '✅', true);
                   if (window.desactivarModoAdmin) window.desactivarModoAdmin();
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
@@ -1974,7 +1974,7 @@ function getTipoCliente() {
                 // Mostrar modal de impresión DESPUÉS de actualizar exitosamente
                 mostrarModalImprimirOrden(
                   function() { // Sí imprimir
-                    generarReciboYImprimir();
+                    generarReciboYImprimir(pedidoId);
                     messageDiv.textContent = 'Pedido actualizado correctamente.';
                     messageDiv.style.color = 'green';
                     setTimeout(() => {
@@ -2222,9 +2222,15 @@ if (cargarClienteBtn) {
   });
 }
 
-// === ALIAS: Autocompletar con historial desde localStorage + Google Sheets ===
-let aliasHistorial = [];
-let aliasDesdeSheets = [];
+// === ALIAS: Autocompletar desde el nodo "alias" de Firebase RTDB (+ cache en localStorage) ===
+let aliasHistorial = [];      // cache offline en localStorage
+let aliasDesdeFirebase = [];  // alias registrados en el nodo "alias" de RTDB
+
+// Convertir un alias a una clave válida para Firebase RTDB.
+// Las claves no admiten . # $ / [ ] ; el alias original se guarda como valor.
+function aliasAClave(alias) {
+  return alias.replace(/[.#$/\[\]]/g, c => '~' + c.charCodeAt(0) + '~');
+}
 
 // Crear datalist para autocompletar alias
 let datalistAlias = document.getElementById('aliasDatalist');
@@ -2240,27 +2246,24 @@ if (aliasField) {
   aliasField.setAttribute('list', 'aliasDatalist');
 }
 
-// Reconstruir el datalist combinando localStorage + Sheets (localStorage primero)
+// Reconstruir el datalist combinando Firebase + localStorage, ordenado alfabéticamente
 function actualizarDatalistAlias() {
   datalistAlias.innerHTML = '';
   const vistos = new Set();
-  // Primero los del historial local (más recientes arriba)
-  aliasHistorial.forEach(alias => {
-    if (!vistos.has(alias)) {
-      vistos.add(alias);
-      const option = document.createElement('option');
-      option.value = alias;
-      datalistAlias.appendChild(option);
+  const todos = [];
+  [...aliasDesdeFirebase, ...aliasHistorial].forEach(alias => {
+    const a = (alias || '').trim().toUpperCase();
+    if (a !== '' && !vistos.has(a)) {
+      vistos.add(a);
+      todos.push(a);
     }
   });
-  // Luego los de Sheets que no estén ya en el historial
-  aliasDesdeSheets.forEach(alias => {
-    if (!vistos.has(alias)) {
-      vistos.add(alias);
-      const option = document.createElement('option');
-      option.value = alias;
-      datalistAlias.appendChild(option);
-    }
+  // Orden alfabético
+  todos.sort((a, b) => a.localeCompare(b, 'es'));
+  todos.forEach(alias => {
+    const option = document.createElement('option');
+    option.value = alias;
+    datalistAlias.appendChild(option);
   });
 }
 
@@ -2276,21 +2279,30 @@ function cargarHistorialAliasDesdeLocalStorage() {
   }
 }
 
-// Cargar alias desde Google Sheets (rango Alias!A2:A)
-async function cargarAliasDesdeSheets() {
+// Suscribirse al nodo "alias" de Firebase RTDB para poblar el datalist
+function cargarAliasDesdeFirebase() {
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Alias!A2:A?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
-    const resp = await fetch(url);
-    if (!resp.ok) return;
-    const data = await resp.json();
-    if (data.values && Array.isArray(data.values)) {
-      aliasDesdeSheets = data.values
-        .map(row => (row[0] || '').trim().toUpperCase())
+    db.ref('alias').on('value', snap => {
+      const val = snap.val() || {};
+      aliasDesdeFirebase = Object.values(val)
+        .map(v => (v || '').toString().trim().toUpperCase())
         .filter(v => v !== '');
       actualizarDatalistAlias();
-    }
+    });
   } catch (error) {
-    console.error('Error cargando alias desde Google Sheets:', error);
+    console.error('Error cargando alias desde Firebase:', error);
+  }
+}
+
+// Registrar un alias en el nodo "alias" de Firebase (una sola vez, sin duplicados).
+// La clave saneada garantiza unicidad: si ya existe, set lo sobrescribe sin duplicar.
+function registrarAliasEnFirebase(nuevoAlias) {
+  try {
+    if (!nuevoAlias || nuevoAlias.trim() === '') return;
+    const aliasLimpio = nuevoAlias.trim().toUpperCase();
+    db.ref('alias/' + aliasAClave(aliasLimpio)).set(aliasLimpio);
+  } catch (error) {
+    console.error('Error registrando alias en Firebase:', error);
   }
 }
 
@@ -2300,6 +2312,9 @@ function guardarAliasEnLocalStorage(nuevoAlias) {
     if (!nuevoAlias || nuevoAlias.trim() === '') return;
 
     const aliasLimpio = nuevoAlias.trim().toUpperCase();
+
+    // Registrar en el nodo "alias" de Firebase (fuente compartida)
+    registrarAliasEnFirebase(aliasLimpio);
 
     // Cargar historial actual
     let historial = [];
@@ -2333,8 +2348,8 @@ function guardarAliasEnLocalStorage(nuevoAlias) {
 
 // Cargar historial de alias al inicializar
 cargarHistorialAliasDesdeLocalStorage();
-// Cargar alias desde Sheets en segundo plano
-cargarAliasDesdeSheets();
+// Suscribirse al nodo "alias" de Firebase RTDB
+cargarAliasDesdeFirebase();
 
 // Al salir del input nombre, validar si existe
 form.nombre.addEventListener('blur', function() {
@@ -2650,6 +2665,12 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     data.push(escTxt(posWrap('- DOCUMENTO NO VALIDO COMO FACTURA -')));
     data.push(escCmd('1B4500'));
 
+    // ID de pedido (últimos 8 caracteres en mayúscula), discreto y centrado al pie del ticket
+    if (d.pedidoId) {
+      data.push(escTxt('\n'));
+      data.push(escTxt(posWrap(String(d.pedidoId).slice(-8).toUpperCase())));
+    }
+
     data.push(escTxt('\n\n\n'));
     data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
     return data;
@@ -2809,6 +2830,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           .tot-fila { display: flex; justify-content: space-between; padding: 1px 0; }
           .tot-final { font-weight: bold; }
           .legend { text-align: center; font-weight: bold; margin-top: 12px; }
+          .pedido-id { text-align: center; margin-top: 10px; font-size: 9px; color: #555; }
           @media print { button { display: none !important; } }
         </style>
       </head>
@@ -2837,6 +2859,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           </div>
           <hr class="sep">
           <div class="legend">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
+          ${d.pedidoId ? `<div class="pedido-id">${String(d.pedidoId).slice(-8).toUpperCase()}</div>` : ''}
         </div>
         <script>window.onload = function(){ window.print(); }<\/script>
       </body>
@@ -2859,7 +2882,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   // Toma una "foto" sincrónica de los datos del formulario ANTES de cualquier
   // await (los llamadores hacen form.reset() / items=[] justo después), y
   // dispara la impresión asíncrona con ese snapshot.
-  function generarReciboYImprimir() {
+  function generarReciboYImprimir(pedidoId) {
     const d = {
       nombre: form.nombre.value.trim(),
       telefono: form.telefono.value.trim(),
@@ -2869,6 +2892,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       descuento: form.descuento.value,
       envio: form.envio.value,
       totalFinal: form.totalFinal.value,
+      pedidoId: pedidoId || '',
       fecha: new Date().toLocaleString('es-AR', { hour12: false }),
       items: items.map(it => ({
         nombre: it.nombre, codigo: it.codigo, codigoBarras: it.codigoBarras,
