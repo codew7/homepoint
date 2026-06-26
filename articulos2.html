@@ -1,0 +1,2206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f7f8fb">
+<title>Alta de Artículos · HomePoint</title>
+<link rel="icon" href="faviconnegro.png" type="image/png">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+<!-- Barcode scanner -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<!-- Config (pedidos-87064 + Google Sheets) -->
+<script src="config.js"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --card-2:#f8f9fc;
+  --card-3:#f1f3f9;
+  --text:#0e1424;
+  --text-2:#3a4256;
+  --muted:#7a8398;
+  --faint:#a9b0c1;
+  --border:#e8eaf1;
+  --border-2:#dfe2ec;
+  --primary:#2b2f37;
+  --primary-600:#181b21;
+  --primary-soft:#eef0f3;
+  --primary-soft-2:#e0e3e9;
+  --primary-glow:rgba(31,35,42,.26);
+  --lime:#7cb342;
+  --lime-600:#5a9216;
+  --lime-soft:#eef6e2;
+  --success:#7cb342;
+  --success-600:#5a9216;
+  --success-soft:#eef6e2;
+  --danger:#f43f5e;
+  --danger-600:#e11d48;
+  --danger-soft:#fdebee;
+  --amber:#f59e0b;
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',monospace;
+  --r:20px;
+  --r-md:16px;
+  --r-sm:12px;
+  --r-xs:10px;
+  --sh-sm:0 1px 2px rgba(14,20,36,.05),0 1px 3px rgba(14,20,36,.04);
+  --sh:0 4px 14px -4px rgba(14,20,36,.10),0 2px 6px -2px rgba(14,20,36,.06);
+  --sh-lg:0 18px 44px -16px rgba(14,20,36,.22),0 6px 16px -8px rgba(14,20,36,.10);
+  --sh-primary:0 10px 26px -8px var(--primary-glow);
+}
+
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-feature-settings:'cv01','ss01'}
+body{
+  min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  background:
+    radial-gradient(900px 480px at 50% -10%, rgba(31,35,42,.06), transparent 70%),
+    radial-gradient(700px 420px at 100% 0%, rgba(124,179,66,.07), transparent 65%),
+    var(--bg);
+  background-attachment:fixed;
+}
+::selection{background:var(--primary-soft-2);color:var(--primary-600)}
+
+/* scrollbars */
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ====== LOGIN ====== */
+.login{
+  position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:
+    radial-gradient(800px 460px at 50% -5%, rgba(31,35,42,.08), transparent 70%),
+    var(--bg);
+  transition:opacity .5s ease,transform .5s ease;
+}
+.login.hidden{opacity:0;transform:scale(1.02);pointer-events:none}
+.login-card{
+  width:100%;max-width:392px;background:var(--card);
+  border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:var(--sh-lg);padding:36px 30px 30px;
+  animation:pop-in .55s cubic-bezier(.2,.8,.25,1);
+}
+@keyframes pop-in{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.login-logo{
+  width:52px;height:52px;border-radius:15px;margin-bottom:20px;
+  background:linear-gradient(135deg,var(--primary),#3d424c);
+  box-shadow:var(--sh-primary);
+  display:flex;align-items:center;justify-content:center;
+}
+.login-tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--lime-600);margin-bottom:10px;font-weight:600}
+.login-card h1{font-weight:800;font-size:1.6rem;line-height:1.1;letter-spacing:-.025em;margin-bottom:6px}
+.login-card .sub{color:var(--muted);font-size:.9rem;margin-bottom:26px}
+.field{margin-bottom:15px}
+.field label{display:block;font-size:.74rem;font-weight:600;color:var(--text-2);margin-bottom:7px}
+.inp{
+  width:100%;padding:13px 14px;background:var(--card);
+  border:1px solid var(--border-2);border-radius:var(--r-sm);
+  font-family:var(--font);font-size:.95rem;color:var(--text);outline:none;
+  transition:border-color .18s,box-shadow .18s,background .18s;
+}
+.inp:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.inp::placeholder{color:var(--faint)}
+.btn{font-family:var(--font);cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s,background .18s,opacity .18s}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn-primary{
+  width:100%;padding:14px;border-radius:var(--r-sm);font-weight:700;font-size:.98rem;letter-spacing:.01em;
+  color:#fff;background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary);margin-top:6px;
+}
+.btn-primary:active{box-shadow:0 5px 16px -8px var(--primary-glow)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed}
+.login-err{min-height:1.1em;color:var(--danger-600);font-size:.82rem;font-weight:600;margin-top:12px;text-align:center}
+
+/* ====== TOPBAR ====== */
+.topbar{
+  position:sticky;top:0;z-index:60;
+  background:rgba(246,247,251,.78);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--border);
+  padding:max(11px,env(safe-area-inset-top)) 16px 11px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{
+  width:36px;height:36px;border-radius:11px;flex-shrink:0;border:none;padding:0;cursor:pointer;
+  background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);
+  display:flex;align-items:center;justify-content:center;transition:transform .12s,box-shadow .15s;
+}
+.brand .mark:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.22)}
+.brand .mark:active{transform:translateY(0)}
+.brand .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.brand .tt b{font-weight:800;font-size:1rem;letter-spacing:-.02em}
+.brand .tt span{font-size:.68rem;color:var(--muted);font-weight:500;margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.conn{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--muted);padding:5px 10px 5px 8px;background:var(--card);border:1px solid var(--border);border-radius:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-soft);position:relative}
+.dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--success);animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite}
+@keyframes ping{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(2.6);opacity:0}}
+.dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.dot.off::after{display:none}
+.logout-btn{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;
+  transition:all .16s;
+}
+.logout-btn:active{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
+
+/* ====== LAYOUT ====== */
+.wrap{max-width:580px;margin:0 auto;padding:18px 16px max(40px,env(safe-area-inset-bottom))}
+
+/* ====== STEP RAIL ====== */
+.rail{display:flex;align-items:flex-start;margin:4px 4px 20px}
+.rail-node{display:flex;flex-direction:column;align-items:center;position:relative;flex:0 0 auto;width:34px}
+.rail-dot{
+  width:34px;height:34px;border-radius:50%;flex-shrink:0;
+  border:1.5px solid var(--border-2);background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:var(--muted);
+  transition:all .3s cubic-bezier(.2,.8,.25,1);z-index:1;box-shadow:var(--sh-sm);
+}
+.rail-line{flex:1;height:2.5px;background:var(--border-2);margin:16px -1px 0;border-radius:2px;position:relative;overflow:hidden}
+.rail-line::after{content:'';position:absolute;inset:0;width:0;background:var(--lime);transition:width .35s ease}
+.rail-node.active .rail-dot{border-color:var(--primary);color:#fff;background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);transform:scale(1.06)}
+.rail-node.done .rail-dot{border-color:var(--lime);background:var(--lime);color:#fff}
+.rail-node.done + .rail-line::after{width:100%}
+.rail-label{font-size:.6rem;font-weight:600;letter-spacing:.01em;color:var(--muted);margin-top:7px;text-align:center;white-space:nowrap}
+
+/* ====== PANEL / CARD ====== */
+.panel{display:none}
+.panel.active{display:block;animation:rise .4s cubic-bezier(.2,.8,.25,1)}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.card + .card{margin-top:14px}
+.card-head{padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.card-head h2{font-weight:800;font-size:1.12rem;letter-spacing:-.02em}
+.card-head .step-no{font-family:var(--mono);font-size:.64rem;font-weight:600;color:var(--primary);background:var(--primary-soft);padding:5px 9px;border-radius:7px;white-space:nowrap;letter-spacing:.02em}
+.card-body{padding:6px 20px 20px}
+.hint{font-size:.82rem;color:var(--muted);line-height:1.55}
+.hint b{color:var(--text-2);font-weight:600}
+
+/* ====== SCAN ====== */
+.scan-hero{
+  width:100%;border:1px solid var(--border-2);border-radius:var(--r-md);
+  background:linear-gradient(180deg,var(--card),var(--card-2));color:var(--text);cursor:pointer;padding:20px;
+  display:flex;align-items:center;gap:16px;transition:all .2s cubic-bezier(.2,.8,.25,1);
+  font-family:var(--font);text-align:left;box-shadow:var(--sh-sm);
+}
+.scan-hero:hover{border-color:var(--primary);box-shadow:var(--sh)}
+.scan-hero:active{transform:scale(.99)}
+.scan-hero .ico{
+  width:54px;height:54px;border-radius:14px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--primary),#3d424c);color:#fff;box-shadow:var(--sh-primary);
+  display:flex;align-items:center;justify-content:center;
+}
+.scan-hero b{font-weight:700;font-size:1.04rem;display:block;letter-spacing:-.01em}
+.scan-hero small{color:var(--muted);font-size:.8rem}
+.scan-hero .chev{margin-left:auto;color:var(--faint)}
+.or{display:flex;align-items:center;gap:12px;margin:16px 0;font-size:.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--border-2)}
+.row{display:flex;gap:9px}
+.inp.mono{font-family:var(--mono);letter-spacing:.01em;font-size:.9rem}
+.btn-dark{background:var(--text);color:#fff;border-radius:var(--r-sm);padding:0 20px;font-weight:700;font-size:.9rem;white-space:nowrap;transition:all .16s}
+.btn-dark:hover{background:#2a2e36}
+.btn-ghost{
+  width:100%;margin-top:14px;background:var(--card);border:1px solid var(--border-2);
+  border-radius:var(--r-sm);padding:13px;color:var(--text-2);font-weight:600;font-size:.88rem;transition:all .16s;
+}
+.btn-ghost:hover{background:var(--card-2);border-color:var(--border-2)}
+.btn-ghost:active{background:var(--card-3)}
+
+/* banners */
+.banner{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:var(--r-sm);font-size:.86rem;font-weight:600;margin-bottom:16px;border:1px solid;animation:rise .4s cubic-bezier(.2,.8,.25,1)}
+.banner .bico{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:9px;color:#fff}
+.banner.edit{background:var(--card-3);border-color:var(--border-2);color:var(--text-2)}
+.banner.edit .bico{background:linear-gradient(135deg,var(--primary),#3d424c)}
+.banner.new{background:var(--lime-soft);border-color:#d8e9c2;color:var(--lime-600)}
+.banner.new .bico{background:linear-gradient(135deg,var(--lime-600),var(--lime))}
+.banner .code{font-family:var(--mono);font-weight:700}
+
+/* ====== PHOTO ====== */
+.photo-stage{
+  position:relative;width:100%;aspect-ratio:1/1;border-radius:var(--r-md);overflow:hidden;cursor:pointer;
+  background:var(--card-2);border:1.5px dashed var(--border-2);
+  display:flex;align-items:center;justify-content:center;transition:border-color .2s;
+}
+.photo-stage:hover{border-color:var(--lime)}
+.photo-stage.has-img{border-style:solid;border-color:var(--border)}
+.photo-stage img{width:100%;height:100%;object-fit:cover;display:none}
+.photo-stage.has-img img{display:block}
+.photo-stage.has-img .photo-placeholder{display:none}
+.photo-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--faint);padding:20px;background:none;border:none;font:inherit;cursor:pointer;width:100%}
+.photo-placeholder svg{margin-bottom:10px;opacity:.7}
+.photo-placeholder div{font-size:.84rem;font-weight:500}
+.photo-actions{display:flex;gap:9px;margin-top:14px}
+.photo-actions .btn{flex:1;padding:13px;border-radius:var(--r-sm);font-weight:700;font-size:.88rem}
+.btn-outline{background:var(--card);border:1px solid var(--border-2);color:var(--text)}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+.btn-accent{background:linear-gradient(135deg,var(--primary),#383d47);color:#fff;box-shadow:var(--sh-primary)}
+.hidden-file{display:none}
+
+/* ====== FORM ====== */
+.fgrid{display:flex;flex-direction:column;gap:16px}
+.f-2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+label.flbl{display:block;font-size:.74rem;font-weight:600;color:var(--text-2);margin-bottom:7px}
+label.flbl .req{color:var(--lime-600);margin-left:1px}
+label.flbl small{text-transform:none;font-weight:500;color:var(--muted)}
+.field-note{font-size:.72rem;color:var(--muted);margin-top:6px}
+select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237a8398' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:36px;cursor:pointer}
+.inp.calc{background:var(--card-3);font-family:var(--mono);font-weight:600;color:var(--text);cursor:default;border-color:var(--border)}
+.inp.calc.bad{color:var(--danger-600)}
+.prefix-wrap,.suffix-wrap{position:relative}
+.prefix-wrap .pfx{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-weight:600;color:var(--muted);font-size:.92rem;pointer-events:none}
+.prefix-wrap .inp{padding-left:30px}
+.suffix-wrap .sfx{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-weight:600;color:var(--muted);font-size:.92rem;pointer-events:none}
+.suffix-wrap .inp{padding-right:32px}
+.toggle{display:flex;border:1px solid var(--border-2);border-radius:var(--r-sm);overflow:hidden;background:var(--card-2);padding:4px;gap:4px}
+.toggle button{flex:1;padding:9px;background:none;border:none;border-radius:9px;font-family:var(--font);font-weight:700;font-size:.88rem;color:var(--muted);cursor:pointer;transition:all .18s}
+.toggle button.on{color:#fff}
+.toggle button.on.yes{background:var(--success);box-shadow:0 4px 12px -4px rgba(124,179,66,.5)}
+.toggle button.on.no{background:var(--danger);box-shadow:0 4px 12px -4px rgba(244,63,94,.5)}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.inp.invalid{border-color:var(--danger);box-shadow:0 0 0 4px var(--danger-soft)}
+
+/* nav buttons */
+.nav-row{display:flex;gap:11px;margin-top:20px}
+.nav-row .btn{flex:1;padding:14px;border-radius:var(--r-sm);font-weight:700;font-size:.92rem}
+.nav-row .btn-back{flex:0 0 auto;padding-left:18px;padding-right:18px}
+.btn-back{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.btn-back:hover{background:var(--card-2)}
+.btn-next{background:var(--text);color:#fff}
+.btn-next:hover{background:#2a2e36}
+.btn-save{background:linear-gradient(135deg,var(--primary),#383d47);color:#fff;box-shadow:var(--sh-primary)}
+.btn-save:disabled{opacity:.6;cursor:not-allowed}
+
+/* ====== REVIEW ====== */
+.review-top{display:flex;gap:15px;align-items:center;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.review-img{width:78px;height:78px;border-radius:16px;object-fit:cover;border:1px solid var(--border);background:var(--card-2);flex-shrink:0;box-shadow:var(--sh-sm)}
+.review-img.empty{display:flex;align-items:center;justify-content:center;color:var(--faint);font-family:var(--mono);font-size:.6rem;text-align:center}
+.review-name{font-weight:800;font-size:1.18rem;line-height:1.2;letter-spacing:-.02em}
+.review-cod{font-family:var(--mono);font-size:.74rem;color:var(--lime-600);margin-top:5px;font-weight:600}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:.88rem}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted);font-weight:500}
+.kv .v{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.kv .v.mono{font-family:var(--mono);font-weight:600}
+.kv .v.pos{color:var(--success-600)}
+.kv .v.neg{color:var(--danger-600)}
+
+/* ====== SCANNER OVERLAY ====== */
+.scanner{position:fixed;inset:0;z-index:900;background:#0e0f13;display:none;flex-direction:column}
+.scanner.active{display:flex;animation:rise .3s ease}
+.scanner-top{padding:max(16px,env(safe-area-inset-top)) 20px 14px;display:flex;align-items:center;justify-content:space-between}
+.scanner-top span{color:#fff;font-size:.9rem;font-weight:600}
+.scanner-x{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:1.4rem;cursor:pointer;transition:background .16s}
+.scanner-x:active{background:rgba(255,255,255,.25)}
+.scanner-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px}
+#reader{width:100%;max-width:460px;border-radius:20px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+#reader video{border-radius:20px;object-fit:cover}
+#reader img[alt="Info icon"],#reader span{display:none!important}
+#reader #html5-qrcode-anchor-scan-type-change{display:none!important}
+.scanner-hint{color:rgba(255,255,255,.55);font-size:.84rem;margin-top:24px;text-align:center}
+
+/* ====== CÁMARA (captura cuadrada) ====== */
+.cam{position:fixed;inset:0;z-index:950;background:#0e0f13;display:none;flex-direction:column}
+.cam.active{display:flex;animation:rise .3s ease}
+.cam-top{padding:max(16px,env(safe-area-inset-top)) 20px 14px;display:flex;align-items:center;justify-content:space-between}
+.cam-top span{color:#fff;font-size:.9rem;font-weight:600}
+.cam-x{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:1.4rem;cursor:pointer;transition:background .16s}
+.cam-x:active{background:rgba(255,255,255,.25)}
+.cam-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;gap:20px}
+.cam-frame{position:relative;width:100%;max-width:460px;aspect-ratio:1/1;border-radius:20px;overflow:hidden;background:#000;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.cam-frame video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.cam-corner{position:absolute;width:30px;height:30px;border:3px solid var(--lime);pointer-events:none}
+.cam-corner.tl{top:12px;left:12px;border-right:0;border-bottom:0;border-top-left-radius:9px}
+.cam-corner.tr{top:12px;right:12px;border-left:0;border-bottom:0;border-top-right-radius:9px}
+.cam-corner.bl{bottom:12px;left:12px;border-right:0;border-top:0;border-bottom-left-radius:9px}
+.cam-corner.br{bottom:12px;right:12px;border-left:0;border-top:0;border-bottom-right-radius:9px}
+.cam-hint{color:rgba(255,255,255,.6);font-size:.84rem;text-align:center;max-width:420px}
+.cam-ctrl{display:flex;align-items:center;justify-content:center;gap:40px;padding:18px 20px max(20px,env(safe-area-inset-bottom))}
+.cam-shot{width:74px;height:74px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);box-shadow:0 0 0 2px #0e0f13 inset;cursor:pointer;transition:transform .12s}
+.cam-shot:active{transform:scale(.92)}
+.cam-mini{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s}
+.cam-mini:active{background:rgba(255,255,255,.25)}
+
+/* ====== SELECTOR MODAL ====== */
+.sheet-overlay{position:fixed;inset:0;z-index:950;background:rgba(14,20,36,.42);backdrop-filter:blur(5px);display:none;align-items:flex-end;justify-content:center}
+.sheet-overlay.active{display:flex;animation:fade .25s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{width:100%;max-width:580px;background:var(--card);border-radius:var(--r) var(--r) 0 0;max-height:74vh;overflow:hidden;box-shadow:var(--sh-lg);animation:sheetUp .32s cubic-bezier(.2,.8,.25,1)}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+.sheet::before{content:'';display:block;width:40px;height:4px;background:var(--border-2);border-radius:3px;margin:10px auto 2px}
+.sheet h3{font-weight:800;font-size:1.05rem;padding:14px 20px 14px;border-bottom:1px solid var(--border);letter-spacing:-.01em}
+.sheet-list{overflow-y:auto;max-height:calc(74vh - 80px)}
+.sheet-item{padding:15px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .14s}
+.sheet-item:active{background:var(--primary-soft)}
+.sheet-item .nm{font-weight:700;font-size:.92rem}
+.sheet-item .cd{font-family:var(--mono);font-size:.74rem;color:var(--muted);margin-top:2px}
+.sheet-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;background:var(--card-2);flex-shrink:0}
+.sheet-tx{flex:1;min-width:0}
+.sheet-tx .nm,.sheet-tx .cd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-go{color:var(--faint);flex-shrink:0;display:flex}
+.sheet-new{background:var(--lime-soft)}
+.sheet-new:active{background:#e2efce}
+.sheet-newico{width:44px;height:44px;border-radius:10px;flex-shrink:0;background:var(--lime);color:#fff;display:flex;align-items:center;justify-content:center}
+.sheet-new .nm{color:var(--lime-600)}
+.sheet-new .cd{color:var(--lime-600);opacity:.8;font-family:var(--font)}
+/* búsqueda por nombre dentro del sheet */
+.sheet-search{padding:13px 16px;border-bottom:1px solid var(--border)}
+.sheet-search .inp{width:100%}
+.sheet-empty{padding:26px 20px;text-align:center;color:var(--muted);font-size:.86rem}
+
+/* ====== CÓDIGOS DE BARRAS (chips) ====== */
+.bc-add{display:flex;gap:9px}
+.bc-add .inp{flex:1;min-width:0}
+.bc-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.bc-chips:empty{display:none}
+.bc-chip{display:inline-flex;align-items:center;gap:8px;background:var(--primary-soft);color:var(--text);border:1px solid var(--border-2);border-radius:999px;padding:6px 7px 6px 13px;font-family:var(--mono);font-size:.8rem;font-weight:600}
+.bc-chip .x{width:19px;height:19px;border-radius:50%;border:none;background:var(--border-2);color:var(--text-2);font-size:.95rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .14s}
+.bc-chip .x:active{background:var(--danger);color:#fff}
+
+/* ====== SUCCESS ====== */
+.success-screen{position:fixed;inset:0;z-index:980;background:radial-gradient(700px 460px at 50% 30%, rgba(124,179,66,.13), transparent 70%),var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
+.success-screen.active{display:flex;animation:fade .3s ease}
+.stamp{width:108px;height:108px;border-radius:50%;background:linear-gradient(135deg,var(--success),#9ccc65);box-shadow:0 18px 40px -10px rgba(124,179,66,.55);display:flex;align-items:center;justify-content:center;animation:stamp-pop .6s cubic-bezier(.34,1.56,.64,1)}
+.stamp svg{width:56px;height:56px;color:#fff}
+@keyframes stamp-pop{0%{transform:scale(0) rotate(-16deg);opacity:0}60%{transform:scale(1.12) rotate(5deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+.success-screen h2{font-weight:800;font-size:1.7rem;margin-top:26px;letter-spacing:-.02em}
+.success-screen .scod{font-family:var(--mono);font-weight:600;color:var(--success-600);margin-top:8px;font-size:1.05rem}
+.success-screen p{color:var(--muted);font-size:.9rem;margin-top:8px}
+.success-screen .btn{margin-top:30px;max-width:320px}
+.success-screen .btn-primary{background:var(--text)}
+.success-screen .btn-primary:active{background:#2a2e36}
+
+/* ====== BLOCK OVERLAY ====== */
+.block{position:fixed;inset:0;z-index:1050;background:rgba(246,247,251,.72);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.block.active{display:flex}
+.spinner{width:44px;height:44px;border:3.5px solid var(--border-2);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.block-text{font-size:.88rem;font-weight:600;color:var(--text-2)}
+
+/* ====== TOAST ====== */
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(140px);z-index:1100;background:var(--text);color:#fff;border-radius:14px;padding:13px 20px;font-size:.86rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:9px;max-width:calc(100vw - 28px);transition:transform .4s cubic-bezier(.34,1.4,.64,1)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{background:linear-gradient(135deg,var(--danger-600),#fb5577)}
+.toast.ok{background:linear-gradient(135deg,var(--success-600),#8bc34a)}
+
+/* ====== VISTAS (home / wizard / tabla) ====== */
+.view{display:none}
+.view.active{display:block;animation:rise .4s cubic-bezier(.2,.8,.25,1)}
+.icon-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;transition:all .16s}
+.icon-btn:active{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-600)}
+
+/* ====== HOME / MENÚ ====== */
+.home-head{text-align:center;margin:14px 0 22px}
+.home-head h1{font-size:1.5rem;font-weight:800;letter-spacing:-.03em}
+.home-head p{color:var(--muted);font-size:.9rem;margin-top:6px}
+.menu-grid{display:flex;flex-direction:column;gap:14px}
+.menu-card{display:flex;align-items:center;gap:16px;text-align:left;width:100%;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);padding:20px;cursor:pointer;transition:transform .14s,box-shadow .14s,border-color .14s}
+.menu-card:hover{transform:translateY(-2px);box-shadow:var(--sh-lg);border-color:var(--border-2)}
+.menu-card:active{transform:translateY(0)}
+.menu-ico{width:52px;height:52px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff}
+.menu-ico.new{background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary)}
+.menu-ico.list{background:linear-gradient(135deg,var(--lime-600),var(--lime))}
+.menu-ico.tags{background:linear-gradient(135deg,#d97706,var(--amber))}
+.menu-tx{flex:1;min-width:0}
+.menu-tx b{display:block;font-size:1.04rem;font-weight:800;letter-spacing:-.02em}
+.menu-tx span{display:block;font-size:.82rem;color:var(--muted);margin-top:3px}
+.menu-card .chev{color:var(--faint);flex-shrink:0}
+
+/* ====== TABLA DE ARTÍCULOS ====== */
+.tabla-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
+.tabla-head h2{font-size:1.2rem;font-weight:800;letter-spacing:-.02em}
+.tabla-head .count{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.tabla-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.tbl-search{flex:1;min-width:150px}
+.edit-warn{display:none;align-items:center;gap:9px;background:#fff8e1;border:1px solid #ffe2a6;color:#8a6100;border-radius:12px;padding:11px 14px;font-size:.82rem;font-weight:600;margin-bottom:13px}
+.edit-warn.show{display:flex}
+.edit-warn svg{flex-shrink:0}
+.editflag{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:8px 13px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--text-2);white-space:nowrap;transition:all .16s}
+.editflag.on{background:var(--lime-soft);border-color:var(--lime);color:var(--lime-600)}
+.editflag .sw{width:30px;height:17px;border-radius:10px;background:var(--border-2);position:relative;transition:background .18s}
+.editflag .sw::after{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
+.editflag.on .sw{background:var(--lime)}
+.editflag.on .sw::after{transform:translateX(13px)}
+.filterbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:8px 13px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--text-2);white-space:nowrap;transition:all .16s}
+.filterbtn:hover{border-color:var(--border-2)}
+.filterbtn.on{background:#e7e9ee;border-color:var(--muted);color:var(--text)}
+table.art tr.aged > td{background:#e8eaef}
+.tabla-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
+table.art{border-collapse:collapse;width:100%;font-size:.82rem;white-space:nowrap}
+table.art th,table.art td{padding:9px 11px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+table.art thead th{position:sticky;top:0;background:var(--card-2);font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;z-index:1}
+table.art tbody tr:hover > td{background:var(--lime-soft)}
+table.art tbody tr.dirty{background:var(--lime-soft)}
+table.art td.codcol{font-family:var(--mono);font-weight:700;color:var(--text-2);white-space:nowrap;cursor:help}
+table.art .thumb{width:38px;height:38px;border-radius:8px;object-fit:cover;background:var(--card-2);display:block;cursor:zoom-in;transition:transform .18s ease,box-shadow .18s ease;transform-origin:center;position:relative}
+table.art .thumb:hover,table.art .thumb.zoom{transform:scale(2);z-index:30;box-shadow:var(--sh-lg)}
+.cell-inp{width:100%;min-width:90px;border:1px solid transparent;background:transparent;border-radius:7px;padding:6px 8px;font-family:var(--font);font-size:.82rem;color:var(--text);outline:none}
+.cell-inp.num{min-width:74px;font-family:var(--mono)}
+.cell-inp:disabled{color:var(--text);opacity:1;-webkit-text-fill-color:var(--text)}
+.editing .cell-inp:not(:disabled){border-color:var(--border-2);background:var(--card)}
+.editing .cell-inp:focus{border-color:var(--lime);box-shadow:0 0 0 3px var(--lime-soft)}
+.cell-inp.calc{color:var(--muted);font-family:var(--mono)}
+.tsw{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.tsw-input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.tsw-track{width:42px;height:23px;border-radius:12px;background:var(--border-2);position:relative;transition:background .18s;display:inline-block;flex-shrink:0}
+.tsw-track::after{content:'';position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
+.tsw-input:checked + .tsw-track{background:var(--lime)}
+.tsw-input:checked + .tsw-track::after{transform:translateX(19px)}
+.tsw-input:disabled ~ *{opacity:.7}
+.tsw-input:disabled{cursor:default}
+.tsw:has(.tsw-input:disabled){cursor:default}
+.tsw-lbl{font-size:.78rem;font-weight:700;color:var(--text-2);min-width:18px}
+.tsw-input:checked ~ .tsw-lbl{color:var(--lime-600)}
+.row-actions{display:flex;align-items:center;gap:7px}
+.row-icon{border:none;border-radius:8px;width:34px;height:32px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:opacity .16s,background .16s,color .16s}
+.row-save{background:var(--lime-600);color:#fff;opacity:.4;pointer-events:none}
+tr.dirty .row-save{opacity:1;pointer-events:auto}
+.row-del{background:var(--danger-soft);color:var(--danger-600)}
+.row-del:hover{background:var(--danger);color:#fff}
+.tabla-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:.9rem}
+/* ====== PAGINADOR ====== */
+.tabla-pager{display:none;align-items:center;justify-content:space-between;gap:12px;margin:14px 2px 0;flex-wrap:wrap}
+.tabla-pager.show{display:flex}
+.pager-info{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.pager-btns{display:flex;align-items:center;gap:9px}
+.pager-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-2);background:var(--card);border-radius:10px;padding:9px 14px;font-family:var(--font);font-size:.82rem;font-weight:700;color:var(--text-2);cursor:pointer;transition:all .16s}
+.pager-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.pager-btn:active:not(:disabled){background:var(--card-2)}
+.pager-btn:disabled{opacity:.4;cursor:not-allowed}
+.pager-pages{font-size:.8rem;font-weight:700;color:var(--text-2);min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
+
+@media (max-width:400px){
+  .f-2{grid-template-columns:1fr}
+  .rail-label{font-size:.54rem}
+  .card-head h2{font-size:1.05rem}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+    </div>
+    <div class="login-tag">HomePoint · Admin</div>
+    <h1>Alta de Artículos</h1>
+    <div class="sub">Iniciá sesión para registrar productos.</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" class="inp" id="loginEmail" placeholder="correo@ejemplo.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" class="inp" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn">Ingresar</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <button type="button" class="mark" id="brandHome" title="Volver al inicio">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+    </button>
+    <span class="tt"><b>Artículos</b><span id="brandSub">Inicio</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="conn"><span class="dot" id="connDot"></span><span id="connTxt">online</span></span>
+    <button class="icon-btn" id="homeBtn" title="Volver al inicio" style="display:none">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><path d="M9 21v-6h6v6"/></svg>
+    </button>
+    <button class="logout-btn" id="logoutBtn" title="Salir">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap" id="mainWrap">
+
+  <!-- ===== HOME / MENÚ ===== -->
+  <section id="home" class="view active">
+    <div class="home-head">
+      <h1>¿Qué querés hacer?</h1>
+      <p>Elegí una opción para continuar.</p>
+    </div>
+    <div class="menu-grid">
+      <button class="menu-card" id="goNew">
+        <span class="menu-ico new">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </span>
+        <span class="menu-tx"><b>Registrar nuevo artículo</b><span>Escaneá, fotografiá y cargá los datos paso a paso.</span></span>
+        <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </button>
+      <button class="menu-card" id="goList">
+        <span class="menu-ico list">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </span>
+        <span class="menu-tx"><b>Ver artículos registrados</b><span>Tabla con todos los campos, editable manualmente.</span></span>
+        <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </button>
+      <button class="menu-card" id="goPrintLabels">
+        <span class="menu-ico tags">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        </span>
+        <span class="menu-tx"><b>Imprimir etiquetas de precio</b><span>Seleccioná artículos y generá las etiquetas en PDF.</span></span>
+        <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ===== WIZARD (alta / edición) ===== -->
+  <div id="wizard" class="view">
+
+  <!-- STEP RAIL -->
+  <div class="rail" id="rail">
+    <div class="rail-node" data-step="1"><div class="rail-dot">1</div><div class="rail-label">Código</div></div>
+    <div class="rail-line"></div>
+    <div class="rail-node" data-step="2"><div class="rail-dot">2</div><div class="rail-label">Foto</div></div>
+    <div class="rail-line"></div>
+    <div class="rail-node" data-step="3"><div class="rail-dot">3</div><div class="rail-label">Datos</div></div>
+    <div class="rail-line"></div>
+    <div class="rail-node" data-step="4"><div class="rail-dot">4</div><div class="rail-label">Guardar</div></div>
+  </div>
+
+  <!-- ===== STEP 1: CÓDIGO DE BARRAS ===== -->
+  <section class="panel active" id="panel1">
+    <div class="card">
+      <div class="card-head">
+        <h2>Código de barras</h2>
+        <span class="step-no">PASO 1/4</span>
+      </div>
+      <div class="card-body">
+        <button class="scan-hero" id="scanHero">
+          <span class="ico">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10.5" y1="8" x2="10.5" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+          </span>
+          <span><b>Escanear con la cámara</b><small>Apuntá al código de barras</small></span>
+          <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </button>
+
+        <div class="or">o ingresá manual</div>
+
+        <div class="bc-add">
+          <input type="text" class="inp mono" id="barcodeInput" placeholder="Código de barras…" inputmode="numeric" autocomplete="off">
+          <button class="btn btn-dark" id="barcodeBtn">Agregar</button>
+        </div>
+        <div class="bc-chips" id="bcChips1"></div>
+        <div class="hint" id="bcHint1" style="margin-top:11px;display:none">Podés agregar varios códigos para el mismo artículo.</div>
+
+        <div class="nav-row" id="step1Nav" style="display:none">
+          <button class="btn btn-next" id="next1">Continuar</button>
+        </div>
+
+        <button class="btn btn-ghost" id="nameSearchBtn" style="margin-top:11px">¿El producto ya existe? Buscar por nombre</button>
+        <button class="btn btn-ghost" id="noBarcodeBtn" style="margin-top:11px">Artículo sin código de barras →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== STEP 2: FOTO ===== -->
+  <section class="panel" id="panel2">
+    <div class="card">
+      <div class="card-head">
+        <h2>Foto del artículo</h2>
+        <span class="step-no">PASO 2/4</span>
+      </div>
+      <div class="card-body">
+        <div class="photo-stage" id="photoStage">
+          <button type="button" class="photo-placeholder" id="photoPlaceholder" title="Tocá para tomar la foto">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+            <div>Sin foto todavía</div>
+          </button>
+          <img id="photoImg" alt="Foto del artículo">
+        </div>
+
+        <input type="file" accept="image/*" class="hidden-file" id="photoFile">
+        <button class="btn btn-ghost" id="pickPhotoBtn" style="margin-top:11px">Elegir de galería</button>
+        <button class="btn btn-ghost" id="skipPhotoBtn" style="margin-top:11px">Continuar sin foto</button>
+
+        <div class="nav-row">
+          <button class="btn btn-back" id="back2">Atrás</button>
+          <button class="btn btn-next" id="next2">Continuar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== STEP 3: DATOS ===== -->
+  <section class="panel" id="panel3">
+    <div class="card">
+      <div class="card-head">
+        <h2>Datos del artículo</h2>
+        <span class="step-no">PASO 3/4</span>
+      </div>
+      <div class="card-body">
+        <div class="fgrid">
+          <div>
+            <label class="flbl">Nombre <span class="req">*</span></label>
+            <input type="text" class="inp" id="fNombre" placeholder="Nombre del artículo" autocomplete="off">
+          </div>
+          <div>
+            <label class="flbl">Categoría</label>
+            <select class="inp" id="fCategoria">
+              <option value="">Cargando categorías…</option>
+            </select>
+          </div>
+          <div>
+            <label class="flbl">Códigos de barras</label>
+            <button type="button" class="btn btn-dark" id="bcAdd3" style="width:100%;padding-top:14px;padding-bottom:14px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9v6M11 9v6M15 9v6M19 9v6" stroke-width="1.6"/></svg>
+              Agregar Variante
+            </button>
+            <div class="bc-chips" id="bcChips3" style="margin-top:10px"></div>
+          </div>
+          <div class="f-2">
+            <div>
+              <label class="flbl">CostoUSD <span class="req">*</span></label>
+              <div class="prefix-wrap">
+                <span class="pfx">$</span>
+                <input type="number" class="inp" id="fCosto" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+              </div>
+            </div>
+            <div>
+              <label class="flbl">Ganancia <span class="req">*</span></label>
+              <div class="suffix-wrap">
+                <span class="sfx">%</span>
+                <input type="number" class="inp" id="fGanancia" placeholder="0" step="1" min="0" max="99" inputmode="numeric">
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="flbl">PrecioUSD <small>(calculado)</small></label>
+            <div class="prefix-wrap">
+              <span class="pfx">$</span>
+              <input type="text" class="inp calc" id="fPrecio" value="0.00" readonly tabindex="-1">
+            </div>
+            <div class="field-note">Costo ÷ (1 − Ganancia/100)</div>
+          </div>
+          <div class="f-2">
+            <div>
+              <label class="flbl">Cantidad <span class="req">*</span></label>
+              <input type="number" class="inp" id="fCantidad" placeholder="0" step="1" min="0" inputmode="numeric">
+            </div>
+            <div>
+              <label class="flbl">Disponible</label>
+              <div class="toggle" id="dispToggle">
+                <button type="button" class="on yes" data-val="true">Sí</button>
+                <button type="button" data-val="false">No</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-row">
+          <button class="btn btn-back" id="back3">Atrás</button>
+          <button class="btn btn-next" id="next3">Revisar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== STEP 4: CONFIRMAR ===== -->
+  <section class="panel" id="panel4">
+    <div class="card">
+      <div class="card-head">
+        <h2>Confirmar y guardar</h2>
+        <span class="step-no">PASO 4/4</span>
+      </div>
+      <div class="card-body">
+        <div class="review-top">
+          <img class="review-img" id="revImg" alt="">
+          <div>
+            <div class="review-name" id="revNombre">—</div>
+            <div class="review-cod" id="revCodigo">—</div>
+          </div>
+        </div>
+        <div id="revList"></div>
+        <div class="nav-row">
+          <button class="btn btn-back" id="back4">Atrás</button>
+          <button class="btn btn-save" id="saveBtn">Guardar artículo</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </div><!-- /#wizard -->
+
+  <!-- ===== TABLA DE ARTÍCULOS ===== -->
+  <section id="tabla" class="view">
+    <div class="tabla-head">
+      <div>
+        <h2>Artículos registrados</h2>
+        <span class="count" id="tablaCount">—</span>
+      </div>
+      <div class="tabla-tools">
+        <input type="text" class="inp tbl-search" id="tablaSearch" placeholder="Buscar…" autocomplete="off">
+        <button class="filterbtn" id="agedFilter" title="Mostrar solo artículos con más de 60 días desde su registro">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          Antiguos
+        </button>
+        <button class="editflag" id="editFlag"><span class="sw"></span>Editar</button>
+      </div>
+    </div>
+    <div class="edit-warn" id="editWarn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Modo edición activo. Modificá con cuidado: cada fila se guarda en Firebase y te pedirá confirmación.
+    </div>
+    <div class="tabla-scroll">
+      <table class="art" id="artTable">
+        <thead>
+          <tr>
+            <th>Código</th><th>Foto</th><th>Cód. barras</th><th>Nombre</th>
+            <th>Categoría</th><th>Costo USD</th><th>Ganancia %</th><th>Precio USD</th>
+            <th>Disponible</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="artTbody"></tbody>
+      </table>
+    </div>
+    <div class="tabla-pager" id="tablaPager">
+      <span class="pager-info" id="pagerInfo"></span>
+      <div class="pager-btns">
+        <button class="pager-btn" id="pagerPrev">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Anterior
+        </button>
+        <span class="pager-pages" id="pagerPages"></span>
+        <button class="pager-btn" id="pagerNext">
+          Siguiente
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="tabla-empty" id="tablaEmpty" style="display:none">No hay artículos registrados todavía.</div>
+  </section>
+
+</main>
+
+<!-- ===== SCANNER ===== -->
+<div class="scanner" id="scanner">
+  <div class="scanner-top">
+    <span>Escanear código</span>
+    <button class="scanner-x" id="scannerClose">&times;</button>
+  </div>
+  <div class="scanner-body">
+    <div id="reader"></div>
+    <div class="scanner-hint">Mantené el código dentro del recuadro</div>
+  </div>
+</div>
+
+<!-- ===== CÁMARA (captura cuadrada) ===== -->
+<div class="cam" id="cam">
+  <div class="cam-top">
+    <span>Encuadrá el artículo</span>
+    <button class="cam-x" id="camClose">&times;</button>
+  </div>
+  <div class="cam-body">
+    <div class="cam-frame">
+      <video id="camVideo" playsinline autoplay muted></video>
+      <span class="cam-corner tl"></span><span class="cam-corner tr"></span>
+      <span class="cam-corner bl"></span><span class="cam-corner br"></span>
+    </div>
+    <div class="cam-hint">Acomodá el producto completo dentro del cuadro. Se guardará exactamente lo que ves, sin partes cortadas.</div>
+  </div>
+  <div class="cam-ctrl">
+    <button class="cam-mini" id="camFlip" title="Cambiar cámara" aria-label="Cambiar cámara">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="cam-shot" id="camShot" aria-label="Capturar foto"></button>
+    <span style="width:48px" aria-hidden="true"></span>
+  </div>
+</div>
+<canvas id="camCanvas" style="display:none"></canvas>
+
+<!-- ===== SELECTOR MODAL (artículos por barcode) ===== -->
+<div class="sheet-overlay" id="selectorOverlay">
+  <div class="sheet">
+    <h3 id="selectorTitle">Artículos con este código</h3>
+    <div class="sheet-list" id="selectorList"></div>
+  </div>
+</div>
+
+<!-- ===== BÚSQUEDA POR NOMBRE (asociar código a artículo existente) ===== -->
+<div class="sheet-overlay" id="nameSearchOverlay">
+  <div class="sheet">
+    <h3 id="nameSearchTitle">Buscar artículo por nombre</h3>
+    <div class="sheet-search">
+      <input type="text" class="inp" id="nameSearchInput" placeholder="Escribí parte del nombre…" autocomplete="off">
+    </div>
+    <div class="sheet-list" id="nameSearchList"></div>
+  </div>
+</div>
+
+<!-- ===== SUCCESS ===== -->
+<div class="success-screen" id="success">
+  <div class="stamp">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+  <h2 id="successTitle">¡Guardado!</h2>
+  <div class="scod" id="successCod">#—</div>
+  <p id="successMsg">El artículo se registró en Firebase.</p>
+  <button class="btn btn-primary" id="anotherBtn">Cargar otro artículo</button>
+</div>
+
+<!-- ===== BLOCK OVERLAY ===== -->
+<div class="block" id="block">
+  <div class="spinner"></div>
+  <div class="block-text" id="blockText">Procesando…</div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  Firebase init (config.js → pedidos-87064)
+// ============================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const storage = firebase.storage();
+const articulosRef = db.ref('articulos');
+
+// ============================================================
+//  Connection-safety pattern (igual que ingresoStock)
+// ============================================================
+let firebaseConectado = false;
+db.ref('.info/connected').on('value', snap => {
+  firebaseConectado = snap.val() === true;
+  const dot = document.getElementById('connDot');
+  const txt = document.getElementById('connTxt');
+  if (dot) dot.classList.toggle('off', !firebaseConectado);
+  if (txt) txt.textContent = firebaseConectado ? 'online' : 'offline';
+});
+
+async function verificarConexionFirebase(timeoutMs = 5000) {
+  if (firebaseConectado) return true;
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    const ref = db.ref('.info/connected');
+    const cb = snap => {
+      if (snap.val() === true) {
+        clearTimeout(timer);
+        ref.off('value', cb);
+        resolve(true);
+      }
+    };
+    ref.on('value', cb);
+  });
+}
+
+function conTimeout(promise, ms, msg) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+  ]);
+}
+
+let procesoCriticoEnEjecucion = false;
+window.addEventListener('beforeunload', e => {
+  if (procesoCriticoEnEjecucion) {
+    e.preventDefault();
+    e.returnValue = 'Hay un guardado en curso. Si cerrás la página, los datos pueden no guardarse.';
+    return e.returnValue;
+  }
+});
+
+// ============================================================
+//  Helpers
+// ============================================================
+const $ = id => document.getElementById(id);
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+let toastTimer = null;
+function toast(msg, type){
+  const t = $('toast');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+function showBlock(text){ $('blockText').textContent = text || 'Procesando…'; $('block').classList.add('active'); }
+function hideBlock(){ $('block').classList.remove('active'); }
+
+// ============================================================
+//  Estado
+// ============================================================
+const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%23f1f3f9' width='64' height='64'/%3E%3Ctext x='32' y='35' text-anchor='middle' fill='%23a9b0c1' font-family='monospace' font-size='8'%3Esin foto%3C/text%3E%3C/svg%3E";
+
+let categorias = [];
+let articulosCache = {};     // key (Codigo) -> registro
+let currentStep = 1;
+
+const state = {
+  editing: false,
+  codigo: '',          // string 5 cifras
+  barcodes: [],        // lista de códigos de barras del artículo (se guarda como CSV)
+  photoBlob: null,     // nueva foto (blob) a subir
+  photoDataUrl: '',    // preview local
+  existingFotoUrl: '', // foto previa (modo edición) si no se reemplaza
+  photoSkipped: false,
+  disponible: true,
+  allowDup: false     // true si el usuario eligió crear un artículo nuevo con un barcode ya existente
+};
+
+// ============================================================
+//  Google Sheets — Categorías
+//  (spreadsheet del prompt + API_KEY de config.js)
+// ============================================================
+const CATEGORIAS_SHEET_ID = '1Fp80hQ2VkczeL_EdFSqDfn40a_yunOkHrY4wIt2eXTI';
+const CATEGORIAS_RANGO = 'Categorias!A:A';
+const CATEGORIAS_URL = `https://sheets.googleapis.com/v4/spreadsheets/${CATEGORIAS_SHEET_ID}/values/${encodeURIComponent(CATEGORIAS_RANGO)}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+
+async function loadCategorias(){
+  const sel = $('fCategoria');
+  try {
+    const res = await fetch(CATEGORIAS_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    let rows = (data.values || []).map(r => (r[0] || '').trim()).filter(Boolean);
+    // descartar encabezado típico
+    if (rows.length && /^categor/i.test(rows[0])) rows = rows.slice(1);
+    // únicos preservando orden
+    categorias = [...new Set(rows)];
+    sel.innerHTML = '<option value="">Seleccioná una categoría…</option>' +
+      categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  } catch (e) {
+    console.error('Error categorías:', e);
+    sel.innerHTML = '<option value="">⚠ No se pudieron cargar las categorías</option>';
+    toast('No se pudieron cargar las categorías del Sheet', 'err');
+  }
+}
+
+// ============================================================
+//  Cargar artículos existentes (para duplicados y código)
+// ============================================================
+function loadArticulos(){
+  return new Promise(resolve => {
+    articulosRef.once('value', snap => {
+      articulosCache = snap.val() || {};
+      resolve(articulosCache);
+    }, err => {
+      console.error('Error leyendo articulos:', err);
+      articulosCache = {};
+      resolve({});
+    });
+  });
+}
+
+function getNextCodigo(){
+  let max = 9999; // así el primero será 10000
+  Object.values(articulosCache).forEach(a => {
+    const n = parseInt(a && a.Codigo, 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  return String(max + 1).padStart(5, '0');
+}
+
+// devuelve array de coincidencias por barcode
+function findByBarcode(barcode){
+  const target = String(barcode).trim();
+  if (!target) return [];
+  const out = [];
+  Object.entries(articulosCache).forEach(([key, a]) => {
+    if (!a || !a.CodigoBarras) return;
+    const codes = String(a.CodigoBarras).split(',').map(c => c.trim()).filter(Boolean);
+    if (codes.includes(target)) out.push({ key, ...a });
+  });
+  return out;
+}
+
+// ============================================================
+//  Navegación de pasos
+// ============================================================
+function setStep(n){
+  currentStep = n;
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  $('panel' + n).classList.add('active');
+  document.querySelectorAll('#rail .rail-node').forEach(node => {
+    const s = parseInt(node.dataset.step, 10);
+    node.classList.toggle('active', s === n);
+    node.classList.toggle('done', s < n);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================
+//  PASO 1 — Código de barras
+// ============================================================
+$('scanHero').addEventListener('click', () => { scanMode = 'step1'; startScanner(); });
+$('barcodeBtn').addEventListener('click', () => submitBarcode($('barcodeInput').value));
+$('barcodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitBarcode($('barcodeInput').value); });
+$('bcAdd3').addEventListener('click', () => { scanMode = 'variant'; startScanner(); });
+$('next1').addEventListener('click', () => enterNewMode());
+$('noBarcodeBtn').addEventListener('click', () => enterNewMode());
+
+// click delegado sobre los chips (quitar)
+['bcChips1','bcChips3'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('click', e => {
+    const x = e.target.closest('.x');
+    if (x) removeBarcode(x.dataset.bc);
+  });
+});
+
+// ---- Lista de códigos de barras (chips) ----
+function normalizeCode(v){ return String(v || '').trim(); }
+
+function renderBarcodeChips(){
+  const html = state.barcodes.map(c =>
+    `<span class="bc-chip">${escapeHtml(c)}<button type="button" class="x" data-bc="${escapeHtml(c)}" aria-label="Quitar">&times;</button></span>`
+  ).join('');
+  ['bcChips1','bcChips3'].forEach(id => { const el = $(id); if (el) el.innerHTML = html; });
+  updateStep1Nav();
+}
+
+function updateStep1Nav(){
+  const has = state.barcodes.length > 0;
+  $('step1Nav').style.display = has ? '' : 'none';
+  $('bcHint1').style.display = has ? '' : 'none';
+  // si ya hay códigos, el botón "sin código de barras" pierde sentido
+  $('noBarcodeBtn').style.display = has ? 'none' : '';
+}
+
+// agrega un código a state.barcodes (con avisos, sin bloquear)
+function addBarcode(code, opts){
+  opts = opts || {};
+  const c = normalizeCode(code);
+  if (!c){ toast('Ingresá un código', 'err'); return false; }
+  if (state.barcodes.includes(c)){ toast('Ese código ya está en la lista', 'err'); return false; }
+  if (!opts.silentOwner){
+    const owners = findByBarcode(c).filter(a => String(a.Codigo || a.key) !== String(state.codigo));
+    if (owners.length){
+      toast('Ojo: ese código ya está en el artículo #' + (owners[0].Codigo || owners[0].key), 'err');
+    }
+  }
+  state.barcodes.push(c);
+  $('barcodeInput').value = '';
+  renderBarcodeChips();
+  return true;
+}
+
+function removeBarcode(code){
+  const c = normalizeCode(code);
+  state.barcodes = state.barcodes.filter(x => x !== c);
+  renderBarcodeChips();
+}
+
+// Entrada de un código en el PASO 1 (manual o por escáner)
+async function submitBarcode(val){
+  const code = normalizeCode(val);
+  if (!code){ toast('Ingresá un código o usá el escáner', 'err'); return; }
+  showBlock('Verificando código…');
+  await loadArticulos();   // cache fresca para detectar duplicados
+  hideBlock();
+
+  // El PRIMER código que matchea un artículo existente → desambiguar (editar o registrar nuevo)
+  if (state.barcodes.length === 0){
+    const matches = findByBarcode(code);
+    if (matches.length){ openSelector(matches, code); return; }
+  }
+  addBarcode(code);
+}
+
+function resetArticleState(keepBarcode){
+  state.editing = false;
+  state.codigo = '';
+  state.photoBlob = null;
+  state.photoDataUrl = '';
+  state.existingFotoUrl = '';
+  state.photoSkipped = false;
+  state.disponible = true;
+  state.allowDup = false;
+  if (!keepBarcode) state.barcodes = [];
+  // limpiar UI de foto
+  $('photoStage').classList.remove('has-img');
+  $('photoImg').src = '';
+  // limpiar códigos de barras
+  $('barcodeInput').value = '';
+  renderBarcodeChips();
+  // limpiar form
+  $('fNombre').value = '';
+  $('fCategoria').value = '';
+  $('fCosto').value = '';
+  $('fGanancia').value = '';
+  $('fPrecio').value = '0.00';
+  $('fCantidad').value = '';
+  setDisponible(true);
+  document.querySelectorAll('.inp.invalid').forEach(el => el.classList.remove('invalid'));
+}
+
+function enterNewMode(){
+  state.editing = false;
+  state.codigo = getNextCodigo();
+  renderBanner('new', state.codigo);
+  renderBarcodeChips();
+  setStep(2);
+}
+
+function enterEditMode(rec){
+  state.editing = true;
+  state.codigo = rec.Codigo || rec.key;
+  state.barcodes = String(rec.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean);
+  renderBarcodeChips();
+  // precargar
+  $('fNombre').value = rec.Nombre || '';
+  if (rec.Categoria){
+    if (!categorias.includes(rec.Categoria)){
+      const opt = document.createElement('option');
+      opt.value = rec.Categoria; opt.textContent = rec.Categoria;
+      $('fCategoria').appendChild(opt);
+    }
+    $('fCategoria').value = rec.Categoria;
+  }
+  $('fCosto').value = (rec.CostoUSD != null ? rec.CostoUSD : '');
+  $('fGanancia').value = (rec.GananciaPorc != null ? rec.GananciaPorc : '');
+  $('fCantidad').value = (rec.Cantidad != null ? rec.Cantidad : '');
+  setDisponible(rec.Disponible !== false);
+  calcValor();
+  // foto previa
+  if (rec.Foto){
+    state.existingFotoUrl = rec.Foto;
+    $('photoImg').src = rec.Foto;
+    $('photoStage').classList.add('has-img');
+  }
+  renderBanner('edit', state.codigo);
+  setStep(2);
+}
+
+function barcodesLabel(){
+  const n = state.barcodes.length;
+  if (n === 0) return 'sin código de barras';
+  if (n === 1) return '1 código de barras';
+  return n + ' códigos de barras';
+}
+
+function renderBanner(type, codigo){
+  const slot = $('bannerSlot');
+  if (!slot) return; // el banner del paso 2 fue removido para optimizar el espacio
+  if (type === 'edit'){
+    slot.innerHTML = `<div class="banner edit">
+      <span class="bico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+      <span>Editando artículo existente · <span class="code">#${escapeHtml(codigo)}</span> · ${barcodesLabel()}</span>
+    </div>`;
+  } else {
+    slot.innerHTML = `<div class="banner new">
+      <span class="bico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+      <span>Artículo nuevo · código asignado <span class="code">#${escapeHtml(codigo)}</span> · ${barcodesLabel()}</span>
+    </div>`;
+  }
+}
+
+// selector cuando hay uno o varios artículos para un barcode
+function openSelector(matches, barcode){
+  const list = $('selectorList');
+  $('selectorTitle').textContent = matches.length > 1
+    ? `${matches.length} artículos con este código`
+    : 'Ya existe un artículo con este código';
+
+  const chev = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+
+  const itemsHtml = matches.map((m, i) => `
+    <div class="sheet-item" data-idx="${i}">
+      <img class="sheet-thumb" src="${m.Foto ? escapeHtml(m.Foto) : PLACEHOLDER_IMG}" alt="" onerror="imgFallback(this)">
+      <div class="sheet-tx">
+        <div class="nm">${escapeHtml(m.Nombre || 'Sin nombre')}</div>
+        <div class="cd">#${escapeHtml(m.Codigo || m.key)}${m.Categoria ? ' · ' + escapeHtml(m.Categoria) : ''}</div>
+      </div>
+      <span class="sheet-go">${chev}</span>
+    </div>`).join('');
+
+  const newHtml = `
+    <div class="sheet-item sheet-new" data-new="1">
+      <span class="sheet-newico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+      <div class="sheet-tx">
+        <div class="nm">Registrar artículo nuevo</div>
+        <div class="cd">Con este mismo código de barras</div>
+      </div>
+    </div>`;
+
+  list.innerHTML = itemsHtml + newHtml;
+  list.querySelectorAll('.sheet-item').forEach(el => {
+    el.addEventListener('click', () => {
+      $('selectorOverlay').classList.remove('active');
+      if (el.dataset.new){
+        startNewWithBarcode(barcode);
+      } else {
+        enterEditMode(matches[parseInt(el.dataset.idx, 10)]);
+      }
+    });
+  });
+  $('selectorOverlay').classList.add('active');
+}
+
+// "Registrar artículo nuevo" desde el selector: siembra el código como chip y permite
+// seguir agregando más en el paso 1 (permitiendo deliberadamente un código ya existente).
+function startNewWithBarcode(barcode){
+  state.allowDup = true;
+  const c = normalizeCode(barcode);
+  if (c && !state.barcodes.includes(c)) state.barcodes.push(c);
+  renderBarcodeChips();
+  toast('Agregá más códigos o tocá Continuar', 'ok');
+}
+$('selectorOverlay').addEventListener('click', e => { if (e.target === $('selectorOverlay')) $('selectorOverlay').classList.remove('active'); });
+
+// ---- Buscar artículo por nombre y asociarle el código tipeado (decisión: asociar a existente) ----
+let pendingAssocCode = '';
+
+$('nameSearchBtn').addEventListener('click', async () => {
+  pendingAssocCode = normalizeCode($('barcodeInput').value);
+  showBlock('Cargando artículos…');
+  await loadArticulos();
+  hideBlock();
+  $('nameSearchTitle').textContent = pendingAssocCode
+    ? `Asociar el código ${pendingAssocCode} a…`
+    : 'Buscar artículo por nombre';
+  $('nameSearchInput').value = '';
+  renderNameResults('');
+  $('nameSearchOverlay').classList.add('active');
+  setTimeout(() => $('nameSearchInput').focus(), 60);
+});
+$('nameSearchInput').addEventListener('input', () => renderNameResults($('nameSearchInput').value));
+$('nameSearchOverlay').addEventListener('click', e => { if (e.target === $('nameSearchOverlay')) $('nameSearchOverlay').classList.remove('active'); });
+
+function renderNameResults(q){
+  const list = $('nameSearchList');
+  const query = String(q || '').trim().toLowerCase();
+  let items = Object.entries(articulosCache).map(([key, a]) => ({ key, ...a }));
+  if (query) items = items.filter(a => String(a.Nombre || '').toLowerCase().includes(query));
+  items.sort((x, y) => String(x.Nombre || '').localeCompare(String(y.Nombre || '')));
+  items = items.slice(0, 40);
+
+  if (!items.length){
+    list.innerHTML = `<div class="sheet-empty">${query ? 'Sin resultados' : 'Escribí parte del nombre para buscar…'}</div>`;
+    return;
+  }
+  const chev = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+  list.innerHTML = items.map(a => {
+    const nCodes = String(a.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean).length;
+    return `
+    <div class="sheet-item" data-key="${escapeHtml(a.key)}">
+      <img class="sheet-thumb" src="${a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)">
+      <div class="sheet-tx">
+        <div class="nm">${escapeHtml(a.Nombre || 'Sin nombre')}</div>
+        <div class="cd">#${escapeHtml(a.Codigo || a.key)}${nCodes ? ' · ' + nCodes + ' cód.' : ''}${a.Categoria ? ' · ' + escapeHtml(a.Categoria) : ''}</div>
+      </div>
+      <span class="sheet-go">${chev}</span>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.sheet-item').forEach(el => {
+    el.addEventListener('click', () => {
+      $('nameSearchOverlay').classList.remove('active');
+      const key = el.dataset.key;
+      enterEditMode({ key, ...articulosCache[key] });
+      if (pendingAssocCode){
+        if (addBarcode(pendingAssocCode, { silentOwner: true })) toast('Código agregado al artículo', 'ok');
+        pendingAssocCode = '';
+      }
+    });
+  });
+}
+
+// ============================================================
+//  Scanner (html5-qrcode)
+// ============================================================
+let html5Qr = null;
+let scanBusy = false;
+// 'step1' = entrada del paso 1 (desambigua/registra); 'variant' = agrega una variante en el paso 3
+let scanMode = 'step1';
+
+// Detecta iOS (incluye iPadOS, que se reporta como "MacIntel" con pantalla táctil)
+const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+const SCAN_FORMATS = () => [
+  Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.QR_CODE
+];
+
+function scanQrbox(vw){
+  const w = Math.min(vw.width, vw.height);
+  return { width: Math.floor(w * 0.8), height: Math.floor(w * 0.5) };
+}
+
+async function startScanner(){
+  if (typeof Html5Qrcode === 'undefined'){ toast('Escáner no disponible', 'err'); return; }
+  $('scanner').classList.add('active');
+  scanBusy = false;
+
+  const baseConfig = { fps: 10, qrbox: scanQrbox };
+
+  // En iOS los códigos de barras 1D (EAN/UPC/CODE_128) no se decodifican con la
+  // config básica: Safari entrega un stream de baja resolución y, al recortar al
+  // qrbox, las barras finas no llegan con suficiente densidad de píxeles (la cámara
+  // "no lee nada"). Pedimos alta resolución + enfoque continuo para resolverlas.
+  // Android ya funciona con la config básica, así que solo cambiamos en iOS.
+  const iosConfig = {
+    ...baseConfig,
+    videoConstraints: {
+      facingMode: { ideal: 'environment' },
+      width:  { min: 640, ideal: 1920, max: 2560 },
+      height: { min: 480, ideal: 1080, max: 1440 },
+      advanced: [{ focusMode: 'continuous' }] // best-effort: se ignora si no se soporta
+    }
+  };
+
+  // Intento principal
+  try {
+    html5Qr = new Html5Qrcode('reader', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await html5Qr.start(
+      { facingMode: 'environment' },
+      ES_IOS ? iosConfig : baseConfig,
+      onScan, () => {}
+    );
+    return;
+  } catch (err){
+    // Si los constraints de alta resolución fallan en algún iPhone
+    // (OverconstrainedError), reintentamos con la config básica para no
+    // quedarnos sin escáner. En no-iOS esto casi nunca se ejecuta.
+    console.warn('Escáner: fallo el inicio, reintentando con config básica:', err);
+    if (html5Qr){
+      try { await html5Qr.stop(); } catch(_){}
+      try { html5Qr.clear(); } catch(_){}
+      html5Qr = null;
+    }
+  }
+
+  // Reintento con la configuración básica (idéntica a la que ya funcionaba)
+  try {
+    html5Qr = new Html5Qrcode('reader', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, baseConfig, onScan, () => {});
+  } catch (err){
+    console.error('Scanner error:', err);
+    toast('No se pudo abrir la cámara', 'err');
+    closeScanner();
+  }
+}
+
+function onScan(decodedText){
+  if (scanBusy) return;
+  scanBusy = true;
+  if (navigator.vibrate) navigator.vibrate(60);
+  const code = String(decodedText).trim();
+  const mode = scanMode;
+  scanMode = 'step1'; // restablecer para el próximo escaneo
+  closeScanner().then(() => {
+    if (mode === 'variant') addBarcode(code); // suma la variante a la lista del artículo
+    else submitBarcode(code);
+  });
+}
+
+function closeScanner(){
+  $('scanner').classList.remove('active');
+  if (html5Qr){
+    return html5Qr.stop().then(() => { html5Qr.clear(); html5Qr = null; }).catch(() => { html5Qr = null; });
+  }
+  return Promise.resolve();
+}
+$('scannerClose').addEventListener('click', closeScanner);
+
+// ============================================================
+//  PASO 2 — Foto + recorte 512x512
+// ============================================================
+// Tocar el recuadro de la foto (placeholder o imagen ya cargada) abre la cámara
+$('photoStage').addEventListener('click', openCamera);
+$('pickPhotoBtn').addEventListener('click', () => $('photoFile').click());
+$('photoFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if (file) handlePhoto(file);
+  e.target.value = '';
+});
+
+// ---- Cámara en vivo con visor CUADRADO (WYSIWYG: lo que se ve es lo que se guarda) ----
+let camStream = null;
+let camFacing = 'environment';
+
+$('camClose').addEventListener('click', closeCamera);
+$('camShot').addEventListener('click', captureCamera);
+$('camFlip').addEventListener('click', async () => {
+  camFacing = (camFacing === 'environment') ? 'user' : 'environment';
+  await startCamStream();
+});
+
+async function openCamera(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    // sin API de cámara (desktop sin webcam, navegador viejo) → selector de archivos
+    $('photoFile').click();
+    return;
+  }
+  $('cam').classList.add('active');
+  await startCamStream();
+}
+
+async function startCamStream(){
+  stopCamStream();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: camFacing }, width: { ideal: 1920 }, height: { ideal: 1920 } },
+      audio: false
+    });
+    const v = $('camVideo');
+    v.srcObject = camStream;
+    v.style.transform = (camFacing === 'user') ? 'scaleX(-1)' : 'none';
+    await v.play().catch(() => {});
+  } catch (err){
+    console.error('Cámara:', err);
+    closeCamera();
+    toast('No se pudo abrir la cámara. Elegí una foto.', 'err');
+    $('photoFile').click();
+  }
+}
+
+function stopCamStream(){
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const v = $('camVideo');
+  if (v) v.srcObject = null;
+}
+
+function closeCamera(){
+  $('cam').classList.remove('active');
+  stopCamStream();
+}
+
+// Captura el cuadrado central del video — coincide exactamente con lo que el
+// visor (object-fit:cover sobre contenedor cuadrado) le muestra al usuario.
+function captureCamera(){
+  const v = $('camVideo');
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw || !vh){ toast('La cámara aún no está lista', 'err'); return; }
+  const side = Math.min(vw, vh);
+  const sx = (vw - side) / 2, sy = (vh - side) / 2;
+  const canvas = $('camCanvas');
+  canvas.width = side; canvas.height = side;
+  const ctx = canvas.getContext('2d');
+  if (camFacing === 'user'){ ctx.save(); ctx.translate(side, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(v, sx, sy, side, side, 0, 0, side, side);
+  if (camFacing === 'user') ctx.restore();
+  canvas.toBlob(b => {
+    if (!b){ toast('No se pudo capturar la foto', 'err'); return; }
+    closeCamera();
+    handlePhoto(b);
+  }, 'image/jpeg', 0.95);
+}
+$('skipPhotoBtn').addEventListener('click', () => { state.photoSkipped = true; state.photoBlob = null; setStep(3); });
+$('next2').addEventListener('click', () => setStep(3));
+$('back2').addEventListener('click', () => setStep(1));
+
+async function handlePhoto(file){
+  try {
+    const square = await buildSquareCanvas(file);   // cuadrado en alta resolución
+    const blob = await squareToBlob(square, 512);  // versión 512x512 para subir a Storage
+    state.photoBlob = blob;
+    state.photoSkipped = false;
+    state.existingFotoUrl = ''; // reemplaza la previa si estábamos editando
+    if (state.photoDataUrl) { try { URL.revokeObjectURL(state.photoDataUrl); } catch(_){} }
+    const url = URL.createObjectURL(blob);
+    state.photoDataUrl = url;
+    $('photoImg').src = url;
+    $('photoStage').classList.add('has-img');
+  } catch (err){
+    console.error('Error procesando foto:', err);
+    toast('No se pudo procesar la imagen', 'err');
+  }
+}
+
+// Recorte cuadrado centrado en alta resolución (hasta 2200px), fuente de la versión 1080 que se sube.
+function buildSquareCanvas(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const S = Math.min(side, 2200);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = S; canvas.height = S;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, S, S);
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, S, S);
+      URL.revokeObjectURL(img.src);
+      resolve(canvas);
+    };
+    img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function squareToBlob(square, S){
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = S; canvas.height = S;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(square, 0, 0, S, S);
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob falló')), 'image/jpeg', 0.85);
+  });
+}
+
+// ============================================================
+//  PASO 3 — Datos
+// ============================================================
+$('fCosto').addEventListener('input', calcValor);
+$('fGanancia').addEventListener('input', calcValor);
+$('next3').addEventListener('click', () => { if (validar()) buildReview(); });
+$('back3').addEventListener('click', () => setStep(2));
+
+$('dispToggle').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setDisponible(btn.dataset.val === 'true');
+});
+function setDisponible(val){
+  state.disponible = !!val;
+  const btns = $('dispToggle').querySelectorAll('button');
+  btns.forEach(b => {
+    const isOn = (b.dataset.val === 'true') === state.disponible;
+    b.classList.toggle('on', isOn);
+    b.classList.toggle('yes', b.dataset.val === 'true');
+    b.classList.toggle('no', b.dataset.val === 'false');
+    if (!isOn) b.classList.remove('on');
+  });
+}
+
+function calcValor(){
+  const costo = parseFloat($('fCosto').value);
+  const gan = parseInt($('fGanancia').value, 10);
+  const out = $('fPrecio');
+  if (isNaN(costo) || isNaN(gan)){ out.value = '0.00'; out.classList.remove('bad'); return; }
+  if (gan >= 100){ out.value = '— (ganancia ≥ 100%)'; out.classList.add('bad'); return; }
+  const valor = costo / (1 - gan / 100);
+  out.classList.remove('bad');
+  out.value = (isFinite(valor) ? valor : 0).toFixed(2);
+}
+
+function getPrecioUSD(){
+  const costo = parseFloat($('fCosto').value);
+  const gan = parseInt($('fGanancia').value, 10);
+  if (isNaN(costo) || isNaN(gan) || gan >= 100) return null;
+  return Math.round((costo / (1 - gan / 100)) * 100) / 100;
+}
+
+function validar(){
+  let ok = true;
+  const mark = (el, bad) => { el.classList.toggle('invalid', bad); if (bad) ok = false; };
+  const nombre = $('fNombre').value.trim();
+  const costo = parseFloat($('fCosto').value);
+  const gan = parseInt($('fGanancia').value, 10);
+  const cant = parseInt($('fCantidad').value, 10);
+
+  mark($('fNombre'), !nombre);
+  mark($('fCosto'), isNaN(costo) || costo < 0);
+  mark($('fGanancia'), isNaN(gan) || gan < 0 || gan >= 100);
+  mark($('fCantidad'), isNaN(cant) || cant < 0);
+
+  if (!ok) toast('Revisá los campos marcados', 'err');
+  return ok;
+}
+
+// ============================================================
+//  PASO 4 — Review
+// ============================================================
+$('back4').addEventListener('click', () => setStep(3));
+
+function buildReview(){
+  $('revNombre').textContent = $('fNombre').value.trim() || '—';
+  $('revCodigo').textContent = '#' + state.codigo + (state.editing ? ' · edición' : '');
+  const img = $('revImg');
+  const preview = state.photoDataUrl || state.existingFotoUrl;
+  if (preview){ img.src = preview; img.classList.remove('empty'); img.alt = ''; }
+  else { img.src = PLACEHOLDER_IMG; img.classList.add('empty'); }
+
+  const valor = getPrecioUSD();
+  const costo = parseFloat($('fCosto').value);
+  const gan = parseInt($('fGanancia').value, 10);
+  const rows = [
+    ['Códigos de barras', state.barcodes.length ? state.barcodes.join(', ') : 'Sin código', 'mono'],
+    ['Categoría', $('fCategoria').value || '—', ''],
+    ['CostoUSD', '$' + (isNaN(costo) ? '0.00' : costo.toFixed(2)), 'mono'],
+    ['Ganancia', (isNaN(gan) ? '0' : gan) + '%', 'mono'],
+    ['PrecioUSD', valor != null ? '$' + valor.toFixed(2) : '—', 'mono pos'],
+    ['Cantidad', $('fCantidad').value || '0', 'mono'],
+    ['Disponible', state.disponible ? 'Sí' : 'No', state.disponible ? 'pos' : 'neg']
+  ];
+  $('revList').innerHTML = rows.map(([k, v, cls]) =>
+    `<div class="kv"><span class="k">${escapeHtml(k)}</span><span class="v ${cls || ''}">${escapeHtml(v)}</span></div>`
+  ).join('');
+  setStep(4);
+}
+
+// ============================================================
+//  Guardar
+// ============================================================
+$('saveBtn').addEventListener('click', guardarArticulo);
+
+async function uploadFoto(blob, codigo){
+  const ref = storage.ref('articulos/' + codigo + '.jpg');
+  await conTimeout(ref.put(blob), 30000, 'La subida de la foto tardó demasiado.');
+  return await ref.getDownloadURL();
+}
+
+async function guardarArticulo(){
+  const btn = $('saveBtn');
+  if (btn.disabled) return;
+
+  const valor = getPrecioUSD();
+  if (valor == null){ toast('Revisá CostoUSD y Ganancia', 'err'); setStep(3); return; }
+
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  showBlock('Verificando conexión…');
+
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
+
+    // recalcular cache + código para nuevos (minimiza colisiones)
+    await loadArticulos();
+    if (!state.editing){
+      // Los duplicados entre artículos ya se avisan al escanear/agregar y al desambiguar
+      // con el selector en el paso 1 (decisión: avisar pero permitir). Acá solo asignamos código.
+      state.codigo = getNextCodigo();
+    }
+
+    // subir foto si hay una nueva
+    let fotoUrl = state.existingFotoUrl || '';
+    if (state.photoBlob){
+      showBlock('Subiendo foto…');
+      fotoUrl = await uploadFoto(state.photoBlob, state.codigo);
+    }
+
+    showBlock('Guardando artículo…');
+    const registro = {
+      Codigo: state.codigo,
+      CodigoBarras: state.barcodes.join(','),
+      Foto: fotoUrl || '',
+      Nombre: $('fNombre').value.trim(),
+      Categoria: $('fCategoria').value.trim(),
+      CostoUSD: parseFloat($('fCosto').value),
+      PrecioUSD: valor,
+      GananciaPorc: parseInt($('fGanancia').value, 10),
+      Cantidad: parseInt($('fCantidad').value, 10),
+      Disponible: !!state.disponible,
+      Timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    const ref = articulosRef.child(state.codigo);
+    await conTimeout(ref.set(registro), 15000, 'Timeout: la escritura tardó demasiado.');
+
+    // verificación de escritura
+    const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar el guardado.');
+    if (!check.exists() || check.val().Codigo !== state.codigo){
+      throw new Error('La verificación del guardado falló.');
+    }
+
+    articulosCache[state.codigo] = registro;
+    showSuccess();
+  } catch (err){
+    console.error('Error guardando:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+function showSuccess(){
+  $('successTitle').textContent = state.editing ? '¡Actualizado!' : '¡Guardado!';
+  $('successCod').textContent = '#' + state.codigo;
+  $('successMsg').textContent = state.editing
+    ? 'El artículo se actualizó en Firebase.'
+    : 'El artículo se registró en Firebase.';
+  $('success').classList.add('active');
+}
+
+$('anotherBtn').addEventListener('click', () => {
+  $('success').classList.remove('active');
+  startNewArticulo();
+});
+
+// ============================================================
+//  Vistas (home / wizard / tabla)
+// ============================================================
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  $(name).classList.add('active');
+  const subs = { home: 'Inicio', wizard: 'Nuevo registro', tabla: 'Listado' };
+  $('brandSub').textContent = subs[name] || '';
+  $('homeBtn').style.display = (name === 'home') ? 'none' : 'flex';
+  $('mainWrap').style.maxWidth = (name === 'tabla') ? 'min(1180px,96vw)' : '580px';
+  window.scrollTo({ top: 0 });
+}
+
+function startNewArticulo(){
+  resetArticleState(false);
+  $('barcodeInput').value = '';
+  setStep(1);
+  showView('wizard');
+}
+
+function goHome(){
+  // si está a mitad del alta, confirmar para no perder datos
+  if ($('wizard').classList.contains('active') && currentStep > 1){
+    if (!confirm('¿Volver al inicio? Se perderán los datos no guardados de este artículo.')) return;
+  }
+  showView('home');
+}
+
+$('goNew').addEventListener('click', startNewArticulo);
+$('goList').addEventListener('click', openTabla);
+$('goPrintLabels').addEventListener('click', () => { window.location.href = 'imprimirEtiqueta.html'; });
+$('homeBtn').addEventListener('click', goHome);
+$('brandHome').addEventListener('click', goHome);
+
+// ============================================================
+//  Tabla de artículos (interactiva / editable)
+// ============================================================
+let tableEditable = false;
+
+async function openTabla(){
+  showView('tabla');
+  showBlock('Cargando artículos…');
+  await loadArticulos();
+  hideBlock();
+  // asegurar categorías para los selectores
+  if (!categorias.length) await loadCategorias();
+  tablaPage = 0;
+  renderTable();
+}
+
+function imgFallback(el){ el.onerror = null; el.src = PLACEHOLDER_IMG; }
+
+// Fecha (solo fecha) ajustada a GMT-3 (Argentina, sin DST)
+function fmtFechaGMT3(ts){
+  if (ts == null || ts === '') return 'sin fecha';
+  const n = Number(ts);
+  if (!isFinite(n)) return 'sin fecha';
+  try {
+    return new Intl.DateTimeFormat('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }).format(new Date(n));
+  } catch (e){
+    const d = new Date(n - 3 * 3600 * 1000);
+    return ('0' + d.getUTCDate()).slice(-2) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '/' + d.getUTCFullYear();
+  }
+}
+
+// Umbral de antigüedad: una fila se sombrea de gris cuando pasó este tiempo desde su registro.
+// NOTA: este valor se reemplazará más adelante por otro.
+const ANTIGUEDAD_MS = 60 * 24 * 60 * 60 * 1000; // 60 días
+function esAntiguo(ts){
+  const n = Number(ts);
+  if (!isFinite(n) || !n) return false;
+  return (Date.now() - n) >= ANTIGUEDAD_MS;
+}
+let agedOnly = false; // estado del filtro "Antiguos"
+
+// ====== Paginación de la tabla ======
+const TABLA_PAGE_SIZE = 100;   // filas por página
+let tablaPage = 0;             // página actual (0-based)
+let tablaFiltered = [];        // items tras búsqueda/filtro, ya ordenados
+
+// Lista completa ordenada por Código
+function tablaSortedItems(){
+  return Object.entries(articulosCache)
+    .map(([key, a]) => ({ key, ...a }))
+    .sort((x, y) => String(x.Codigo).localeCompare(String(y.Codigo)));
+}
+
+// Recalcula tablaFiltered aplicando búsqueda + filtro de antigüedad
+function recomputeFiltered(){
+  const q = $('tablaSearch').value.trim().toLowerCase();
+  tablaFiltered = tablaSortedItems().filter(a => {
+    if (agedOnly && !esAntiguo(a.Timestamp)) return false;
+    if (q){
+      const hay = [a.Codigo, a.Nombre, a.CodigoBarras]
+        .map(v => String(v || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// Re-render completo: recalcula el filtrado y dibuja la página vigente (clamp incluido)
+function renderTable(){
+  recomputeFiltered();
+  renderTablaPage();
+}
+
+function renderTablaPage(){
+  const tbody = $('artTbody');
+  tbody.innerHTML = '';
+
+  const total = Object.keys(articulosCache).length;
+  const filtered = tablaFiltered.length;
+  const totalPages = Math.max(1, Math.ceil(filtered / TABLA_PAGE_SIZE));
+  tablaPage = Math.min(Math.max(0, tablaPage), totalPages - 1);
+
+  const start = tablaPage * TABLA_PAGE_SIZE;
+  const pageItems = tablaFiltered.slice(start, start + TABLA_PAGE_SIZE);
+
+  // Contador
+  let countTxt;
+  if (!total){
+    countTxt = '0 artículos';
+  } else if (!filtered){
+    countTxt = `Sin coincidencias · ${total} en total`;
+  } else {
+    const noun = filtered === 1 ? 'artículo' : 'artículos';
+    const range = `${start + 1}–${start + pageItems.length}`;
+    countTxt = filtered === total
+      ? `${range} de ${total} ${noun}`
+      : `${range} de ${filtered} ${noun} (filtrado de ${total})`;
+  }
+  $('tablaCount').textContent = countTxt;
+
+  // Estado vacío / sin resultados
+  $('tablaEmpty').textContent = total ? 'Sin resultados para tu búsqueda.' : 'No hay artículos registrados todavía.';
+  $('tablaEmpty').style.display = pageItems.length ? 'none' : 'block';
+  $('artTable').style.display = pageItems.length ? '' : 'none';
+
+  const catOpts = (cur) => {
+    const list = [...categorias];
+    if (cur && !list.includes(cur)) list.unshift(cur);
+    return '<option value=""></option>' + list.map(c =>
+      `<option value="${escapeHtml(c)}"${c === cur ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  };
+
+  pageItems.forEach(a => {
+    const id = a.key; // clave real del nodo en RTDB
+    const tr = document.createElement('tr');
+    tr.dataset.codigo = id;
+    if (esAntiguo(a.Timestamp)) tr.classList.add('aged');
+    const foto = a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG;
+    tr.innerHTML = `
+      <td class="codcol" title="Registrado: ${fmtFechaGMT3(a.Timestamp)}&#10;Cantidad: ${a.Cantidad != null ? a.Cantidad : 0}">#${escapeHtml(a.Codigo || id)}</td>
+      <td><img class="thumb" src="${foto}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
+      <td><input class="cell-inp" data-f="CodigoBarras" value="${escapeHtml(a.CodigoBarras || '')}" title="Separá varios códigos con comas" disabled></td>
+      <td><input class="cell-inp" data-f="Nombre" value="${escapeHtml(a.Nombre || '')}" disabled></td>
+      <td><select class="cell-inp" data-f="Categoria" disabled>${catOpts(a.Categoria || '')}</select></td>
+      <td><input class="cell-inp num" data-f="CostoUSD" type="number" step="0.01" min="0" value="${a.CostoUSD != null ? a.CostoUSD : ''}" disabled></td>
+      <td><input class="cell-inp num" data-f="GananciaPorc" type="number" step="1" min="0" max="99" value="${a.GananciaPorc != null ? a.GananciaPorc : ''}" disabled></td>
+      <td><input class="cell-inp num calc" data-f="PrecioUSD" value="${(a.PrecioUSD != null ? a.PrecioUSD : a.ValorUSD) != null ? Number(a.PrecioUSD != null ? a.PrecioUSD : a.ValorUSD).toFixed(2) : ''}" disabled readonly></td>
+      <td><label class="tsw"><input type="checkbox" class="tsw-input" data-f="Disponible"${a.Disponible !== false ? ' checked' : ''} aria-label="Disponible"><span class="tsw-track"></span><span class="tsw-lbl">${a.Disponible !== false ? 'Sí' : 'No'}</span></label></td>
+      <td><div class="row-actions">
+        <button class="row-icon row-save" data-codigo="${escapeHtml(id)}" title="Guardar cambios" aria-label="Guardar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+        <button class="row-icon row-del" data-codigo="${escapeHtml(id)}" title="Eliminar artículo" aria-label="Eliminar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </div></td>`;
+    tbody.appendChild(tr);
+  });
+
+  applyEditableState();
+  renderPager(totalPages);
+}
+
+// Dibuja/oculta los controles de paginación
+function renderPager(totalPages){
+  const pager = $('tablaPager');
+  if (totalPages <= 1){ pager.classList.remove('show'); return; }
+  pager.classList.add('show');
+  $('pagerInfo').textContent = `${tablaFiltered.length} artículos · ${TABLA_PAGE_SIZE} por página`;
+  $('pagerPages').textContent = `Página ${tablaPage + 1} / ${totalPages}`;
+  $('pagerPrev').disabled = tablaPage <= 0;
+  $('pagerNext').disabled = tablaPage >= totalPages - 1;
+}
+
+// Cambia de página, advirtiendo si hay filas con cambios sin guardar
+function gotoTablaPage(p){
+  const totalPages = Math.max(1, Math.ceil(tablaFiltered.length / TABLA_PAGE_SIZE));
+  p = Math.min(Math.max(0, p), totalPages - 1);
+  if (p === tablaPage) return;
+  const dirty = document.querySelectorAll('#artTbody tr.dirty').length;
+  if (dirty && !confirm(`Hay ${dirty} fila(s) con cambios sin guardar en esta página. ¿Cambiar de página y descartarlos?`)) return;
+  tablaPage = p;
+  renderTablaPage();
+  document.querySelector('.tabla-scroll').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('pagerPrev').addEventListener('click', () => gotoTablaPage(tablaPage - 1));
+$('pagerNext').addEventListener('click', () => gotoTablaPage(tablaPage + 1));
+
+// listeners delegados sobre el tbody
+$('artTbody').addEventListener('input', e => {
+  const inp = e.target.closest('.cell-inp');
+  if (!inp || inp.dataset.f === 'PrecioUSD') return;
+  const tr = inp.closest('tr');
+  tr.classList.add('dirty');
+  if (inp.dataset.f === 'CostoUSD' || inp.dataset.f === 'GananciaPorc') recalcRowValor(tr);
+});
+$('artTbody').addEventListener('change', e => {
+  const sel = e.target.closest('select.cell-inp');
+  if (sel){ sel.closest('tr').classList.add('dirty'); return; }
+  const sw = e.target.closest('.tsw-input');
+  if (sw){
+    const lbl = sw.parentElement.querySelector('.tsw-lbl');
+    if (lbl) lbl.textContent = sw.checked ? 'Sí' : 'No';
+    saveDisponible(sw.closest('tr'), sw); // se persiste de inmediato, sin botón Guardar
+  }
+});
+$('artTbody').addEventListener('click', e => {
+  const img = e.target.closest('.thumb');
+  if (img){
+    img.classList.add('zoom');
+    clearTimeout(img._zoomTimer);
+    img._zoomTimer = setTimeout(() => img.classList.remove('zoom'), 1600);
+    return;
+  }
+  const del = e.target.closest('.row-del');
+  if (del){ deleteRow(del.dataset.codigo); return; }
+  const btn = e.target.closest('.row-save');
+  if (btn) saveRow(btn.dataset.codigo);
+});
+
+function recalcRowValor(tr){
+  const cost = parseFloat(tr.querySelector('[data-f="CostoUSD"]').value);
+  const gan = parseInt(tr.querySelector('[data-f="GananciaPorc"]').value, 10);
+  const out = tr.querySelector('[data-f="PrecioUSD"]');
+  if (isNaN(cost) || isNaN(gan) || gan >= 100){ out.value = ''; return; }
+  out.value = (cost / (1 - gan / 100)).toFixed(2);
+}
+
+function applyEditableState(){
+  $('artTable').classList.toggle('editing', tableEditable);
+  document.querySelectorAll('#artTbody .cell-inp').forEach(inp => {
+    if (inp.dataset.f === 'PrecioUSD') { inp.disabled = true; return; }
+    inp.disabled = !tableEditable;
+  });
+  // El selector Disponible queda siempre habilitado (con o sin modo edición)
+  document.querySelectorAll('#artTbody .tsw-input').forEach(sw => { sw.disabled = false; });
+}
+
+$('editFlag').addEventListener('click', () => {
+  // activar edición requiere un gesto explícito (advertencia simple)
+  if (!tableEditable){
+    tableEditable = true;
+    $('editFlag').classList.add('on');
+    $('editWarn').classList.add('show');
+  } else {
+    // si hay filas sin guardar, advertir antes de salir del modo edición
+    const dirty = document.querySelectorAll('#artTbody tr.dirty').length;
+    if (dirty && !confirm(`Hay ${dirty} fila(s) con cambios sin guardar. ¿Salir del modo edición y descartarlos?`)) return;
+    tableEditable = false;
+    $('editFlag').classList.remove('on');
+    $('editWarn').classList.remove('show');
+    renderTable(); // re-render para descartar cambios visuales no guardados
+    return;
+  }
+  applyEditableState();
+});
+
+$('tablaSearch').addEventListener('input', filterTable);
+$('agedFilter').addEventListener('click', () => {
+  agedOnly = !agedOnly;
+  $('agedFilter').classList.toggle('on', agedOnly);
+  filterTable();
+});
+// Al buscar o cambiar de filtro: recalcula el conjunto y vuelve a la primera página
+function filterTable(){
+  tablaPage = 0;
+  renderTable();
+}
+
+// Guardado inmediato del selector Disponible (no requiere el botón Guardar)
+async function saveDisponible(tr, sw){
+  if (!tr || !sw) return;
+  const codigo = tr.dataset.codigo;
+  const val = sw.checked;
+  const lbl = sw.parentElement.querySelector('.tsw-lbl');
+  const revertir = () => { sw.checked = !val; if (lbl) lbl.textContent = sw.checked ? 'Sí' : 'No'; };
+
+  sw.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); revertir(); return; }
+
+    const ref = articulosRef.child(codigo);
+    await conTimeout(ref.update({ Disponible: val }), 15000, 'Timeout: la escritura tardó demasiado.');
+    const check = await conTimeout(ref.child('Disponible').once('value'), 10000, 'No se pudo verificar el guardado.');
+    if (check.val() !== val) throw new Error('La verificación del guardado falló.');
+
+    if (articulosCache[codigo]) articulosCache[codigo].Disponible = val;
+    toast(`#${codigo} ${val ? 'disponible' : 'no disponible'}`, 'ok');
+  } catch (err){
+    console.error('Error guardando Disponible:', err);
+    toast('Error: ' + err.message, 'err');
+    revertir();
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    sw.disabled = false;
+  }
+}
+
+async function saveRow(codigo){
+  const tr = document.querySelector(`#artTbody tr[data-codigo="${codigo}"]`);
+  if (!tr) return;
+  const get = f => tr.querySelector(`[data-f="${f}"]`);
+
+  const nombre = get('Nombre').value.trim();
+  const categoria = get('Categoria').value.trim();
+  const costo = parseFloat(get('CostoUSD').value);
+  const gan = parseInt(get('GananciaPorc').value, 10);
+
+  if (!nombre){ toast('El Nombre no puede quedar vacío', 'err'); return; }
+  if (isNaN(costo) || costo < 0){ toast('CostoUSD inválido', 'err'); return; }
+  if (isNaN(gan) || gan < 0 || gan >= 100){ toast('Ganancia inválida (0–99)', 'err'); return; }
+
+  const valor = +(costo / (1 - gan / 100)).toFixed(4);
+  const updates = {
+    CodigoBarras: [...new Set(get('CodigoBarras').value.split(',').map(s => s.trim()).filter(Boolean))].join(','),
+    Nombre: nombre,
+    Categoria: categoria,
+    CostoUSD: costo,
+    GananciaPorc: gan,
+    PrecioUSD: valor,
+    ValorUSD: null, // limpia el campo viejo en registros existentes
+    Disponible: get('Disponible').checked,
+    Timestamp: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  const btn = tr.querySelector('.row-save');
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  showBlock('Guardando cambios…');
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
+
+    const ref = articulosRef.child(codigo);
+    await conTimeout(ref.update(updates), 15000, 'Timeout: la escritura tardó demasiado.');
+    // verificación de escritura
+    const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar el guardado.');
+    if (!check.exists() || check.val().Nombre !== nombre){
+      throw new Error('La verificación del guardado falló.');
+    }
+
+    articulosCache[codigo] = { ...articulosCache[codigo], ...updates, Timestamp: Date.now() };
+    get('PrecioUSD').value = valor.toFixed(2);
+    tr.classList.remove('dirty');
+    toast(`#${codigo} actualizado`, 'ok');
+  } catch (err){
+    console.error('Error guardando fila:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+// Eliminar un artículo (DB + foto en Storage). Requiere clave de confirmación.
+const CLAVE_ELIMINAR = '2574';
+async function deleteRow(codigo){
+  const tr = document.querySelector(`#artTbody tr[data-codigo="${codigo}"]`);
+  if (!tr) return;
+  const a = articulosCache[codigo] || {};
+  const clave = prompt(`Eliminar artículo #${codigo}${a.Nombre ? ' · ' + a.Nombre : ''}\n\nIngresá la clave para confirmar:`);
+  if (clave === null) return; // cancelado
+  if (clave.trim() !== CLAVE_ELIMINAR){ toast('Clave incorrecta. No se eliminó.', 'err'); return; }
+
+  procesoCriticoEnEjecucion = true;
+  showBlock('Eliminando artículo…');
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
+
+    const ref = articulosRef.child(codigo);
+    await conTimeout(ref.remove(), 15000, 'Timeout: la eliminación tardó demasiado.');
+    // verificación de eliminación
+    const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar la eliminación.');
+    if (check.exists()) throw new Error('La verificación de la eliminación falló.');
+
+    // borrar la foto del Storage (best-effort: puede no existir)
+    try { await storage.ref('articulos/' + codigo + '.jpg').delete(); } catch (_){}
+
+    delete articulosCache[codigo];
+    renderTable(); // refresca filas, contador, estado vacío y filtros
+    toast(`#${codigo} eliminado`, 'ok');
+  } catch (err){
+    console.error('Error eliminando fila:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+  }
+}
+
+// ============================================================
+//  Auth
+// ============================================================
+let appInitialized = false;
+
+function handleLogin(){
+  const email = $('loginEmail').value.trim();
+  const pass = $('loginPass').value;
+  const err = $('loginErr');
+  const btn = $('loginBtn');
+  if (!email || !pass){ err.textContent = 'Completá ambos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
+  auth.signInWithEmailAndPassword(email, pass).catch(e => {
+    let msg = 'Error al iniciar sesión';
+    if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) msg = 'Email o contraseña incorrectos';
+    else if (e.code === 'auth/invalid-email') msg = 'Email inválido';
+    else if (e.code === 'auth/too-many-requests') msg = 'Demasiados intentos. Esperá un momento';
+    err.textContent = msg;
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+$('loginBtn').addEventListener('click', handleLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+$('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+$('logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) auth.signOut(); });
+
+auth.onAuthStateChanged(user => {
+  if (user){
+    $('login').classList.add('hidden');
+    if (!appInitialized){ appInitialized = true; init(); }
+  } else {
+    $('login').classList.remove('hidden');
+    const btn = $('loginBtn');
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+});
+
+async function init(){
+  setStep(1);
+  setDisponible(true);
+  showView('home');
+  await Promise.all([ loadCategorias(), loadArticulos() ]);
+}
+</script>
+</body>
+</html>
