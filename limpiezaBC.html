@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f7f8fb">
+<title>Limpieza de Códigos · HomePoint</title>
+<link rel="icon" href="faviconnegro.png" type="image/png">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<!-- Barcode scanner -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<!-- Config (pedidos-87064) -->
+<script src="config.js"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f6f7fb;--card:#ffffff;--card-2:#f8f9fc;--card-3:#f1f3f9;
+  --text:#0e1424;--text-2:#3a4256;--muted:#7a8398;--faint:#a9b0c1;
+  --border:#e8eaf1;--border-2:#dfe2ec;
+  --primary:#2b2f37;--primary-600:#181b21;--primary-soft:#eef0f3;--primary-soft-2:#e0e3e9;--primary-glow:rgba(31,35,42,.26);
+  --lime:#7cb342;--lime-600:#5a9216;--lime-soft:#eef6e2;
+  --success:#7cb342;--success-600:#5a9216;--success-soft:#eef6e2;
+  --danger:#f43f5e;--danger-600:#e11d48;--danger-soft:#fdebee;
+  --amber:#f59e0b;
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',monospace;
+  --r:20px;--r-md:16px;--r-sm:12px;--r-xs:10px;
+  --sh-sm:0 1px 2px rgba(14,20,36,.05),0 1px 3px rgba(14,20,36,.04);
+  --sh:0 4px 14px -4px rgba(14,20,36,.10),0 2px 6px -2px rgba(14,20,36,.06);
+  --sh-lg:0 18px 44px -16px rgba(14,20,36,.22),0 6px 16px -8px rgba(14,20,36,.10);
+  --sh-primary:0 10px 26px -8px var(--primary-glow);
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-feature-settings:'cv01','ss01'}
+body{
+  min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  background:
+    radial-gradient(900px 480px at 50% -10%, rgba(31,35,42,.06), transparent 70%),
+    radial-gradient(700px 420px at 100% 0%, rgba(124,179,66,.07), transparent 65%),
+    var(--bg);
+  background-attachment:fixed;
+}
+::selection{background:var(--primary-soft-2);color:var(--primary-600)}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ===== LOGIN ===== */
+.login{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(800px 460px at 50% -5%, rgba(31,35,42,.08), transparent 70%),var(--bg);
+  transition:opacity .5s ease,transform .5s ease}
+.login.hidden{opacity:0;transform:scale(1.02);pointer-events:none}
+.login-card{width:100%;max-width:392px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:var(--sh-lg);padding:36px 30px 30px;animation:pop-in .55s cubic-bezier(.2,.8,.25,1)}
+@keyframes pop-in{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.login-logo{width:52px;height:52px;border-radius:15px;margin-bottom:20px;
+  background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);
+  display:flex;align-items:center;justify-content:center}
+.login-tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--lime-600);margin-bottom:10px;font-weight:600}
+.login-card h1{font-weight:800;font-size:1.6rem;line-height:1.1;letter-spacing:-.025em;margin-bottom:6px}
+.login-card .sub{color:var(--muted);font-size:.9rem;margin-bottom:26px}
+.field{margin-bottom:15px}
+.field label{display:block;font-size:.74rem;font-weight:600;color:var(--text-2);margin-bottom:7px}
+.inp{width:100%;padding:13px 14px;background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);
+  font-family:var(--font);font-size:.95rem;color:var(--text);outline:none;transition:border-color .18s,box-shadow .18s,background .18s}
+.inp:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.inp::placeholder{color:var(--faint)}
+.btn{font-family:var(--font);cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s,background .18s,opacity .18s}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn-primary{width:100%;padding:14px;border-radius:var(--r-sm);font-weight:700;font-size:.98rem;letter-spacing:.01em;
+  color:#fff;background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary);margin-top:6px}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed}
+.login-err{min-height:1.1em;color:var(--danger-600);font-size:.82rem;font-weight:600;margin-top:12px;text-align:center}
+
+/* ===== TOPBAR ===== */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(246,247,251,.78);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--border);padding:max(11px,env(safe-area-inset-top)) 16px 11px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{width:36px;height:36px;border-radius:11px;flex-shrink:0;border:none;padding:0;
+  background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);
+  display:flex;align-items:center;justify-content:center}
+.brand .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.brand .tt b{font-weight:800;font-size:1rem;letter-spacing:-.02em}
+.brand .tt span{font-size:.68rem;color:var(--muted);font-weight:500;margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.conn{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--muted);padding:5px 10px 5px 8px;background:var(--card);border:1px solid var(--border);border-radius:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-soft);position:relative}
+.dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--success);animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite}
+@keyframes ping{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(2.6);opacity:0}}
+.dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.dot.off::after{display:none}
+.logout-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;
+  display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;transition:all .16s}
+.logout-btn:active{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
+
+/* ===== LAYOUT ===== */
+.wrap{max-width:620px;margin:0 auto;padding:18px 16px max(40px,env(safe-area-inset-bottom))}
+.head{margin:6px 2px 16px}
+.head h1{font-size:1.4rem;font-weight:800;letter-spacing:-.03em}
+.head p{color:var(--muted);font-size:.88rem;margin-top:6px;line-height:1.5}
+
+/* progreso */
+.progress{display:flex;gap:10px;margin:14px 0 16px}
+.stat{flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--sh-sm);padding:13px 15px}
+.stat b{display:block;font-family:var(--mono);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;line-height:1}
+.stat span{display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin-top:7px}
+.stat.pend b{color:var(--amber)}
+.stat.done b{color:var(--lime-600)}
+
+.tools{margin-bottom:14px}
+.tbl-search{position:relative}
+.tbl-search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint);pointer-events:none}
+.tbl-search .inp{padding-left:40px}
+
+/* ===== LISTA DE CARDS ===== */
+.list{display:flex;flex-direction:column;gap:12px}
+.acard{display:flex;align-items:stretch;gap:0;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--sh);overflow:hidden;transition:transform .14s,box-shadow .14s,border-color .14s;animation:rise .35s cubic-bezier(.2,.8,.25,1)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.acard:hover{transform:translateY(-2px);box-shadow:var(--sh-lg);border-color:var(--border-2)}
+.acard.removing{opacity:0;transform:scale(.96);transition:opacity .3s,transform .3s}
+.acard-main{flex:1;min-width:0;display:flex;align-items:center;gap:14px;padding:13px 13px 13px 15px;cursor:pointer;text-align:left;background:none;border:none;font-family:inherit;transition:background .14s}
+.acard-main:active{background:var(--card-2)}
+.acard-thumb{width:54px;height:54px;border-radius:12px;object-fit:cover;background:var(--card-2);flex-shrink:0;border:1px solid var(--border)}
+.acard-body{flex:1;min-width:0}
+.acard-name{font-weight:700;font-size:.95rem;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acard-cod{font-family:var(--mono);font-size:.7rem;color:var(--lime-600);font-weight:600;margin-top:2px}
+.acard-count{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--amber)}
+.acard-count b{font-family:var(--mono);font-size:1.2rem;font-weight:700;line-height:1}
+.acard-count span{font-size:.56rem;text-transform:uppercase;letter-spacing:.04em;font-weight:700;color:var(--muted)}
+.acard-del{flex-shrink:0;width:54px;border:none;border-left:1px solid var(--border);background:var(--danger-soft);color:var(--danger-600);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .14s,color .14s}
+.acard-del:hover{background:var(--danger);color:#fff}
+.acard-del:active{background:var(--danger-600);color:#fff}
+
+.empty{padding:50px 24px;text-align:center;color:var(--muted)}
+.empty .eico{width:72px;height:72px;border-radius:50%;margin:0 auto 18px;background:var(--lime-soft);color:var(--lime-600);display:flex;align-items:center;justify-content:center}
+.empty h3{font-weight:800;font-size:1.15rem;color:var(--text);letter-spacing:-.02em}
+.empty p{margin-top:8px;font-size:.88rem;line-height:1.5}
+.loader{padding:50px;text-align:center}
+.spinner-inline{width:34px;height:34px;border:3px solid var(--border-2);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== EDITOR (overlay full-screen) ===== */
+.editor{position:fixed;inset:0;z-index:800;background:var(--bg);display:none;flex-direction:column;
+  overflow-y:auto;-webkit-overflow-scrolling:touch}
+.editor.active{display:flex;animation:fade .25s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.ed-top{position:sticky;top:0;z-index:5;background:rgba(246,247,251,.85);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);padding:max(13px,env(safe-area-inset-top)) 16px 13px;
+  display:flex;align-items:center;gap:12px}
+.ed-back{width:38px;height:38px;border-radius:11px;flex-shrink:0;background:var(--card);border:1px solid var(--border);
+  color:var(--text-2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .16s}
+.ed-back:active{background:var(--card-3)}
+.ed-top b{font-weight:800;font-size:1.02rem;letter-spacing:-.02em}
+.ed-wrap{max-width:620px;width:100%;margin:0 auto;padding:18px 16px max(40px,env(safe-area-inset-bottom))}
+
+.ed-hero{display:flex;gap:15px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--sh);padding:15px;margin-bottom:18px}
+.ed-hero img{width:72px;height:72px;border-radius:14px;object-fit:cover;background:var(--card-2);border:1px solid var(--border);flex-shrink:0}
+.ed-hero .nm{font-weight:800;font-size:1.1rem;line-height:1.2;letter-spacing:-.02em}
+.ed-hero .cd{font-family:var(--mono);font-size:.72rem;color:var(--lime-600);font-weight:600;margin-top:5px}
+
+.sec{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--sh);padding:16px;margin-bottom:14px}
+.sec-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sec-title h3{font-weight:800;font-size:.98rem;letter-spacing:-.01em}
+.sec-title .badge{font-family:var(--mono);font-size:.64rem;font-weight:700;padding:4px 9px;border-radius:7px;background:var(--primary-soft);color:var(--primary)}
+.sec-hint{font-size:.78rem;color:var(--muted);line-height:1.5;margin-bottom:12px}
+
+/* códigos históricos (tap para conservar) */
+.old-chips{display:flex;flex-wrap:wrap;gap:8px}
+.old-chip{display:inline-flex;align-items:center;gap:8px;background:var(--card-2);border:1px dashed var(--border-2);border-radius:999px;
+  padding:8px 13px;font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .14s}
+.old-chip:active{transform:scale(.97)}
+.old-chip.used{opacity:.4;border-style:solid;background:var(--lime-soft);border-color:var(--lime);color:var(--lime-600);cursor:default}
+.old-chip .plus{width:18px;height:18px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.9rem;line-height:1}
+.old-chip.used .plus{background:var(--lime-600)}
+
+/* escanear */
+.scan-hero{width:100%;border:1px solid var(--border-2);border-radius:var(--r-md);
+  background:linear-gradient(180deg,var(--card),var(--card-2));color:var(--text);cursor:pointer;padding:18px;
+  display:flex;align-items:center;gap:15px;transition:all .2s cubic-bezier(.2,.8,.25,1);font-family:var(--font);text-align:left;box-shadow:var(--sh-sm)}
+.scan-hero:hover{border-color:var(--primary);box-shadow:var(--sh)}
+.scan-hero:active{transform:scale(.99)}
+.scan-hero .ico{width:50px;height:50px;border-radius:14px;flex-shrink:0;background:linear-gradient(135deg,var(--primary),#3d424c);color:#fff;box-shadow:var(--sh-primary);display:flex;align-items:center;justify-content:center}
+.scan-hero b{font-weight:700;font-size:1rem;display:block;letter-spacing:-.01em}
+.scan-hero small{color:var(--muted);font-size:.78rem}
+.or{display:flex;align-items:center;gap:12px;margin:14px 0;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--border-2)}
+.bc-add{display:flex;gap:9px}
+.bc-add .inp{flex:1;min-width:0;font-family:var(--mono)}
+.btn-dark{background:var(--text);color:#fff;border-radius:var(--r-sm);padding:0 20px;font-weight:700;font-size:.9rem;white-space:nowrap}
+.btn-dark:hover{background:#2a2e36}
+
+/* vigentes (nuevos) */
+.new-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;min-height:4px}
+.new-chips:empty{display:none}
+.bc-chip{display:inline-flex;align-items:center;gap:8px;background:var(--lime-soft);color:var(--lime-600);border:1px solid #d8e9c2;border-radius:999px;
+  padding:7px 8px 7px 13px;font-family:var(--mono);font-size:.84rem;font-weight:700}
+.bc-chip .x{width:20px;height:20px;border-radius:50%;border:none;background:#d8e9c2;color:var(--lime-600);font-size:1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .14s}
+.bc-chip .x:active{background:var(--danger);color:#fff}
+.no-codes{font-size:.82rem;color:var(--faint);font-style:italic;margin-top:12px;padding:14px;border:1px dashed var(--border-2);border-radius:var(--r-sm);text-align:center}
+
+.ed-actions{display:flex;gap:11px;margin-top:6px}
+.ed-actions .btn{flex:1;padding:15px;border-radius:var(--r-sm);font-weight:700;font-size:.95rem}
+.btn-cancel{flex:0 0 auto!important;padding-left:20px;padding-right:20px;background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.btn-save{background:linear-gradient(135deg,var(--lime-600),var(--lime));color:#fff;box-shadow:0 10px 26px -8px rgba(124,179,66,.5)}
+.btn-save:disabled{opacity:.45;cursor:not-allowed;background:var(--primary);box-shadow:none}
+
+/* ===== SCANNER OVERLAY ===== */
+.scanner{position:fixed;inset:0;z-index:900;background:#0e0f13;display:none;flex-direction:column}
+.scanner.active{display:flex;animation:fade .3s ease}
+.scanner-top{padding:max(16px,env(safe-area-inset-top)) 20px 14px;display:flex;align-items:center;justify-content:space-between}
+.scanner-top span{color:#fff;font-size:.9rem;font-weight:600}
+.scanner-x{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:1.4rem;cursor:pointer;transition:background .16s}
+.scanner-x:active{background:rgba(255,255,255,.25)}
+.scanner-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px}
+#reader{width:100%;max-width:460px;border-radius:20px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+#reader video{border-radius:20px;object-fit:cover}
+#reader img[alt="Info icon"],#reader span{display:none!important}
+#reader #html5-qrcode-anchor-scan-type-change{display:none!important}
+.scanner-hint{color:rgba(255,255,255,.55);font-size:.84rem;margin-top:24px;text-align:center}
+.scanner-count{margin-top:16px;display:flex;flex-wrap:wrap;gap:7px;justify-content:center;max-width:460px}
+.scanner-count .sc{font-family:var(--mono);font-size:.74rem;font-weight:700;color:#0e0f13;background:var(--lime);border-radius:999px;padding:5px 12px}
+.scanner-done{margin-top:22px;background:#fff;color:var(--text);border:none;border-radius:var(--r-sm);padding:13px 28px;font-family:var(--font);font-weight:700;font-size:.92rem;cursor:pointer}
+
+/* ===== BLOCK / TOAST ===== */
+.block{position:fixed;inset:0;z-index:1050;background:rgba(246,247,251,.72);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.block.active{display:flex}
+.spinner{width:44px;height:44px;border:3.5px solid var(--border-2);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+.block-text{font-size:.88rem;font-weight:600;color:var(--text-2)}
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(140px);z-index:1100;background:var(--text);color:#fff;border-radius:14px;padding:13px 20px;font-size:.86rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:9px;max-width:calc(100vw - 28px);transition:transform .4s cubic-bezier(.34,1.4,.64,1)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{background:linear-gradient(135deg,var(--danger-600),#fb5577)}
+.toast.ok{background:linear-gradient(135deg,var(--success-600),#8bc34a)}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+    </div>
+    <div class="login-tag">HomePoint · Admin</div>
+    <h1>Limpieza de Códigos</h1>
+    <div class="sub">Iniciá sesión para depurar los códigos de barras.</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" class="inp" id="loginEmail" placeholder="correo@ejemplo.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" class="inp" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn">Ingresar</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>
+    </span>
+    <span class="tt"><b>Limpieza BC</b><span>Códigos de barras</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="conn"><span class="dot" id="connDot"></span><span id="connTxt">online</span></span>
+    <button class="logout-btn" id="logoutBtn" title="Salir">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="head">
+    <h1>Artículos con varios códigos</h1>
+    <p>Estos artículos tienen <b>más de un código de barras</b> en el histórico. Reescaneá el o los códigos vigentes para dejar solo los actuales.</p>
+  </div>
+
+  <div class="progress">
+    <div class="stat pend"><b id="statPend">—</b><span>Pendientes</span></div>
+    <div class="stat done"><b id="statDone">0</b><span>Limpiados</span></div>
+  </div>
+
+  <div class="tools">
+    <div class="tbl-search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" class="inp" id="search" placeholder="Buscar por nombre, código o barra…" autocomplete="off">
+    </div>
+  </div>
+
+  <div id="list" class="list"></div>
+  <div id="loader" class="loader"><div class="spinner-inline"></div></div>
+</main>
+
+<!-- ===== EDITOR ===== -->
+<div class="editor" id="editor">
+  <div class="ed-top">
+    <button class="ed-back" id="edBack" title="Volver">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <b>Reescanear códigos</b>
+  </div>
+  <div class="ed-wrap">
+    <div class="ed-hero">
+      <img id="edImg" alt="">
+      <div>
+        <div class="nm" id="edNombre">—</div>
+        <div class="cd" id="edCodigo">#—</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">
+        <h3>Códigos históricos</h3>
+        <span class="badge" id="edOldBadge">0</span>
+      </div>
+      <div class="sec-hint">Tocá un código para conservarlo como vigente. Los que no agregues se eliminarán al guardar.</div>
+      <div class="old-chips" id="edOldChips"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title"><h3>Escanear vigentes</h3></div>
+      <div class="sec-hint">Apuntá al código de barras real del producto. Podés escanear más de uno.</div>
+      <button class="scan-hero" id="edScan">
+        <span class="ico">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10.5" y1="8" x2="10.5" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+        </span>
+        <span><b>Escanear con la cámara</b><small>Apuntá al código de barras</small></span>
+      </button>
+      <div class="or">o ingresá manual</div>
+      <div class="bc-add">
+        <input type="text" class="inp mono" id="edInput" placeholder="Código de barras…" inputmode="numeric" autocomplete="off">
+        <button class="btn btn-dark" id="edAdd">Agregar</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">
+        <h3>Códigos vigentes</h3>
+        <span class="badge" id="edNewBadge">0</span>
+      </div>
+      <div class="new-chips" id="edNewChips"></div>
+      <div class="no-codes" id="edNoCodes">Todavía no agregaste ningún código vigente.</div>
+    </div>
+
+    <div class="ed-actions">
+      <button class="btn btn-cancel" id="edCancel">Cancelar</button>
+      <button class="btn btn-save" id="edSave" disabled>Guardar vigentes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCANNER ===== -->
+<div class="scanner" id="scanner">
+  <div class="scanner-top">
+    <span>Escaneá el código vigente</span>
+    <button class="scanner-x" id="scannerClose">&times;</button>
+  </div>
+  <div class="scanner-body">
+    <div id="reader"></div>
+    <div class="scanner-hint">Mantené el código dentro del recuadro</div>
+    <div class="scanner-count" id="scannerCount"></div>
+    <button class="scanner-done" id="scannerDone">Listo</button>
+  </div>
+</div>
+
+<!-- ===== BLOCK / TOAST ===== -->
+<div class="block" id="block"><div class="spinner"></div><div class="block-text" id="blockText">Procesando…</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  Firebase init
+// ============================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const articulosRef = db.ref('articulos');
+
+// ============================================================
+//  Connection-safety (igual patrón que articulos / ingresoStock)
+// ============================================================
+let firebaseConectado = false;
+db.ref('.info/connected').on('value', snap => {
+  firebaseConectado = snap.val() === true;
+  const dot = document.getElementById('connDot');
+  const txt = document.getElementById('connTxt');
+  if (dot) dot.classList.toggle('off', !firebaseConectado);
+  if (txt) txt.textContent = firebaseConectado ? 'online' : 'offline';
+});
+async function verificarConexionFirebase(timeoutMs = 5000){
+  if (firebaseConectado) return true;
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    const ref = db.ref('.info/connected');
+    const cb = snap => { if (snap.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); } };
+    ref.on('value', cb);
+  });
+}
+function conTimeout(promise, ms, msg){
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))]);
+}
+let procesoCriticoEnEjecucion = false;
+window.addEventListener('beforeunload', e => {
+  if (procesoCriticoEnEjecucion){ e.preventDefault(); e.returnValue = 'Hay un guardado en curso.'; return e.returnValue; }
+});
+
+// ============================================================
+//  Helpers
+// ============================================================
+const $ = id => document.getElementById(id);
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+let toastTimer = null;
+function toast(msg, type){
+  const t = $('toast');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg; void t.offsetWidth; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+function showBlock(text){ $('blockText').textContent = text || 'Procesando…'; $('block').classList.add('active'); }
+function hideBlock(){ $('block').classList.remove('active'); }
+const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%23f1f3f9' width='64' height='64'/%3E%3Ctext x='32' y='35' text-anchor='middle' fill='%23a9b0c1' font-family='monospace' font-size='8'%3Esin foto%3C/text%3E%3C/svg%3E";
+function parseBarcodes(rec){ return String(rec && rec.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean); }
+function normalizeCode(v){ return String(v || '').trim(); }
+
+// ============================================================
+//  Estado
+// ============================================================
+let pendientes = [];     // artículos con >1 barcode aún sin limpiar
+let limpiados = 0;
+let filtro = '';
+
+// ============================================================
+//  Carga
+// ============================================================
+async function loadList(){
+  $('loader').style.display = '';
+  try {
+    const snap = await articulosRef.once('value');
+    const all = snap.val() || {};
+    pendientes = Object.entries(all)
+      .map(([key, a]) => ({ key, ...a }))
+      .filter(a => parseBarcodes(a).length > 1)
+      .sort((a, b) => parseBarcodes(b).length - parseBarcodes(a).length
+        || String(a.Codigo || a.key).localeCompare(String(b.Codigo || b.key)));
+  } catch (err){
+    console.error('Error leyendo articulos:', err);
+    toast('No se pudieron cargar los artículos', 'err');
+    pendientes = [];
+  }
+  $('loader').style.display = 'none';
+  renderList();
+}
+
+function renderList(){
+  $('statPend').textContent = pendientes.length;
+  $('statDone').textContent = limpiados;
+
+  const q = filtro.trim().toLowerCase();
+  const items = q ? pendientes.filter(a => {
+    const inName = String(a.Nombre || '').toLowerCase().includes(q);
+    const inCod = String(a.Codigo || a.key).toLowerCase().includes(q);
+    const inBc = parseBarcodes(a).some(c => c.toLowerCase().includes(q));
+    return inName || inCod || inBc;
+  }) : pendientes;
+
+  const list = $('list');
+
+  if (!pendientes.length){
+    list.innerHTML = `<div class="empty">
+      <div class="eico"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+      <h3>¡Todo limpio!</h3>
+      <p>No quedan artículos con más de un código de barras.</p>
+    </div>`;
+    return;
+  }
+  if (!items.length){
+    list.innerHTML = `<div class="empty"><h3>Sin resultados</h3><p>Ningún artículo coincide con "${escapeHtml(filtro)}".</p></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(a => {
+    const codes = parseBarcodes(a);
+    const cod = escapeHtml(a.Codigo || a.key);
+    const key = escapeHtml(a.key);
+    return `<div class="acard" data-key="${key}">
+      <button class="acard-main" data-act="open" data-key="${key}">
+        <img class="acard-thumb" src="${a.Foto ? escapeHtml(a.Foto) : PLACEHOLDER_IMG}" loading="lazy" alt="" onerror="this.src='${PLACEHOLDER_IMG}'">
+        <div class="acard-body">
+          <div class="acard-name">${escapeHtml(a.Nombre || 'Sin nombre')}</div>
+          <div class="acard-cod">#${cod}</div>
+        </div>
+        <span class="acard-count"><b>${codes.length}</b><span>códigos</span></span>
+      </button>
+      <button class="acard-del" data-act="del" data-key="${key}" title="Eliminar todos los códigos de barras">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+$('search').addEventListener('input', e => { filtro = e.target.value; renderList(); });
+
+$('list').addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  if (btn.dataset.act === 'open') openEditor(btn.dataset.key);
+  else if (btn.dataset.act === 'del') deleteAllBarcodes(btn.dataset.key);
+});
+
+// ---- Eliminar todos los códigos de barras de un artículo ----
+async function deleteAllBarcodes(key){
+  const a = pendientes.find(x => x.key === key);
+  if (!a) return;
+  const codes = parseBarcodes(a);
+  const nombre = a.Nombre || '#' + (a.Codigo || key);
+  if (!confirm(`Eliminar TODOS los códigos de barras de:\n\n${nombre} (#${a.Codigo || key})\n${codes.length} código(s): ${codes.join(', ')}\n\nEl artículo quedará sin código de barras. ¿Continuar?`)) return;
+
+  procesoCriticoEnEjecucion = true;
+  showBlock('Eliminando códigos…');
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
+
+    const ref = articulosRef.child(key);
+    await conTimeout(ref.update({ CodigoBarras: '', Timestamp: firebase.database.ServerValue.TIMESTAMP }),
+      15000, 'Timeout: la escritura tardó demasiado.');
+    // verificación de escritura (read-back)
+    const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar el guardado.');
+    if (!check.exists() || normalizeCode(check.val().CodigoBarras) !== ''){
+      throw new Error('La verificación del guardado falló.');
+    }
+
+    const idx = pendientes.findIndex(x => x.key === key);
+    if (idx >= 0) pendientes.splice(idx, 1);
+    limpiados++;
+    renderList();
+    toast(`✓ ${nombre} sin códigos de barras`, 'ok');
+  } catch (err){
+    console.error('Error eliminando códigos:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+  }
+}
+
+// ============================================================
+//  Editor
+// ============================================================
+let editKey = null;
+let editOld = [];        // códigos históricos
+let editNew = [];        // códigos vigentes elegidos
+
+function openEditor(key){
+  const a = pendientes.find(x => x.key === key);
+  if (!a) return;
+  editKey = key;
+  editOld = parseBarcodes(a);
+  editNew = [];
+  $('edImg').src = a.Foto ? a.Foto : PLACEHOLDER_IMG;
+  $('edImg').onerror = function(){ this.src = PLACEHOLDER_IMG; };
+  $('edNombre').textContent = a.Nombre || 'Sin nombre';
+  $('edCodigo').textContent = '#' + (a.Codigo || a.key);
+  $('edInput').value = '';
+  renderOldChips();
+  renderNewChips();
+  $('editor').classList.add('active');
+  $('editor').scrollTop = 0;
+}
+function closeEditor(){
+  $('editor').classList.remove('active');
+  editKey = null; editOld = []; editNew = [];
+}
+$('edBack').addEventListener('click', closeEditor);
+$('edCancel').addEventListener('click', closeEditor);
+
+function renderOldChips(){
+  $('edOldBadge').textContent = editOld.length;
+  $('edOldChips').innerHTML = editOld.map(c => {
+    const used = editNew.includes(c);
+    return `<button type="button" class="old-chip${used ? ' used' : ''}" data-c="${escapeHtml(c)}" ${used ? 'disabled' : ''}>
+      ${escapeHtml(c)}<span class="plus">${used ? '✓' : '+'}</span></button>`;
+  }).join('');
+}
+function renderNewChips(){
+  $('edNewBadge').textContent = editNew.length;
+  $('edNoCodes').style.display = editNew.length ? 'none' : '';
+  $('edNewChips').innerHTML = editNew.map(c =>
+    `<span class="bc-chip">${escapeHtml(c)}<button type="button" class="x" data-c="${escapeHtml(c)}" aria-label="Quitar">&times;</button></span>`
+  ).join('');
+  $('edSave').disabled = editNew.length === 0;
+}
+
+function addNew(code, opts){
+  opts = opts || {};
+  const c = normalizeCode(code);
+  if (!c){ toast('Ingresá un código', 'err'); return false; }
+  if (editNew.includes(c)){ if (!opts.silent) toast('Ese código ya está en vigentes', 'err'); return false; }
+  editNew.push(c);
+  renderOldChips();
+  renderNewChips();
+  return true;
+}
+function removeNew(code){
+  editNew = editNew.filter(x => x !== code);
+  renderOldChips();
+  renderNewChips();
+}
+
+$('edOldChips').addEventListener('click', e => {
+  const chip = e.target.closest('.old-chip');
+  if (chip && !chip.disabled) addNew(chip.dataset.c, { silent:true });
+});
+$('edNewChips').addEventListener('click', e => {
+  const x = e.target.closest('.x');
+  if (x) removeNew(x.dataset.c);
+});
+$('edAdd').addEventListener('click', () => { if (addNew($('edInput').value)){ $('edInput').value = ''; $('edInput').focus(); } });
+$('edInput').addEventListener('keydown', e => { if (e.key === 'Enter'){ if (addNew($('edInput').value)){ $('edInput').value = ''; } } });
+
+// ---- Guardar ----
+$('edSave').addEventListener('click', saveEditor);
+async function saveEditor(){
+  if (!editKey) return;
+  if (editNew.length === 0){ toast('Agregá al menos un código vigente', 'err'); return; }
+  const key = editKey;
+  const nuevo = editNew.join(',');
+
+  procesoCriticoEnEjecucion = true;
+  $('edSave').disabled = true;
+  showBlock('Guardando códigos…');
+  try {
+    const conectado = await verificarConexionFirebase(5000).catch(() => false);
+    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
+
+    const ref = articulosRef.child(key);
+    await conTimeout(ref.update({ CodigoBarras: nuevo, Timestamp: firebase.database.ServerValue.TIMESTAMP }),
+      15000, 'Timeout: la escritura tardó demasiado.');
+    // verificación de escritura (read-back)
+    const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar el guardado.');
+    if (!check.exists() || normalizeCode(check.val().CodigoBarras) !== nuevo){
+      throw new Error('La verificación del guardado falló.');
+    }
+
+    // actualizar estado local: el artículo queda limpiado y sale de pendientes
+    const idx = pendientes.findIndex(x => x.key === key);
+    const nombre = idx >= 0 ? (pendientes[idx].Nombre || '#' + key) : '#' + key;
+    if (idx >= 0) pendientes.splice(idx, 1);
+    limpiados++;
+    closeEditor();
+    renderList();
+    toast(`✓ ${nombre} · ${editNew.length === 1 ? '1 código' : editNew.length + ' códigos'}`, 'ok');
+  } catch (err){
+    console.error('Error guardando códigos:', err);
+    toast('Error: ' + err.message, 'err');
+    $('edSave').disabled = false;
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+  }
+}
+
+// ============================================================
+//  Scanner (html5-qrcode) — mismo patrón/validación que articulos.html
+// ============================================================
+let html5Qr = null;
+let scanBusy = false;
+let scanLast = '';
+let scanCount = 0;
+const SCAN_CONSENSO = 2;
+let scannedSession = [];   // códigos escaneados en la sesión actual del scanner
+
+function gtinCheckOk(code){
+  if (!/^\d+$/.test(code)) return false;
+  const d = code.split('').map(Number);
+  const check = d.pop();
+  let sum = 0;
+  for (let i = d.length - 1, w = 3; i >= 0; i--, w = (w === 3 ? 1 : 3)) sum += d[i] * w;
+  return ((10 - (sum % 10)) % 10) === check;
+}
+function codigoEscaneadoValido(code, fmt){
+  if (!code) return false;
+  switch (fmt){
+    case 'EAN_13': return code.length === 13 && gtinCheckOk(code);
+    case 'EAN_8':  return code.length === 8  && gtinCheckOk(code);
+    case 'UPC_A':  return code.length === 12 && gtinCheckOk(code);
+    case 'UPC_E':  return code.length === 8  && /^\d+$/.test(code);
+    case 'ITF':    return /^\d+$/.test(code) && code.length >= 6 && code.length % 2 === 0
+                          && (code.length !== 14 || gtinCheckOk(code));
+    case 'CODE_39':
+    case 'CODABAR': return code.length >= 4;
+    default:        return code.length >= 3;
+  }
+}
+const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const SCAN_FORMATS = () => [
+  Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.QR_CODE
+];
+function scanQrbox(vw){
+  const w = Math.min(vw.width, vw.height);
+  return { width: Math.floor(w * 0.8), height: Math.floor(w * 0.5) };
+}
+
+$('edScan').addEventListener('click', startScanner);
+
+async function startScanner(){
+  if (typeof Html5Qrcode === 'undefined'){ toast('Escáner no disponible', 'err'); return; }
+  scannedSession = [];
+  renderScannerCount();
+  $('scanner').classList.add('active');
+  scanBusy = false; scanLast = ''; scanCount = 0;
+
+  const baseConfig = { fps: 10, qrbox: scanQrbox };
+  const iosConfig = {
+    ...baseConfig,
+    videoConstraints: {
+      facingMode: { ideal: 'environment' },
+      width:  { min: 640, ideal: 1920, max: 2560 },
+      height: { min: 480, ideal: 1080, max: 1440 },
+      advanced: [{ focusMode: 'continuous' }]
+    }
+  };
+  try {
+    html5Qr = new Html5Qrcode('reader', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, ES_IOS ? iosConfig : baseConfig, onScan, () => {});
+    return;
+  } catch (err){
+    console.warn('Escáner: reintentando con config básica:', err);
+    if (html5Qr){ try { await html5Qr.stop(); } catch(_){} try { html5Qr.clear(); } catch(_){} html5Qr = null; }
+  }
+  try {
+    html5Qr = new Html5Qrcode('reader', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, baseConfig, onScan, () => {});
+  } catch (err){
+    console.error('Scanner error:', err);
+    toast('No se pudo abrir la cámara', 'err');
+    closeScanner();
+  }
+}
+
+function onScan(decodedText, decodedResult){
+  if (scanBusy) return;
+  const code = String(decodedText).trim();
+  const fmt = (decodedResult && decodedResult.result && decodedResult.result.format
+    && decodedResult.result.format.formatName) || '';
+  if (!codigoEscaneadoValido(code, fmt)){ scanLast = ''; scanCount = 0; return; }
+  if (code === scanLast) scanCount++; else { scanLast = code; scanCount = 1; }
+  if (scanCount < SCAN_CONSENSO) return;
+
+  scanLast = ''; scanCount = 0;
+  // multi-escaneo: aceptamos varios sin cerrar la cámara
+  if (scannedSession.includes(code) || editNew.includes(code)){
+    toast('Ese código ya fue agregado', 'err');
+  } else {
+    if (navigator.vibrate) navigator.vibrate(60);
+    scannedSession.push(code);
+    addNew(code, { silent:true });
+    renderScannerCount();
+    toast('Código agregado: ' + code, 'ok');
+  }
+  // pequeña pausa anti-rebote para no duplicar el mismo frame
+  scanBusy = true;
+  setTimeout(() => { scanBusy = false; }, 900);
+}
+
+function renderScannerCount(){
+  const el = $('scannerCount');
+  el.innerHTML = scannedSession.map(c => `<span class="sc">${escapeHtml(c)}</span>`).join('');
+  $('scannerDone').textContent = scannedSession.length ? `Listo (${scannedSession.length})` : 'Listo';
+}
+
+function closeScanner(){
+  $('scanner').classList.remove('active');
+  if (html5Qr){
+    return html5Qr.stop().then(() => { html5Qr.clear(); html5Qr = null; }).catch(() => { html5Qr = null; });
+  }
+  return Promise.resolve();
+}
+$('scannerClose').addEventListener('click', closeScanner);
+$('scannerDone').addEventListener('click', closeScanner);
+
+// ============================================================
+//  Auth
+// ============================================================
+let appInitialized = false;
+function handleLogin(){
+  const email = $('loginEmail').value.trim();
+  const pass = $('loginPass').value;
+  const err = $('loginErr');
+  const btn = $('loginBtn');
+  if (!email || !pass){ err.textContent = 'Completá ambos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
+  auth.signInWithEmailAndPassword(email, pass).catch(e => {
+    let msg = 'Error al iniciar sesión';
+    if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) msg = 'Email o contraseña incorrectos';
+    else if (e.code === 'auth/invalid-email') msg = 'Email inválido';
+    else if (e.code === 'auth/too-many-requests') msg = 'Demasiados intentos. Esperá un momento';
+    err.textContent = msg;
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+$('loginBtn').addEventListener('click', handleLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+$('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+$('logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) auth.signOut(); });
+
+auth.onAuthStateChanged(user => {
+  if (user){
+    $('login').classList.add('hidden');
+    if (!appInitialized){ appInitialized = true; loadList(); }
+  } else {
+    $('login').classList.remove('hidden');
+    const btn = $('loginBtn'); btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+});
+</script>
+</body>
+</html>
