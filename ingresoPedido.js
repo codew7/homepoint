@@ -828,7 +828,14 @@ function getTipoCliente() {
   // === NUEVA FUNCIONALIDAD DE BÚSQUEDA DE ARTÍCULOS ===
   let selectedResultIndex = -1;
   let selectedArticuloNombre = null;
-  
+  // Cuando es false (por defecto): la búsqueda es "barcode-first" (solo columna L),
+  // y los artículos sin código de barras se hallan por nombre/código.
+  // Cuando es true (desbloqueado con contraseña): búsqueda manual completa por nombre.
+  let busquedaManualHabilitada = false;
+  // Referencia asignada por el IIFE del modal de contraseña, para poder desactivar
+  // la búsqueda manual desde otras partes (se desactiva tras agregar cada artículo).
+  let desactivarBusquedaManual = null;
+
   function initializeSearchArticulos() {
     if (!searchInput || !searchResults) return;
     
@@ -927,6 +934,20 @@ function getTipoCliente() {
         selectedResultIndex = -1;
       }
     });
+
+    // Tab (desde cualquier parte) posiciona el cursor en la búsqueda de artículos.
+    // Facilita el flujo con lector de código de barras.
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Tab' || e.shiftKey) return;
+      // No interferir si ya se está escribiendo en el propio buscador.
+      if (document.activeElement === searchInput) return;
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    });
+
+    // Al abrir/cargar la página, posicionar el cursor en la búsqueda de artículos.
+    setTimeout(() => searchInput.focus(), 100);
   }
   
   function selectArticuloAndFocusQuantity(resultItem) {
@@ -966,15 +987,24 @@ function getTipoCliente() {
   function performSearch(query) {
     if (!searchResults) return;
     
-    // Buscar en columnas C (código - índice 2), D (nombre - índice 3) y L (códigos de barras - índice 11)
+    // El query ya viene en minúsculas (ver initializeSearchArticulos)
+    const q = query;
     const results = articulosDisponibles.filter(art => {
-      const codigo = (art[2] || '').toLowerCase();
-      const nombre = (art[3] || '').toLowerCase();
-      const codigosBarras = (art[11] || '').toLowerCase();
-      
-      return codigo.includes(query) || 
-             nombre.includes(query) || 
-             codigosBarras.includes(query);
+      const barras = (art[11] || '').toLowerCase(); // Columna L (código de barras)
+      const nombre = (art[3] || '').toLowerCase();  // Columna D (nombre)
+      const codC   = (art[2] || '').toLowerCase();  // Columna C (código interno)
+      const codA   = (art[0] || '').toLowerCase();  // Columna A (código)
+
+      if (busquedaManualHabilitada) {
+        // Modo manual: búsqueda completa sin restricciones (nombre + código + barras)
+        return nombre.includes(q) || codC.includes(q) || codA.includes(q) || barras.includes(q);
+      }
+
+      // Modo por defecto (barcode-first):
+      // - Si el artículo TIENE código de barras (col L), solo se halla por ese dato.
+      // - Si NO tiene código de barras (col L vacía), se permite buscar por nombre/código.
+      if (barras) return barras.includes(q);
+      return nombre.includes(q) || codC.includes(q) || codA.includes(q);
     }).slice(0, 50).reverse(); // Limitar a 50 resultados e invertir orden
     
     if (results.length === 0) {
@@ -1111,7 +1141,13 @@ function getTipoCliente() {
     
     // Recalcular totales
     debouncedCalculations();
-    
+
+    // La búsqueda manual es de un solo uso: se desactiva tras agregar cada artículo
+    // para evitar el abuso de esta función de emergencia.
+    if (busquedaManualHabilitada && typeof desactivarBusquedaManual === 'function') {
+      desactivarBusquedaManual();
+    }
+
     // Limpiar búsqueda
     clearSearch();
   }
@@ -1457,10 +1493,6 @@ function getTipoCliente() {
     const tipoClienteRadio = document.querySelector('input[name="tipoCliente"]:checked');
     const tipoCliente = tipoClienteRadio ? tipoClienteRadio.value : '';
 
-    if (!nombre) {
-      showPopup('Debe completar el campo Nombre de cliente.', '❗', false);
-      enviandoPedido = false; return;
-    }
     if (!tipoCliente) {
       showPopup('Debe seleccionar el Tipo de Cliente.', '❗', false);
       enviandoPedido = false; return;
@@ -3180,7 +3212,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
     
     // Limpiar campos del formulario
-    form.nombre.value = 'n/a';
+    form.nombre.value = '';
     form.telefono.value = '';
     form.direccion.value = '';
     form.dni.value = '';
@@ -3218,9 +3250,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     const newUrl = window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
     
-    // Enfocar en el campo de nombre
-    if (form.nombre) {
-      setTimeout(() => form.nombre.focus(), 100);
+    // Enfocar en el campo de búsqueda de artículos
+    if (searchInput) {
+      setTimeout(() => searchInput.focus(), 100);
     }
     
     if (window.desactivarModoAdmin) window.desactivarModoAdmin();
@@ -3282,6 +3314,96 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     };
 
     adminBtn.addEventListener('click', abrirModal);
+    btnConf.addEventListener('click', confirmar);
+    btnCanc.addEventListener('click', cerrarModal);
+
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) cerrarModal();
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
+      else if (e.key === 'Escape') cerrarModal();
+    });
+  })();
+
+  // === MODAL CONTRASEÑA BÚSQUEDA MANUAL ===
+  (function() {
+    const MANUAL_PASS = 'homepoint2278';
+    const overlay = document.getElementById('manualPassOverlay');
+    const input   = document.getElementById('manualPassInput');
+    const errDiv  = document.getElementById('manualPassError');
+    const btnConf = document.getElementById('manualPassConfirmBtn');
+    const btnCanc = document.getElementById('manualPassCancelBtn');
+    const manualBtn   = document.getElementById('manualSearchBtn');
+    const manualIcon  = document.getElementById('manualSearchIcon');
+    const manualLabel = document.getElementById('manualSearchLabel');
+    const helpText    = document.getElementById('searchHelpText');
+    if (!overlay || !manualBtn) return;
+
+    const PLACEHOLDER_BARCODE = 'Escanee o ingrese el código de barras...';
+    const PLACEHOLDER_MANUAL  = 'Buscar por nombre...';
+    const HELP_BARCODE = '💡 Escanee o ingrese el <strong>código de barras</strong> del artículo, ajuste la cantidad y presione Enter o clic en Agregar.';
+    const HELP_MANUAL  = '🔓 <strong>Búsqueda manual activa:</strong> puede buscar cualquier artículo por nombre. Pulse el botón para volver al modo código de barras.';
+
+    function abrirModal() {
+      input.value = '';
+      errDiv.style.display = 'none';
+      overlay.style.display = 'flex';
+      setTimeout(() => input.focus(), 80);
+    }
+
+    function cerrarModal() {
+      overlay.style.display = 'none';
+    }
+
+    function activarModoManual() {
+      busquedaManualHabilitada = true;
+      manualBtn.style.background = '#28a745';
+      manualBtn.style.color = '#fff';
+      manualBtn.style.borderColor = '#28a745';
+      manualBtn.title = 'Desactivar búsqueda manual';
+      if (manualIcon)  manualIcon.textContent = '🔓';
+      if (manualLabel) manualLabel.textContent = 'Búsqueda manual activa';
+      if (searchInput) searchInput.placeholder = PLACEHOLDER_MANUAL;
+      if (helpText)    helpText.innerHTML = HELP_MANUAL;
+    }
+
+    function desactivarModoManual() {
+      busquedaManualHabilitada = false;
+      manualBtn.style.background = '#fff';
+      manualBtn.style.color = '#6c4eb6';
+      manualBtn.style.borderColor = '#6c4eb6';
+      manualBtn.title = 'Habilitar búsqueda manual por nombre';
+      if (manualIcon)  manualIcon.textContent = '🔒';
+      if (manualLabel) manualLabel.textContent = 'Búsqueda manual';
+      if (searchInput) searchInput.placeholder = PLACEHOLDER_BARCODE;
+      if (helpText)    helpText.innerHTML = HELP_BARCODE;
+    }
+
+    // Exponer al scope exterior para desactivar el modo manual tras agregar un artículo
+    desactivarBusquedaManual = desactivarModoManual;
+
+    function confirmar() {
+      if (input.value === MANUAL_PASS) {
+        activarModoManual();
+        cerrarModal();
+      } else {
+        errDiv.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    manualBtn.addEventListener('click', function() {
+      // Toggle: si ya está activo, se desactiva sin pedir contraseña
+      if (busquedaManualHabilitada) {
+        desactivarModoManual();
+      } else {
+        abrirModal();
+      }
+    });
+
     btnConf.addEventListener('click', confirmar);
     btnCanc.addEventListener('click', cerrarModal);
 
