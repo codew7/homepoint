@@ -2607,9 +2607,28 @@
     // ==========================================
     // ACTUALIZAR STOCK EN TIEMPO REAL
     // ==========================================
+    // Refresca en vivo valorU/valorC de los items del pedido abierto desde sheetValorMap.
+    // No toca pedidos bloqueados (DESPACHADO/CANCELADO = registro historico congelado)
+    // ni sobrescribe con valores vacios (>0) para no destruir precios reales.
+    // Solo actualiza en memoria + re-render; la persistencia ocurre al cerrar/despachar.
+    function refrescarPreciosItems() {
+      if (!pedidoActual || !pedidoActual.items) return false;
+      // Congelar precios en pedidos bloqueados o cerrados (locked): registro historico
+      if (isBlocked || pedidoActual.locked) return false;
+      let cambio = false;
+      pedidoActual.items.forEach(item => {
+        if (!item.codigo) return;
+        const v = sheetValorMap[item.codigo];
+        if (!v) return;
+        if (v.valorU > 0 && Number(item.valorU) !== v.valorU) { item.valorU = v.valorU; cambio = true; }
+        if (v.valorC > 0 && Number(item.valorC) !== v.valorC) { item.valorC = v.valorC; cambio = true; }
+      });
+      return cambio;
+    }
+
     async function actualizarStock() {
       try {
-        // Solo fetches columnas C:K (codigo en col C=index 0, stock en col K=index 8)
+        // Fetches columnas C:K (relativo a C: codigo=0, valorU/G=4, valorC/H=5, stock/K=8)
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Lista!C2:K?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
         const res = await fetch(url);
         const data = await res.json();
@@ -2632,15 +2651,44 @@
               hubocambios = true;
             }
           }
+          // Precios (ya vienen en el mismo payload, sin costo de red extra)
+          const valorURaw = row[4] || '';
+          const valorCRaw = row[5] || '';
+          const valorU = valorURaw ? (parseFloat(valorURaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0) : 0;
+          const valorC = valorCRaw ? (parseFloat(valorCRaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0) : 0;
+          const prev = sheetValorMap[codigo];
+          if (!prev || prev.valorU !== valorU || prev.valorC !== valorC) {
+            sheetValorMap[codigo] = { valorU, valorC };
+            hubocambios = true;
+          }
         });
-        if (hubocambios && pedidoActual) renderUnificado();
+        if (pedidoActual) {
+          const preciosActualizados = refrescarPreciosItems();
+          if (hubocambios || preciosActualizados) renderUnificado();
+        }
       } catch (err) {
         console.warn('Error actualizando stock:', err);
       }
     }
 
-    // Polling de stock cada 60 segundos
-    setInterval(actualizarStock, 60000);
+    // Polling de stock/precios cada 60s, pausado cuando la pestana no esta visible
+    let stockPollTimer = null;
+    function iniciarPollingStock() {
+      if (stockPollTimer) return;
+      stockPollTimer = setInterval(actualizarStock, 60000);
+    }
+    function detenerPollingStock() {
+      if (stockPollTimer) { clearInterval(stockPollTimer); stockPollTimer = null; }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        detenerPollingStock();
+      } else {
+        actualizarStock();       // refresco inmediato al volver al foco
+        iniciarPollingStock();
+      }
+    });
+    if (!document.hidden) iniciarPollingStock();
 
     // ==========================================
     // BUSCAR PEDIDO
@@ -3924,11 +3972,9 @@
       } else {
         btn.textContent = 'Cerrar Pedido';
         btn.classList.remove('completo');
-        // Solo habilitar si todos los items tienen listo === 'y'
-        const items = pedidoActual.items || [];
-        const todosListos = items.length > 0 && items.every(it => it.listo === 'y');
-        btn.disabled = !todosListos;
-        btn.style.opacity = todosListos ? '1' : '.5';
+        // Sin restriccion de empaquetado: el cierre queda siempre habilitado
+        btn.disabled = false;
+        btn.style.opacity = '1';
       }
     }
 
@@ -4313,6 +4359,16 @@
       return texto;
     }
 
+    // Al copiar el TOTAL FINAL o enviar la cotizacion: fija en Firebase los precios de items
+    // (ya refrescados en memoria desde Sheets) + el snapshot financiero, y acto seguido cierra
+    // y bloquea el pedido. pvCerrarPedido(true) persiste items+pagos+locked en una operacion.
+    // No re-cierra registros ya congelados (bloqueados/cerrados) para permitir re-copiar/re-enviar.
+    async function sellarYCerrarCotizacion() {
+      if (!pedidoId || !pedidoActual) return;
+      if (isBlocked || pedidoActual.locked) return;
+      await pvCerrarPedido(true);
+    }
+
     function actualizarCalculosPV() {
       const subtotal = pvCalcSubtotal();
       const totalDiv = document.getElementById('pvTotal');
@@ -4355,6 +4411,7 @@
 
       // Click para copiar resumen al portapapeles
       totalFinalDiv.onclick = function() {
+        sellarYCerrarCotizacion();
         const texto = pvBuildCotizacionTexto();
         navigator.clipboard.writeText(texto).then(() => {
           const textoOriginal = totalFinalDiv.textContent;
@@ -4613,24 +4670,16 @@
     // ==========================================
     // PEDIDO VIEW: Cerrar Pedido
     // ==========================================
-    async function pvCerrarPedido() {
-      const tipoPago = document.querySelector('input[name="pvTipoPago"]:checked');
-      const tipoEntrega = document.querySelector('input[name="pvTipoEntrega"]:checked');
-      if (!tipoPago || !tipoEntrega) { showToast('Seleccione pago y entrega'); return; }
-      if (!confirm('Cerrar definitivamente el pedido?')) return;
-
-      // Re-consultar Google Sheets para tomar el costo (valorC) mas actual al momento de cerrar
-      await cargarSheets(true);
-
-      // Actualizar valorC/valorU
-      if (pedidoActual.items) {
-        pedidoActual.items.forEach(item => {
-          if (item.codigo && sheetValorMap[item.codigo]) {
-            item.valorC = sheetValorMap[item.codigo].valorC;
-            item.valorU = sheetValorMap[item.codigo].valorU;
-          }
-        });
+    async function pvCerrarPedido(forzar = false) {
+      const tipoPagoEl = document.querySelector('input[name="pvTipoPago"]:checked');
+      const tipoEntregaEl = document.querySelector('input[name="pvTipoEntrega"]:checked');
+      if (!forzar) {
+        if (!tipoPagoEl || !tipoEntregaEl) { showToast('Seleccione pago y entrega'); return; }
+        if (!confirm('Cerrar definitivamente el pedido?')) return;
       }
+      // En cierre forzado (al cotizar) se usan defaults si no hay seleccion
+      const tipoPago = tipoPagoEl ? tipoPagoEl.value : 'Efectivo';
+      const tipoEntrega = tipoEntregaEl ? tipoEntregaEl.value : 'Retiro en local';
 
       const user = firebase.auth().currentUser;
       const updateData = {
@@ -4638,23 +4687,24 @@
         enPreparacion: 'listo',
         lastModifiedBy: admin && user ? 'admin' : 'usuario',
         lastModifiedEmail: admin && user ? user.email : '',
-        tipoPago: tipoPago.value, tipoEntrega: tipoEntrega.value,
-        entrega: tipoEntrega.value !== 'Retiro en local' ? 'Envios' : '',
+        tipoPago: tipoPago, tipoEntrega: tipoEntrega,
+        entrega: tipoEntrega !== 'Retiro en local' ? 'Envios' : '',
         items: pedidoActual.items
       };
 
       const pagosUpdate = {
+        subtotal: pvCalcSubtotal(),
         descuento: parseInt(document.getElementById('pvDescuentoInput')?.value) || 0,
         porcentajeDescuento: parseInt(document.getElementById('pvPorcentajeInput')?.value) || 0,
         recargo: parseInt(document.getElementById('pvRecargoInput')?.value) || 0,
         porcentajeRecargo: parseFloat(document.getElementById('pvPorcentajeRecargoInput')?.value) || 0,
         envio: parseInt(document.getElementById('pvEnvioInput')?.value) || 0
       };
-      let tf = pvCalcSubtotal() - pagosUpdate.descuento + pagosUpdate.recargo + pagosUpdate.envio;
+      let tf = pagosUpdate.subtotal - pagosUpdate.descuento + pagosUpdate.recargo + pagosUpdate.envio;
       if (tf < 0) tf = 0;
       pagosUpdate.totalFinal = tf;
 
-      if (tipoPago.value === 'Transferencia' && admin) {
+      if (tipoPago === 'Transferencia' && admin) {
         const ai = document.getElementById('pvAlias');
         if (ai && ai.value.trim()) { pagosUpdate.alias = ai.value.trim().toUpperCase(); guardarAliasEnLocalStorage(pagosUpdate.alias); }
       }
@@ -4763,18 +4813,8 @@
 
         bloquearInterfaz('Procesando despacho...');
 
-        // Re-consultar Google Sheets para tomar el costo (valorC) mas actual al momento de despachar
-        await cargarSheets(true);
-
-        // Actualizar valorC/valorU
-        if (pedidoActual.items) {
-          pedidoActual.items.forEach(item => {
-            if (item.codigo && sheetValorMap[item.codigo]) {
-              item.valorC = sheetValorMap[item.codigo].valorC;
-              if (item.valorU === undefined || item.valorU === null || item.valorU === '') item.valorU = sheetValorMap[item.codigo].valorU;
-            }
-          });
-        }
+        // Los precios (valorU/valorC) ya fueron sellados al cotizar/cerrar el pedido;
+        // el despacho usa esos valores de pedidoActual.items sin re-leer Sheets.
 
         function getFechaActual() {
           const now = new Date();
@@ -4883,6 +4923,7 @@
         msg = 'Hola, ' + nombreCliente + ':\n\nNos comunicamos de Distribuidora HomePoint en relacion a tu pedido.\n\nAdjuntamos el enlace a tu pedido:\n' + link;
       } else if (tipo === '2') {
         // Cotización — exactamente igual que clic en TOTAL FINAL
+        sellarYCerrarCotizacion();
         msg = pvBuildCotizacionTexto();
       }
       window.open('https://api.whatsapp.com/send/?phone=' + tel + '&text=' + encodeURIComponent(msg), '_blank');
