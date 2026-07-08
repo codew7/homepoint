@@ -481,6 +481,8 @@ table.art .thumb{width:38px;height:38px;border-radius:8px;object-fit:cover;backg
 table.art .thumb:hover,table.art .thumb.zoom{transform:scale(2);z-index:30;box-shadow:var(--sh-lg)}
 .cell-inp{width:auto;field-sizing:content;min-width:3ch;max-width:26ch;border:1px solid transparent;background:transparent;border-radius:7px;padding:6px 8px;font-family:var(--font);font-size:.82rem;color:var(--text);outline:none}
 .cell-inp.num{min-width:2ch;max-width:12ch;font-family:var(--mono)}
+.cell-inp.kw{field-sizing:fixed;width:110px;min-width:110px;max-width:110px;font-size:.72rem;color:var(--muted);text-overflow:ellipsis}
+table.art th:nth-child(5),table.art td:nth-child(5){width:120px}
 /* Columna Cód. barras (3ª): ancho fijo, no se ajusta al contenido */
 table.art th:nth-child(3),table.art td:nth-child(3){width:190px}
 table.art td:nth-child(3) .cell-inp{field-sizing:fixed;width:100%;min-width:190px;max-width:190px}
@@ -706,7 +708,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         <div class="fgrid">
           <div>
             <label class="flbl">Nombre <span class="req">*</span></label>
-            <input type="text" class="inp" id="fNombre" placeholder="Nombre del artículo" autocomplete="off">
+            <input type="text" class="inp" id="fNombre" placeholder="Nombre del artículo" autocomplete="off" oninput="this.value = this.value.toUpperCase()" style="text-transform:uppercase">
           </div>
           <div>
             <label class="flbl">Keywords <small>(opcional)</small></label>
@@ -828,6 +830,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         <thead>
           <tr>
             <th>Código</th><th>Foto</th><th>Cód. barras</th><th>Nombre</th>
+            <th>Keywords</th>
             <th>Categoría</th><th>Costo USD</th><th>Ganancia %</th><th>Precio USD</th>
             <th>Precio ARS</th><th>Stock</th><th>Disponible</th><th></th>
           </tr>
@@ -1882,7 +1885,7 @@ async function guardarArticulo(){
       Codigo: state.codigo,
       CodigoBarras: state.barcodes.join(','),
       Foto: fotoUrl || '',
-      Nombre: $('fNombre').value.trim(),
+      Nombre: $('fNombre').value.trim().toUpperCase(),
       Keywords: $('fKeywords').value.trim(),
       Categoria: $('fCategoria').value.trim(),
       CostoUSD: round2($('fCosto').value),
@@ -2294,6 +2297,7 @@ function renderTablaPage(){
       <td><img class="thumb" src="${foto}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
       <td><input class="cell-inp" data-f="CodigoBarras" value="${escapeHtml(a.CodigoBarras || '')}" title="Separá varios códigos con comas" disabled></td>
       <td><input class="cell-inp" data-f="Nombre" value="${escapeHtml(a.Nombre || '')}" disabled></td>
+      <td><input class="cell-inp kw" data-f="Keywords" value="${escapeHtml(a.Keywords || '')}" title="${escapeHtml(a.Keywords || '')}" placeholder="—" disabled></td>
       <td><select class="cell-inp" data-f="Categoria" disabled>${catOpts(a.Categoria || '')}</select></td>
       <td><input class="cell-inp num" data-f="CostoUSD" type="text" inputmode="decimal" value="${a.CostoUSD != null ? round2(a.CostoUSD).toFixed(2) : ''}" disabled></td>
       <td><input class="cell-inp num" data-f="GananciaPorc" type="number" step="1" min="0" max="99" value="${a.GananciaPorc != null ? a.GananciaPorc : ''}" disabled></td>
@@ -2474,6 +2478,7 @@ async function saveRow(codigo){
   const updates = {
     CodigoBarras: [...new Set(get('CodigoBarras').value.split(',').map(s => s.trim()).filter(Boolean))].join(','),
     Nombre: nombre,
+    Keywords: get('Keywords').value.trim(),
     Categoria: categoria,
     CostoUSD: costo,
     GananciaPorc: gan,
