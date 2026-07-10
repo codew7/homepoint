@@ -470,7 +470,7 @@ input[type=number]{-moz-appearance:textfield}
 .filterbtn:hover{border-color:var(--border-2)}
 .filterbtn.on{background:#e7e9ee;border-color:var(--muted);color:var(--text)}
 table.art tr.aged > td{background:#e8eaef}
-.tabla-scroll{overflow:auto;max-height:70vh;width:max-content;max-width:100%;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
+.tabla-scroll{overflow:auto;max-height:75vh;width:max-content;max-width:100%;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
 table.art{border-collapse:collapse;width:auto;font-size:.82rem;white-space:nowrap}
 table.art th,table.art td{padding:9px 11px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
 table.art thead th{position:sticky;top:0;background:var(--card-2);font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;z-index:2}
@@ -481,11 +481,12 @@ table.art .thumb{width:38px;height:38px;border-radius:8px;object-fit:cover;backg
 table.art .thumb:hover,table.art .thumb.zoom{transform:scale(2);z-index:30;box-shadow:var(--sh-lg)}
 .cell-inp{width:auto;field-sizing:content;min-width:3ch;max-width:26ch;border:1px solid transparent;background:transparent;border-radius:7px;padding:6px 8px;font-family:var(--font);font-size:.82rem;color:var(--text);outline:none}
 .cell-inp.num{min-width:2ch;max-width:12ch;font-family:var(--mono)}
-.cell-inp.kw{field-sizing:fixed;width:110px;min-width:110px;max-width:110px;font-size:.72rem;color:var(--muted);text-overflow:ellipsis}
-table.art th:nth-child(5),table.art td:nth-child(5){width:120px}
-/* Columna Cód. barras (3ª): ancho fijo, no se ajusta al contenido */
-table.art th:nth-child(3),table.art td:nth-child(3){width:190px}
-table.art td:nth-child(3) .cell-inp{field-sizing:fixed;width:100%;min-width:190px;max-width:190px}
+/* Columna Cód. barras (3ª): compacta, se ajusta al contenido */
+table.art th:nth-child(3),table.art td:nth-child(3){width:1%}
+table.art td:nth-child(3) .cell-inp{field-sizing:content;min-width:6ch;max-width:15ch;text-overflow:ellipsis}
+/* Columna Categoría (5ª, tras quitar Keywords): al menor ancho posible */
+table.art th:nth-child(5),table.art td:nth-child(5){width:1%}
+table.art td:nth-child(5) .cell-inp{field-sizing:content;min-width:5ch;max-width:14ch}
 .cell-inp:disabled{color:var(--text);opacity:1;-webkit-text-fill-color:var(--text)}
 .editing .cell-inp:not(:disabled){border-color:var(--border-2);background:var(--card)}
 .editing .cell-inp:focus{border-color:var(--lime);box-shadow:0 0 0 3px var(--lime-soft)}
@@ -755,7 +756,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
           </div>
           <div class="f-2">
             <div>
-              <label class="flbl">Cantidad <span class="req">*</span></label>
+              <label class="flbl">Cantidad <small>(entrada a sumar · 0 = sin movimiento)</small></label>
               <input type="number" class="inp" id="fCantidad" placeholder="0" step="1" min="0" inputmode="numeric">
               <div class="stock-note" id="stockNote" style="display:none">
                 <span class="sdot"></span><span id="stockNoteTxt"></span>
@@ -818,6 +819,10 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           Antiguos
         </button>
+        <button class="filterbtn" id="syncSheet" title="Actualizar la hoja ArticulosV2 de Google Sheets con los artículos disponibles">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+          Actualizar Sheet
+        </button>
         <button class="editflag" id="editFlag"><span class="sw"></span>Editar</button>
       </div>
     </div>
@@ -830,7 +835,6 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         <thead>
           <tr>
             <th>Código</th><th>Foto</th><th>Cód. barras</th><th>Nombre</th>
-            <th>Keywords</th>
             <th>Categoría</th><th>Costo USD</th><th>Ganancia %</th><th>Precio USD</th>
             <th>Precio ARS</th><th>Stock</th><th>Disponible</th><th></th>
           </tr>
@@ -941,7 +945,7 @@ const auth = firebase.auth();
 const db = firebase.database();
 const storage = firebase.storage();
 const articulosRef = db.ref('articulos');
-const dolarRef = db.ref('dolar');
+const dolarRef = db.ref('dolar/blue');
 
 // ============================================================
 //  Connection-safety pattern (igual que ingresoStock)
@@ -1025,7 +1029,8 @@ const state = {
   existingImgUrl: '',  // imagen alternativa previa (campo "Img") — se preserva al editar
   photoSkipped: false,
   disponible: true,
-  allowDup: false     // true si el usuario eligió crear un artículo nuevo con un barcode ya existente
+  allowDup: false,    // true si el usuario eligió crear un artículo nuevo con un barcode ya existente
+  existingCantidad: null // Cantidad previa del artículo (modo edición): se preserva si no se ingresa una nueva entrada
 };
 
 // ============================================================
@@ -1035,6 +1040,10 @@ const state = {
 const CATEGORIAS_SHEET_ID = '1Fp80hQ2VkczeL_EdFSqDfn40a_yunOkHrY4wIt2eXTI';
 const CATEGORIAS_RANGO = 'Categorias!A:A';
 const CATEGORIAS_URL = `https://sheets.googleapis.com/v4/spreadsheets/${CATEGORIAS_SHEET_ID}/values/${encodeURIComponent(CATEGORIAS_RANGO)}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+
+// URL /exec del Web App de Apps Script que vuelca los artículos disponibles a la hoja ArticulosV2.
+// Pegar aquí la URL tras desplegar (Implementar → Nueva implementación → Aplicación web).
+const SHEETS_SYNC_URL = 'https://script.google.com/macros/s/AKfycbyhgMBU0esPxuNFrbnbjYEqLH5YojQ0awRIJtALAs-TJ60KmvPyb2Xdyh6uO6EqOB6Cyg/exec';
 
 async function loadCategorias(){
   const sel = $('fCategoria');
@@ -1202,6 +1211,7 @@ function resetArticleState(keepBarcode){
   state.photoSkipped = false;
   state.disponible = true;
   state.allowDup = false;
+  state.existingCantidad = null;
   if (!keepBarcode) state.barcodes = [];
   // limpiar UI de foto
   $('photoStage').classList.remove('has-img');
@@ -1249,7 +1259,10 @@ function enterEditMode(rec){
   }
   $('fCosto').value = (rec.CostoUSD != null ? round2(rec.CostoUSD).toFixed(2) : '');
   $('fGanancia').value = (rec.GananciaPorc != null ? rec.GananciaPorc : '');
-  $('fCantidad').value = (rec.Cantidad != null ? rec.Cantidad : '');
+  // En edición el campo arranca vacío: lo que se ingrese acá es la ENTRADA a sumar al stock.
+  // El valor previo se preserva en state para no perder el atributo Cantidad si no se ingresa nada.
+  state.existingCantidad = (rec.Cantidad != null ? rec.Cantidad : null);
+  $('fCantidad').value = '';
   setDisponible(rec.Disponible !== false);
   calcValor();
   // foto previa — se conserva "Foto" para persistir e "Img" como alternativa de visualización
@@ -1751,7 +1764,9 @@ function validar(){
   const nombre = $('fNombre').value.trim();
   const costo = round2($('fCosto').value);
   const gan = parseInt($('fGanancia').value, 10);
-  const cant = parseInt($('fCantidad').value, 10);
+  // Cantidad opcional: vacío = 0 = sin movimiento de entrada. Solo inválido si es negativa o no numérica.
+  const cantRaw = $('fCantidad').value.trim();
+  const cant = cantRaw === '' ? 0 : parseInt(cantRaw, 10);
 
   mark($('fNombre'), !nombre);
   mark($('fCosto'), isNaN(costo) || costo < 0);
@@ -1880,7 +1895,14 @@ async function guardarArticulo(){
     }
 
     showBlock('Guardando artículo…');
-    const cantidad = parseInt($('fCantidad').value, 10);
+    // Cantidad ingresada = unidades a sumar como ENTRADA (vacío o 0 = sin movimiento).
+    const cantParsed = parseInt($('fCantidad').value, 10);
+    const cantIngresada = Number.isFinite(cantParsed) && cantParsed > 0 ? cantParsed : 0;
+    // Atributo Cantidad del registro: al editar sin ingresar nada, se preserva el valor previo
+    // para no pisarlo con 0; en altas nuevas o cuando hay ingreso, refleja la cantidad ingresada.
+    const cantidadRegistro = (state.editing && cantIngresada === 0 && state.existingCantidad != null)
+      ? state.existingCantidad
+      : cantIngresada;
     const registro = {
       Codigo: state.codigo,
       CodigoBarras: state.barcodes.join(','),
@@ -1891,7 +1913,7 @@ async function guardarArticulo(){
       CostoUSD: round2($('fCosto').value),
       PrecioUSD: round2(valor),
       GananciaPorc: parseInt($('fGanancia').value, 10),
-      Cantidad: cantidad,
+      Cantidad: cantidadRegistro,
       Disponible: !!state.disponible,
       Timestamp: firebase.database.ServerValue.TIMESTAMP
     };
@@ -1899,19 +1921,21 @@ async function guardarArticulo(){
     // reemplaza el nodo completo, así que sin esto se perdería.
     if (state.existingImgUrl) registro.Img = state.existingImgUrl;
 
-    // Escritura atómica: artículo + (solo en altas nuevas con stock) movimiento de ENTRADA.
+    // Escritura atómica: artículo + (cuando se ingresa cantidad > 0) movimiento de ENTRADA.
     // Un multi-location update garantiza "todo o nada": si falla, no queda dato parcial.
     const updates = {};
     updates['articulos/' + state.codigo] = registro;
 
+    // Movimiento de ENTRADA: se genera tanto en altas nuevas como en ediciones,
+    // siempre que se haya ingresado una cantidad > 0. Si la cantidad es 0, no se registra movimiento.
     let movKey = null;
-    if (!state.editing && Number.isFinite(cantidad) && cantidad > 0){
+    if (cantIngresada > 0){
       movKey = db.ref('movimientos').push().key;   // genera la clave sin escribir todavía
       updates['movimientos/' + movKey] = {
         timestamp: Date.now(),
         codigo: state.codigo,
         nombre: registro.Nombre,
-        cantidad: cantidad,
+        cantidad: cantIngresada,
         tipo: 'ENTRADA'
       };
     }
@@ -1965,7 +1989,7 @@ function showView(name){
   const subs = { home: 'Inicio', wizard: 'Nuevo registro', tabla: 'Listado' };
   $('brandSub').textContent = subs[name] || '';
   $('homeBtn').style.display = (name === 'home') ? 'none' : 'flex';
-  $('mainWrap').style.maxWidth = (name === 'tabla') ? 'min(1700px,96vw)' : '650px';
+  $('mainWrap').style.maxWidth = (name === 'tabla') ? 'min(1700px,96vw)' : '580px';
   window.scrollTo({ top: 0 });
 }
 
@@ -2297,7 +2321,6 @@ function renderTablaPage(){
       <td><img class="thumb" src="${foto}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
       <td><input class="cell-inp" data-f="CodigoBarras" value="${escapeHtml(a.CodigoBarras || '')}" title="Separá varios códigos con comas" disabled></td>
       <td><input class="cell-inp" data-f="Nombre" value="${escapeHtml(a.Nombre || '')}" disabled></td>
-      <td><input class="cell-inp kw" data-f="Keywords" value="${escapeHtml(a.Keywords || '')}" title="${escapeHtml(a.Keywords || '')}" placeholder="—" disabled></td>
       <td><select class="cell-inp" data-f="Categoria" disabled>${catOpts(a.Categoria || '')}</select></td>
       <td><input class="cell-inp num" data-f="CostoUSD" type="text" inputmode="decimal" value="${a.CostoUSD != null ? round2(a.CostoUSD).toFixed(2) : ''}" disabled></td>
       <td><input class="cell-inp num" data-f="GananciaPorc" type="number" step="1" min="0" max="99" value="${a.GananciaPorc != null ? a.GananciaPorc : ''}" disabled></td>
@@ -2417,6 +2440,25 @@ $('editFlag').addEventListener('click', () => {
   applyEditableState();
 });
 
+$('syncSheet').addEventListener('click', async () => {
+  if (!SHEETS_SYNC_URL){ toast('Falta configurar SHEETS_SYNC_URL (Web App)', 'err'); return; }
+  const btn = $('syncSheet');
+  btn.disabled = true;
+  showBlock('Sincronizando con Google Sheets…');
+  try {
+    const res = await fetch(SHEETS_SYNC_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Error del script');
+    toast(`Hoja actualizada: ${data.count} artículo(s)`, 'ok');
+  } catch (err) {
+    toast('No se pudo sincronizar: ' + err.message, 'err');
+  } finally {
+    hideBlock();
+    btn.disabled = false;
+  }
+});
+
 $('tablaSearch').addEventListener('input', filterTable);
 $('agedFilter').addEventListener('click', () => {
   agedOnly = !agedOnly;
@@ -2478,7 +2520,6 @@ async function saveRow(codigo){
   const updates = {
     CodigoBarras: [...new Set(get('CodigoBarras').value.split(',').map(s => s.trim()).filter(Boolean))].join(','),
     Nombre: nombre,
-    Keywords: get('Keywords').value.trim(),
     Categoria: categoria,
     CostoUSD: costo,
     GananciaPorc: gan,
