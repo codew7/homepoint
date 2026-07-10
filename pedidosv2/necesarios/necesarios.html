@@ -265,9 +265,8 @@
       text-align: center;
       flex-shrink: 0;
     }
+    .list-header .lh-stock { width: 52px; }
     .list-header .lh-necesario { width: 52px; }
-    .list-header .lh-disponible { width: 90px; }
-    .list-header .lh-pendiente { width: 52px; }
     .list-header .lh-ok { width: 32px; }
 
     /* Category header */
@@ -459,6 +458,71 @@
       padding: 4px;
     }
     .detalle-close:hover { color: var(--text); }
+
+    /* Filtro de pedidos */
+    .pedido-filtro-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .pedido-filtro-actions button {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font-ui);
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      transition: all .15s var(--ease-out);
+    }
+    .pedido-filtro-actions button:hover { background: var(--border); color: var(--text); }
+    .pedido-filtro-actions button:active { transform: scale(.94); }
+    .pedido-filtro-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .pedido-filtro-row:last-child { border-bottom: none; }
+    .pedido-filtro-check {
+      width: 20px; height: 20px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .pedido-filtro-nombre {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pedido-filtro-cant {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .pedido-filtro-row.excluido .pedido-filtro-nombre {
+      color: var(--text-muted);
+      text-decoration: line-through;
+    }
+    .header-btn.has-filtro {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
     .item-code {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -478,6 +542,20 @@
     .item-stock.stock-zero { color: var(--danger); }
     .item-stock.stock-low  { color: #b8860b; }
     .item-stock.stock-ok   { color: var(--success); }
+
+    /* Stock (columna) */
+    .col-stock {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-secondary);
+      width: 52px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .col-stock.stock-zero { color: var(--danger); }
+    .col-stock.stock-low  { color: #b8860b; }
+    .col-stock.stock-ok   { color: var(--success); }
 
     /* Cantidad necesaria badge */
     .qty-necesaria {
@@ -679,16 +757,13 @@
       .item-card { padding: 10px 8px; gap: 8px; }
       .item-img, .item-img-placeholder { width: 40px; height: 40px; border-radius: 8px; }
       .item-name { font-size: 12px; }
-      .qty-necesaria { font-size: 13px; min-width: 36px; }
-      .qty-btn { width: 26px; height: 28px; }
-      .qty-value { font-size: 13px; min-width: 24px; }
-      .pendiente-badge { font-size: 12px; min-width: 40px; padding: 3px 6px; }
+      .qty-necesaria { font-size: 13px; min-width: 44px; }
+      .col-stock { font-size: 13px; width: 44px; }
       .stat-card { padding: 10px 12px; }
       .stat-card .stat-value { font-size: 18px; }
       .list-header { padding-left: 58px; font-size: 9px; }
-      .list-header .lh-necesario { width: 36px; }
-      .list-header .lh-disponible { width: 78px; }
-      .list-header .lh-pendiente { width: 40px; }
+      .list-header .lh-stock { width: 44px; }
+      .list-header .lh-necesario { width: 44px; }
     }
   </style>
 </head>
@@ -698,11 +773,12 @@
     <!-- Header -->
     <div class="header">
       <div class="brand-mark"><img src="favicon.png" alt="Logo"></div>
-      <h1>Articulos Necesarios</h1>
-      <button class="header-btn" id="filtroOkBtn" onclick="toggleFiltroSinOK()">&#9744; Faltan</button>
+      <h1>Necesarios</h1>
+      <button class="header-btn" onclick="imprimirReporte()">&#128424; Imprimir</button>
+      <button class="header-btn active" id="filtroOkBtn" onclick="toggleFiltroSinOK()">&#9745; Faltan</button>
+      <button class="header-btn" id="filtroPedidosBtn" onclick="abrirFiltroPedidos()">&#128101; Pedidos</button>
       <button class="header-btn" onclick="recargarDatos()">&#x21bb; Recargar</button>
       <button class="header-btn" onclick="limpiarTodo()">&#129529; Limpiar</button>
-      <button class="header-btn" onclick="imprimirReporte()">&#128424; Imprimir</button>
     </div>
 
     <!-- Stats -->
@@ -775,7 +851,9 @@
     let pedidosCount = 0;
     let sheetsData = {}; // { codigo: { imagen, nombre } }
     let sheetsLoaded = false;
-    let filtroSinOK = false; // muestra solo artículos con OK sin tildar
+    let filtroSinOK = true; // muestra solo artículos con OK sin tildar (activo por defecto)
+    let todosPedidos = []; // [{ pedidoId, cliente, items: [{codigo, nombre, cantidad}] }]
+    let pedidosExcluidos = new Set(); // pedidoIds deseleccionados del cálculo
 
     // Cargar sheets y datos en paralelo
     Promise.all([cargarSheets(), cargarDatos()]);
@@ -803,7 +881,8 @@
             imagen: imagenes[0] || '',
             nombre: (row[3] || '').trim(),
             stock: stockRaw !== '' ? (parseInt(stockRaw, 10) || 0) : null,
-            categoria: (row[0] || '').trim()
+            categoria: (row[0] || '').trim(),
+            codigoBarras: (row[11] || '').toString().trim()
           };
         });
 
@@ -873,8 +952,8 @@
           db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
         ]);
 
-        articulosMap = {};
-        pedidosCount = 0;
+        todosPedidos = [];
+        pedidosExcluidos.clear(); // al recargar se reestablecen todos los pedidos
 
         const procesarSnap = (snap) => {
           snap.forEach(child => {
@@ -882,36 +961,134 @@
             if (p.createdby !== 'web') return;
             if (p.enPreparacion === 'listo') return;
 
-            pedidosCount++;
             const clienteNombre = (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key);
-            const pedidoId = child.key;
-            const items = p.items || [];
-            items.forEach(it => {
-              if (it.listo === 'y') return;
-              const codigo = it.codigo || 'SIN_CODIGO';
-              const cant = parseInt(it.cantidad) || 0;
-              if (!articulosMap[codigo]) {
-                articulosMap[codigo] = {
-                  codigo: codigo,
-                  nombre: it.nombre || codigo,
-                  cantidadNecesaria: 0,
-                  pedidos: []
-                };
-              }
-              articulosMap[codigo].cantidadNecesaria += cant;
-              articulosMap[codigo].pedidos.push({ cliente: clienteNombre, cantidad: cant, pedidoId: pedidoId });
-            });
+            const items = (p.items || [])
+              .filter(it => it.listo !== 'y')
+              .map(it => {
+                const codigo = it.codigo || 'SIN_CODIGO';
+                return { codigo: codigo, nombre: it.nombre || codigo, cantidad: parseInt(it.cantidad) || 0 };
+              });
+            if (items.length === 0) return;
+            todosPedidos.push({ pedidoId: child.key, cliente: clienteNombre, items: items });
           });
         };
 
         procesarSnap(snapAbierto);
         procesarSnap(snapCerrado);
 
+        construirArticulosMap();
         renderTabla();
+        actualizarFiltroPedidosBtn();
       } catch (err) {
         console.error('Error cargando datos:', err);
         document.getElementById('loadingState').innerHTML = '<span style="color:var(--danger);">Error al cargar datos</span>';
       }
+    }
+
+    // Construye articulosMap a partir de los pedidos NO excluidos.
+    function construirArticulosMap() {
+      articulosMap = {};
+      pedidosCount = 0;
+      todosPedidos.forEach(p => {
+        if (pedidosExcluidos.has(p.pedidoId)) return;
+        pedidosCount++;
+        p.items.forEach(it => {
+          const codigo = it.codigo;
+          if (!articulosMap[codigo]) {
+            articulosMap[codigo] = {
+              codigo: codigo,
+              nombre: it.nombre,
+              cantidadNecesaria: 0,
+              pedidos: []
+            };
+          }
+          articulosMap[codigo].cantidadNecesaria += it.cantidad;
+          articulosMap[codigo].pedidos.push({ cliente: p.cliente, cantidad: it.cantidad, pedidoId: p.pedidoId });
+        });
+      });
+    }
+
+    // ==========================================
+    // FILTRO DE PEDIDOS (incluir/excluir del cálculo)
+    // ==========================================
+    function aplicarFiltroPedidos() {
+      construirArticulosMap();
+      renderTabla();
+      actualizarFiltroPedidosBtn();
+    }
+
+    function actualizarFiltroPedidosBtn() {
+      const btn = document.getElementById('filtroPedidosBtn');
+      if (!btn) return;
+      btn.classList.toggle('has-filtro', pedidosExcluidos.size > 0);
+    }
+
+    function abrirFiltroPedidos() {
+      if (todosPedidos.length === 0) return;
+      const overlay = document.createElement('div');
+      overlay.className = 'detalle-overlay';
+
+      const actualizarContador = () => {
+        const small = overlay.querySelector('.detalle-header small');
+        if (small) small.textContent = (todosPedidos.length - pedidosExcluidos.size) + ' de ' + todosPedidos.length + ' incluidos en el cálculo';
+      };
+
+      const render = () => {
+        const lista = [...todosPedidos].sort((a, b) => a.cliente.localeCompare(b.cliente, 'es'));
+        let filas = '';
+        lista.forEach(p => {
+          const incluido = !pedidosExcluidos.has(p.pedidoId);
+          const totalItems = p.items.reduce((s, it) => s + it.cantidad, 0);
+          filas += '<label class="pedido-filtro-row' + (incluido ? '' : ' excluido') + '">' +
+            '<input type="checkbox" class="pedido-filtro-check" data-pedido="' + escapeHtml(p.pedidoId) + '" ' + (incluido ? 'checked' : '') + '>' +
+            '<span class="pedido-filtro-nombre">' + escapeHtml(p.cliente) + '</span>' +
+            '<span class="pedido-filtro-cant">' + totalItems + ' art.</span>' +
+            '</label>';
+        });
+        overlay.innerHTML =
+          '<div class="detalle-modal" style="position:relative;">' +
+            '<button class="detalle-close">&times;</button>' +
+            '<div class="detalle-header">' +
+              '<h3>Filtrar pedidos</h3>' +
+              '<small>' + (todosPedidos.length - pedidosExcluidos.size) + ' de ' + todosPedidos.length + ' incluidos en el cálculo</small>' +
+              '<div class="pedido-filtro-actions">' +
+                '<button data-action="todos">Todos</button>' +
+                '<button data-action="ninguno">Ninguno</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="detalle-body">' + filas + '</div>' +
+          '</div>';
+      };
+
+      render();
+
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.classList.contains('detalle-close')) { overlay.remove(); return; }
+        const action = e.target.getAttribute && e.target.getAttribute('data-action');
+        if (action === 'todos') {
+          pedidosExcluidos.clear();
+          aplicarFiltroPedidos();
+          render();
+        } else if (action === 'ninguno') {
+          todosPedidos.forEach(p => pedidosExcluidos.add(p.pedidoId));
+          aplicarFiltroPedidos();
+          render();
+        }
+      });
+
+      overlay.addEventListener('change', function(e) {
+        const cb = e.target.closest('.pedido-filtro-check');
+        if (!cb) return;
+        const id = cb.getAttribute('data-pedido');
+        if (cb.checked) pedidosExcluidos.delete(id);
+        else pedidosExcluidos.add(id);
+        const row = cb.closest('.pedido-filtro-row');
+        if (row) row.classList.toggle('excluido', !cb.checked);
+        aplicarFiltroPedidos();
+        actualizarContador();
+      });
+
+      document.body.appendChild(overlay);
     }
 
     // ==========================================
@@ -921,14 +1098,6 @@
       const d = document.createElement('div');
       d.textContent = str;
       return d.innerHTML;
-    }
-
-    function getPreparado(codigo) {
-      return parseInt(localStorage.getItem('armado_preparado_' + codigo)) || 0;
-    }
-
-    function setPreparado(codigo, val) {
-      localStorage.setItem('armado_preparado_' + codigo, val);
     }
 
     function getVerificado(codigo) {
@@ -967,9 +1136,8 @@
       // Column headers
       let html = '<div class="list-header">' +
         '<span class="lh-info">Artículo</span>' +
+        '<span class="lh-col lh-stock">Stock</span>' +
         '<span class="lh-col lh-necesario">Neces.</span>' +
-        '<span class="lh-col lh-disponible">Disponibles</span>' +
-        '<span class="lh-col lh-pendiente">Pend.</span>' +
         '<span class="lh-col lh-ok">OK</span>' +
         '</div>';
 
@@ -979,12 +1147,8 @@
           currentCat = art._categoria;
           html += '<div class="category-header">' + escapeHtml(currentCat) + '</div>';
         }
-        const preparado = getPreparado(art.codigo);
         const verificado = getVerificado(art.codigo);
-        const diff = art.cantidadNecesaria - preparado;
-        const isDone = verificado || diff <= 0;
-        const cardClass = isDone ? ' card-done' : '';
-        const pendienteClass = diff > 0 ? 'pendiente-positive' : 'pendiente-zero';
+        const cardClass = verificado ? ' card-done' : '';
         const delay = Math.min(i * 0.03, 0.5);
 
         const sheetInfo = sheetsData[art.codigo] || {};
@@ -1004,25 +1168,19 @@
         const stockVal = sheetInfo.stock;
         const stockClass = (stockVal !== null && Number.isFinite(stockVal))
           ? (stockVal <= 0 ? ' stock-zero' : stockVal <= 10 ? ' stock-low' : ' stock-ok') : '';
-        const stockDisplay = (stockVal !== null && Number.isFinite(stockVal))
-          ? '<span class="item-stock' + stockClass + '">stk: ' + stockVal + '</span>' : '';
+        const stockCol = (stockVal !== null && Number.isFinite(stockVal)) ? stockVal : '—';
+        const codBarras = (sheetInfo.codigoBarras || '').trim();
+        const codigoDisplay = escapeHtml(art.codigo) + (codBarras ? ' - ' + escapeHtml(codBarras) : '');
         html += '<div class="item-info">' +
           '<div class="item-name" title="' + escapeHtml(art.nombre) + '">' + escapeHtml(art.nombre) + '</div>' +
-          '<div class="item-code">' + escapeHtml(art.codigo) + stockDisplay + '</div>' +
+          '<div class="item-code">' + codigoDisplay + '</div>' +
           '</div>';
+
+        // Stock (columna a la izquierda de Necesario)
+        html += '<span class="col-stock' + stockClass + '">' + stockCol + '</span>';
 
         // Cantidad necesaria
         html += '<span class="qty-necesaria">' + art.cantidadNecesaria + '</span>';
-
-        // Disponibles (con flechas)
-        html += '<div class="qty-control">' +
-          '<button class="qty-btn" onclick="cambiarDisponible(\'' + codigoEsc + '\', -1)">&#9660;</button>' +
-          '<span class="qty-value" id="qty_' + escapeHtml(art.codigo) + '">' + preparado + '</span>' +
-          '<button class="qty-btn" onclick="cambiarDisponible(\'' + codigoEsc + '\', 1)">&#9650;</button>' +
-          '</div>';
-
-        // Pendientes
-        html += '<span class="pendiente-badge ' + pendienteClass + '" id="pend_' + escapeHtml(art.codigo) + '">' + diff + '</span>';
 
         // Checkbox
         html += '<input type="checkbox" class="item-check" ' + (verificado ? 'checked' : '') + ' onchange="onVerificadoChange(this, \'' + codigoEsc + '\')">';
@@ -1038,35 +1196,6 @@
     // ==========================================
     // ACCIONES
     // ==========================================
-    function cambiarDisponible(codigo, delta) {
-      const art = articulosMap[codigo];
-      if (!art) return;
-
-      const actual = getPreparado(codigo);
-      const nuevo = Math.max(0, actual + delta);
-      setPreparado(codigo, nuevo);
-
-      // Actualizar UI sin re-render completo
-      const qtyEl = document.getElementById('qty_' + codigo);
-      const pendEl = document.getElementById('pend_' + codigo);
-      if (qtyEl) qtyEl.textContent = nuevo;
-
-      const diff = art.cantidadNecesaria - nuevo;
-      if (pendEl) {
-        pendEl.textContent = diff;
-        pendEl.className = 'pendiente-badge ' + (diff > 0 ? 'pendiente-positive' : 'pendiente-zero');
-      }
-
-      // Actualizar card class
-      const card = qtyEl ? qtyEl.closest('.item-card') : null;
-      if (card) {
-        const verificado = getVerificado(codigo);
-        card.classList.toggle('card-done', verificado || diff <= 0);
-      }
-
-      actualizarStats();
-    }
-
     function onVerificadoChange(checkbox, codigo) {
       const checked = checkbox.checked;
       setVerificado(codigo, checked);
@@ -1077,9 +1206,7 @@
       }
 
       const card = checkbox.closest('.item-card');
-      const pendEl = card.querySelector('.pendiente-badge');
-      const diffVal = parseInt(pendEl.textContent) || 0;
-      card.classList.toggle('card-done', checked || diffVal <= 0);
+      card.classList.toggle('card-done', checked);
 
       actualizarStats();
 
@@ -1160,7 +1287,11 @@
         }
       }
       aEliminar.forEach(k => localStorage.removeItem(k));
+      // Reestablecer todos los pedidos en el cálculo
+      pedidosExcluidos.clear();
+      construirArticulosMap();
       renderTabla();
+      actualizarFiltroPedidosBtn();
     }
 
     // ==========================================
@@ -1218,16 +1349,17 @@
 
       let filas = '';
       articulos.forEach((art, i) => {
-        const preparado = getPreparado(art.codigo);
-        const diff = art.cantidadNecesaria - preparado;
         const verificado = getVerificado(art.codigo);
+        const sheetInfo = sheetsData[art.codigo] || {};
+        const stockVal = sheetInfo.stock;
+        const stockCol = (stockVal !== null && Number.isFinite(stockVal)) ? stockVal : '—';
         const rowClass = verificado ? ' class="row-done"' : '';
         filas += '<tr' + rowClass + '>' +
           '<td class="col-num">' + (i + 1) + '</td>' +
           '<td class="col-nombre">' + escapeHtml(art.nombre) + '</td>' +
           '<td class="col-codigo">' + escapeHtml(art.codigo) + '</td>' +
+          '<td class="col-stock">' + stockCol + '</td>' +
           '<td class="col-cant">' + art.cantidadNecesaria + '</td>' +
-          '<td class="col-pend">' + diff + '</td>' +
           '<td class="col-check">' + (verificado ? '&#10003;' : '') + '</td>' +
           '</tr>';
       });
@@ -1245,12 +1377,12 @@
         'thead th { background: #0f172a; color: #fff; padding: 6px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; text-align: left; }' +
         'thead th.col-num { width: 28px; text-align: center; }' +
         'thead th.col-codigo { width: 100px; }' +
-        'thead th.col-cant, thead th.col-pend { width: 55px; text-align: center; }' +
+        'thead th.col-stock, thead th.col-cant { width: 55px; text-align: center; }' +
         'thead th.col-check { width: 32px; text-align: center; }' +
         'tbody td { padding: 5px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }' +
         'tbody td.col-num { text-align: center; color: #999; font-size: 10px; }' +
         'tbody td.col-codigo { font-family: "Courier New", monospace; font-size: 10px; color: #666; }' +
-        'tbody td.col-cant, tbody td.col-pend { text-align: center; font-weight: 700; font-family: "Courier New", monospace; }' +
+        'tbody td.col-stock, tbody td.col-cant { text-align: center; font-weight: 700; font-family: "Courier New", monospace; }' +
         'tbody td.col-check { text-align: center; font-size: 14px; color: #2d9f6f; }' +
         'tbody tr:nth-child(even) { background: #f8f8f6; }' +
         'tbody tr.row-done { background: #e6f5ee; }' +
@@ -1267,8 +1399,8 @@
         '<th class="col-num">#</th>' +
         '<th>Articulo</th>' +
         '<th class="col-codigo">Codigo</th>' +
+        '<th class="col-stock">Stock</th>' +
         '<th class="col-cant">Neces.</th>' +
-        '<th class="col-pend">Pend.</th>' +
         '<th class="col-check">OK</th>' +
         '</tr></thead>' +
         '<tbody>' + filas + '</tbody>' +
