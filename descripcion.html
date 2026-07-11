@@ -132,6 +132,9 @@ body{
 .icon-btn.keyset{border-color:var(--lime);color:var(--lime-600);background:var(--lime-soft)}
 .logout-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;transition:all .16s}
 .logout-btn:active{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
+.model-sel{background:var(--card);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:var(--font);font-size:.7rem;font-weight:600;padding:5px 9px;height:29px;cursor:pointer;outline:none;transition:all .16s}
+.model-sel:hover{color:var(--text-2)}
+.model-sel:focus{border-color:var(--lime);color:var(--text-2)}
 
 /* ====== LAYOUT ====== */
 .wrap{max-width:min(1180px,96vw);margin:0 auto;padding:18px 16px max(40px,env(safe-area-inset-bottom))}
@@ -331,7 +334,14 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
   </div>
   <div class="topbar-right">
     <span class="conn"><span class="dot" id="connDot"></span><span id="connTxt">online</span></span>
-    <button class="icon-btn" id="keyBtn" title="Configurar API key de Gemini">
+    <select class="model-sel" id="modelSel" title="Modelo de Gemini">
+      <option value="">Auto</option>
+      <option value="gemini-flash-lite-latest">Flash Lite</option>
+      <option value="gemini-flash-latest">Flash</option>
+      <option value="gemini-2.0-flash-lite">2.0 Flash Lite</option>
+      <option value="gemini-2.0-flash">2.0 Flash</option>
+    </select>
+    <button class="icon-btn" id="keyBtn" title="Configurar API key de Gemini" style="display:none">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
     </button>
     <button class="logout-btn" id="logoutBtn" title="Salir">
@@ -500,9 +510,23 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 // Orden por velocidad: los "lite" son mucho más rápidos y les sobra para leer una etiqueta.
 const GEMINI_MODEL_CANDIDATES = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
 const GEMINI_KEY_STORAGE = 'geminiApiKey';
-const GEMINI_MODEL_STORAGE = 'geminiModel';   // modelo que funcionó, cacheado
+const GEMINI_MODEL_STORAGE = 'geminiModel';        // modelo que funcionó, cacheado (modo Auto)
+const GEMINI_MODEL_MANUAL = 'geminiModelManual';   // modelo elegido a mano en el selector ('' = Auto)
 
-function getGeminiKey(){ try { return (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(); } catch(_){ return ''; } }
+// Modelo forzado desde el selector de la topbar ('' = Auto). Si está seteado se prueba primero.
+function getManualModel(){ try { return (localStorage.getItem(GEMINI_MODEL_MANUAL) || '').trim(); } catch(_){ return ''; } }
+function setManualModel(m){ try { m ? localStorage.setItem(GEMINI_MODEL_MANUAL, m) : localStorage.removeItem(GEMINI_MODEL_MANUAL); } catch(_){} }
+
+// API key de Gemini alojada en el código (como config.js con Firebase/Sheets).
+// ⚠️ Cualquiera que abra la página o el archivo puede verla; mantené este archivo
+// fuera de repos públicos (.gitignore). Para cambiarla, editá esta constante.
+const GEMINI_API_KEY = 'AQ.Ab8RN6Ig7aS2--uwmqLZxg1u3fkWz52BzNz7YdzFPvenKM9ofA';
+
+// Usa la key del código; si estuviera vacía, cae a la guardada en localStorage.
+function getGeminiKey(){
+  if (GEMINI_API_KEY && GEMINI_API_KEY.trim()) return GEMINI_API_KEY.trim();
+  try { return (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(); } catch(_){ return ''; }
+}
 function setGeminiKey(k){ try { localStorage.setItem(GEMINI_KEY_STORAGE, k.trim()); } catch(_){} }
 // Se versiona el caché del modelo: al cambiar la preferencia (p.ej. priorizar los "lite"),
 // se bumpea MODEL_PREF_VER para descartar el modelo recordado con el criterio viejo.
@@ -573,11 +597,15 @@ async function generarDescripcionGemini(base64, nombre){
   const key = getGeminiKey();
   if (!key){ const e = new Error('Falta la API key'); e.code = 'NO_KEY'; throw e; }
 
-  // Orden de intento: modelo cacheado primero (si hay), luego los candidatos, sin repetir.
+  // Orden de intento: modelo elegido a mano (si hay) → cacheado → candidatos. Sin repetir.
+  // Si el manual falla igual cae a los demás, así el selector nunca deja la app trabada.
+  const manual = getManualModel();
   const cached = getCachedModel();
   const tryList = [];
-  if (cached) tryList.push(cached);
-  for (const m of GEMINI_MODEL_CANDIDATES){ if (m !== cached) tryList.push(m); }
+  const push = m => { if (m && !tryList.includes(m)) tryList.push(m); };
+  push(manual);
+  push(cached);
+  for (const m of GEMINI_MODEL_CANDIDATES){ push(m); }
 
   let r = null, model = null, transient = null;
   for (const cand of tryList){
@@ -586,7 +614,7 @@ async function generarDescripcionGemini(base64, nombre){
     if (resp.status === 429 || resp.status === 503){ transient = { r: resp, model: cand }; continue; } // saturado/limitado → probar otro modelo
     r = resp; model = cand; break;                                                                  // respuesta definitiva (200/400/403…)
   }
-  if (model){ setCachedModel(model); }          // modelo que respondió de verdad → recordarlo
+  if (model && !manual){ setCachedModel(model); } // en modo Auto, recordar el que respondió (no pisar con la elección manual)
   else if (transient){ r = transient.r; model = transient.model; } // todos saturados/limitados → usar el último para el mensaje
   else { const e = new Error('Ningún modelo de Gemini está disponible para tu API key.'); e.code = 'NO_MODEL'; throw e; }
 
@@ -857,8 +885,6 @@ let camState = { codigo: '', nombre: '', previewUrl: '', base64: '' };
 function openCameraFor(codigo){
   const a = articulosCache[codigo];
   if (!a) return;
-  // Requerir key antes de empezar; si no hay, abrir modal y no seguir.
-  if (!getGeminiKey()){ toast('Configurá primero tu API key de Gemini', 'err'); openKeyModal(); return; }
 
   camState = { codigo, nombre: a.Nombre || '', previewUrl: '', base64: '' };
   $('camName').textContent = a.Nombre || 'Artículo';
@@ -970,9 +996,9 @@ async function ejecutarGeminiSobreCaptura(){
     updateDescCount();
   } catch (err){
     console.error('Gemini:', err);
-    if (err.code === 'NO_KEY' || err.code === 'BAD_KEY' || err.code === 'NO_MODEL'){
-      toast(err.message, 'err');
-      openKeyModal();
+    // La key está alojada en el código (GEMINI_API_KEY); si es inválida hay que editar esa constante.
+    if (err.code === 'BAD_KEY' || err.code === 'NO_MODEL'){
+      toast(err.message + ' Revisá la constante GEMINI_API_KEY en el código.', 'err');
     } else {
       toast(err.message || 'No se pudo generar la descripción', 'err');
     }
@@ -1111,6 +1137,14 @@ $('photoFile').addEventListener('change', e => {
 });
 $('descArea').addEventListener('input', updateDescCount);
 
+// Selector de modelo (topbar): guarda la elección; '' = Auto.
+$('modelSel').value = getManualModel();
+$('modelSel').addEventListener('change', e => {
+  const m = e.target.value;
+  setManualModel(m);
+  toast(m ? 'Modelo: ' + e.target.selectedOptions[0].text : 'Modelo automático', 'ok');
+});
+
 // Modal API key
 $('keyBtn').addEventListener('click', openKeyModal);
 $('keyCancel').addEventListener('click', closeKeyModal);
@@ -1163,10 +1197,7 @@ async function init(){
   try {
     await loadArticulos();
     renderTable();
-    if (!getGeminiKey()){
-      toast('Configurá tu API key de Gemini para empezar', 'err');
-      openKeyModal();
-    }
+    // La API key de Gemini está alojada en el código (GEMINI_API_KEY), no se pide en la página.
   } catch (err){
     console.error('Init error:', err);
     toast('Error al cargar artículos desde Firebase', 'err');
