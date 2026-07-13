@@ -12,6 +12,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
+<!-- Lector de códigos de barras (cámara del móvil) -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
 <!-- Config (pedidos-87064 + Google Sheets) -->
 <script src="config.js"></script>
 
@@ -164,6 +167,56 @@ body{
 .filterbtn.on .sw{background:var(--lime)}
 .filterbtn.on .sw::after{transform:translateX(13px)}
 
+/* ====== SCAN BUTTON ====== */
+.scan-btn{
+  display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;
+  padding:11px 16px;font-family:var(--font);font-size:.82rem;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary);
+  cursor:pointer;white-space:nowrap;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s;
+}
+.scan-btn:active{transform:translateY(1px) scale(.985)}
+.scan-btn svg{color:var(--lime)}
+@media(max-width:520px){.scan-btn{flex:1;justify-content:center;min-width:130px}}
+
+/* ====== SCANNER OVERLAY ====== */
+.scanner{position:fixed;inset:0;z-index:1150;background:#0b0f1a;display:none;flex-direction:column}
+.scanner.active{display:flex}
+.scanner-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:max(14px,env(safe-area-inset-top)) 18px 14px;color:#fff;z-index:2}
+.scanner-head .st{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.scanner-head .st b{font-size:1.02rem;font-weight:800;letter-spacing:-.02em}
+.scanner-head .st span{font-size:.72rem;color:rgba(255,255,255,.55);font-weight:500;margin-top:2px}
+.scanner-actions{display:flex;gap:9px;flex-shrink:0}
+.scanner-icon-btn{width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s}
+.scanner-icon-btn:active{background:rgba(255,255,255,.16)}
+.scanner-icon-btn.on{background:var(--lime);border-color:var(--lime);color:#0b0f1a}
+.scanner-stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
+#scannerReader{width:100%;height:100%}
+#scannerReader video{width:100%!important;height:100%!important;object-fit:cover!important;display:block}
+/* guía de encuadre */
+.scanner-stage::after{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(80vw,340px);height:min(32vh,170px);
+  border:2px solid rgba(255,255,255,.9);border-radius:16px;
+  box-shadow:0 0 0 100vmax rgba(0,0,0,.4);pointer-events:none;z-index:1;
+}
+.scan-result{
+  position:absolute;left:50%;bottom:20px;transform:translateX(-50%) translateY(20px);z-index:3;
+  display:flex;align-items:center;gap:12px;background:rgba(20,24,34,.94);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:11px 18px;
+  max-width:calc(100vw - 32px);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
+}
+.scan-result.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.scan-result .sr-icon{width:34px;height:34px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.scan-result .sr-txt{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.scan-result .sr-txt b{font-size:.9rem;font-weight:700;color:#fff}
+.scan-result .sr-txt span{font-size:.76rem;color:rgba(255,255,255,.62);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:64vw}
+.scan-result.ok .sr-icon{background:var(--success)}
+.scan-result.warn .sr-icon{background:var(--amber)}
+.scan-result.err .sr-icon{background:var(--danger)}
+.scanner-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;color:rgba(255,255,255,.85);font-size:.92rem;line-height:1.6;z-index:4}
+.scanner-foot{background:#0b0f1a;border-top:1px solid rgba(255,255,255,.08);padding:14px 18px max(14px,env(safe-area-inset-bottom));color:rgba(255,255,255,.5);font-size:.78rem;text-align:center;line-height:1.5}
+
 /* ====== TABLE ====== */
 .tabla-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
 table.art{border-collapse:collapse;width:100%;font-size:.84rem}
@@ -172,9 +225,13 @@ table.art thead th{position:sticky;top:0;background:var(--card-2);font-size:.66r
 table.art tbody tr{cursor:pointer;transition:background .12s}
 table.art tbody tr:hover > td{background:var(--lime-soft)}
 table.art tbody tr:last-child td{border-bottom:none}
+/* fila encontrada por escaneo: destello para ubicarla de un vistazo */
+table.art tbody tr.hit > td{animation:hit-flash 2.4s ease-out}
+@keyframes hit-flash{0%,55%{background:#e2efce}100%{background:transparent}}
 table.art td.codcol{font-family:var(--mono);font-weight:700;color:var(--text-2);white-space:nowrap}
 table.art td.namecol{font-weight:600;color:var(--text);max-width:280px;min-width:140px}
-table.art td.desccol{color:var(--text-2);max-width:340px;min-width:160px}
+table.art td.desccol{color:var(--text-2);max-width:340px;min-width:160px;cursor:text}
+table.art td.desccol:hover .dtxt,table.art td.desccol:hover .dempty{text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:2px}
 table.art td.desccol .dtxt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:.8rem;line-height:1.35}
 table.art td.desccol .dempty{color:var(--faint);font-style:italic}
 .thumb-wrap{position:relative;width:46px;height:46px}
@@ -271,8 +328,28 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
 .mbtn-save:disabled{opacity:.6;cursor:not-allowed}
 .modal-err{min-height:1em;color:var(--danger-600);font-size:.78rem;font-weight:600;margin-top:9px}
 
+/* ====== MODAL DESCRIPCIÓN (ver / editar) ====== */
+.modal-card.wide{max-width:640px}
+.dm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.dm-head .dm-tt{min-width:0}
+.dm-head h2{margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-head .dm-cod{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.dm-x{width:34px;height:34px;flex-shrink:0;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text-2);font-size:1.2rem;line-height:1;cursor:pointer;transition:all .16s}
+.dm-x:hover{border-color:var(--danger);color:var(--danger-600)}
+.dm-label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.74rem;font-weight:700;color:var(--text-2);margin-bottom:7px}
+.dm-count{font-family:var(--mono);font-size:.68rem;color:var(--faint);font-weight:500}
+.dm-area{
+  width:100%;min-height:240px;max-height:52vh;resize:vertical;
+  background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);
+  color:var(--text);font-family:var(--font);font-size:.9rem;line-height:1.6;padding:13px 14px;outline:none;
+  white-space:pre-wrap;transition:border-color .18s,box-shadow .18s;
+}
+.dm-area:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.dm-area::placeholder{color:var(--faint)}
+
 /* ====== BLOCK OVERLAY ====== */
-.block{position:fixed;inset:0;z-index:1050;background:rgba(14,15,19,.55);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+/* por encima de los modales (1200) para que el spinner se vea al guardar desde el editor */
+.block{position:fixed;inset:0;z-index:1250;background:rgba(14,15,19,.55);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
 .block.active{display:flex}
 .spinner{width:44px;height:44px;border:3.5px solid rgba(255,255,255,.25);border-top-color:var(--lime);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -295,8 +372,8 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
   .page-head h1{font-size:1.2rem}
   table.art th,table.art td{padding:9px 9px}
   .rowbtn{padding:9px 11px}
-  table.art td.desccol{display:none}
-  table.art th.desccol{display:none}
+  /* la descripción se mantiene visible (es el acceso al editor); la tabla scrollea en horizontal */
+  table.art td.desccol{max-width:200px;min-width:130px}
 }
 </style>
 </head>
@@ -368,6 +445,10 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
   <!-- ===== TOOLS ===== -->
   <div class="tabla-tools">
     <input type="text" class="inp tbl-search" id="tablaSearch" placeholder="Buscar por nombre, código o cód. de barras…" autocomplete="off">
+    <button class="scan-btn" id="scanBtn" type="button" title="Buscar un artículo escaneando su código de barras">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+      Escanear
+    </button>
     <button class="filterbtn" id="filterBtn" type="button" title="Mostrar solo artículos sin descripción">
       <span class="sw"></span>
       Solo sin descripción
@@ -482,6 +563,58 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
   <div class="stamp">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
   </div>
+</div>
+
+<!-- ===== MODAL DESCRIPCIÓN (ver / editar) ===== -->
+<div class="modal" id="descModal">
+  <div class="modal-card wide">
+    <div class="dm-head">
+      <div class="dm-tt">
+        <h2 id="dmName">Artículo</h2>
+        <span class="dm-cod" id="dmCod">#—</span>
+      </div>
+      <button class="dm-x" id="dmClose" type="button" title="Cerrar">&times;</button>
+    </div>
+    <div class="dm-label">
+      <span>Descripción</span>
+      <span class="dm-count" id="dmCount">0 caracteres</span>
+    </div>
+    <textarea class="dm-area" id="dmArea" placeholder="Este artículo todavía no tiene descripción. Podés escribirla acá o generarla con la cámara." spellcheck="true"></textarea>
+    <div class="modal-actions">
+      <button class="btn mbtn-cancel" id="dmCancel" type="button">Cancelar</button>
+      <button class="btn mbtn-save" id="dmSave" type="button">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCANNER ===== -->
+<div class="scanner" id="scanner">
+  <div class="scanner-head">
+    <div class="st">
+      <b>Buscar por código</b>
+      <span>Apuntá al código de barras del artículo</span>
+    </div>
+    <div class="scanner-actions">
+      <button class="scanner-icon-btn" id="torchBtn" type="button" title="Linterna">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+      </button>
+      <button class="scanner-icon-btn" id="scanCloseBtn" type="button" title="Cerrar">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="scanner-stage">
+    <div id="scannerReader"></div>
+    <div class="scan-result" id="scanResult">
+      <div class="sr-icon" id="scanResultIcon"></div>
+      <div class="sr-txt">
+        <b id="scanResultTitle"></b>
+        <span id="scanResultSub"></span>
+      </div>
+    </div>
+    <div class="scanner-error" id="scannerError" style="display:none"></div>
+  </div>
+  <div class="scanner-foot">Al reconocer el código, se cierra la cámara y el artículo queda filtrado en la lista.</div>
 </div>
 
 <!-- ===== TOAST ===== -->
@@ -1029,6 +1162,23 @@ function updateDescCount(){
 // ============================================================
 //  Guardado en Firebase
 // ============================================================
+// Escribe la descripción en el nodo del artículo y verifica leyendo de vuelta.
+// Lanza si no hay conexión, si la escritura tarda demasiado o si la verificación falla.
+async function persistirDescripcion(codigo, texto){
+  showBlock('Verificando conexión…');
+  const conectado = await verificarConexionFirebase(5000).catch(() => false);
+  if (!conectado) throw new Error('Sin conexión a Firebase. Verificá tu internet.');
+
+  showBlock('Guardando…');
+  const ref = articulosRef.child(codigo);
+  await conTimeout(ref.update({ Descripcion: texto, Timestamp: firebase.database.ServerValue.TIMESTAMP }), 15000, 'Timeout: la escritura tardó demasiado.');
+
+  const check = await conTimeout(ref.child('Descripcion').once('value'), 10000, 'No se pudo verificar el guardado.');
+  if (!check.exists() || check.val() !== texto) throw new Error('La verificación del guardado falló.');
+
+  if (articulosCache[codigo]) articulosCache[codigo].Descripcion = texto;
+}
+
 async function guardarDescripcion(){
   const codigo = camState.codigo;
   const texto = $('descArea').value.trim();
@@ -1038,28 +1188,68 @@ async function guardarDescripcion(){
   const btn = $('camSave');
   btn.disabled = true;
   procesoCriticoEnEjecucion = true;
-  showBlock('Verificando conexión…');
   try {
-    const conectado = await verificarConexionFirebase(5000).catch(() => false);
-    if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
-
-    showBlock('Guardando…');
-    const ref = articulosRef.child(codigo);
-    await conTimeout(ref.update({ Descripcion: texto, Timestamp: firebase.database.ServerValue.TIMESTAMP }), 15000, 'Timeout: la escritura tardó demasiado.');
-
-    // verificación de escritura (lectura de vuelta)
-    const check = await conTimeout(ref.child('Descripcion').once('value'), 10000, 'No se pudo verificar el guardado.');
-    if (!check.exists() || check.val() !== texto){
-      throw new Error('La verificación del guardado falló.');
-    }
-
-    // actualizar cache local + UI
-    if (articulosCache[codigo]) articulosCache[codigo].Descripcion = texto;
+    await persistirDescripcion(codigo, texto);
     hideBlock();
     closeCamera();
     showSuccessStamp();
     toast(`Descripción guardada en #${codigo}`, 'ok');
     renderTable();   // si el filtro "sin descripción" está activo, la fila desaparece
+  } catch (err){
+    console.error('Error guardando descripción:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+//  Modal ver / editar descripción (click en la celda de la tabla)
+// ============================================================
+let descModalCodigo = '';
+
+function openDescModal(codigo){
+  const a = articulosCache[codigo];
+  if (!a) return;
+  descModalCodigo = codigo;
+  $('dmName').textContent = a.Nombre || 'Artículo';
+  $('dmName').title = a.Nombre || '';
+  $('dmCod').textContent = '#' + codigo;
+  $('dmArea').value = tieneDescripcion(a) ? String(a.Descripcion).trim() : '';
+  updateDmCount();
+  $('descModal').classList.add('active');
+  setTimeout(() => $('dmArea').focus(), 60);
+}
+function closeDescModal(){
+  $('descModal').classList.remove('active');
+  descModalCodigo = '';
+  $('dmArea').value = '';
+}
+function updateDmCount(){
+  const n = $('dmArea').value.trim().length;
+  $('dmCount').textContent = n + (n === 1 ? ' carácter' : ' caracteres');
+}
+
+async function guardarDescripcionModal(){
+  const codigo = descModalCodigo;
+  if (!codigo) return;
+  const texto = $('dmArea').value.trim();
+  const actual = tieneDescripcion(articulosCache[codigo]) ? String(articulosCache[codigo].Descripcion).trim() : '';
+  if (texto === actual){ closeDescModal(); return; }          // sin cambios → no se escribe
+  if (!texto){ toast('La descripción está vacía', 'err'); $('dmArea').focus(); return; }
+
+  const btn = $('dmSave');
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  try {
+    await persistirDescripcion(codigo, texto);
+    hideBlock();
+    closeDescModal();
+    showSuccessStamp();
+    toast(`Descripción actualizada en #${codigo}`, 'ok');
+    renderTable();
   } catch (err){
     console.error('Error guardando descripción:', err);
     toast('Error: ' + err.message, 'err');
@@ -1092,8 +1282,173 @@ function saveKeyModal(){
 }
 
 // ============================================================
+//  Escáner de códigos de barras (cámara del móvil)
+// ============================================================
+let html5Qr = null;
+let scannerRunning = false;
+let torchOn = false;
+let lastScanCode = '';
+let lastScanTime = 0;
+let scanFbTimer = null;
+let audioCtx = null;
+
+// Busca un artículo por código de barras. `CodigoBarras` puede traer varios separados
+// por coma; se tolera la diferencia de ceros a la izquierda (UPC-A vs EAN-13) y, si no
+// hay match, se cae al código interno del artículo.
+function findByBarcode(code){
+  const raw = String(code).trim();
+  if (!raw) return null;
+  const norm = raw.replace(/^0+/, '');
+  const items = Object.entries(articulosCache).map(([key, a]) => ({ key, ...a }));
+  for (const a of items){
+    const codes = String(a.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean);
+    for (const b of codes){
+      if (b === raw || b.replace(/^0+/, '') === norm) return a;
+    }
+  }
+  return items.find(a => String(a.Codigo || '').trim() === raw) || null;
+}
+
+// Feedback sonoro + háptico
+function buzz(ok){
+  try { if (navigator.vibrate) navigator.vibrate(ok ? 35 : [40, 45, 40]); } catch(_){}
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = ok ? 900 : 240;
+    g.gain.value = 0.05;
+    o.connect(g); g.connect(audioCtx.destination);
+    const t = audioCtx.currentTime;
+    o.start(t);
+    o.stop(t + (ok ? 0.09 : 0.2));
+  } catch(_){}
+}
+
+const SR_ICONS = {
+  ok:   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  warn: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>',
+  err:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+};
+function scanFeedback(type, title, sub){
+  const el = $('scanResult');
+  $('scanResultIcon').innerHTML = SR_ICONS[type] || '';
+  $('scanResultTitle').textContent = title;
+  $('scanResultSub').textContent = sub || '';
+  el.className = 'scan-result show ' + type;
+  clearTimeout(scanFbTimer);
+  scanFbTimer = setTimeout(() => el.classList.remove('show'), 1900);
+}
+
+// Deja el artículo escaneado como único resultado de la lista y lo resalta.
+function enfocarArticulo(a){
+  // Si el filtro "solo sin descripción" está activo y el artículo ya tiene una,
+  // quedaría fuera de la lista: se apaga el filtro para poder mostrarlo.
+  if (sinDescOnly && tieneDescripcion(a)){
+    sinDescOnly = false;
+    $('filterBtn').classList.remove('on');
+  }
+  $('tablaSearch').value = a.Codigo;
+  page = 0;
+  renderTable();
+  const tr = $('artTbody').querySelector(`tr[data-codigo="${String(a.Codigo).replace(/["\\]/g, '\\$&')}"]`);
+  if (tr){
+    tr.classList.add('hit');
+    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  toast(`#${a.Codigo} · ${a.Nombre || ''}`, 'ok');
+}
+
+function onScanSuccess(decodedText){
+  const now = Date.now();
+  const code = String(decodedText).trim();
+  // El lector dispara en ráfaga sobre el mismo código: se ignoran las repeticiones.
+  if (code === lastScanCode && now - lastScanTime < 1800) return;
+  lastScanCode = code; lastScanTime = now;
+
+  const a = findByBarcode(code);
+  if (!a){
+    scanFeedback('err', 'Sin coincidencia', 'Código ' + code);
+    buzz(false);
+    return;
+  }
+  if (!isDisponible(a)){
+    scanFeedback('warn', 'No disponible', (a.Nombre || '#' + a.Codigo) + ' · no aparece en la lista');
+    buzz(false);
+    return;
+  }
+  scanFeedback('ok', 'Encontrado', a.Nombre || '#' + a.Codigo);
+  buzz(true);
+  const art = a;
+  setTimeout(async () => { await closeScanner(); enfocarArticulo(art); }, 450);   // deja ver el feedback antes de cerrar
+}
+
+async function openScanner(){
+  if (typeof Html5Qrcode === 'undefined'){
+    toast('No se pudo cargar el escáner. Verificá tu conexión.', 'err');
+    return;
+  }
+  $('scanner').classList.add('active');
+  $('scannerError').style.display = 'none';
+  $('scanResult').classList.remove('show');
+  lastScanCode = ''; lastScanTime = 0;
+  torchOn = false;
+  $('torchBtn').classList.remove('on');
+
+  const fmts = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.CODABAR
+  ];
+
+  try {
+    html5Qr = new Html5Qrcode('scannerReader', { formatsToSupport: fmts, verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, { fps: 12 }, onScanSuccess, () => {});
+    scannerRunning = true;
+  } catch (err){
+    console.error('Scanner:', err);
+    scannerRunning = false;
+    const errEl = $('scannerError');
+    errEl.style.display = 'flex';
+    errEl.textContent = 'No se pudo acceder a la cámara. Revisá los permisos del navegador. Podés seguir buscando el artículo a mano desde el buscador.';
+  }
+}
+
+async function closeScanner(){
+  if (html5Qr && scannerRunning){
+    try { await html5Qr.stop(); } catch(_){}
+    try { html5Qr.clear(); } catch(_){}
+  }
+  html5Qr = null;
+  scannerRunning = false;
+  $('scanner').classList.remove('active');
+}
+
+async function toggleTorch(){
+  if (!html5Qr || !scannerRunning) return;
+  torchOn = !torchOn;
+  try {
+    await html5Qr.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    $('torchBtn').classList.toggle('on', torchOn);
+  } catch(_){
+    torchOn = false;
+    toast('Linterna no disponible en este dispositivo', 'err');
+  }
+}
+
+// ============================================================
 //  Event listeners
 // ============================================================
+// Escáner
+$('scanBtn').addEventListener('click', openScanner);
+$('scanCloseBtn').addEventListener('click', closeScanner);
+$('torchBtn').addEventListener('click', toggleTorch);
+
 // Buscar
 let searchTimer;
 $('tablaSearch').addEventListener('input', () => {
@@ -1109,11 +1464,23 @@ $('filterBtn').addEventListener('click', () => {
   renderTable();
 });
 
-// Click en fila o botón → abrir cámara para ese artículo
+// Click en la celda de descripción → abrir el modal para leerla/editarla completa.
+// Click en el resto de la fila (o en el botón) → abrir la cámara para regenerarla.
 $('artTbody').addEventListener('click', e => {
   const tr = e.target.closest('tr');
   if (!tr) return;
+  if (e.target.closest('td.desccol')){ openDescModal(tr.dataset.codigo); return; }
   openCameraFor(tr.dataset.codigo);
+});
+
+// Modal ver / editar descripción
+$('dmClose').addEventListener('click', closeDescModal);
+$('dmCancel').addEventListener('click', closeDescModal);
+$('dmSave').addEventListener('click', guardarDescripcionModal);
+$('dmArea').addEventListener('input', updateDmCount);
+$('descModal').addEventListener('click', e => { if (e.target === $('descModal')) closeDescModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('descModal').classList.contains('active')) closeDescModal();
 });
 
 // Paginación
