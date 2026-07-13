@@ -103,6 +103,7 @@ body{
 }
 .inp:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
 .inp::placeholder{color:var(--faint)}
+.dim-side{flex:1;min-width:0;padding:13px 10px}
 .btn{font-family:var(--font);cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s,background .18s,opacity .18s}
 .btn:active{transform:translateY(1px) scale(.985)}
 .btn-primary{width:100%;padding:14px;border-radius:var(--r-sm);font-weight:700;font-size:.98rem;letter-spacing:.01em;color:#fff;background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary);margin-top:6px}
@@ -234,6 +235,10 @@ table.art td.desccol{color:var(--text-2);max-width:340px;min-width:160px;cursor:
 table.art td.desccol:hover .dtxt,table.art td.desccol:hover .dempty{text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:2px}
 table.art td.desccol .dtxt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:.8rem;line-height:1.35}
 table.art td.desccol .dempty{color:var(--faint);font-style:italic}
+table.art td.medcol{color:var(--text-2);max-width:170px;min-width:120px;cursor:text}
+table.art td.medcol:hover .dtxt,table.art td.medcol:hover .dempty{text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:2px}
+table.art td.medcol .dtxt{font-size:.8rem;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.art td.medcol .dempty{color:var(--faint);font-style:italic;font-size:.8rem}
 .thumb-wrap{position:relative;width:46px;height:46px}
 table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;background:var(--card-2);display:block;border:1px solid var(--border)}
 .thumb-empty{width:46px;height:46px;border-radius:9px;background:var(--card-2);border:1.5px dashed var(--border-2);display:flex;align-items:center;justify-content:center;color:var(--faint)}
@@ -374,6 +379,7 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
   .rowbtn{padding:9px 11px}
   /* la descripción se mantiene visible (es el acceso al editor); la tabla scrollea en horizontal */
   table.art td.desccol{max-width:200px;min-width:130px}
+  table.art td.medcol{max-width:120px;min-width:90px}
 }
 </style>
 </head>
@@ -464,6 +470,7 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
           <th>Foto</th>
           <th>Nombre</th>
           <th class="desccol">Descripción</th>
+          <th>Medidas</th>
           <th class="col-act">Acción</th>
         </tr>
       </thead>
@@ -583,6 +590,37 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
     <div class="modal-actions">
       <button class="btn mbtn-cancel" id="dmCancel" type="button">Cancelar</button>
       <button class="btn mbtn-save" id="dmSave" type="button">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL TAMAÑO / PESO ===== -->
+<div class="modal" id="dimModal">
+  <div class="modal-card">
+    <div class="dm-head">
+      <div class="dm-tt">
+        <h2 id="dimName">Artículo</h2>
+        <span class="dm-cod" id="dimCod">#—</span>
+      </div>
+      <button class="dm-x" id="dimClose" type="button" title="Cerrar">&times;</button>
+    </div>
+    <div class="field">
+      <label>Tamaño (cm) · largo × ancho × alto — el alto es opcional para objetos planos</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" class="inp dim-side" id="dimLado1" placeholder="70" min="0" step="0.1" inputmode="decimal" style="text-align:center">
+        <span style="color:var(--muted);font-weight:700">×</span>
+        <input type="number" class="inp dim-side" id="dimLado2" placeholder="30" min="0" step="0.1" inputmode="decimal" style="text-align:center">
+        <span style="color:var(--muted);font-weight:700">×</span>
+        <input type="number" class="inp dim-side" id="dimLado3" placeholder="40 (opc.)" min="0" step="0.1" inputmode="decimal" style="text-align:center">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Peso (kg)</label>
+      <input type="number" class="inp" id="dimPeso" placeholder="0" min="0" step="0.01" inputmode="decimal">
+    </div>
+    <div class="modal-actions">
+      <button class="btn mbtn-cancel" id="dimCancel" type="button">Cancelar</button>
+      <button class="btn mbtn-save" id="dimSave" type="button">Guardar</button>
     </div>
   </div>
 </div>
@@ -839,6 +877,14 @@ function isDisponible(a){
 function imageUrl(a){ return String((a && (a.Foto || a.Img)) || '').trim(); }
 // ¿Ya tiene una descripción cargada?
 function tieneDescripcion(a){ return !!(a && typeof a.Descripcion === 'string' && a.Descripcion.trim()); }
+// Tamaño / peso: cargados a mano (Tamano: "LxAxH" o "LxA" en cm; Peso: numérico, siempre en kg).
+function tieneMedidas(a){ return !!(a && (String(a.Tamano || '').trim() || a.Peso || a.Peso === 0)); }
+function medidasTexto(a){
+  const partes = [];
+  if (a && String(a.Tamano || '').trim()) partes.push(String(a.Tamano).trim() + ' cm');
+  if (a && (a.Peso || a.Peso === 0)) partes.push(`${a.Peso} kg`);
+  return partes.join(' · ');
+}
 
 // ============================================================
 //  Carga desde Firebase
@@ -942,11 +988,16 @@ function renderPage(){
     const btn = has
       ? `<button class="rowbtn replace" type="button">${CAM_ICON} Editar</button>`
       : `<button class="rowbtn assign" type="button">${CAM_ICON} Generar</button>`;
+    const hasMed = tieneMedidas(a);
+    const medCell = hasMed
+      ? `<div class="dtxt">${escapeHtml(medidasTexto(a))}</div>`
+      : `<span class="dempty">Sin datos</span>`;
     tr.innerHTML = `
       <td class="codcol">#${escapeHtml(a.Codigo)}</td>
       <td>${fotoCell}</td>
       <td class="namecol">${escapeHtml(a.Nombre)}</td>
       <td class="desccol">${descCell}</td>
+      <td class="medcol">${medCell}</td>
       <td class="col-act">${btn}</td>`;
     tbody.appendChild(tr);
   });
@@ -1261,6 +1312,100 @@ async function guardarDescripcionModal(){
 }
 
 // ============================================================
+//  Modal tamaño / peso (carga manual, sin IA)
+// ============================================================
+let dimModalCodigo = '';
+
+function openDimModal(codigo){
+  const a = articulosCache[codigo];
+  if (!a) return;
+  dimModalCodigo = codigo;
+  $('dimName').textContent = a.Nombre || 'Artículo';
+  $('dimName').title = a.Nombre || '';
+  $('dimCod').textContent = '#' + codigo;
+  const lados = String(a.Tamano || '').split(/x/i).map(s => s.trim()).filter(Boolean);
+  $('dimLado1').value = lados[0] || '';
+  $('dimLado2').value = lados[1] || '';
+  $('dimLado3').value = lados[2] || '';
+  $('dimPeso').value = (a.Peso || a.Peso === 0) ? a.Peso : '';
+  $('dimModal').classList.add('active');
+  setTimeout(() => $('dimLado1').focus(), 60);
+}
+function closeDimModal(){
+  $('dimModal').classList.remove('active');
+  dimModalCodigo = '';
+}
+
+// Escribe tamaño/peso en el nodo del artículo y verifica leyendo de vuelta (mismo patrón que la descripción).
+async function persistirMedidas(codigo, tamano, peso){
+  showBlock('Verificando conexión…');
+  const conectado = await verificarConexionFirebase(5000).catch(() => false);
+  if (!conectado) throw new Error('Sin conexión a Firebase. Verificá tu internet.');
+
+  showBlock('Guardando…');
+  const ref = articulosRef.child(codigo);
+  await conTimeout(ref.update({
+    Tamano: tamano,
+    Peso: peso,             // null borra el campo (sin peso cargado); siempre en kg
+    Timestamp: firebase.database.ServerValue.TIMESTAMP
+  }), 15000, 'Timeout: la escritura tardó demasiado.');
+
+  const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar el guardado.');
+  const val = check.val() || {};
+  if ((val.Tamano || '') !== tamano || (val.Peso ?? null) !== peso) throw new Error('La verificación del guardado falló.');
+
+  if (articulosCache[codigo]){
+    articulosCache[codigo].Tamano = tamano;
+    articulosCache[codigo].Peso = peso;
+  }
+}
+
+// Valida un lado (número >= 0); usado tanto para los obligatorios como el opcional.
+function ladoValido(raw){
+  if (raw === '') return null;
+  const n = Number(raw);
+  return (isFinite(n) && n >= 0) ? n : null;
+}
+
+async function guardarMedidas(){
+  const codigo = dimModalCodigo;
+  if (!codigo) return;
+
+  const l1raw = $('dimLado1').value.trim();
+  const l2raw = $('dimLado2').value.trim();
+  const l3raw = $('dimLado3').value.trim();
+  if (!l1raw || !l2raw){ toast('El tamaño es obligatorio: completá al menos dos lados', 'err'); (l1raw ? $('dimLado2') : $('dimLado1')).focus(); return; }
+  const l1 = ladoValido(l1raw), l2 = ladoValido(l2raw);
+  if (l1 === null || l2 === null){ toast('Los lados deben ser números válidos', 'err'); return; }
+  let l3 = null;
+  if (l3raw !== ''){ l3 = ladoValido(l3raw); if (l3 === null){ toast('El tercer lado debe ser un número válido', 'err'); $('dimLado3').focus(); return; } }
+  const tamano = [l1, l2, l3].filter(v => v !== null).join('x');
+
+  const pesoRaw = $('dimPeso').value.trim();
+  const peso = pesoRaw === '' ? null : Number(pesoRaw);
+  if (pesoRaw !== '' && (!isFinite(peso) || peso < 0)){ toast('Peso inválido', 'err'); $('dimPeso').focus(); return; }
+
+  const btn = $('dimSave');
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  try {
+    await persistirMedidas(codigo, tamano, peso);
+    hideBlock();
+    closeDimModal();
+    showSuccessStamp();
+    toast(`Medidas guardadas en #${codigo}`, 'ok');
+    renderTable();
+  } catch (err){
+    console.error('Error guardando medidas:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
 //  Modal API key
 // ============================================================
 function refreshKeyBtn(){ $('keyBtn').classList.toggle('keyset', !!getGeminiKey()); }
@@ -1470,6 +1615,7 @@ $('artTbody').addEventListener('click', e => {
   const tr = e.target.closest('tr');
   if (!tr) return;
   if (e.target.closest('td.desccol')){ openDescModal(tr.dataset.codigo); return; }
+  if (e.target.closest('td.medcol')){ openDimModal(tr.dataset.codigo); return; }
   openCameraFor(tr.dataset.codigo);
 });
 
@@ -1481,6 +1627,19 @@ $('dmArea').addEventListener('input', updateDmCount);
 $('descModal').addEventListener('click', e => { if (e.target === $('descModal')) closeDescModal(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('descModal').classList.contains('active')) closeDescModal();
+});
+
+// Modal tamaño / peso
+$('dimClose').addEventListener('click', closeDimModal);
+$('dimCancel').addEventListener('click', closeDimModal);
+$('dimSave').addEventListener('click', guardarMedidas);
+$('dimModal').addEventListener('click', e => { if (e.target === $('dimModal')) closeDimModal(); });
+$('dimLado1').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('dimLado2').focus(); } });
+$('dimLado2').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('dimLado3').focus(); } });
+$('dimLado3').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('dimPeso').focus(); } });
+$('dimPeso').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); guardarMedidas(); } });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('dimModal').classList.contains('active')) closeDimModal();
 });
 
 // Paginación
