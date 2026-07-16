@@ -1171,8 +1171,15 @@ async function usarFotoDelArticulo(){
   btn.disabled = true;
   try {
     showBlock('Descargando la foto…');
-    const resp = await conTimeout(fetch(url, { mode: 'cors', cache: 'no-store' }), 20000, 'La descarga de la foto tardó demasiado');
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // Requiere CORS habilitado en el bucket de Storage para este origen (ver cors.json).
+    let resp;
+    try {
+      resp = await conTimeout(fetch(url, { mode: 'cors', cache: 'no-store' }), 20000, 'La descarga de la foto tardó demasiado');
+    } catch (netErr){
+      if (netErr instanceof TypeError) throw new Error('El bucket de Storage bloquea la descarga (CORS). Sacá la foto o configurá cors.json.');
+      throw netErr;
+    }
+    if (!resp.ok) throw new Error('No se pudo descargar la foto (HTTP ' + resp.status + ')');
     const blob = await resp.blob();
     if (!blob.size || !/^image\//.test(blob.type || 'image/')) throw new Error('El archivo no es una imagen');
     hideBlock();
