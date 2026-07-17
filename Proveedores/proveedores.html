@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Pagos a Proveedores</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ══════════════════════ Encabezado ══════════════════════ -->
+  <header class="header">
+    <div class="header__inner">
+      <h1 class="header__titulo">Pagos a Proveedores</h1>
+
+      <!-- Cotización en vivo (bluelytics): informativa. Oficial y Blue, valor de venta. -->
+      <div class="cotizacion" id="chip-dolar" title="Dólar (venta) · bluelytics.com.ar">
+        <span class="cotizacion__par">
+          <span class="cotizacion__tag cotizacion__tag--oficial">Oficial</span>
+          <span class="cotizacion__valor" id="dolar-oficial">…</span>
+        </span>
+        <span class="cotizacion__sep"></span>
+        <span class="cotizacion__par">
+          <span class="cotizacion__tag cotizacion__tag--blue">Blue</span>
+          <span class="cotizacion__valor" id="dolar-blue">…</span>
+        </span>
+      </div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab tab--activa" role="tab" data-vista="pagos" aria-selected="true">Pagos</button>
+      <button class="tab" role="tab" data-vista="facturas" aria-selected="false">Facturas</button>
+      <button class="tab" role="tab" data-vista="proveedores" aria-selected="false">Proveedores</button>
+      <button class="tab" role="tab" data-vista="resumen" aria-selected="false">Resumen</button>
+      <button class="tab" role="tab" data-vista="informes" aria-selected="false">Informes</button>
+    </nav>
+  </header>
+
+  <main class="main">
+
+    <!-- Aviso de configuración faltante / errores de conexión -->
+    <div id="banner-estado" class="banner banner--oculto"></div>
+
+    <!-- ══════════════════════ Vista: Pagos ══════════════════════ -->
+    <section class="vista vista--activa" id="vista-pagos" role="tabpanel">
+
+      <div class="seccion-header">
+        <h2>Registro de pagos</h2>
+        <button type="button" class="btn btn--primario" id="btn-nuevo-pago">+ Nuevo pago</button>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filtros">
+        <div class="campo campo--compacto">
+          <label for="filtro-proveedor">Proveedor</label>
+          <select id="filtro-proveedor">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="campo campo--compacto">
+          <label for="filtro-moneda">Moneda</label>
+          <select id="filtro-moneda">
+            <option value="">Todas</option>
+            <option value="ARS">Pesos</option>
+            <option value="USD">Dólares</option>
+          </select>
+        </div>
+        <div class="campo campo--compacto">
+          <label for="filtro-desde">Desde</label>
+          <input type="date" id="filtro-desde">
+        </div>
+        <div class="campo campo--compacto">
+          <label for="filtro-hasta">Hasta</label>
+          <input type="date" id="filtro-hasta">
+        </div>
+        <button type="button" class="btn btn--texto" id="btn-limpiar-filtros">Limpiar</button>
+      </div>
+
+      <!-- Totales de lo que está filtrado -->
+      <div class="totales" id="totales-pagos"></div>
+
+      <!-- Listado -->
+      <div class="tabla-wrap">
+        <table class="tabla" id="tabla-pagos">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Proveedor</th>
+              <th>Facturas / concepto</th>
+              <th>Método</th>
+              <th class="ta-right">Monto</th>
+              <th class="ta-right">Cotización</th>
+              <th class="ta-right">Equiv. ARS</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-pagos"></tbody>
+        </table>
+        <p class="vacio vacio--oculto" id="pagos-vacio">No hay pagos que coincidan con los filtros.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ Vista: Facturas ══════════════════════ -->
+    <section class="vista" id="vista-facturas" role="tabpanel">
+
+      <div class="seccion-header">
+        <h2>Facturas y saldos</h2>
+        <button type="button" class="btn btn--primario" id="btn-nueva-factura">+ Nueva factura</button>
+      </div>
+
+      <div class="filtros">
+        <div class="campo campo--compacto">
+          <label for="filtro-factura-proveedor">Proveedor</label>
+          <select id="filtro-factura-proveedor">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="campo campo--compacto">
+          <label for="filtro-factura-moneda">Moneda</label>
+          <select id="filtro-factura-moneda">
+            <option value="">Todas</option>
+            <option value="ARS">Pesos</option>
+            <option value="USD">Dólares</option>
+          </select>
+        </div>
+        <div class="campo campo--compacto">
+          <label for="filtro-factura-estado">Estado</label>
+          <select id="filtro-factura-estado">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendientes</option>
+            <option value="parcial">Parciales</option>
+            <option value="pagada">Pagadas</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn--texto" id="btn-limpiar-filtros-facturas">Limpiar</button>
+      </div>
+
+      <!-- Saldos separados por moneda: ARS y USD no se suman entre sí -->
+      <div class="totales" id="totales-facturas"></div>
+
+      <div class="tabla-wrap">
+        <table class="tabla" id="tabla-facturas">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>N° factura</th>
+              <th>Proveedor</th>
+              <th class="ta-right">Monto</th>
+              <th class="ta-right">Pagado</th>
+              <th class="ta-right">Saldo</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-facturas"></tbody>
+        </table>
+        <p class="vacio vacio--oculto" id="facturas-vacio">Todavía no cargaste facturas.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ Vista: Proveedores ══════════════════════ -->
+    <section class="vista" id="vista-proveedores" role="tabpanel">
+
+      <div class="seccion-header">
+        <h2>Proveedores</h2>
+        <div class="seccion-header__acciones">
+          <label class="check">
+            <input type="checkbox" id="ver-inactivos">
+            <span>Ver dados de baja</span>
+          </label>
+          <button type="button" class="btn btn--primario" id="btn-nuevo-proveedor">+ Nuevo proveedor</button>
+        </div>
+      </div>
+
+      <div class="tabla-wrap">
+        <table class="tabla" id="tabla-proveedores">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>CUIT / ID</th>
+              <th>Teléfono</th>
+              <th class="ta-right">Total pagado (ARS)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-proveedores"></tbody>
+        </table>
+        <p class="vacio vacio--oculto" id="proveedores-vacio">Todavía no cargaste proveedores.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ Vista: Resumen ══════════════════════ -->
+    <section class="vista" id="vista-resumen" role="tabpanel">
+      <div class="seccion-header">
+        <h2>Balance por proveedor</h2>
+      </div>
+      <div class="totales" id="totales-generales"></div>
+      <div class="tabla-wrap">
+        <table class="tabla" id="tabla-resumen">
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th>Moneda</th>
+              <th class="ta-right">Facturado</th>
+              <th class="ta-right">Pagado</th>
+              <th class="ta-right">Balance</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-resumen"></tbody>
+        </table>
+        <p class="vacio vacio--oculto" id="resumen-vacio">
+          Todavía no hay movimientos. Cargá facturas y pagos para ver el balance.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ Vista: Informes ══════════════════════ -->
+    <section class="vista" id="vista-informes" role="tabpanel">
+
+      <div class="seccion-header">
+        <h2>Informe de estado de cuenta</h2>
+        <button type="button" class="btn btn--primario" id="btn-descargar-pdf">Descargar PDF</button>
+      </div>
+
+      <div class="filtros">
+        <div class="campo campo--compacto">
+          <label for="informe-proveedor">Proveedor</label>
+          <select id="informe-proveedor">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="campo campo--compacto">
+          <label for="informe-desde">Desde</label>
+          <input type="date" id="informe-desde">
+        </div>
+        <div class="campo campo--compacto">
+          <label for="informe-hasta">Hasta</label>
+          <input type="date" id="informe-hasta">
+        </div>
+        <button type="button" class="btn btn--texto" id="btn-limpiar-informe">Limpiar</button>
+      </div>
+
+      <!-- Vista previa: el mismo contenido que se descarga en el PDF -->
+      <div class="informe" id="informe-preview"></div>
+    </section>
+
+  </main>
+
+  <!-- ══════════════════════ Modal: Pago ══════════════════════ -->
+  <dialog class="modal" id="modal-pago">
+    <form class="modal__form" id="form-pago" novalidate>
+      <div class="modal__header">
+        <h3 id="titulo-modal-pago">Nuevo pago</h3>
+        <button type="button" class="modal__cerrar" data-cerrar aria-label="Cerrar">&times;</button>
+      </div>
+
+      <div class="modal__body">
+        <input type="hidden" id="pago-id">
+
+        <div class="campo">
+          <label for="pago-proveedor">Proveedor <span class="req">*</span></label>
+          <select id="pago-proveedor" required></select>
+          <p class="campo__error"></p>
+        </div>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="pago-fecha">Fecha <span class="req">*</span></label>
+            <input type="date" id="pago-fecha" required>
+            <p class="campo__error"></p>
+          </div>
+          <div class="campo">
+            <label for="pago-metodo">Método de pago <span class="req">*</span></label>
+            <select id="pago-metodo" required>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="cheque">Cheque</option>
+              <option value="otro">Otro</option>
+            </select>
+            <p class="campo__error"></p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="pago-moneda">Moneda <span class="req">*</span></label>
+            <select id="pago-moneda" required>
+              <option value="ARS_USD">Pesos/USD</option>
+              <option value="ARS">Pesos</option>
+              <option value="USD">Dólares</option>
+            </select>
+            <p class="campo__error"></p>
+          </div>
+          <div class="campo">
+            <label for="pago-monto">Monto <span class="req">*</span></label>
+            <input type="text" id="pago-monto" inputmode="decimal" placeholder="0,00" required>
+            <p class="campo__error"></p>
+          </div>
+        </div>
+
+        <!-- Solo visible cuando la moneda es USD -->
+        <div class="campo campo--condicional" id="campo-cotizacion" hidden>
+          <label for="pago-cotizacion">Cotización usada en este pago <span class="req">*</span></label>
+          <input type="text" id="pago-cotizacion" inputmode="decimal" placeholder="0,00">
+          <p class="campo__ayuda" id="equivalente-ars">Equivalente en pesos: —</p>
+          <p class="campo__error"></p>
+        </div>
+
+        <!-- Imputación: repartir este pago entre las facturas impagas del proveedor.
+             Es opcional; un pago sin imputar queda como pago a cuenta. -->
+        <div class="imputaciones" id="bloque-imputaciones" hidden>
+          <div class="imputaciones__header">
+            <span class="imputaciones__titulo">Imputar a facturas</span>
+            <span class="imputaciones__resto" id="imputaciones-resto"></span>
+          </div>
+          <div id="lista-imputaciones"></div>
+          <p class="campo__error" id="imputaciones-error"></p>
+        </div>
+
+        <div class="campo">
+          <label for="pago-concepto">Concepto</label>
+          <input type="text" id="pago-concepto" maxlength="120" placeholder="Opcional">
+          <p class="campo__error"></p>
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn--texto" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn--primario" id="btn-guardar-pago">Guardar pago</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ══════════════════════ Modal: Factura ══════════════════════ -->
+  <dialog class="modal" id="modal-factura">
+    <form class="modal__form" id="form-factura" novalidate>
+      <div class="modal__header">
+        <h3 id="titulo-modal-factura">Nueva factura</h3>
+        <button type="button" class="modal__cerrar" data-cerrar aria-label="Cerrar">&times;</button>
+      </div>
+
+      <div class="modal__body">
+        <input type="hidden" id="factura-id">
+
+        <div class="campo">
+          <label for="factura-proveedor">Proveedor <span class="req">*</span></label>
+          <select id="factura-proveedor" required></select>
+          <p class="campo__error"></p>
+        </div>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="factura-numero">N° de factura <span class="req">*</span></label>
+            <input type="text" id="factura-numero" maxlength="40" placeholder="A-0001-00012345" required>
+            <p class="campo__error"></p>
+          </div>
+          <div class="campo">
+            <label for="factura-fecha">Fecha <span class="req">*</span></label>
+            <input type="date" id="factura-fecha" required>
+            <p class="campo__error"></p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="factura-moneda">Moneda <span class="req">*</span></label>
+            <select id="factura-moneda" required>
+              <option value="ARS">Pesos</option>
+              <option value="USD">Dólares</option>
+            </select>
+            <p class="campo__error"></p>
+          </div>
+          <div class="campo">
+            <label for="factura-monto">Monto total <span class="req">*</span></label>
+            <input type="text" id="factura-monto" inputmode="decimal" placeholder="0,00" required>
+            <p class="campo__error"></p>
+          </div>
+        </div>
+
+        <p class="campo__ayuda" id="factura-ayuda-imputado" hidden></p>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn--texto" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn--primario" id="btn-guardar-factura">Guardar factura</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ══════════════════════ Modal: Proveedor ══════════════════════ -->
+  <dialog class="modal" id="modal-proveedor">
+    <form class="modal__form" id="form-proveedor" novalidate>
+      <div class="modal__header">
+        <h3 id="titulo-modal-proveedor">Nuevo proveedor</h3>
+        <button type="button" class="modal__cerrar" data-cerrar aria-label="Cerrar">&times;</button>
+      </div>
+
+      <div class="modal__body">
+        <input type="hidden" id="proveedor-id">
+
+        <div class="campo">
+          <label for="proveedor-nombre">Nombre <span class="req">*</span></label>
+          <input type="text" id="proveedor-nombre" maxlength="80" required>
+          <p class="campo__error"></p>
+        </div>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="proveedor-cuit">CUIT / ID</label>
+            <input type="text" id="proveedor-cuit" maxlength="20" placeholder="Opcional">
+            <p class="campo__error"></p>
+          </div>
+          <div class="campo">
+            <label for="proveedor-telefono">Teléfono</label>
+            <input type="tel" id="proveedor-telefono" placeholder="Opcional">
+            <p class="campo__error"></p>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="proveedor-notas">Notas</label>
+          <textarea id="proveedor-notas" rows="2" maxlength="300" placeholder="Opcional"></textarea>
+          <p class="campo__error"></p>
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn--texto" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn--primario" id="btn-guardar-proveedor">Guardar proveedor</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <!-- ══════════════════════ Modal: Confirmación ══════════════════════ -->
+  <dialog class="modal modal--chico" id="modal-confirmar">
+    <div class="modal__form">
+      <div class="modal__header">
+        <h3 id="confirmar-titulo">Confirmar</h3>
+      </div>
+      <div class="modal__body">
+        <p id="confirmar-mensaje"></p>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--texto" id="confirmar-cancelar">Cancelar</button>
+        <button type="button" class="btn btn--peligro" id="confirmar-aceptar">Confirmar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
