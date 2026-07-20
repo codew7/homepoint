@@ -338,6 +338,22 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
 .mbtn-save:disabled{opacity:.6;cursor:not-allowed}
 .modal-err{min-height:1em;color:var(--danger-600);font-size:.78rem;font-weight:600;margin-top:9px}
 
+/* ====== MODAL API KEY ====== */
+.key-wrap{position:relative}
+.key-wrap .inp{padding-right:46px}                    /* espacio para el ojo */
+.key-eye{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+  background:none;border:none;border-radius:8px;color:var(--faint);cursor:pointer;transition:color .16s,background .16s;
+}
+.key-eye:hover{color:var(--text-2);background:var(--lime-soft)}
+.key-status{display:flex;align-items:center;gap:7px;font-size:.76rem;font-weight:600;color:var(--muted);margin-top:9px}
+.key-status .kdot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.key-status.on .kdot{background:var(--lime-600)}
+.key-status code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.74rem;color:var(--text-2)}
+.mbtn-del{flex:0 0 auto!important;background:var(--card);border:1px solid var(--border-2);color:var(--danger-600);padding:12px 14px!important}
+.mbtn-del:hover{border-color:var(--danger-600);background:rgba(225,29,72,.06)}
+
 /* ====== MODAL DESCRIPCIÓN (ver / editar) ====== */
 .modal-card.wide{max-width:640px}
 .dm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
@@ -429,7 +445,7 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
       <option value="gemini-2.0-flash-lite">2.0 Flash Lite</option>
       <option value="gemini-2.0-flash">2.0 Flash</option>
     </select>
-    <button class="icon-btn" id="keyBtn" title="Configurar API key de Gemini" style="display:none">
+    <button class="icon-btn" id="keyBtn" title="Configurar API key de Gemini">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
     </button>
     <button class="logout-btn" id="logoutBtn" title="Salir">
@@ -557,13 +573,20 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
 <div class="modal" id="keyModal">
   <div class="modal-card">
     <h2>API key de Gemini</h2>
-    <p>Necesitás una API key gratuita de Google AI Studio para leer el packaging. Conseguila en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Se guarda solo en este navegador.</p>
+    <p>Es gratuita y se consigue en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Se guarda solo en este navegador, así que hay que cargarla una vez en cada dispositivo que uses.</p>
     <div class="field" style="margin-bottom:6px">
       <label>Tu API key</label>
-      <input type="password" class="inp" id="keyInput" placeholder="Pegá tu API key" autocomplete="off" spellcheck="false">
+      <div class="key-wrap">
+        <input type="password" class="inp" id="keyInput" placeholder="Pegá tu API key" autocomplete="off" spellcheck="false">
+        <button class="key-eye" id="keyEye" type="button" title="Mostrar / ocultar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
+    <div class="key-status" id="keyStatus"><span class="kdot"></span><span id="keyStatusTxt">No hay ninguna key cargada</span></div>
     <div class="modal-err" id="keyErr"></div>
     <div class="modal-actions">
+      <button class="btn mbtn-del" id="keyDelete" type="button" title="Borrar la key guardada">Borrar</button>
       <button class="btn mbtn-cancel" id="keyCancel" type="button">Cancelar</button>
       <button class="btn mbtn-save" id="keySave" type="button">Guardar</button>
     </div>
@@ -699,17 +722,20 @@ const GEMINI_MODEL_MANUAL = 'geminiModelManual';   // modelo elegido a mano en e
 function getManualModel(){ try { return (localStorage.getItem(GEMINI_MODEL_MANUAL) || '').trim(); } catch(_){ return ''; } }
 function setManualModel(m){ try { m ? localStorage.setItem(GEMINI_MODEL_MANUAL, m) : localStorage.removeItem(GEMINI_MODEL_MANUAL); } catch(_){} }
 
-// API key de Gemini alojada en el código (como config.js con Firebase/Sheets).
-// ⚠️ Cualquiera que abra la página o el archivo puede verla; mantené este archivo
-// fuera de repos públicos (.gitignore). Para cambiarla, editá esta constante.
-const GEMINI_API_KEY = 'AQ.Ab8RN6Ig7aS2--uwmqLZxg1u3fkWz52BzNz7YdzFPvenKM9ofA';
-
-// Usa la key del código; si estuviera vacía, cae a la guardada en localStorage.
+// La API key de Gemini la carga el usuario desde el modal (botón de la topbar) y se guarda
+// solo en este navegador. No se versiona ninguna key en el código: si se revoca, se cambia
+// desde la UI sin tocar el archivo.
 function getGeminiKey(){
-  if (GEMINI_API_KEY && GEMINI_API_KEY.trim()) return GEMINI_API_KEY.trim();
   try { return (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(); } catch(_){ return ''; }
 }
 function setGeminiKey(k){ try { localStorage.setItem(GEMINI_KEY_STORAGE, k.trim()); } catch(_){} }
+function clearGeminiKey(){ try { localStorage.removeItem(GEMINI_KEY_STORAGE); } catch(_){} }
+
+// Muestra la key sin exponerla entera: primeros 6 + últimos 4.
+function maskGeminiKey(k){
+  if (!k) return '';
+  return k.length <= 12 ? k.slice(0, 2) + '…' : k.slice(0, 6) + '…' + k.slice(-4);
+}
 // Se versiona el caché del modelo: al cambiar la preferencia (p.ej. priorizar los "lite"),
 // se bumpea MODEL_PREF_VER para descartar el modelo recordado con el criterio viejo.
 const MODEL_PREF_VER = '2';
@@ -1217,6 +1243,7 @@ async function procesarYGenerar(rawFile){
 // Llama a Gemini con la captura actual (camState.base64) y vuelca el texto en el textarea.
 async function ejecutarGeminiSobreCaptura(){
   if (!camState.base64) return;
+  let problemaDeKey = false;
   showBlock('Leyendo el packaging…');
   $('camSave').disabled = true;
   $('camRegen').disabled = true;
@@ -1226,18 +1253,21 @@ async function ejecutarGeminiSobreCaptura(){
     updateDescCount();
   } catch (err){
     console.error('Gemini:', err);
-    // La key está alojada en el código (GEMINI_API_KEY); si es inválida hay que editar esa constante.
-    if (err.code === 'BAD_KEY' || err.code === 'NO_MODEL'){
-      toast(err.message + ' Revisá la constante GEMINI_API_KEY en el código.', 'err');
-    } else {
-      toast(err.message || 'No se pudo generar la descripción', 'err');
-    }
+    // Los errores de key llevan directo a la solución: se abre el modal para cargarla.
+    problemaDeKey = (err.code === 'NO_KEY' || err.code === 'BAD_KEY' || err.code === 'NO_MODEL');
+    toast(err.message || 'No se pudo generar la descripción', 'err');
     // Se deja el textarea disponible para escribir manualmente / reintentar.
   } finally {
     hideBlock();
     $('camSave').disabled = false;
     $('camRegen').disabled = false;
-    $('descArea').focus();
+    // El modal (z-1200) va después de hideBlock(): el overlay .block (z-1250) lo taparía.
+    if (problemaDeKey){
+      pendienteReintentoGemini = true;
+      openKeyModal();
+    } else {
+      $('descArea').focus();
+    }
   }
 }
 
@@ -1454,22 +1484,60 @@ async function guardarMedidas(){
 // ============================================================
 //  Modal API key
 // ============================================================
+// Si Gemini falla por falta de key / key inválida se abre el modal y se levanta esta bandera:
+// al guardar una key nueva se reintenta solo, sin obligar a volver a sacar la foto.
+let pendienteReintentoGemini = false;
+
 function refreshKeyBtn(){ $('keyBtn').classList.toggle('keyset', !!getGeminiKey()); }
+
 function openKeyModal(){
-  $('keyInput').value = getGeminiKey();
+  const actual = getGeminiKey();
+  // El input arranca vacío aunque ya haya key: la actual se muestra enmascarada abajo.
+  // Así Guardar con el campo vacío no puede pisar por accidente una key que funciona.
+  $('keyInput').value = '';
+  $('keyInput').type = 'password';
+  $('keyInput').placeholder = actual ? 'Pegá tu nueva API key' : 'Pegá tu API key';
+  $('keyStatus').classList.toggle('on', !!actual);
+  $('keyStatusTxt').innerHTML = actual
+    ? 'Key cargada: <code>' + maskGeminiKey(actual) + '</code>'
+    : 'No hay ninguna key cargada';
+  $('keyDelete').style.display = actual ? '' : 'none';
   $('keyErr').textContent = '';
   $('keyModal').classList.add('active');
   setTimeout(() => $('keyInput').focus(), 60);
 }
-function closeKeyModal(){ $('keyModal').classList.remove('active'); }
+
+function closeKeyModal(){
+  $('keyModal').classList.remove('active');
+  $('keyInput').value = '';   // no dejar la key colgada en el DOM
+  pendienteReintentoGemini = false;
+}
+
 function saveKeyModal(){
   const k = $('keyInput').value.trim();
   if (!k){ $('keyErr').textContent = 'Pegá una API key válida.'; return; }
+  // Validación laxa a propósito: solo descarta pegados obviamente rotos, sin atarse
+  // a un prefijo concreto (hoy conviven los formatos "AIza…" y "AQ.…").
+  if (k.length < 20 || /\s/.test(k)){
+    $('keyErr').textContent = 'Eso no parece una API key. Copiala completa, sin espacios.';
+    return;
+  }
+  const reintentar = pendienteReintentoGemini;
   setGeminiKey(k);
   setCachedModel('');   // key nueva → re-descubrir el modelo disponible
   refreshKeyBtn();
   closeKeyModal();
   toast('API key guardada', 'ok');
+  // Retoma la generación que había fallado por la key.
+  if (reintentar && camState.base64) ejecutarGeminiSobreCaptura();
+}
+
+function borrarKeyModal(){
+  clearGeminiKey();
+  setCachedModel('');
+  refreshKeyBtn();
+  closeKeyModal();
+  toast('API key eliminada', 'ok');
 }
 
 // ============================================================
@@ -1722,8 +1790,17 @@ $('modelSel').addEventListener('change', e => {
 $('keyBtn').addEventListener('click', openKeyModal);
 $('keyCancel').addEventListener('click', closeKeyModal);
 $('keySave').addEventListener('click', saveKeyModal);
+$('keyDelete').addEventListener('click', borrarKeyModal);
 $('keyInput').addEventListener('keydown', e => { if (e.key === 'Enter') saveKeyModal(); });
 $('keyModal').addEventListener('click', e => { if (e.target === $('keyModal')) closeKeyModal(); });
+$('keyEye').addEventListener('click', () => {
+  const i = $('keyInput');
+  i.type = i.type === 'password' ? 'text' : 'password';
+  i.focus();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('keyModal').classList.contains('active')) closeKeyModal();
+});
 
 // ============================================================
 //  Auth
@@ -1770,13 +1847,15 @@ async function init(){
   try {
     await loadArticulos();
     renderTable();
-    // La API key de Gemini está alojada en el código (GEMINI_API_KEY), no se pide en la página.
   } catch (err){
     console.error('Init error:', err);
     toast('Error al cargar artículos desde Firebase', 'err');
     $('pageCount').textContent = 'Error al cargar datos';
   } finally {
     hideBlock();
+    // Primer arranque en este navegador: sin key no se puede generar nada, se pide de entrada.
+    // Va después de hideBlock() porque el overlay .block (z-1250) taparía el modal (z-1200).
+    if (!getGeminiKey()) openKeyModal();
   }
 }
 </script>
