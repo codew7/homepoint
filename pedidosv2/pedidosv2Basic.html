@@ -2430,11 +2430,12 @@
           const codigo = (row[2] || '').trim();
           if (!codigo) return;
           const imagenRaw = row[1] || '';
-          const imagenes = imagenRaw.split(',').map(u => u.trim()).filter(Boolean);
+          const imgPartes = imagenRaw.split(',').map(u => u.trim());  // posicional (1er y 4to link)
           const stockRaw = (row[10] || '').trim();
           const nombre = (row[3] || '').trim();
           sheetsData[codigo] = {
-            imagen: imagenes[0] || '',
+            imagen: imgPartes[0] || '',
+            imagenAlt: imgPartes[3] || '',
             nombre: nombre,
             codigoBarras: (row[11] || '').trim(),
             stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
@@ -2442,7 +2443,8 @@
           sheetsAllItems.push({
             codigo,
             nombre: nombre,
-            imagen: imagenes[0] || ''
+            imagen: imgPartes[0] || '',
+            imagenAlt: imgPartes[3] || ''
           });
 
           // Datos para Pedido View
@@ -2456,7 +2458,7 @@
           sheetValorMap[codigo] = { valorU: valorULimpio, valorC: valorCLimpio };
           if (categoria) sheetCategoryMap[codigo] = categoria;
           if (stockRaw !== '') window.sheetStockMap[codigo] = parseInt(stockRaw, 10) || 0;
-          if (nombre) mapImg[nombre] = imagenes;
+          if (nombre) mapImg[nombre] = imgPartes;
         });
 
         sheetsLoaded = true;
@@ -2877,6 +2879,7 @@
           const idx = entry.idx;
           const sheetInfo = sheetsData[it.codigo] || {};
           const imgUrl = sheetInfo.imagen || '';
+          const imgUrlAlt = sheetInfo.imagenAlt || '';
           const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
           const sinStock = sheetInfo.stock !== null && sheetInfo.stock !== undefined && Number.isFinite(sheetInfo.stock) && sheetInfo.stock <= 0;
           const sinStockClass = sinStock ? ' sin-stock' : '';
@@ -2888,8 +2891,12 @@
           groupHtml += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
 
           // Imagen
-          if (imgUrl) {
-            groupHtml += '<img class="item-img" src="' + escapeHtml(imgUrl) + '" alt="" onclick="openLightbox(\'' + escapeHtml(imgUrl) + '\')" loading="lazy">';
+          if (imgUrl || imgUrlAlt) {
+            const imgSrc = imgUrl || imgUrlAlt;
+            const imgAlt = imgUrlAlt !== imgSrc ? imgUrlAlt : '';
+            groupHtml += '<img class="item-img" src="' + escapeHtml(imgSrc) + '" alt=""'
+              + ' onclick="openLightbox(this.src)"'
+              + ' onerror="imgFallback(this, \'' + escapeHtml(imgAlt) + '\')" loading="lazy">';
           } else {
             groupHtml += '<div class="item-img-placeholder">&#128247;</div>';
           }
@@ -3128,6 +3135,20 @@
       lightbox.classList.remove('active');
       lightboxImg.src = '';
     });
+
+    // Fallback de imagen: 1er link -> 4to link -> placeholder
+    function imgFallback(el, alt, phClass) {
+      if (alt && el.dataset.imgAlt !== '1') {
+        el.dataset.imgAlt = '1';
+        el.src = alt;
+        return;
+      }
+      el.onerror = null;
+      const ph = document.createElement('div');
+      ph.className = phClass || 'item-img-placeholder';
+      ph.innerHTML = '&#128247;';
+      el.replaceWith(ph);
+    }
 
     // ==========================================
     // TOOLTIP (codigo + codigo de barras)

@@ -1467,6 +1467,19 @@
       background: var(--bg);
       border: 1px solid var(--border-light);
     }
+    .add-item-img-ph {
+      width: 40px;
+      height: 40px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
     .add-item-option .opt-name {
       font-size: 13px;
       font-weight: 700;
@@ -2566,11 +2579,12 @@
           const codigo = (row[2] || '').trim();
           if (!codigo) return;
           const imagenRaw = row[1] || '';
-          const imagenes = imagenRaw.split(',').map(u => u.trim()).filter(Boolean);
+          const imgPartes = imagenRaw.split(',').map(u => u.trim());  // posicional (1er y 4to link)
           const stockRaw = (row[10] || '').trim();
           const nombre = (row[3] || '').trim();
           sheetsData[codigo] = {
-            imagen: imagenes[0] || '',
+            imagen: imgPartes[0] || '',
+            imagenAlt: imgPartes[3] || '',
             nombre: nombre,
             codigoBarras: (row[11] || '').trim(),
             stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
@@ -2578,7 +2592,8 @@
           sheetsAllItems.push({
             codigo,
             nombre: nombre,
-            imagen: imagenes[0] || ''
+            imagen: imgPartes[0] || '',
+            imagenAlt: imgPartes[3] || ''
           });
 
           // Datos para Pedido View
@@ -2592,7 +2607,7 @@
           sheetValorMap[codigo] = { valorU: valorULimpio, valorC: valorCLimpio };
           if (categoria) sheetCategoryMap[codigo] = categoria;
           if (stockRaw !== '') window.sheetStockMap[codigo] = parseInt(stockRaw, 10) || 0;
-          if (nombre) mapImg[nombre] = imagenes;
+          if (nombre) mapImg[nombre] = imgPartes;
         });
 
         sheetsLoaded = true;
@@ -3077,6 +3092,7 @@
           const idx = entry.idx;
           const sheetInfo = sheetsData[it.codigo] || {};
           const imgUrl = sheetInfo.imagen || '';
+          const imgUrlAlt = sheetInfo.imagenAlt || '';
           const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
           const sinStock = sheetInfo.stock !== null && sheetInfo.stock !== undefined && Number.isFinite(sheetInfo.stock) && sheetInfo.stock <= 0;
           const sinStockClass = sinStock ? ' sin-stock' : '';
@@ -3088,8 +3104,12 @@
           groupHtml += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
 
           // Imagen
-          if (imgUrl) {
-            groupHtml += '<img class="item-img" src="' + escapeHtml(imgUrl) + '" alt="" onclick="openLightbox(\'' + escapeHtml(imgUrl) + '\')" loading="lazy">';
+          if (imgUrl || imgUrlAlt) {
+            const imgSrc = imgUrl || imgUrlAlt;
+            const imgAlt = imgUrlAlt !== imgSrc ? imgUrlAlt : '';
+            groupHtml += '<img class="item-img" src="' + escapeHtml(imgSrc) + '" alt=""'
+              + ' onclick="openLightbox(this.src)"'
+              + ' onerror="imgFallback(this, \'' + escapeHtml(imgAlt) + '\')" loading="lazy">';
           } else {
             groupHtml += '<div class="item-img-placeholder">&#128247;</div>';
           }
@@ -3539,12 +3559,36 @@
     const lightbox = document.getElementById('lightbox');
     const lightboxImg = document.getElementById('lightboxImg');
 
-    function openLightbox(url) {
+    function openLightbox(url, alt) {
+      lightboxImg.onerror = null;
+      if (alt) {
+        let intentado = false;
+        lightboxImg.onerror = () => {
+          if (intentado) { lightboxImg.onerror = null; return; }
+          intentado = true;
+          lightboxImg.src = alt;
+        };
+      }
       lightboxImg.src = url;
       lightbox.classList.add('active');
     }
+
+    // Fallback de imagen: 1er link -> 4to link -> placeholder
+    function imgFallback(el, alt, phClass) {
+      if (alt && el.dataset.imgAlt !== '1') {
+        el.dataset.imgAlt = '1';
+        el.src = alt;
+        return;
+      }
+      el.onerror = null;
+      const ph = document.createElement('div');
+      ph.className = phClass || 'item-img-placeholder';
+      ph.innerHTML = '&#128247;';
+      el.replaceWith(ph);
+    }
     lightbox.addEventListener('click', () => {
       lightbox.classList.remove('active');
+      lightboxImg.onerror = null;
       lightboxImg.src = '';
     });
 
@@ -3616,12 +3660,17 @@
       // Limitar a 50 resultados para rendimiento
       const limited = filtered.slice(0, 50);
 
-      addItemList.innerHTML = limited.map(it =>
-        '<div class="add-item-option" data-codigo="' + escapeHtml(it.codigo) + '">' +
-        (it.imagen ? '<img src="' + escapeHtml(it.imagen) + '" loading="lazy">' : '<div style="width:40px;height:40px;background:var(--bg);border-radius:8px"></div>') +
-        '<div><div class="opt-name">' + escapeHtml(it.nombre) + '</div><div class="opt-code">' + escapeHtml(it.codigo) + '</div></div>' +
-        '</div>'
-      ).join('');
+      addItemList.innerHTML = limited.map(it => {
+        const src = it.imagen || it.imagenAlt || '';
+        const alt = (it.imagenAlt && it.imagenAlt !== src) ? it.imagenAlt : '';
+        const imgHtml = src
+          ? '<img src="' + escapeHtml(src) + '" onerror="imgFallback(this, \'' + escapeHtml(alt) + '\', \'add-item-img-ph\')" loading="lazy">'
+          : '<div class="add-item-img-ph">&#128247;</div>';
+        return '<div class="add-item-option" data-codigo="' + escapeHtml(it.codigo) + '">' +
+          imgHtml +
+          '<div><div class="opt-name">' + escapeHtml(it.nombre) + '</div><div class="opt-code">' + escapeHtml(it.codigo) + '</div></div>' +
+          '</div>';
+      }).join('');
 
       if (limited.length === 0) {
         addItemList.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-weight:500">Sin resultados</div>';
@@ -4571,8 +4620,11 @@
 
     function pvOpenLightbox(nombre) {
       const urls = mapImg[nombre] || [];
-      if (!urls.length) { showToast('Imagen no disponible'); return; }
-      openLightbox(urls[0]);
+      const principal = urls[0] || '';
+      const alt = urls[3] || '';
+      const src = principal || alt;
+      if (!src) { showToast('Imagen no disponible'); return; }
+      openLightbox(src, alt !== src ? alt : '');
     }
 
     // ==========================================
