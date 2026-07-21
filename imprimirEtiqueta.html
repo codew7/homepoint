@@ -580,8 +580,13 @@ async function loadSheets(){
     const imgRaw = (row[1] || '').trim();
     const precioRaw = (row[6] || '').trim();   // Column G = index 6
     const cbRaw = (row[11] || '').trim();       // Column L = index 11 (barcodes)
+    // La columna B trae hasta 4 URLs separadas por coma. Si la primera no existe (404),
+    // se reintenta con la cuarta (variante "C") antes de caer al placeholder.
+    const imgs = imgRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const candidatos = [imgs[0], imgs[3]].filter((v, i, arr) => v && arr.indexOf(v) === i);
     return {
-      imagen: imgRaw.split(',')[0].trim(),
+      imagen: candidatos[0] || '',
+      imagenAlt: candidatos[1] || '',
       codigo: (row[2] || '').trim(),            // Column C
       nombre: (row[3] || '').trim(),            // Column D
       precio: precioRaw,
@@ -646,7 +651,10 @@ function renderPage(){
     const tr = document.createElement('tr');
     tr.dataset.codigo = a.codigo;
     if(isSel) tr.classList.add('sel');
-    const foto = a.imagen ? escapeAttr(a.imagen) : PLACEHOLDER_IMG;
+    // src = 1er link (o el 4to si no hay primero); data-alt guarda el candidato restante
+    const src = a.imagen || a.imagenAlt || '';
+    const alt = a.imagen ? (a.imagenAlt || '') : '';
+    const foto = src ? escapeAttr(src) : PLACEHOLDER_IMG;
     tr.innerHTML = `
       <td class="col-check">
         <label class="cbx" onclick="event.stopPropagation()">
@@ -655,7 +663,7 @@ function renderPage(){
         </label>
       </td>
       <td class="codcol">#${escapeHtml(a.codigo)}</td>
-      <td><img class="thumb" src="${foto}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
+      <td><img class="thumb" src="${foto}" data-alt="${escapeAttr(alt)}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
       <td class="namecol">${escapeHtml(a.nombre)}</td>
       <td class="pricecol">$${formatPriceDisplay(a.precio)}</td>`;
     tbody.appendChild(tr);
@@ -684,7 +692,14 @@ function gotoPage(p){
   document.querySelector('.tabla-scroll').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
-function imgFallback(el){ el.onerror = null; el.src = PLACEHOLDER_IMG; }
+// 1er intento: link alternativo (4to de la columna B). Se limpia data-alt antes de
+// reasignar src para que un segundo 404 caiga en el placeholder y no genere un loop.
+function imgFallback(el){
+  const alt = el.dataset.alt;
+  if(alt){ el.dataset.alt = ''; el.src = alt; return; }
+  el.onerror = null;
+  el.src = PLACEHOLDER_IMG;
+}
 
 // ============================================================
 //  Selección
