@@ -2649,14 +2649,15 @@
             imagen: imgPartes[0] || '',
             imagenAlt: imgPartes[3] || '',
             nombre: nombre,
-            codigoBarras: (row[11] || '').trim(),
+            codigoBarras: (row[11] || '').split(',').map(s => s.trim()).filter(Boolean),
             stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
           };
           sheetsAllItems.push({
             codigo,
             nombre: nombre,
             imagen: imgPartes[0] || '',
-            imagenAlt: imgPartes[3] || ''
+            imagenAlt: imgPartes[3] || '',
+            codigoBarras: sheetsData[codigo].codigoBarras
           });
 
           // Datos para Pedido View
@@ -3372,7 +3373,7 @@
       const info = sheetsData[codigo] || {};
       tooltipBox.innerHTML =
         '<span class="tt-label">Codigo</span><span class="tt-value">' + escapeHtml(codigo) + '</span>' +
-        '<span class="tt-label" style="margin-top:6px">Codigo de Barras</span><span class="tt-value">' + escapeHtml(info.codigoBarras || 'N/A') + '</span>';
+        '<span class="tt-label" style="margin-top:6px">Codigo de Barras</span><span class="tt-value">' + escapeHtml((info.codigoBarras && info.codigoBarras.length ? info.codigoBarras.join(', ') : 'N/A')) + '</span>';
 
       // Posicionar cerca del click
       const rect = event.target.getBoundingClientRect();
@@ -3581,7 +3582,7 @@
       // 1) Match exacto contra codigo de barras del catalogo; 2) contra codigo de producto
       let codigo = null;
       for (const c in sheetsData) {
-        if (sheetsData[c].codigoBarras && sheetsData[c].codigoBarras === texto) { codigo = c; break; }
+        if (sheetsData[c].codigoBarras && sheetsData[c].codigoBarras.includes(texto)) { codigo = c; break; }
       }
       if (!codigo) {
         const upper = texto.toUpperCase();
@@ -3609,7 +3610,8 @@
       if (filter) {
         filtered = sheetsAllItems.filter(it =>
           it.nombre.toLowerCase().includes(filter) ||
-          it.codigo.toLowerCase().includes(filter)
+          it.codigo.toLowerCase().includes(filter) ||
+          (it.codigoBarras && it.codigoBarras.some(b => b.toLowerCase().includes(filter)))
         );
       }
       const limited = filtered.slice(0, 50);
