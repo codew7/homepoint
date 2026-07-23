@@ -1597,7 +1597,9 @@ function getTipoCliente() {
             costos,
             ganancia: subtotal - costos - descuento,
             gananciaSelec,
-            alias
+            // Solo incluir alias si tiene valor (Transferencia/Parcial);
+            // omitirlo elimina el campo de Firebase con otros medios de pago.
+            ...(alias ? { alias } : {})
           },
           status: 'DESPACHADO/ENTREGADO',
           cotizacionCierre: cotizacionCierre,
@@ -1970,7 +1972,9 @@ function getTipoCliente() {
               costos,
               ganancia: subtotal - costos - descuento,
               gananciaSelec,
-              alias
+              // Solo incluir alias si tiene valor (Transferencia/Parcial);
+              // omitirlo elimina el campo de Firebase con otros medios de pago.
+              ...(alias ? { alias } : {})
             },
             status: 'DESPACHADO/ENTREGADO',
             cotizacionCierre: cotizacionCierre,
@@ -2968,6 +2972,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       aliasRow.style.display = '';
     } else {
       aliasRow.style.display = 'none';
+      // El alias solo aplica a Transferencia/Parcial: limpiarlo del formulario
+      // para que no se guarde en Firebase con otros medios de pago.
+      if (form.alias) form.alias.value = '';
     }
   }
   // Ejecutar al cargar

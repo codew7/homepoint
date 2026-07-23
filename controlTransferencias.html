@@ -949,6 +949,17 @@
             return (pedido.pagos?.medioPago || '').trim().toLowerCase();
         }
 
+        // Formatea el medio de pago para mostrarlo siempre igual:
+        // recorta espacios y capitaliza cada palabra ("TRANSFERENCIA" → "Transferencia").
+        function formatearMedioPago(medioPago) {
+            const limpio = (medioPago || '').trim();
+            if (!limpio) return '';
+            return limpio
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .replace(/(^|\s)\p{L}/gu, letra => letra.toUpperCase());
+        }
+
         // Función para actualizar estadísticas
         function updateStats() {
             const totalPedidos = filteredData.length;
@@ -1016,24 +1027,31 @@
 
         // Función para obtener alias únicos y poblar el select
         function poblarSelectAlias() {
-            // Obtener todos los alias únicos
-            const aliasSet = new Set();
+            // Agrupar alias sin distinguir mayúsculas/minúsculas ni espacios extra.
+            // Clave normalizada (MAYÚSCULAS) → texto a mostrar (primer original visto).
+            // Así "Transferencia" y "transferencia" comparten una sola opción; el filtro
+            // ya compara con .toUpperCase(), por lo que seleccionar cualquiera agrupa todo.
+            const aliasMap = new Map();
             transferenciasData.forEach(pedido => {
-                const alias = pedido.pagos?.alias;
-                if (alias && alias.trim()) {
-                    aliasSet.add(alias.trim());
+                const original = (pedido.pagos?.alias || '').trim();
+                if (!original) return;
+                const clave = original.toUpperCase();
+                if (!aliasMap.has(clave)) {
+                    aliasMap.set(clave, original);
                 }
             });
 
-            // Convertir a array y ordenar
-            aliasUnicos = Array.from(aliasSet).sort();
+            // Ordenar por el texto a mostrar
+            aliasUnicos = Array.from(aliasMap.values()).sort((a, b) =>
+                a.localeCompare(b, 'es', { sensitivity: 'base' })
+            );
 
             // Poblar el select
             const selectAlias = document.getElementById('filtroAlias');
-            
+
             // Limpiar opciones existentes (excepto la primera)
             selectAlias.innerHTML = '<option value="">Todos los alias</option>';
-            
+
             // Agregar opciones de alias
             aliasUnicos.forEach(alias => {
                 const option = document.createElement('option');
@@ -1091,7 +1109,7 @@
             const aliasBadge = alias
                 ? `<span class="badge badge-alias" title="${alias}">${alias}</span>`
                 : '<span class="badge-vacio">Sin alias</span>';
-            const medioPago = pedido.pagos?.medioPago;
+            const medioPago = formatearMedioPago(pedido.pagos?.medioPago);
             const medioClase = esParcial ? ' is-parcial' : (medioPagoDe(pedido) === 'transferencia' ? ' is-transferencia' : '');
             const medioBadge = medioPago
                 ? `<span class="badge badge-medio${medioClase}">${medioPago}</span>`
@@ -1099,7 +1117,7 @@
             return `
                 <tr class="${esParcial ? 'pago-parcial' : ''}">
                     <td class="date-column">${formatearFecha(pedido.fecha || '')}</td>
-                    <td class="client-column" data-pedido-id="${pedido.id}" title="Abrir pedido de ${nombreCliente}">${nombreCliente}</td>
+                    <td class="client-column" data-pedido-id="${pedido.id}" data-entrega="${pedido.entrega || ''}" title="Abrir pedido de ${nombreCliente}">${nombreCliente}</td>
                     <td>${pedido.entrega || '<span class="badge-vacio">—</span>'}</td>
                     <td class="amount-column">${formatearMoneda(pedido.pagos?.totalFinal || 0)}</td>
                     <td class="alias-column">${aliasBadge}</td>
@@ -1181,11 +1199,18 @@
                 });
             });
 
-            // Agregar event listeners a las celdas de cliente para abrir pedido
+            // Agregar event listeners a las celdas de cliente para abrir pedido.
+            // Según el tipo de entrega se abre un archivo distinto:
+            //   - "Local"  → ingresoPedido.html
+            //   - resto ("Envios", etc.) → pedidos.html
             tableBody.querySelectorAll('.client-column').forEach(cell => {
                 cell.addEventListener('click', function() {
                     const pedidoId = this.getAttribute('data-pedido-id');
-                    window.open(`https://home-point.com.ar/pedidos.html?id=${pedidoId}&admin=true`, '_blank');
+                    const entrega = (this.getAttribute('data-entrega') || '').trim().toUpperCase();
+                    const url = entrega === 'LOCAL'
+                        ? `ingresoPedido.html?id=${pedidoId}`
+                        : `https://home-point.com.ar/pedidos.html?id=${pedidoId}&admin=true`;
+                    window.open(url, '_blank');
                 });
             });
 

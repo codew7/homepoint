@@ -122,7 +122,7 @@
     }
     .filters-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 12px;
       align-items: end;
     }
@@ -605,6 +605,12 @@
           <option value="Envios">Envíos</option>
         </select>
       </div>
+      <div class="filter-group">
+        <label for="filterMedioPago">Medio de pago</label>
+        <select id="filterMedioPago">
+          <option value="">Todos</option>
+        </select>
+      </div>
       <div class="filter-actions">
         <button class="btn btn-primary" id="btnSearch">Buscar</button>
         <button class="btn btn-outline" id="btnClear">Limpiar</button>
@@ -774,13 +780,14 @@ function parsePedidos(obj) {
       clientProv:  p.cliente?.provincia|| '',
       clientLocal: p.cliente?.localidad|| '',
       status:      p.status  || '—',
-      tipoPago:    p.tipoPago || p.medioPago || '—',
+      tipoPago:    p.pagos?.medioPago || p.tipoPago || p.medioPago || '—',
       tipoEntrega: p.tipoEntrega || p.entrega || '—',
       facturado:   p.facturado ? 'Sí' : 'No',
       fact:        p.fact || '',
       cotizacion:  p.cotizacionCierre || 0,
       timestamp:   p.timestamp || 0,
-      lastUpdated: p.lastUpdated || p.timestamp || 0,
+      fecha:       p.fecha || p.timestamp || 0,
+      lastUpdated: p.lastUpdated || 0,
       vendedor:    p.vendedor || '',
       nota:        p.nota || '',
       notaFecha:   p.notaFecha || '',
@@ -806,7 +813,40 @@ function parsePedidos(obj) {
   $('statTotal').textContent = allPedidos.length.toLocaleString();
   $('statArticles').textContent = totalArticles.toLocaleString();
 
+  populateMedioPagoFilter();
   applyFilters();
+}
+
+// Clave normalizada para agrupar medios de pago (minúsculas, sin acentos, sin espacios extra)
+function medioPagoKey(str) {
+  return normalize((str || '').trim()).replace(/\s+/g, ' ');
+}
+
+// Etiqueta canónica en Title Case (ej: "TRANSFERENCIA" / "transferencia" → "Transferencia")
+function medioPagoLabel(str) {
+  return (str || '').trim().toLowerCase().replace(/\s+/g, ' ')
+    .replace(/(^|\s)\p{L}/gu, ch => ch.toUpperCase());
+}
+
+// Puebla el <select> de medio de pago agrupando los alias equivalentes (mayúsculas/acentos/espacios)
+function populateMedioPagoFilter() {
+  const sel = $('filterMedioPago');
+  const prev = sel.value;
+  // Map clave-normalizada → etiqueta canónica para mostrar
+  const grupos = new Map();
+  allPedidos.forEach(p => {
+    if (!p.tipoPago || p.tipoPago === '—') return;
+    const key = medioPagoKey(p.tipoPago);
+    if (key && !grupos.has(key)) grupos.set(key, medioPagoLabel(p.tipoPago));
+  });
+
+  const claves = [...grupos.keys()].sort((a, b) => grupos.get(a).localeCompare(grupos.get(b), 'es'));
+
+  sel.innerHTML = '<option value="">Todos</option>' +
+    claves.map(k => `<option value="${esc(k)}">${esc(grupos.get(k))}</option>`).join('');
+
+  // Preservar la selección previa si sigue disponible
+  if (prev && grupos.has(prev)) sel.value = prev;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -822,11 +862,13 @@ function applyFilters() {
   const codeQ    = $('filterCode').value.trim().toLowerCase();
   const notaQ    = normalize($('filterNota').value.trim());
   const tipoEntregaQ = $('filterTipoEntrega').value;
+  const medioPagoQ = $('filterMedioPago').value;
 
   filteredPedidos = allPedidos.filter(p => {
     if (nameQ && !normalize(p.clientName).includes(nameQ)) return false;
     if (notaQ && !normalize(p.nota).includes(notaQ)) return false;
-    
+    if (medioPagoQ && medioPagoKey(p.tipoPago) !== medioPagoQ) return false;
+
     // Filtro de tipo de entrega: Local vs Envíos
     if (tipoEntregaQ === 'Local') {
       const isLocal = normalize(p.tipoEntrega).includes('local') || 
@@ -904,7 +946,9 @@ function statusBadgeClass(status) {
 
 function formatDate(ts) {
   if (!ts) return '—';
-  const d = new Date(ts);
+  // Normalizar strings tipo "YYYY-MM-DD HH:mm:ss" (el espacio no lo parsea Safari)
+  const val = (typeof ts === 'string') ? ts.replace(' ', 'T') : ts;
+  const d = new Date(val);
   if (isNaN(d)) return '—';
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
@@ -935,8 +979,8 @@ function renderPedidoCard(p) {
   const codeQ    = $('filterCode').value.trim();
 
   const clientNameHTML = highlightMatch(p.clientName, nameQ);
-  const dateStr = formatDate(p.timestamp);
-  const updatedStr = formatDate(p.lastUpdated);
+  const dateStr = formatDate(p.fecha);
+  const updatedStr = p.lastUpdated ? formatDate(p.lastUpdated) : '—';
 
   // Items table rows
   let itemsHTML = '';
@@ -1087,6 +1131,7 @@ $('btnClear').addEventListener('click', () => {
   $('filterCode').value = '';
   $('filterNota').value = '';
   $('filterTipoEntrega').value = '';
+  $('filterMedioPago').value = '';
   applyFilters();
 });
 $('sortSelect').addEventListener('change', () => { sortPedidos(); currentPage = 1; renderPage(); });
@@ -1115,6 +1160,7 @@ let _debounce;
   $(id).addEventListener('input', () => { clearTimeout(_debounce); _debounce = setTimeout(applyFilters, 300); });
 });
 $('filterTipoEntrega').addEventListener('change', applyFilters);
+$('filterMedioPago').addEventListener('change', applyFilters);
 </script>
 </body>
 </html>
