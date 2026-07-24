@@ -4068,15 +4068,15 @@
 
         const pedidos = [];
 
-        snapAbierto.forEach(child => {
+        const recolectarPendiente = (child) => {
           const p = child.val();
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, nota: p.nota || '', timestamp: p.timestamp || 0 });
-        });
+          const items = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
+          const todosListos = items.length > 0 && items.every(it => it && it.listo === 'y');
+          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, todosListos: todosListos, nota: p.nota || '', timestamp: p.timestamp || 0 });
+        };
 
-        snapCerrado.forEach(child => {
-          const p = child.val();
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, nota: p.nota || '', timestamp: p.timestamp || 0 });
-        });
+        snapAbierto.forEach(recolectarPendiente);
+        snapCerrado.forEach(recolectarPendiente);
 
         // Ordenar por timestamp descendente (más recientes primero)
         pedidos.sort((a, b) => b.timestamp - a.timestamp);
@@ -4089,7 +4089,7 @@
         pedidosPanelList.innerHTML = pedidos.map(p =>
           '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
           '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
-          (p.enPreparacion === 'si' ? '<span class=\"badge-en-preparacion\">&#9881;&#65039; En prep.</span>' : p.enPreparacion === 'listo' ? '<span class=\"badge-listo\">✅ Listo</span>' : '') +
+          (p.todosListos ? '<span class=\"badge-listo\">✅ Completo</span>' : p.enPreparacion === 'si' ? '<span class=\"badge-en-preparacion\">&#9881;&#65039; En prep.</span>' : '') +
           '<span class="status-badge ' + getStatusClass(p.status) + '">' + emojiStatus(p.status) + escapeHtml(p.status) + '</span>' +
           (p.nota ? '<span class="pedidos-panel-nota">📝 ' + escapeHtml(p.nota) + '</span>' : '') +
           '</div>'
@@ -5259,7 +5259,6 @@
       const user = firebase.auth().currentUser;
       const updateData = {
         locked: true, status: 'CERRADO',
-        enPreparacion: 'listo',
         lastModifiedBy: admin && user ? 'admin' : 'usuario',
         lastModifiedEmail: admin && user ? user.email : '',
         tipoPago: tipoPago, tipoEntrega: tipoEntrega,
