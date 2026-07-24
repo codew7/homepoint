@@ -1,0 +1,36 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Qué es esto
+
+Módulo de administración de artículos de "HomePoint" (parte de un proyecto Web2 más grande). No es una app con build system: son páginas HTML estáticas autocontenidas (HTML + CSS + JS inline en cada archivo, sin bundler ni framework), pensadas para abrirse directamente en el navegador o servirse como archivos estáticos. No hay `package.json`, tests, ni linter — no hay comandos de build/test/lint que ejecutar.
+
+Cada `.html` es una vista independiente con su propio `<style>` y `<script>` inline, y todas comparten el mismo patrón de arranque (Firebase + auth + config). Al modificar una, revisar si el mismo patrón/bug existe en las demás.
+
+## Archivos
+
+- `config.js` — credenciales compartidas: `firebaseConfig` (Firebase RTDB + Storage + Auth del proyecto `pedidos-87064`) y `GOOGLE_SHEETS_CONFIG` (API key + `SPREADSHEET_ID` + rango para leer stock desde Google Sheets vía REST, sin librería cliente). Se referencia con `<script src="config.js">` en cada HTML. **Nunca commitear una API key real de producción sin confirmar con el usuario** — el propio archivo tiene una advertencia de gitignore.
+- `articulos.html` — vista principal: home/menú, wizard de alta/edición de artículo en 4 pasos (Código → Foto → Datos → Guardar) y tabla editable de artículos existentes.
+- `agregarImg.html` — utilidad puntual para agregar/backfill el campo `Img` a artículos existentes.
+- `asignarImagen.html` — flujo para tomar fotos con cámara y asignarlas a artículos que no tienen imagen.
+- `imprimirEtiqueta.html` — selección de artículos y generación de etiquetas de precio en PDF, usando stock/datos leídos de Google Sheets.
+- `cors.json` — configuración CORS del bucket de Storage. **No lo usa la app**: se aplica al bucket con `gcloud storage buckets update gs://pedidos-87064.firebasestorage.app --cors-file=cors.json` (desde Cloud Shell — `gcloud` no está instalado localmente). Necesario solo para que `descripcion.html` pueda leer los bytes de las fotos con `fetch`. La lista de `origin` reemplaza a la anterior por completo: al agregar un dominio hay que volver a listar todos.
+- `descripcion.html` — genera descripciones de producto con IA (Gemini) a partir de fotos del packaging; el modelo se elige entre varios candidatos (`gemini-flash-lite-latest`, etc.) con fallback automático si uno da 404. **La API key de Gemini no vive en el código ni en `config.js`**: la carga el usuario desde un modal (`#keyModal`, botón `#keyBtn` en la topbar) y se guarda en `localStorage` bajo `geminiApiKey` — ver más abajo. La imagen puede venir de la cámara, de la galería, o del campo `Foto` ya guardado del artículo (botón opcional "Usar la foto del artículo", que ignora deliberadamente `Img` y depende del CORS de `cors.json`). También permite cargar a mano el tamaño y peso de cada artículo (columna "Medidas" + modal dedicado): el tamaño se ingresa como 2 o 3 lados por separado (largo/ancho/alto, el alto es opcional para objetos planos) y se guarda concatenado con `x` (p. ej. `70x30x40`); el peso es un único campo numérico, siempre en kg.
+
+## Arquitectura común a todas las vistas
+
+- **Auth**: Firebase Auth (email/password) con pantalla de login (`#login`) tapando la app hasta `onAuthStateChanged`. No hay roles: cualquier usuario autenticado tiene acceso total.
+- **Datos**: Firebase Realtime Database, nodo raíz `articulos` (clave = código de artículo) es la fuente de verdad. Nodo `movimientos` registra entradas/salidas de stock (push key + `tipo: 'ENTRADA'|...`). Nodo `dolar/blue` guarda el valor estático del dólar usado para calcular `PrecioARS`.
+- **Fotos**: Firebase Storage, ruta `articulos/{codigo}.jpg`. Mostrarlas en un `<img>` no requiere nada especial, pero **leer sus bytes** desde JS (`fetch`, o canvas + `toDataURL()`) exige que el origen esté habilitado en el CORS del bucket — si no, el `fetch` falla y el canvas queda *tainted*. No hay forma de esquivarlo desde el cliente: la única solución es aplicar `cors.json`.
+- **Stock**: se lee en vivo desde una Google Sheet externa vía `fetch` a la API REST de Sheets (`GOOGLE_SHEETS_CONFIG`), no desde Firebase — Firebase solo guarda `Cantidad` como snapshot al momento de alta/edición.
+- **Escrituras atómicas**: al guardar un artículo se usa `db.ref().update({...})` con múltiples rutas (`articulos/{codigo}` + `movimientos/{key}`) en un solo update multi-path para garantizar todo-o-nada, seguido de una verificación de lectura (`once('value')`) post-escritura — ver `guardarArticulo()` en `articulos.html` como referencia del patrón a replicar en otras vistas.
+- **Conectividad**: patrón `db.ref('.info/connected')` + `conTimeout(promise, ms, msg)` envuelve operaciones críticas de Firebase para evitar cuelgues silenciosos.
+- **Escaneo de códigos de barras**: librería `html5-qrcode` (CDN) para el paso de escaneo con cámara.
+- **Credenciales — dos criterios distintos**: las de infraestructura compartida (Firebase, Google Sheets) van en `config.js` y son iguales para todos. La API key de Gemini, en cambio, es **por navegador**: se pide al usuario y se guarda en `localStorage`, nunca en el código. Se eligió así porque se revocó una key hardcodeada y recuperarla exigía editar el HTML. Si hace falta otra credencial que el usuario pueda romper o rotar, replicar este patrón (`getGeminiKey`/`setGeminiKey`/`clearGeminiKey` + `#keyModal` en `descripcion.html`) en vez de agregarla a `config.js`. Detalles del patrón: el modal se abre solo al final de `init()` si no hay key y cuando la API falla con `NO_KEY`/`BAD_KEY`/`NO_MODEL`, en cuyo caso al guardar se reintenta sola la operación pendiente; el input arranca vacío aun habiendo key (la actual se muestra enmascarada) para que Guardar en blanco no pise una key que funciona.
+- **Modales**: todos siguen el mismo patrón — `<div class="modal" id="X">` > `.modal-card`, abiertos/cerrados con `classList.add/remove('active')`, con cierre por backdrop y por Escape (un `document.addEventListener('keydown')` por modal). Ojo con el z-index: el overlay de carga `.block` (z-1250) tapa los modales (z-1200), así que abrir un modal desde un `finally` exige hacerlo **después** de `hideBlock()`.
+- **Sin build step**: los cambios de JS/CSS se ven recargando el HTML directamente en el navegador (o vía un servidor estático simple). No hay transpilación ni módulos ES — todo es JS clásico inline con `var`/`const` en el scope global de cada página.
+
+## Convenciones de datos (registro de `articulos/{codigo}`)
+
+Campos típicos: `Codigo`, `CodigoBarras` (string separado por comas, puede tener varios códigos por artículo), `Foto`/`Img` (URL), `Nombre` (siempre `UPPERCASE`), `Keywords`, `Categoria`, `CostoUSD`, `PrecioUSD`, `GananciaPorc`, `Cantidad`, `Disponible` (bool), `Descripcion` (texto generado/editado desde `descripcion.html`), `Tamano` (string `"LxA"` o `"LxAxH"` en cm, cargado a mano desde `descripcion.html`), `Peso` (number, siempre en kg), `Timestamp` (`firebase.database.ServerValue.TIMESTAMP`). Al editar, preservar campos que el formulario no gestiona directamente (p. ej. `Img`) explícitamente, porque el `update` reemplaza el nodo completo del artículo.
