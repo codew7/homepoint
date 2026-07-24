@@ -794,6 +794,48 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
+        .gastos-lista-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            padding: 25px 25px 15px;
+        }
+
+        .gastos-filtro-cuenta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .gastos-filtro-cuenta label {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+        }
+
+        .gastos-filtro-cuenta select {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--primary-color);
+            background-color: white;
+            width: 180px;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+
+        .gastos-filtro-cuenta select:focus {
+            border-color: var(--warning-color);
+            box-shadow: 0 0 0 0.2rem rgba(243, 156, 18, 0.25);
+            outline: none;
+        }
+
         .gastos-table {
             width: 100%;
             border-collapse: collapse;
@@ -967,6 +1009,16 @@
             
             .btn-group-gastos {
                 margin-top: 15px;
+            }
+
+            .gastos-lista-header {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 20px 15px 10px;
+            }
+
+            .gastos-filtro-cuenta select {
+                width: 100%;
             }
 
             .btn-agregar-gasto {
@@ -1148,9 +1200,10 @@
                             <div class="form-group">
                                 <label for="cuentaGasto">Cuenta</label>
                                 <select id="cuentaGasto" name="cuenta" class="form-select" required>
-                                    <option value="Ambas" selected>Ambas (50%)</option>
+                                    <option value="" disabled selected>Seleccionar cuenta...</option>
                                     <option value="Local">Local</option>
                                     <option value="Envios">Envíos</option>
+                                    <option value="Ambas">Ambas (50%)</option>
                                 </select>
                             </div>
                         </div>
@@ -1171,9 +1224,20 @@
 
                 <!-- Lista de gastos -->
                 <div class="gastos-lista">
-                    <h3 style="padding: 20px 20px 0; margin: 10px; color: var(--primary-color);">
-                        <i class="bi bi-list-ul"></i> Listado de Gastos
-                    </h3>
+                    <div class="gastos-lista-header">
+                        <h3 style="margin: 0; color: var(--primary-color);">
+                            <i class="bi bi-list-ul"></i> Listado de Gastos
+                        </h3>
+                        <div class="gastos-filtro-cuenta">
+                            <label for="filtroCuentaGastos">Cuenta</label>
+                            <select id="filtroCuentaGastos">
+                                <option value="todas" selected>Todas</option>
+                                <option value="Local">🏪 Local</option>
+                                <option value="Envios">🚚 Envíos</option>
+                                <option value="Ambas">🏪🚚 Ambas</option>
+                            </select>
+                        </div>
+                    </div>
                     <div id="gastosListaContainer">
                         <!-- La tabla se generará dinámicamente -->
                     </div>
@@ -1213,6 +1277,7 @@
         // Variables para gastos (siguen en Firebase)
         let gastosData = [];
         let gastosAgrupados = {};
+        let filtroCuentaGasto = 'todas'; // Filtro del listado de gastos: 'todas', 'Local', 'Envios', 'Ambas'
         
         // Elementos del DOM
         const loadingDiv = document.getElementById('loadingDiv');
@@ -1303,10 +1368,13 @@
             if (fechaGasto) {
                 fechaGasto.value = new Date().toISOString().split('T')[0];
             }
-            // Establecer opción por defecto en cuenta
-            const cuentaGasto = document.getElementById('cuentaGasto');
-            if (cuentaGasto) {
-                cuentaGasto.value = 'Ambas';
+            // Filtro por cuenta del listado de gastos
+            const filtroCuentaGastos = document.getElementById('filtroCuentaGastos');
+            if (filtroCuentaGastos) {
+                filtroCuentaGastos.addEventListener('change', (e) => {
+                    filtroCuentaGasto = e.target.value;
+                    renderizarListaGastos();
+                });
             }
         }
 
@@ -1870,7 +1938,24 @@
                 `;
                 return;
             }
-            
+
+            // Aplicar filtro por cuenta (Local y Envios incluyen también los gastos "Ambas")
+            const gastosFiltrados = gastosData.filter(gasto => {
+                if (filtroCuentaGasto === 'todas') return true;
+                if (filtroCuentaGasto === 'Ambas') return gasto.cuenta === 'Ambas';
+                return gasto.cuenta === filtroCuentaGasto || gasto.cuenta === 'Ambas';
+            });
+
+            if (gastosFiltrados.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        <i class="bi bi-funnel" style="font-size: 3rem; margin-bottom: 20px;"></i>
+                        <p>No hay gastos para la cuenta seleccionada.</p>
+                    </div>
+                `;
+                return;
+            }
+
             let tablaHTML = `
                 <table class="gastos-table">
                     <thead>
@@ -1886,7 +1971,7 @@
                     <tbody>
             `;
             
-            gastosData.forEach(gasto => {
+            gastosFiltrados.forEach(gasto => {
                 // Formatear fecha manualmente como DD/MM/YYYY
                 let fechaFormateada = gasto.fecha;
                 if (gasto.fecha && gasto.fecha.length === 10) {
