@@ -412,10 +412,41 @@ function getTipoCliente() {
     return imagenes[0]?.trim() || '';
   }
 
+  // === IMÁGENES: misma lógica que mayorista.js (1er link → 4to link → fallback) ===
+  const CACHE_VERSION_IMG = "2.2";
+  function getCacheBustedURL(url) {
+    if (!url || url === 'no-disponible.png') return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}v=${CACHE_VERSION_IMG}`;
+  }
+
+  // A partir del string de la columna B (links separados por comas) devuelve
+  // { principal, alt } = 1er y 4to link (con cache busting). No se filtran vacíos
+  // para preservar la posición del 4to link, igual que mayorista.js (imageUrls[3]).
+  function imagenesDeStr(imagenesStr) {
+    const imgs = (imagenesStr || '').split(',').map(s => s.trim());
+    return {
+      principal: imgs[0] ? getCacheBustedURL(imgs[0]) : '',
+      alt: imgs[3] ? getCacheBustedURL(imgs[3]) : ''
+    };
+  }
+
+  // Igual que obtenerPrimeraImagen pero devuelve { principal, alt } por nombre.
+  function obtenerImagenesArticulo(nombreArticulo) {
+    if (!nombreArticulo || !articulosPorNombre[nombreArticulo]) return { principal: '', alt: '' };
+    return imagenesDeStr(articulosPorNombre[nombreArticulo][1] || '');
+  }
+
+  // onerror autocontenido para usar en HTML inline: cae al 4to link (data-alt)
+  // y, si tampoco carga, aplica el fallback pasado (por defecto ocultar la img).
+  function imgFallbackAttrs(alt, fallbackJs = "this.style.display='none';") {
+    return `referrerpolicy="no-referrer" data-alt="${alt || ''}" onerror="if(this.dataset.alt && this.dataset.fell!=='1'){this.dataset.fell='1';this.src=this.dataset.alt;}else{${fallbackJs}}"`;
+  }
+
   // === FUNCIÓN PARA CREAR EFECTO HOVER DE IMAGEN (OPTIMIZADA) ===
   let allHoverDivs = new Map(); // Para gestionar todos los hover divs
   
-  function crearHoverImagen(imgElement, imagenUrl) {
+  function crearHoverImagen(imgElement, imagenUrl, imagenAlt) {
     if (!imagenUrl) return;
     
     let hoverDiv = null;
@@ -436,16 +467,24 @@ function getTipoCliente() {
         hoverDiv.style.display = 'none';
         
         const hoverImg = document.createElement('img');
+        hoverImg.referrerPolicy = 'no-referrer';
         hoverImg.src = imagenUrl;
         hoverImg.style.width = '300px';
         hoverImg.style.height = '300px';
         hoverImg.style.objectFit = 'cover';
         hoverImg.style.display = 'block';
         hoverImg.style.borderRadius = '4px';
-        
-        // Manejar error de carga de imagen grande
+
+        // Manejar error de carga: 1er link → 4to link → mensaje "no disponible"
+        let hoverFallbackStep = 0;
         hoverImg.onerror = function() {
-          hoverDiv.innerHTML = '<div style="width:150px;height:150px;display:flex;align-items:center;justify-content:center;color:#666;font-size:14px;">Imagen no disponible</div>';
+          if (hoverFallbackStep === 0 && imagenAlt) {
+            hoverFallbackStep = 1;
+            this.src = imagenAlt;
+          } else {
+            hoverFallbackStep = 2;
+            hoverDiv.innerHTML = '<div style="width:150px;height:150px;display:flex;align-items:center;justify-content:center;color:#666;font-size:14px;">Imagen no disponible</div>';
+          }
         };
         
         hoverDiv.appendChild(hoverImg);
@@ -573,14 +612,15 @@ function getTipoCliente() {
 
   // === OPTIMIZACIÓN: CREAR UNA SOLA FILA ===
   function createRowElement(item, idx) {
-    const primeraImagen = obtenerPrimeraImagen(item.nombre);
-    
+    const imgs = obtenerImagenesArticulo(item.nombre);
+    const primeraImagen = imgs.principal;
+
     const row = document.createElement('tr');
     row.setAttribute('data-idx', idx);
-    
+
     row.innerHTML = `
       <td style="text-align:center;">
-        ${primeraImagen ? `<img src="${primeraImagen}" class="articulo-img" style="width:50px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="Imagen del artículo" onerror="this.style.display='none'">` : '<span style="color:#ccc;">Sin img</span>'}
+        ${primeraImagen ? `<img src="${primeraImagen}" class="articulo-img" style="width:50px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="Imagen del artículo" ${imgFallbackAttrs(imgs.alt)}>` : '<span style="color:#ccc;">Sin img</span>'}
       </td>
       <td><input type="text" value="${item.codigo || ''}" class="codigo" maxlength="20" style="width:80px" readonly></td>
       <td><div class="nombre-display" style="padding:8px;min-width:220px;">${item.nombre || ''}</div></td>
@@ -603,9 +643,9 @@ function getTipoCliente() {
     // Configurar efecto hover para imagen con cleanup
     let hoverCleanup = null;
     if (imgElement) {
-      const primeraImagen = obtenerPrimeraImagen(items[idx].nombre);
-      if (primeraImagen) {
-        hoverCleanup = crearHoverImagen(imgElement, primeraImagen);
+      const imgs = obtenerImagenesArticulo(items[idx].nombre);
+      if (imgs.principal) {
+        hoverCleanup = crearHoverImagen(imgElement, imgs.principal, imgs.alt);
       }
     }
 
@@ -1017,11 +1057,12 @@ function getTipoCliente() {
     searchResults.innerHTML = results.map(art => {
       const codigo = art[2] || '';
       const nombre = art[3] || '';
-      const imagenUrl = art[1] ? art[1].split(',')[0]?.trim() : '';
-      
+      const imgs = imagenesDeStr(art[1] || '');
+      const imagenUrl = imgs.principal;
+
       return `
         <div class="search-result-item" data-nombre="${nombre}">
-          ${imagenUrl ? `<img src="${imagenUrl}" class="search-result-img" alt="${nombre}" onerror="this.style.display='none'">` : '<div class="search-result-img-placeholder"></div>'}
+          ${imagenUrl ? `<img src="${imagenUrl}" class="search-result-img" alt="${nombre}" ${imgFallbackAttrs(imgs.alt)}>` : '<div class="search-result-img-placeholder"></div>'}
           <div class="search-result-info">
             <div class="search-result-name">${nombre}</div>
             <div class="search-result-code">Código: ${codigo}</div>
@@ -1174,7 +1215,8 @@ function getTipoCliente() {
   // === FUNCIÓN PARA MOSTRAR NOTIFICACIÓN CON IMAGEN (TOAST) ===
   function showItemNotification(nombreArticulo, cantidad, isIncrement = false) {
     // Obtener imagen del artículo
-    const imagenUrl = obtenerPrimeraImagen(nombreArticulo);
+    const imgs = obtenerImagenesArticulo(nombreArticulo);
+    const imagenUrl = imgs.principal;
     
     // Remover notificación anterior si existe
     const oldNotif = document.getElementById('barcodeToast');
@@ -1199,11 +1241,11 @@ function getTipoCliente() {
     `;
     
     // Crear contenido
-    const imageHtml = imagenUrl ? 
-      `<img src="${imagenUrl}" 
-            style="width: 100%; height: 350px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;" 
+    const imageHtml = imagenUrl ?
+      `<img src="${imagenUrl}"
+            style="width: 100%; height: 350px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;"
             alt="${nombreArticulo}"
-            onerror="this.style.display='none'">` : '';
+            ${imgFallbackAttrs(imgs.alt)}>` : '';
     
     const cantidadText = cantidad > 1 ? ` (${cantidad} unidades)` : '';
     const accionText = isIncrement ? '✅ Cantidad actualizada' : '✅ Artículo agregado';
