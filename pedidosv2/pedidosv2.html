@@ -1508,15 +1508,46 @@
     /* =========================================
        BUSCAR ARTICULO EN PEDIDOS
        ========================================= */
-    .articulo-paso {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
+    /* Modal a pantalla completa: la camara queda arriba (se apunta con el brazo
+       extendido) y las acciones abajo, en la zona del pulgar. Scopeado a
+       #articuloModal para no alterar #addItemModal, que comparte las clases. */
+    #articuloModal { align-items: stretch; }
+    #articuloModal .add-item-panel {
+      height: 100vh;
+      height: 100dvh;
+      max-height: none;
+      border-radius: 0;
     }
+    /* Ya no es un bottom-sheet: sobra el handle decorativo */
+    #articuloModal .add-item-header::before { content: none; }
+
+    .articulo-scanner-wrap {
+      position: relative;
+      flex-shrink: 0;
+      min-height: 220px;          /* evita el salto de layout mientras arranca la camara */
+      max-height: 42vh;
+      max-height: 42dvh;          /* deja aire para la lista; recorta el video por CSS,
+                                     sin cambiar su tamano real (ver nota de abajo) */
+      background: var(--header-from);
+      overflow: hidden;
+      display: flex;
+      align-items: center;        /* el recorte se reparte arriba/abajo: el centro,
+                                     que es donde se apunta, siempre queda visible */
+      justify-content: center;
+    }
+    #articuloScannerDiv { width: 100%; }
+    /* Deliberadamente NO se fija alto ni object-fit al <video>: html5-qrcode
+       calcula la region a decodificar con videoWidth/clientWidth y
+       videoHeight/clientHeight, asi que redimensionarlo por CSS desalinea lo
+       que se ve de lo que se decodifica. Se deja su alto natural. */
+
+    /* Toggle de camara superpuesto sobre el visor */
     .articulo-scan-btn {
-      margin: 12px 16px 4px;
-      padding: 13px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 13px 22px;
       background: var(--accent);
       color: #fff;
       border: none;
@@ -1525,22 +1556,29 @@
       font-weight: 700;
       font-family: var(--font-ui);
       cursor: pointer;
-      transition: all .2s var(--ease-out);
+      white-space: nowrap;
       box-shadow: 0 2px 8px rgba(230,126,34,.3);
-      flex-shrink: 0;
+      z-index: 2;
     }
-    .articulo-scan-btn:active { transform: scale(.97); }
-    .articulo-scan-btn.scanning { background: var(--danger); box-shadow: none; }
-    .articulo-scanner-wrap {
-      padding: 12px 16px 4px;
-      flex-shrink: 0;
+    .articulo-scan-btn:active { transform: translate(-50%, -50%) scale(.94); }
+    /* Con la camara encendida se achica y se corre a la esquina para no tapar el visor */
+    .articulo-scan-btn.scanning {
+      left: auto;
+      top: auto;
+      right: 12px;
+      bottom: 12px;
+      transform: none;
+      padding: 0;
+      width: 44px;
+      height: 44px;
+      font-size: 15px;
+      background: rgba(15,23,42,.72);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 50%;
+      box-shadow: 0 2px 10px rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
     }
-    #articuloScannerDiv {
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      border: 1px solid var(--border);
-      background: #0f172a;
-    }
+    .articulo-scan-btn.scanning:active { transform: scale(.9); }
     .articulo-paso2-header { position: relative; }
     .articulo-item-info {
       flex: 1;
@@ -1647,11 +1685,12 @@
     .articulo-btn-confirmar {
       flex: 1;
       padding: 13px;
+      min-height: 52px;
       background: var(--success);
       color: #fff;
       border: none;
       border-radius: var(--radius-md);
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 700;
       font-family: var(--font-ui);
       cursor: pointer;
@@ -2544,32 +2583,33 @@
   </div>
 
   <!-- BUSCAR ARTICULO EN PEDIDOS -->
+  <!-- Estructura plana: el visor de camara es hermano de las listas para poder
+       seguir visible (y vivo) tanto en el paso 1 como en el paso 2. -->
   <div class="add-item-modal" id="articuloModal">
     <div class="add-item-panel">
-      <!-- Paso 1: identificar articulo -->
-      <div class="articulo-paso" id="articuloPaso1">
-        <div class="add-item-header">
-          <input type="text" id="articuloSearch" placeholder="Buscar articulo por nombre o codigo...">
-          <button id="articuloClose1">&times;</button>
-        </div>
-        <button class="articulo-scan-btn" id="btnArticuloEscanear">&#128247; Escanear c&oacute;digo de barras</button>
-        <div class="articulo-scanner-wrap" id="articuloScannerWrap" style="display:none">
-          <div id="articuloScannerDiv"></div>
-        </div>
-        <div class="add-item-list" id="articuloList"></div>
+      <!-- Header paso 1: identificar articulo -->
+      <div class="add-item-header" id="articuloHeader1">
+        <input type="text" id="articuloSearch" placeholder="Buscar articulo por nombre o codigo...">
+        <button id="articuloClose1">&times;</button>
       </div>
-      <!-- Paso 2: pedidos que contienen el articulo -->
-      <div class="articulo-paso" id="articuloPaso2" style="display:none">
-        <div class="add-item-header articulo-paso2-header">
-          <button id="btnArticuloVolver" title="Buscar otro articulo">&larr;</button>
-          <div class="articulo-item-info" id="articuloItemInfo"></div>
-          <button id="articuloClose2">&times;</button>
-        </div>
-        <div class="add-item-list" id="articuloPedidosList"></div>
-        <div class="articulo-footer" id="articuloFooter" style="display:none">
-          <button class="articulo-btn-sec" id="btnArticuloTodos">Todos</button>
-          <button class="articulo-btn-confirmar" id="btnArticuloConfirmar" disabled>Marcar listo</button>
-        </div>
+      <!-- Header paso 2: articulo elegido -->
+      <div class="add-item-header articulo-paso2-header" id="articuloHeader2" style="display:none">
+        <button id="btnArticuloVolver" title="Buscar otro articulo">&larr;</button>
+        <div class="articulo-item-info" id="articuloItemInfo"></div>
+        <button id="articuloClose2">&times;</button>
+      </div>
+      <!-- Visor de camara: siempre presente, arriba y a lo ancho -->
+      <div class="articulo-scanner-wrap" id="articuloScannerWrap">
+        <div id="articuloScannerDiv"></div>
+        <button class="articulo-scan-btn" id="btnArticuloEscanear">&#128247; Encender c&aacute;mara</button>
+      </div>
+      <!-- Cuerpo paso 1: catalogo -->
+      <div class="add-item-list" id="articuloList"></div>
+      <!-- Cuerpo paso 2: pedidos que contienen el articulo -->
+      <div class="add-item-list" id="articuloPedidosList" style="display:none"></div>
+      <div class="articulo-footer" id="articuloFooter" style="display:none">
+        <button class="articulo-btn-sec" id="btnArticuloTodos">Todos</button>
+        <button class="articulo-btn-confirmar" id="btnArticuloConfirmar" disabled>Marcar listo</button>
       </div>
     </div>
   </div>
@@ -4205,8 +4245,8 @@
     // BUSCAR ARTICULO EN PEDIDOS (busqueda inversa)
     // ==========================================
     const articuloModal = document.getElementById('articuloModal');
-    const articuloPaso1 = document.getElementById('articuloPaso1');
-    const articuloPaso2 = document.getElementById('articuloPaso2');
+    const articuloHeader1 = document.getElementById('articuloHeader1');
+    const articuloHeader2 = document.getElementById('articuloHeader2');
     const articuloSearch = document.getElementById('articuloSearch');
     const articuloList = document.getElementById('articuloList');
     const articuloScannerWrap = document.getElementById('articuloScannerWrap');
@@ -4217,7 +4257,6 @@
     const btnArticuloConfirmar = document.getElementById('btnArticuloConfirmar');
 
     let articuloHtml5Qr = null;       // instancia propia, independiente del scanner QR de pedidos
-    let articuloUsoScanner = false;   // el articulo actual se identifico escaneando (para modo continuo)
     let articuloActual = null;        // { codigo, nombre, imagen }
     let articuloResultados = [];      // [{ id, nombre, status, cantidad, yaListo, timestamp, sel }]
     let articuloUltimoScan = { texto: '', ts: 0 };
@@ -4272,22 +4311,32 @@
       }
     }
 
+    // Conmuta entre paso 1 (buscar articulo) y paso 2 (pedidos que lo contienen).
+    // El visor de camara no participa: queda visible en ambos pasos.
+    function articuloMostrarPaso(n) {
+      const p1 = n === 1;
+      articuloHeader1.style.display = p1 ? 'flex' : 'none';
+      articuloHeader2.style.display = p1 ? 'none' : 'flex';
+      articuloList.style.display = p1 ? 'block' : 'none';
+      articuloPedidosList.style.display = p1 ? 'none' : 'block';
+      if (p1) articuloFooter.style.display = 'none';
+    }
+
     document.getElementById('btnBuscarArticulo').addEventListener('click', async () => {
       articuloModal.classList.add('active');
-      articuloUsoScanner = false;
       articuloActual = null;
       articuloResultados = [];
-      articuloPaso2.style.display = 'none';
-      articuloPaso1.style.display = 'flex';
+      articuloMostrarPaso(1);
       articuloSearch.value = '';
       articuloList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando catalogo...</div>';
+      // Sin await: el permiso/arranque de camara corre en paralelo con la carga del catalogo
+      articuloIniciarScanner();
       await cargarSheets();
       articuloRenderLista('');
     });
 
     function articuloCerrarModal() {
       articuloDetenerScanner();
-      articuloUsoScanner = false;
       articuloModal.classList.remove('active');
     }
 
@@ -4307,8 +4356,8 @@
     });
 
     async function articuloIniciarScanner() {
-      articuloScannerWrap.style.display = 'block';
-      btnArticuloEscanear.textContent = 'Detener camara';
+      btnArticuloEscanear.innerHTML = '&#9209;';
+      btnArticuloEscanear.title = 'Detener camara';
       btnArticuloEscanear.classList.add('scanning');
       articuloScanLast = ''; articuloScanCount = 0;
       articuloUltimoScan = { texto: '', ts: 0 };
@@ -4372,9 +4421,26 @@
         articuloHtml5Qr.stop().catch(() => {});
       }
       articuloScanLast = ''; articuloScanCount = 0;
-      articuloScannerWrap.style.display = 'none';
-      btnArticuloEscanear.innerHTML = '&#128247; Escanear c&oacute;digo de barras';
+      // El wrap queda visible con el placeholder oscuro: evita el salto de layout
+      btnArticuloEscanear.innerHTML = '&#128247; Encender c&aacute;mara';
+      btnArticuloEscanear.title = 'Encender camara';
       btnArticuloEscanear.classList.remove('scanning');
+    }
+
+    // Deja de decodificar pero mantiene el stream vivo (el video sigue en pantalla).
+    // Se usa al pasar al paso 2: reanudar despues es instantaneo, a diferencia de
+    // stop()+start(), que vuelve a pagar el arranque de la camara (~1s).
+    function articuloPausarScanner() {
+      if (!articuloHtml5Qr || !articuloHtml5Qr.isScanning) return;
+      try { articuloHtml5Qr.pause(false); } catch (_) {}
+    }
+
+    // Si el usuario apago la camara a mano, isScanning es false y no se reenciende sola.
+    function articuloReanudarScanner() {
+      if (!articuloHtml5Qr || !articuloHtml5Qr.isScanning) return;
+      articuloScanLast = ''; articuloScanCount = 0;
+      articuloUltimoScan = { texto: '', ts: 0 };
+      try { articuloHtml5Qr.resume(); } catch (_) {}
     }
 
     function articuloOnScan(decodedText, decodedResult) {
@@ -4415,8 +4481,7 @@
         return;
       }
 
-      articuloUsoScanner = true;
-      articuloDetenerScanner();
+      articuloPausarScanner();
       articuloSeleccionar(codigo);
     }
 
@@ -4453,8 +4518,7 @@
     articuloList.addEventListener('click', (e) => {
       const option = e.target.closest('.add-item-option');
       if (!option) return;
-      articuloUsoScanner = false;
-      articuloDetenerScanner();
+      articuloPausarScanner();
       articuloSeleccionar(option.dataset.codigo);
     });
 
@@ -4466,8 +4530,7 @@
         nombre: info.nombre || codigo,
         imagen: info.imagen || info.imagenAlt || ''
       };
-      articuloPaso1.style.display = 'none';
-      articuloPaso2.style.display = 'flex';
+      articuloMostrarPaso(2);
       articuloItemInfo.innerHTML =
         (articuloActual.imagen ? '<img src="' + escapeHtml(articuloActual.imagen) + '" onerror="this.style.display=\'none\'">' : '') +
         '<div style="min-width:0"><div class="opt-name">' + escapeHtml(articuloActual.nombre) + '</div>' +
@@ -4498,7 +4561,9 @@
               cantidad: item.cantidad || 1,
               yaListo: item.listo === 'y',
               timestamp: p.timestamp || 0,
-              sel: false
+              // Pre-marcado: el flujo normal es escanear -> "Marcar listo".
+              // Se destilda solo lo que no corresponda.
+              sel: item.listo !== 'y'
             });
           });
         };
@@ -4564,18 +4629,16 @@
     }
 
     document.getElementById('btnArticuloVolver').addEventListener('click', () => {
-      articuloUsoScanner = false;
-      articuloVolverAPaso1(false);
+      articuloVolverAPaso1();
     });
 
-    function articuloVolverAPaso1(reactivarScanner) {
+    function articuloVolverAPaso1() {
       articuloActual = null;
       articuloResultados = [];
-      articuloPaso2.style.display = 'none';
-      articuloPaso1.style.display = 'flex';
+      articuloMostrarPaso(1);
       articuloSearch.value = '';
       articuloRenderLista('');
-      if (reactivarScanner) articuloIniciarScanner();
+      articuloReanudarScanner();
     }
 
     // --- Confirmar: marcar listo='y' solo en el item de cada pedido seleccionado ---
@@ -4624,8 +4687,8 @@
         ? '✅ Marcado en ' + ok + ' pedido' + (ok === 1 ? '' : 's') + (fail > 0 ? ' · ' + fail + ' no se pudo' : '')
         : 'No se pudo marcar ningun pedido');
 
-      // Modo continuo: volver al paso 1 (con camara si el articulo se habia escaneado)
-      articuloVolverAPaso1(articuloUsoScanner);
+      // Modo continuo: volver al paso 1 y reanudar la camara (sin reiniciarla)
+      articuloVolverAPaso1();
     });
 
     // ==========================================
