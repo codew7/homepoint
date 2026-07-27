@@ -94,3 +94,27 @@ Sistema de gestión de pedidos para distribuidor "HomePoint". App web HTML está
 - **Transferencia sin recargo automático**: Eliminada la lógica que auto-cargaba 3% al seleccionar Transferencia (cambio de radio ya no setea `porcentajeRecargo`). Label del radio actualizado a "Transferencia" (sin "+3%").
 - **Voucher en cotización copiada**: `pvBuildCotizacionTexto()` agrega al final (separado por renglón en blanco) "VOUCHER DESCUENTO - $<15% del Total Final, redondeado> (valido hasta <hoy + 31 días, formato d/m/aaaa>)".
 - **Descuento/Recargo $ manual**: Los inputs `$` de descuento y recargo aceptan ingreso manual cuando el campo `%` adjunto está en 0. Los handlers de `pvDescuentoInput`/`pvRecargoInput` ya no back-calculan el porcentaje (eso pisaba el valor tipeado al re-aplicar el % redondeado). Si `%` > 0, el `$` sigue siendo autocalculado.
+
+## Recent Changes (2026-07-27)
+
+### Escáner de códigos de barras de artículos (`articuloIniciarScanner`/`articuloOnScan`)
+
+El escaneo por cámara tardaba mucho y a veces daba "Codigo no encontrado" con códigos válidos, mientras que `Articulos/articulos.html` (misma librería `html5-qrcode@2.3.8`) leía perfecto. Se replicó su criterio:
+
+- **Sin `qrbox`** — era la causa principal. La librería recorta el frame a esa caja y crea un canvas de ese tamaño; con la caja anterior (280×140) las barras finas llegaban al decoder sin densidad de píxeles suficiente. Omitir `qrbox` deja `isShadedBoxEnabled()` en `false` y se escanea el viewfinder completo a resolución nativa. **No volver a agregarlo.** (`articulos.html` consigue lo mismo por accidente: su `scanQrbox(vw)` lee `vw.width` sobre un argumento que la librería pasa como número, devuelve `NaN` y la condición `qrDimensions.height <= viewfinderHeight` falla.)
+- **`formatsToSupport`** en el constructor con los 9 formatos usados (`SCAN_FORMATS()`), en vez de dejar que ZXing pruebe todos en cada frame.
+- **Constraints de iOS** — alta resolución + `focusMode: 'continuous'`, con reintento automático a config básica si el navegador los rechaza (`OverconstrainedError`). Safari entrega un stream de baja resolución que no decodifica 1D.
+- **Validación + consenso** — `gtinCheckOk()` y `codigoEscaneadoValido(code, fmt)` descartan lecturas parciales por longitud y dígito verificador según formato (el ITF truncado era el que producía el falso "no encontrado"), y se exigen 2 lecturas idénticas consecutivas (`ARTICULO_SCAN_CONSENSO`). **El dedupe de 2500 ms va DESPUÉS del consenso**: si filtrara antes, bloquearía la segunda lectura idéntica y el consenso nunca se alcanzaría.
+
+El escáner de QR de pedidos (`#qr-reader-container`, lee QR no 1D) quedó sin cambios.
+
+### Rediseño UX del modal Buscar artículo (`#articuloModal`)
+
+Era un bottom-sheet de 72vh: el visor quedaba en la mitad baja de la pantalla (incómodo para apuntar en celular) y la cámara se apagaba y reencendía en cada artículo.
+
+- **Estructura plana** — se eliminaron los contenedores `.articulo-paso`; header (paso 1 / paso 2), visor, listas y footer son hermanos directos de `.add-item-panel`. Así el visor sigue visible en ambos pasos. `articuloMostrarPaso(n)` conmuta headers y listas.
+- **Pantalla completa** — `align-items: stretch` + panel `100dvh`, cámara arriba y acciones abajo (zona del pulgar). **Todo el CSS va scopeado a `#articuloModal`**: comparte `.add-item-modal`/`.add-item-panel`/`.add-item-header`/`.add-item-list` con `#addItemModal`, que debe seguir siendo un bottom-sheet de 72vh.
+- **No fijar alto ni `object-fit` al `<video>`** — html5-qrcode calcula la región a decodificar con `videoWidth/clientWidth` y `videoHeight/clientHeight`; redimensionarlo por CSS desalinea lo que se ve de lo que se decodifica. El visor se acota con `max-height: 42dvh` + `overflow: hidden` en el wrap (recorta visualmente sin tocar el tamaño real del elemento) y `align-items: center` para que el centro siempre quede visible.
+- **Cámara viva entre escaneos** — `articuloPausarScanner()`/`articuloReanudarScanner()` usan `pause(false)`/`resume()` en vez de `stop()`+`start()`, evitando el arranque de ~1s por artículo. Ambas van con guard `isScanning` + `try/catch` (la librería lanza si no está corriendo). `articuloCerrarModal()` sí hace `stop()` completo para liberar la cámara.
+- **Atajos** — la cámara arranca sola al abrir el modal (sin `await`, en paralelo con `cargarSheets()`), y los pedidos pendientes llegan pre-tildados (`sel: item.listo !== 'y'`).
+- Se eliminó `articuloUsoScanner`: con la cámara viva todo el ciclo, `articuloVolverAPaso1()` ya no recibe parámetro y siempre reanuda. Si el usuario apagó la cámara a mano, `articuloReanudarScanner()` no la reenciende (chequea `isScanning`).
