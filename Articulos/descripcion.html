@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#f7f8fb">
 <title>Descripción · HomePoint</title>
-<link rel="icon" href="faviconnegro.png" type="image/png">
+<link rel="icon" href="../faviconnegro.png" type="image/png">
 
 <!-- Firebase SDK (sin Storage: acá no se sube ninguna foto) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -136,9 +136,6 @@ body{
 .icon-btn.keyset{border-color:var(--lime);color:var(--lime-600);background:var(--lime-soft)}
 .logout-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;transition:all .16s}
 .logout-btn:active{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
-.model-sel{background:var(--card);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:var(--font);font-size:.7rem;font-weight:600;padding:5px 9px;height:29px;cursor:pointer;outline:none;transition:all .16s}
-.model-sel:hover{color:var(--text-2)}
-.model-sel:focus{border-color:var(--lime);color:var(--text-2)}
 
 /* ====== LAYOUT ====== */
 .wrap{max-width:min(1180px,96vw);margin:0 auto;padding:18px 16px max(40px,env(safe-area-inset-bottom))}
@@ -248,6 +245,11 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
 .rowbtn.assign svg{color:var(--lime)}
 .rowbtn.replace{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
 .rowbtn.replace:hover{border-color:var(--primary);color:var(--primary)}
+/* atajo "Foto": misma jerarquía visual que Editar, pero se distingue por el icono */
+.rowbtn.usefoto{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.rowbtn.usefoto:hover{border-color:var(--lime);color:var(--primary)}
+.rowbtn.usefoto svg{color:var(--lime)}
+.rowacts{display:inline-flex;align-items:center;gap:7px;justify-content:flex-end}
 .col-act{text-align:right;white-space:nowrap}
 .tabla-empty{padding:44px 20px;text-align:center;color:var(--muted);font-size:.9rem}
 
@@ -397,7 +399,8 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
 @media (max-width:480px){
   .page-head h1{font-size:1.2rem}
   table.art th,table.art td{padding:9px 9px}
-  .rowbtn{padding:9px 11px}
+  .rowbtn{padding:9px 10px;gap:5px}
+  .rowacts{gap:5px}
   /* la descripción se mantiene visible (es el acceso al editor); la tabla scrollea en horizontal */
   table.art td.desccol{max-width:200px;min-width:130px}
   table.art td.medcol{max-width:120px;min-width:90px}
@@ -438,13 +441,6 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
   </div>
   <div class="topbar-right">
     <span class="conn"><span class="dot" id="connDot"></span><span id="connTxt">online</span></span>
-    <select class="model-sel" id="modelSel" title="Modelo de Gemini">
-      <option value="">Auto</option>
-      <option value="gemini-flash-lite-latest">Flash Lite</option>
-      <option value="gemini-flash-latest">Flash</option>
-      <option value="gemini-2.0-flash-lite">2.0 Flash Lite</option>
-      <option value="gemini-2.0-flash">2.0 Flash</option>
-    </select>
     <button class="icon-btn" id="keyBtn" title="Configurar API key de Gemini">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
     </button>
@@ -492,7 +488,7 @@ table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;backg
           <th>Nombre</th>
           <th class="desccol">Descripción</th>
           <th>Medidas</th>
-          <th class="col-act">Acción</th>
+          <th class="col-act">Acciones</th>
         </tr>
       </thead>
       <tbody id="artTbody"></tbody>
@@ -707,20 +703,15 @@ const $ = id => document.getElementById(id);
 //  Gemini
 // ============================================================
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-// Modelos candidatos preferidos (rápido/barato). El disponible real depende de la key,
-// por eso además se consulta ListModels y se cachea el que funcione.
-// Los alias "*-latest" los mantiene Google apuntando a un modelo vigente, así que no
-// caducan para cuentas nuevas (a diferencia de gemini-2.5-flash, que da 404
-// "no longer available to new users" aunque ListModels lo siga listando).
-// Orden por velocidad: los "lite" son mucho más rápidos y les sobra para leer una etiqueta.
-const GEMINI_MODEL_CANDIDATES = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
+// Un solo modelo: "flash lite" es el más barato y rápido, y para leer una etiqueta le sobra.
+// El segundo es solo red de contención por si el alias "-latest" deja de existir (404):
+// no hay selector de modelo en la UI, la elección no es del usuario.
+const GEMINI_MODEL = 'gemini-flash-lite-latest';
+const GEMINI_MODEL_FALLBACK = 'gemini-2.0-flash-lite';
+const GEMINI_MODEL_CANDIDATES = [GEMINI_MODEL, GEMINI_MODEL_FALLBACK];
 const GEMINI_KEY_STORAGE = 'geminiApiKey';
-const GEMINI_MODEL_STORAGE = 'geminiModel';        // modelo que funcionó, cacheado (modo Auto)
-const GEMINI_MODEL_MANUAL = 'geminiModelManual';   // modelo elegido a mano en el selector ('' = Auto)
-
-// Modelo forzado desde el selector de la topbar ('' = Auto). Si está seteado se prueba primero.
-function getManualModel(){ try { return (localStorage.getItem(GEMINI_MODEL_MANUAL) || '').trim(); } catch(_){ return ''; } }
-function setManualModel(m){ try { m ? localStorage.setItem(GEMINI_MODEL_MANUAL, m) : localStorage.removeItem(GEMINI_MODEL_MANUAL); } catch(_){} }
+const GEMINI_MODEL_STORAGE = 'geminiModel';        // modelo que funcionó, cacheado
+const GEMINI_THINK_STORAGE = 'geminiThinkMode';    // variante de thinkingConfig que aceptó el modelo
 
 // La API key de Gemini la carga el usuario desde el modal (botón de la topbar) y se guarda
 // solo en este navegador. No se versiona ninguna key en el código: si se revoca, se cambia
@@ -738,16 +729,49 @@ function maskGeminiKey(k){
 }
 // Se versiona el caché del modelo: al cambiar la preferencia (p.ej. priorizar los "lite"),
 // se bumpea MODEL_PREF_VER para descartar el modelo recordado con el criterio viejo.
-const MODEL_PREF_VER = '2';
-function getCachedModel(){
+const MODEL_PREF_VER = '3';
+function leerPref(clave){
   try {
-    const raw = (localStorage.getItem(GEMINI_MODEL_STORAGE) || '').trim();
+    const raw = (localStorage.getItem(clave) || '').trim();
     const sep = raw.indexOf('|');
     if (sep < 0) return '';                                  // formato viejo (sin versión) → ignorar
     return raw.slice(0, sep) === MODEL_PREF_VER ? raw.slice(sep + 1) : '';
   } catch(_){ return ''; }
 }
-function setCachedModel(m){ try { m ? localStorage.setItem(GEMINI_MODEL_STORAGE, MODEL_PREF_VER + '|' + m) : localStorage.removeItem(GEMINI_MODEL_STORAGE); } catch(_){} }
+function guardarPref(clave, v){ try { v ? localStorage.setItem(clave, MODEL_PREF_VER + '|' + v) : localStorage.removeItem(clave); } catch(_){} }
+
+function getCachedModel(){ return leerPref(GEMINI_MODEL_STORAGE); }
+function setCachedModel(m){ guardarPref(GEMINI_MODEL_STORAGE, m); }
+
+// Cómo apagar el "thinking" (que agrega latencia y quema tokens de salida sin aportar
+// nada para leer una etiqueta) depende de la familia del modelo, y los alias "-latest"
+// cambian de familia sin aviso: 2.5 usa thinkingBudget, 3.x usa thinkingLevel, 2.0 no
+// soporta nada de esto. En vez de adivinar por el nombre, se prueban las variantes en
+// orden y se cachea la que el modelo aceptó, para no gastar requests en cada generación.
+const THINK_MODES = ['budget', 'level', 'none'];
+function getCachedThink(){ const t = leerPref(GEMINI_THINK_STORAGE); return THINK_MODES.includes(t) ? t : ''; }
+function setCachedThink(t){ guardarPref(GEMINI_THINK_STORAGE, t); }
+function thinkingCfgDe(modo){
+  if (modo === 'budget') return { thinkingBudget: 0 };
+  if (modo === 'level') return { thinkingLevel: 'low' };
+  return null;
+}
+
+// Cuota agotada (429): la API dice en cuántos segundos reintentar. Hasta que pase ese
+// tiempo no se manda nada más — cada request extra solo suma al límite que ya se pasó.
+let geminiCooldownHasta = 0;
+function segundosDeCooldown(){ return Math.max(0, Math.ceil((geminiCooldownHasta - Date.now()) / 1000)); }
+// Lee el retryDelay ("21s") de los details del 429; si no viene, asume un minuto.
+function retrasoDe429(data){
+  const det = (data && data.error && data.error.details) || [];
+  for (const d of det){
+    const s = parseFloat(String(d && d.retryDelay || '').replace('s', ''));
+    if (!isNaN(s) && s > 0) return Math.min(120, Math.ceil(s) + 1);
+  }
+  const m = /retry in ([\d.]+)s/i.exec(String((data && data.error && data.error.message) || ''));
+  if (m) return Math.min(120, Math.ceil(parseFloat(m[1])) + 1);
+  return 60;
+}
 
 // Las API keys de Gemini se envían por header x-goog-api-key (funciona con el formato
 // nuevo "AQ." y con el viejo "AIza"; el query ?key= no sirve con las nuevas).
@@ -771,13 +795,23 @@ function buildPrompt(nombre){
     `Respetá los títulos "Descripción:" e "Info:" tal cual.`;
 }
 
-// Una llamada a generateContent con un modelo concreto. Devuelve {ok, status, data}.
-async function callGenerate(model, key, base64, nombre){
-  // Los modelos 2.5 (flash-latest / flash-lite-latest) activan "thinking" por defecto,
-  // que agrega mucha latencia y no aporta nada para leer una etiqueta → lo apagamos.
-  // Los 2.0 no soportan thinkingConfig, así que no se lo mandamos.
+// Distingue un error real de API key de cualquier otro 400. La API devuelve 400
+// INVALID_ARGUMENT tanto para keys inválidas como para requests mal armados, así que
+// no alcanza con el status: hay que mirar el mensaje/reason del cuerpo.
+function esErrorDeKey(status, data){
+  if (status === 403) return true;                      // key sin permisos / API deshabilitada
+  if (status !== 400) return false;
+  const err = (data && data.error) || {};
+  if (/API[ _]key not valid|API_KEY_INVALID|expired|invalid api key/i.test(String(err.message || ''))) return true;
+  return (err.details || []).some(d => d && /API_KEY/.test(String(d.reason || '')));
+}
+
+// Una llamada a generateContent con un modelo y una variante de thinking concretos.
+// Devuelve {ok, status, data}.
+async function callGenerate(model, key, base64, nombre, modoThinking){
   const genCfg = { temperature: 0.3, maxOutputTokens: 700 };
-  if (!/2\.0/.test(model)) genCfg.thinkingConfig = { thinkingBudget: 0 };
+  const th = thinkingCfgDe(modoThinking);
+  if (th) genCfg.thinkingConfig = th;
   let res;
   try {
     res = await fetch(genUrl(model), {
@@ -795,39 +829,71 @@ async function callGenerate(model, key, base64, nombre){
     const e = new Error('No se pudo conectar con Gemini. Verificá tu internet.'); e.code = 'NETWORK'; throw e;
   }
   const data = await res.json().catch(() => ({}));
+  // Se loguea el error crudo de la API: es lo único que dice por qué falló realmente.
+  if (!res.ok) console.warn('Gemini', model, res.status, (data && data.error) || data);
   return { ok: res.ok, status: res.status, data };
 }
 
-// Llama a Gemini con la imagen en base64. Prueba los modelos candidatos en orden
-// (empezando por el cacheado) y usa el primero que no dé 404 — así evita los modelos
-// deprecados que ListModels sigue listando pero ya no generan para cuentas nuevas.
+// Llama a Gemini con la imagen en base64, usando el modelo cacheado (o el principal) y
+// la variante de thinking que ya se sabe que acepta. En el caso normal es UN solo request:
+// las alternativas se recorren nada más cuando la API rechaza la combinación actual.
 async function generarDescripcionGemini(base64, nombre){
   const key = getGeminiKey();
   if (!key){ const e = new Error('Falta la API key'); e.code = 'NO_KEY'; throw e; }
+  if (!base64){ const e = new Error('No hay imagen para analizar. Sacá la foto de nuevo.'); e.code = 'EMPTY'; throw e; }
+  const espera = segundosDeCooldown();
+  if (espera){
+    const e = new Error('Cuota de Gemini agotada. Esperá ' + espera + ' s antes de reintentar.'); e.code = 'QUOTA'; throw e;
+  }
 
-  // Orden de intento: modelo elegido a mano (si hay) → cacheado → candidatos. Sin repetir.
-  // Si el manual falla igual cae a los demás, así el selector nunca deja la app trabada.
-  const manual = getManualModel();
+  // Modelos: el que funcionó la última vez primero, después los candidatos. Sin repetir.
   const cached = getCachedModel();
-  const tryList = [];
-  const push = m => { if (m && !tryList.includes(m)) tryList.push(m); };
-  push(manual);
+  const modelos = [];
+  const push = m => { if (m && !modelos.includes(m)) modelos.push(m); };
   push(cached);
   for (const m of GEMINI_MODEL_CANDIDATES){ push(m); }
+  // Variantes de thinking: la cacheada primero.
+  const cachedThink = getCachedThink();
+  const modosBase = [];
+  const pushModo = t => { if (t && !modosBase.includes(t)) modosBase.push(t); };
+  pushModo(cachedThink);
+  for (const t of THINK_MODES){ pushModo(t); }
 
-  let r = null, model = null, transient = null;
-  for (const cand of tryList){
-    const resp = await callGenerate(cand, key, base64, nombre);
-    if (resp.status === 404){ if (getCachedModel() === cand) setCachedModel(''); continue; }      // deprecado/inexistente → siguiente
-    if (resp.status === 429 || resp.status === 503){ transient = { r: resp, model: cand }; continue; } // saturado/limitado → probar otro modelo
-    r = resp; model = cand; break;                                                                  // respuesta definitiva (200/400/403…)
+  let r = null, model = null, transient = null, badReq = null;
+  buscar:
+  for (const cand of modelos){
+    // Los 2.0 no soportan thinkingConfig en ninguna forma: se les manda sin nada.
+    const modos = /2\.0/.test(cand) ? ['none'] : modosBase;
+    let modeloInservible = true;   // salvo que falle por algo pasajero, este modelo no sirve
+    for (const modo of modos){
+      const resp = await callGenerate(cand, key, base64, nombre, modo);
+      if (resp.status === 404){ break; }                                                 // modelo deprecado/inexistente → siguiente modelo
+      if (resp.status === 429 || resp.status === 503){ transient = { r: resp, model: cand }; modeloInservible = false; break; } // pasajero: el modelo sigue siendo válido
+      // 400 que no es de key: la API rechazó ESTE request. Casi siempre es la variante de
+      // thinking → se prueba la siguiente con el mismo modelo antes de descartarlo.
+      if (resp.status === 400 && !esErrorDeKey(resp.status, resp.data)){
+        if (!badReq) badReq = { r: resp, model: cand };
+        if (getCachedThink() === modo) setCachedThink('');
+        continue;
+      }
+      r = resp; model = cand;
+      if (resp.ok) setCachedThink(modo);                                                 // combinación que anda → recordarla
+      break buscar;                                                                      // respuesta definitiva (200/403…)
+    }
+    if (modeloInservible && getCachedModel() === cand) setCachedModel('');               // no volver a probarlo primero la próxima vez
   }
-  if (model && !manual){ setCachedModel(model); } // en modo Auto, recordar el que respondió (no pisar con la elección manual)
-  else if (transient){ r = transient.r; model = transient.model; } // todos saturados/limitados → usar el último para el mensaje
+  if (model){ if (r && r.ok) setCachedModel(model); }             // recordar el modelo que respondió bien
+  else if (transient){ r = transient.r; model = transient.model; } // saturado/limitado → usar esa respuesta para el mensaje
+  else if (badReq){ r = badReq.r; model = badReq.model; }          // todo rechazado → mostrar el error real de la API
   else { const e = new Error('Ningún modelo de Gemini está disponible para tu API key.'); e.code = 'NO_MODEL'; throw e; }
 
-  if (r.status === 400 || r.status === 403){ const e = new Error('API key inválida o sin permisos. Revisá tu key de aistudio.google.com/apikey.'); e.code = 'BAD_KEY'; throw e; }
-  if (r.status === 429){ const e = new Error('Límite de uso alcanzado. Esperá un momento y tocá Regenerar.'); e.code = 'QUOTA'; throw e; }
+  if (esErrorDeKey(r.status, r.data)){ const e = new Error('API key inválida o sin permisos. Revisá tu key de aistudio.google.com/apikey.'); e.code = 'BAD_KEY'; throw e; }
+  if (r.status === 429){
+    // Se respeta el retryDelay de la API: hasta que pase, ni se intenta (ahorra cuota).
+    const s = retrasoDe429(r.data);
+    geminiCooldownHasta = Date.now() + s * 1000;
+    const e = new Error('Cuota de Gemini agotada (plan gratuito). Esperá ' + s + ' s y tocá Regenerar.'); e.code = 'QUOTA'; throw e;
+  }
   if (r.status === 503){ const e = new Error('Los modelos de Gemini están saturados ahora mismo. Esperá unos segundos y tocá Regenerar.'); e.code = 'OVERLOAD'; throw e; }
   if (!r.ok){
     const apiMsg = r.data && r.data.error && r.data.error.message;
@@ -977,6 +1043,7 @@ function renderTable(){
 }
 
 const CAM_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+const IMG_SM_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
 const IMG_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
 
 function renderPage(){
@@ -1022,9 +1089,15 @@ function renderPage(){
     const descCell = has
       ? `<div class="dtxt">${escapeHtml(desc)}</div>`
       : `<span class="dempty">Sin descripción</span>`;
-    const btn = has
-      ? `<button class="rowbtn replace" type="button">${CAM_ICON} Editar</button>`
-      : `<button class="rowbtn assign" type="button">${CAM_ICON} Generar</button>`;
+    // Dos acciones independientes: cámara (foto nueva) y foto ya guardada del artículo.
+    // El atajo "Foto" solo aparece si el artículo tiene imagen cargada.
+    const btnCam = has
+      ? `<button class="rowbtn replace" type="button" title="Sacar una foto nueva">${CAM_ICON} Editar</button>`
+      : `<button class="rowbtn assign" type="button" title="Sacar una foto nueva">${CAM_ICON} Generar</button>`;
+    const btnFoto = String(a.Foto || '').trim()
+      ? `<button class="rowbtn usefoto" type="button" title="Generar con la foto ya guardada del artículo">${IMG_SM_ICON} Foto</button>`
+      : '';
+    const btn = `<div class="rowacts">${btnFoto}${btnCam}</div>`;
     const hasMed = tieneMedidas(a);
     const medCell = hasMed
       ? `<div class="dtxt">${escapeHtml(medidasTexto(a))}</div>`
@@ -1070,7 +1143,10 @@ function imgFallback(el){
 // ============================================================
 //  Procesado de imagen para Gemini (redimensiona preservando aspecto)
 // ============================================================
-function resizeForGemini(file, maxDim = 1024){
+// 768 px no es arbitrario: Gemini cobra la imagen en mosaicos de 768x768 (≈258 tokens cada
+// uno), así que a ese tamaño entra en UN mosaico. Con 1024 eran cuatro — 4x el costo de
+// entrada por foto sin ganar legibilidad real en una etiqueta.
+function resizeForGemini(file, maxDim = 768){
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -1087,7 +1163,7 @@ function resizeForGemini(file, maxDim = 1024){
       ctx.fillRect(0, 0, W, H);
       ctx.drawImage(img, 0, 0, W, H);
       URL.revokeObjectURL(img.src);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);  // algo más de calidad: al bajar a 768 el texto chico es lo primero que se pierde
       const base64 = dataUrl.split(',')[1] || '';
       resolve({ dataUrl, base64 });
     };
@@ -1103,9 +1179,10 @@ let camStream = null;
 let camFacing = 'environment';
 let camState = { codigo: '', nombre: '', previewUrl: '', base64: '', fotoUrl: '' };
 
-function openCameraFor(codigo){
+// Deja el modal listo para el artículo (sin decidir de dónde sale la imagen).
+function prepararCam(codigo){
   const a = articulosCache[codigo];
-  if (!a) return;
+  if (!a) return null;
 
   // solo el campo Foto: Img se ignora como fuente para generar la descripción
   camState = { codigo, nombre: a.Nombre || '', previewUrl: '', base64: '', fotoUrl: String(a.Foto || '').trim() };
@@ -1120,12 +1197,27 @@ function openCameraFor(codigo){
   updateDescCount();
   setCamMode('capture');
   $('cam').classList.add('active');
+  return a;
+}
+
+// Camino "foto nueva": abre el modal y enciende la cámara.
+function openCameraFor(codigo){
+  if (!prepararCam(codigo)) return;
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     $('photoFile').click();   // sin API de cámara → selector de archivos
     return;
   }
   startCamStream();
+}
+
+// Camino "foto guardada" (botón de la tabla): mismo modal, pero sin encender la cámara.
+// Si la descarga falla (típicamente CORS), cae a la cámara para no dejar el modal muerto.
+async function generarDesdeFotoGuardada(codigo){
+  if (!prepararCam(codigo)) return;
+  if (!camState.fotoUrl){ toast('Este artículo no tiene foto guardada', 'err'); openCameraFor(codigo); return; }
+  const ok = await usarFotoDelArticulo();
+  if (!ok && $('cam').classList.contains('active')) startCamStream();
 }
 
 async function startCamStream(){
@@ -1191,9 +1283,10 @@ function captureCamera(){
 
 // Usa la imagen ya guardada del artículo (campo Foto/Img) como input de Gemini,
 // en lugar de sacar una foto nueva. Descarga la URL y la trata como una captura más.
+// Devuelve true si llegó a procesar la imagen (quien llame decide el plan B).
 async function usarFotoDelArticulo(){
   const url = camState.fotoUrl;
-  if (!url) return;
+  if (!url) return false;
   const btn = $('camUseFoto');
   btn.disabled = true;
   try {
@@ -1211,10 +1304,12 @@ async function usarFotoDelArticulo(){
     if (!blob.size || !/^image\//.test(blob.type || 'image/')) throw new Error('El archivo no es una imagen');
     hideBlock();
     await procesarYGenerar(blob);
+    return true;
   } catch (err){
     console.error('Foto del artículo:', err);
     hideBlock();
     toast(err.message || 'No se pudo usar la foto del artículo', 'err');
+    return false;
   } finally {
     btn.disabled = false;
   }
@@ -1224,7 +1319,7 @@ async function usarFotoDelArticulo(){
 async function procesarYGenerar(rawFile){
   try {
     showBlock('Procesando foto…');
-    const { dataUrl, base64 } = await resizeForGemini(rawFile, 1024);
+    const { dataUrl, base64 } = await resizeForGemini(rawFile);
     camState.base64 = base64;
     if (camState.previewUrl){ try { URL.revokeObjectURL(camState.previewUrl); } catch(_){} }
     camState.previewUrl = dataUrl;
@@ -1524,7 +1619,8 @@ function saveKeyModal(){
   }
   const reintentar = pendienteReintentoGemini;
   setGeminiKey(k);
-  setCachedModel('');   // key nueva → re-descubrir el modelo disponible
+  setCachedModel(''); setCachedThink('');   // key nueva → re-descubrir modelo y config soportados
+  geminiCooldownHasta = 0;                  // la cuota es por proyecto: con otra key se reintenta ya
   refreshKeyBtn();
   closeKeyModal();
   toast('API key guardada', 'ok');
@@ -1534,7 +1630,7 @@ function saveKeyModal(){
 
 function borrarKeyModal(){
   clearGeminiKey();
-  setCachedModel('');
+  setCachedModel(''); setCachedThink('');
   refreshKeyBtn();
   closeKeyModal();
   toast('API key eliminada', 'ok');
@@ -1724,12 +1820,14 @@ $('filterBtn').addEventListener('click', () => {
 });
 
 // Click en la celda de descripción → abrir el modal para leerla/editarla completa.
-// Click en el resto de la fila (o en el botón) → abrir la cámara para regenerarla.
+// Click en el botón "Foto" → generar con la imagen ya guardada, sin pasar por la cámara.
+// Click en el resto de la fila (o en el botón de cámara) → sacar una foto nueva.
 $('artTbody').addEventListener('click', e => {
   const tr = e.target.closest('tr');
   if (!tr) return;
   if (e.target.closest('td.desccol')){ openDescModal(tr.dataset.codigo); return; }
   if (e.target.closest('td.medcol')){ openDimModal(tr.dataset.codigo); return; }
+  if (e.target.closest('.rowbtn.usefoto')){ generarDesdeFotoGuardada(tr.dataset.codigo); return; }
   openCameraFor(tr.dataset.codigo);
 });
 
@@ -1777,14 +1875,6 @@ $('photoFile').addEventListener('change', e => {
   if (file) procesarYGenerar(file);
 });
 $('descArea').addEventListener('input', updateDescCount);
-
-// Selector de modelo (topbar): guarda la elección; '' = Auto.
-$('modelSel').value = getManualModel();
-$('modelSel').addEventListener('change', e => {
-  const m = e.target.value;
-  setManualModel(m);
-  toast(m ? 'Modelo: ' + e.target.selectedOptions[0].text : 'Modelo automático', 'ok');
-});
 
 // Modal API key
 $('keyBtn').addEventListener('click', openKeyModal);
