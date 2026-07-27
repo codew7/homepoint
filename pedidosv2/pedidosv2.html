@@ -752,22 +752,32 @@
       letter-spacing: .3px;
     }
 
-    /* Quantity controls */
+    /* Quantity controls
+       Arranca colapsado (solo el numero) y se despliega con un tap sobre el, para
+       que un roce al scrollear no cambie cantidades. Los botones se ocultan con
+       opacity + pointer-events, NUNCA con display:none: el control tiene que
+       conservar su ancho al expandirse, si no el checkbox vecino se corre bajo el
+       dedo justo en el momento de abrirlo. */
     .qty-control {
       display: flex;
       align-items: center;
       gap: 0;
       flex-shrink: 0;
-      background: var(--bg);
+      background: transparent;
       border-radius: 10px;
-      border: 1px solid var(--border);
+      border: 1px solid transparent;
       overflow: hidden;
+      transition: background .18s var(--ease-out), border-color .18s var(--ease-out);
+    }
+    .qty-control.qty-activo {
+      background: var(--bg);
+      border-color: var(--border);
     }
     .qty-btn {
       background: transparent;
       border: none;
-      width: 30px;
-      height: 32px;
+      width: 34px;
+      height: 42px;
       font-size: 9px;
       cursor: pointer;
       display: flex;
@@ -776,7 +786,10 @@
       color: var(--text-secondary);
       transition: all .15s var(--ease-out);
       user-select: none;
+      opacity: 0;
+      pointer-events: none;
     }
+    .qty-control.qty-activo .qty-btn { opacity: 1; pointer-events: auto; }
     .qty-btn:hover { background: var(--border); color: var(--text); }
     .qty-btn:active { background: var(--accent-soft); color: var(--accent); transform: scale(.9); }
     .qty-value {
@@ -786,10 +799,20 @@
       color: var(--text);
       min-width: 28px;
       text-align: center;
-      border-left: 1px solid var(--border);
-      border-right: 1px solid var(--border);
-      height: 32px;
-      line-height: 32px;
+      border-left: 1px solid transparent;
+      border-right: 1px solid transparent;
+      height: 42px;
+      line-height: 42px;
+      cursor: pointer;
+      user-select: none;
+      /* pista de que es tocable mientras esta colapsado */
+      box-shadow: inset 0 -1px 0 var(--border);
+      transition: box-shadow .18s var(--ease-out);
+    }
+    .qty-control.qty-activo .qty-value {
+      border-left-color: var(--border);
+      border-right-color: var(--border);
+      box-shadow: none;
     }
 
     /* Custom checkbox */
@@ -2737,7 +2760,6 @@
     // Estado Pedido View
     const admin = true;
     let sheetValorMap = {};
-    let sheetCategoryMap = {};
     window.sheetStockMap = window.sheetStockMap || {};
     let mapImg = {};
     let aliasHistorial = [];
@@ -2837,7 +2859,6 @@
           });
 
           // Datos para Pedido View
-          const categoria = (row[0] || '').trim();
           const valorURaw = row[6] || '';
           const valorCRaw = row[7] || '';
           let valorULimpio = 0;
@@ -2845,7 +2866,6 @@
           let valorCLimpio = 0;
           if (valorCRaw) valorCLimpio = parseFloat(valorCRaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0;
           sheetValorMap[codigo] = { valorU: valorULimpio, valorC: valorCLimpio };
-          if (categoria) sheetCategoryMap[codigo] = categoria;
           if (stockRaw !== '') window.sheetStockMap[codigo] = parseInt(stockRaw, 10) || 0;
           if (nombre) mapImg[nombre] = imgPartes;
         });
@@ -2965,8 +2985,6 @@
       document.getElementById('statusBar').className = 'status-bar';
       document.getElementById('statusBar').style.display = 'none';
       document.getElementById('footerControls').style.display = 'none';
-      const plp = document.getElementById('printListaPedido');
-      if (plp) plp.style.display = 'none';
       despachoYaEjecutado = false;
       window.cachedValues = {};
       document.getElementById('mainContent').innerHTML =
@@ -3110,9 +3128,6 @@
         pedidoInput.value = nombreCliente;
         despachoYaEjecutado = false;
         window.cachedValues = {};
-
-        const plp = document.getElementById('printListaPedido');
-        if (plp) plp.style.display = admin ? 'block' : 'none';
 
         footer.style.display = isBlocked ? 'none' : 'block';
         actualizarValoresItems();
@@ -3374,10 +3389,11 @@
 
           // Cantidad
           if (!isBlocked) {
-            groupHtml += '<div class="qty-control">' +
-              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)">\u25BC</button>' +
-              '<span class="qty-value" id="pv-qty-' + idx + '">' + (it.cantidad || 1) + '</span>' +
-              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)">\u25B2</button>' +
+            groupHtml += '<div class="qty-control" data-qty-idx="' + idx + '">' +
+              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)" tabindex="-1">\u25BC</button>' +
+              '<span class="qty-value" id="pv-qty-' + idx + '" role="button" title="Tocar para editar"' +
+              ' onclick="activarQty(' + idx + ')">' + (it.cantidad || 1) + '</span>' +
+              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)" tabindex="-1">\u25B2</button>' +
               '</div>';
           } else {
             groupHtml += '<span class="qty-static">' + (it.cantidad || 1) + '</span>';
@@ -3464,6 +3480,7 @@
       html += '</div>';
 
       mainContent.innerHTML = '<div class="pv-content">' + html + '</div>';
+      colapsarQty();  // el DOM anterior se descarta: resetear indice y timer
       actualizarProgreso();
 
       // Wire up financial event listeners
@@ -3473,6 +3490,71 @@
     // ==========================================
     // INTERACTIVIDAD DE ITEMS
     // ==========================================
+
+    // --- Guarda contra toques accidentales -------------------------------
+    // En tablet el gesto para frenar el scroll por inercia es un toque, y en
+    // Android ese toque igual dispara click: si cae sobre un check o un +/- el
+    // cambio se guarda en Firebase y se sincroniza a todos los dispositivos.
+    // Se descarta el click si el dedo se desplazo mientras estaba apoyado o si
+    // la lista scrolleo hace muy poco.
+    const TOQUE_SLOP = 12;          // px tolerados entre pointerdown y click
+    const TOQUE_POST_SCROLL = 300;  // ms de gracia tras el ultimo scroll
+    const GUARDA_SELECTOR = '.item-check, .qty-btn, .item-delete';
+    let toqueX = 0, toqueY = 0, ultimoScrollTs = 0;
+
+    // El contenedor sobrevive a los re-render (solo se reemplaza su innerHTML),
+    // asi que los listeners se instalan una sola vez.
+    const listaItemsEl = document.getElementById('mainContent');
+
+    listaItemsEl.addEventListener('pointerdown', (e) => {
+      toqueX = e.clientX; toqueY = e.clientY;
+    }, { passive: true, capture: true });
+
+    listaItemsEl.addEventListener('scroll', () => { ultimoScrollTs = Date.now(); }, { passive: true });
+
+    listaItemsEl.addEventListener('click', (e) => {
+      if (e.detail === 0) return;  // click sintetico por teclado: llega sin coordenadas
+      if (!e.target.closest(GUARDA_SELECTOR)) return;
+      const movido = Math.hypot(e.clientX - toqueX, e.clientY - toqueY) > TOQUE_SLOP;
+      const scrollReciente = Date.now() - ultimoScrollTs < TOQUE_POST_SCROLL;
+      if (!movido && !scrollReciente) return;
+      // El checkbox usa onchange: cancelar la accion por defecto evita el toggle
+      // y con el el change. Los +/- y la X usan onclick inline sobre el propio
+      // target, asi que solo se frenan cortando la propagacion desde la captura.
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+
+    // --- Stepper de cantidad bajo demanda --------------------------------
+    // Colapsado por defecto; un tap sobre el numero lo despliega para esa card.
+    let qtyActivoIdx = -1, qtyActivoTimer = null;
+    const QTY_AUTO_COLAPSO = 5000;
+
+    function colapsarQty() {
+      clearTimeout(qtyActivoTimer);
+      qtyActivoTimer = null;
+      qtyActivoIdx = -1;
+      document.querySelectorAll('.qty-control.qty-activo').forEach(el => el.classList.remove('qty-activo'));
+    }
+
+    function reiniciarTimerQty() {
+      clearTimeout(qtyActivoTimer);
+      qtyActivoTimer = setTimeout(colapsarQty, QTY_AUTO_COLAPSO);
+    }
+
+    function activarQty(idx) {
+      if (qtyActivoIdx === idx) { colapsarQty(); return; }  // segundo tap cierra
+      colapsarQty();
+      const ctrl = document.querySelector('.qty-control[data-qty-idx="' + idx + '"]');
+      if (!ctrl) return;
+      ctrl.classList.add('qty-activo');
+      qtyActivoIdx = idx;
+      reiniciarTimerQty();
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.qty-control')) colapsarQty();
+    });
 
     function actualizarContador() {
       const counter = document.querySelector('.items-counter');
@@ -3524,12 +3606,14 @@
       }
       actualizarContador();
       actualizarCalculosPV();
+      reiniciarTimerQty();  // ajustes sucesivos no deben cerrar el stepper
       programarActualizacion('pedidos/' + pedidoId, { items: pedidoActual.items });
     }
 
     // Toggle checkbox empaquetado
     function toggleCheck(idx, checked) {
       if (!pedidoActual || !pedidoActual.items[idx]) return;
+      colapsarQty();  // la card migra de grupo: no dejar el stepper abierto
       const card = document.querySelector('.item-card[data-idx="' + idx + '"]');
 
       // Actualizar estado local
@@ -5669,48 +5753,6 @@
         msg = pvBuildCotizacionTexto();
       }
       window.open('https://api.whatsapp.com/send/?phone=' + tel + '&text=' + encodeURIComponent(msg), '_blank');
-    }
-
-    // ==========================================
-    // PEDIDO VIEW: Imprimir lista pedido
-    // ==========================================
-    // Extend existing print menu
-    document.getElementById('printMenu').insertAdjacentHTML('beforeend',
-      '<div class="print-menu-item" id="printListaPedido" style="display:none">\u{1F4CB} Lista Pedido</div>'
-    );
-    document.getElementById('printListaPedido').addEventListener('click', () => {
-      document.getElementById('printMenu').classList.remove('active');
-      pvImprimirListaPedido();
-    });
-
-    function pvImprimirListaPedido() {
-      if (!pedidoActual) return;
-      const cliente = pedidoActual.cliente || {};
-      const itemsOrdenados = [...pedidoActual.items].sort((a, b) => {
-        const catA = (a.codigo && sheetCategoryMap[a.codigo]) || 'ZZZ';
-        const catB = (b.codigo && sheetCategoryMap[b.codigo]) || 'ZZZ';
-        return catA.localeCompare(catB);
-      });
-      const totalUnidades = itemsOrdenados.reduce((s, it) => s + (it.cantidad || 0), 0);
-      let tel = (cliente.telefono || '').replace(/[^\d]/g, '');
-      if (tel.startsWith('0')) tel = tel.substring(1);
-      if (!tel.startsWith('54')) tel = '54' + tel;
-      const qrWA = cliente.telefono ? 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent('https://api.whatsapp.com/send/?phone=' + tel) : '';
-      const qrPedido = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent('https://www.home-point.com.ar/pedidos.html?id=' + pedidoId);
-
-      let h = '<html><head><title>Lista Pedido</title><style>body{font-family:Arial,sans-serif;padding:30px}table{border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #bbb;padding:4px 15px;font-size:.9em;text-align:left;white-space:nowrap}th{background:#4CAF50;color:#fff}.cant,.check{text-align:center}.info{font-size:1.25em;display:inline-block;width:calc(100% - 120px)}.qr-container{position:absolute;top:0;right:0;width:100px;height:100px}.qr-container img{width:100px}.header-container{position:relative;margin-bottom:20px}.total-unidades{position:absolute;top:0;right:0;font-size:1.1em;font-weight:bold;color:#4CAF50}.table-container{position:relative}.qr-container-table{position:absolute;top:50px;right:0;width:100px}@media print{button{display:none!important}}</style></head><body>';
-      h += '<div class="header-container"><div class="info"><b>Nombre:</b> ' + escapeHtml(cliente.nombre || '') + '<br><b>Direccion:</b> ' + escapeHtml(cliente.direccion || '') + ' - ' + escapeHtml(cliente.localidad || '') + '<br><b>Provincia:</b> ' + escapeHtml(cliente.provincia || '') + '<br><b>Telefono:</b> ' + escapeHtml(cliente.telefono || '') + '<br><b>DNI:</b> ' + escapeHtml(cliente.dni || '') + '<br><b>Envio:</b> ' + escapeHtml(pedidoActual.tipoEntrega || '') + '<br><br><b>REMITENTE:</b><br>Javier Romero Perez / Tel. 011 2189-1006<br>Sargento Cabral 1945, Florida Oeste, Buenos Aires</div>';
-      if (qrWA) h += '<div class="qr-container"><img src="' + qrWA + '"></div>';
-      h += '</div><div class="table-container"><div class="total-unidades">Total Unidades: ' + totalUnidades + '</div><div class="qr-container-table"><img src="' + qrPedido + '"></div><table><tr><th>Articulo</th><th class="cant">Cant.</th><th class="check"></th></tr>';
-      itemsOrdenados.forEach(it => {
-        const stk = window.sheetStockMap[it.codigo];
-        const cls = (stk !== null && stk !== undefined && stk < 10) ? ' style="background-color:#fff3cd"' : '';
-        h += '<tr' + cls + '><td>' + escapeHtml(it.nombre) + '</td><td class="cant">' + (it.cantidad || 0) + '</td><td><input type="checkbox" style="width:22px;height:22px"></td></tr>';
-      });
-      h += '</table></div><script>window.onload=function(){window.print()}<\/script></body></html>';
-      const w = window.open('', '_blank');
-      w.document.write(h);
-      w.document.close();
     }
 
     // ==========================================
