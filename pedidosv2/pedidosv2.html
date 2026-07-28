@@ -1684,6 +1684,51 @@
       font-weight: 500;
       font-size: 13px;
     }
+
+    /* Aviso de desambiguacion: un codigo de barras que pertenece a varios articulos.
+       Va scopeado a #articuloModal porque se pinta dentro de .add-item-list, que
+       tambien usa #addItemModal. */
+    #articuloModal .articulo-multi {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--accent-soft);
+      border-bottom: 1px solid var(--border-light);
+    }
+    #articuloModal .articulo-multi-tx {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    #articuloModal .articulo-multi-code {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      word-break: break-all;
+    }
+    #articuloModal .articulo-multi-cancel {
+      flex-shrink: 0;
+      padding: 7px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .15s var(--ease-out);
+    }
+    #articuloModal .articulo-multi-cancel:active { transform: scale(.95); }
     .articulo-footer {
       display: flex;
       gap: 8px;
@@ -2748,6 +2793,9 @@
     let pedidoId = null;
     let sheetsData = {};       // { codigo: { imagen, nombre, codigoBarras } }
     let sheetsAllItems = [];   // Lista completa para agregar articulos
+    // Indice inverso codigo de barras -> [codigos de producto]. Un mismo codigo de
+    // barras puede pertenecer a mas de un articulo, por eso el valor es un array.
+    let articuloBarcodeIndex = {};
     let sheetsLoaded = false;
     let isBlocked = false;
     let deleteIdx = -1;
@@ -2835,6 +2883,7 @@
 
         // Reiniciar lista para evitar duplicados al recargar (force=true)
         sheetsAllItems = [];
+        articuloBarcodeIndex = {};
 
         rows.forEach(row => {
           const codigo = (row[2] || '').trim();
@@ -2856,6 +2905,15 @@
             imagen: imgPartes[0] || '',
             imagenAlt: imgPartes[3] || '',
             codigoBarras: sheetsData[codigo].codigoBarras
+          });
+
+          // Indice inverso para el escaner: el mismo codigo de barras puede
+          // aparecer en varios articulos, por eso se acumulan todos.
+          sheetsData[codigo].codigoBarras.forEach(b => {
+            const k = articuloNormBarcode(b);
+            if (!k) return;
+            if (!articuloBarcodeIndex[k]) articuloBarcodeIndex[k] = [];
+            if (!articuloBarcodeIndex[k].includes(codigo)) articuloBarcodeIndex[k].push(codigo);
           });
 
           // Datos para Pedido View
@@ -4344,6 +4402,7 @@
     let articuloActual = null;        // { codigo, nombre, imagen }
     let articuloResultados = [];      // [{ id, nombre, status, cantidad, yaListo, timestamp, sel }]
     let articuloUltimoScan = { texto: '', ts: 0 };
+    let articuloCandidatos = null;    // { codigo, codigos[] } mientras se desambigua un scan
 
     // --- Configuracion del escaner de codigos de barras (mismo criterio que Articulos/articulos.html) ---
 
@@ -4395,6 +4454,22 @@
       }
     }
 
+    // Normaliza para comparar: el Sheet trae espacios sueltos y los alfanumericos
+    // (CODE_39 / CODABAR) pueden venir en distinto case que el catalogo.
+    function articuloNormBarcode(v) { return String(v || '').trim().toUpperCase(); }
+
+    // Devuelve TODOS los codigos de producto que matchean la lectura. Mismo criterio
+    // que antes (primero codigo de barras exacto, y si no hay, codigo de producto),
+    // pero sin quedarse con el primero: un codigo de barras puede estar repetido en
+    // varios articulos y el usuario tiene que poder elegir.
+    function articuloBuscarCandidatos(texto) {
+      const k = articuloNormBarcode(texto);
+      if (!k) return [];
+      const porBarras = (articuloBarcodeIndex[k] || []).filter(c => sheetsData[c]);
+      if (porBarras.length) return porBarras;
+      return Object.keys(sheetsData).filter(c => articuloNormBarcode(c) === k);
+    }
+
     // Conmuta entre paso 1 (buscar articulo) y paso 2 (pedidos que lo contienen).
     // El visor de camara no participa: queda visible en ambos pasos.
     function articuloMostrarPaso(n) {
@@ -4410,6 +4485,7 @@
       articuloModal.classList.add('active');
       articuloActual = null;
       articuloResultados = [];
+      articuloCandidatos = null;
       articuloMostrarPaso(1);
       articuloSearch.value = '';
       articuloList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando catalogo...</div>';
@@ -4549,30 +4625,46 @@
       articuloUltimoScan = { texto, ts: ahora };
       if (navigator.vibrate) navigator.vibrate(60);
 
-      // 4) Confirmado: match exacto contra codigo de barras del catalogo y, si no, contra codigo de producto
-      let codigo = null;
-      for (const c in sheetsData) {
-        if (sheetsData[c].codigoBarras && sheetsData[c].codigoBarras.includes(texto)) { codigo = c; break; }
-      }
-      if (!codigo) {
-        const upper = texto.toUpperCase();
-        for (const c in sheetsData) {
-          if (c.toUpperCase() === upper) { codigo = c; break; }
-        }
-      }
-      if (!codigo) {
+      // 4) Confirmado: puede haber mas de un articulo con el mismo codigo de barras.
+      const candidatos = articuloBuscarCandidatos(texto);
+      if (candidatos.length === 0) {
         showToast('Codigo no encontrado en el catalogo');
         return;
       }
 
+      // Se pausa tambien en el caso multiple: si el decoder siguiera activo, pasados
+      // los 2500 ms del dedupe volveria a repintar la lista justo cuando el usuario
+      // esta por tocar un candidato.
       articuloPausarScanner();
-      articuloSeleccionar(codigo);
+      if (candidatos.length === 1) {
+        articuloCandidatos = null;
+        articuloSeleccionar(candidatos[0]);
+        return;
+      }
+      articuloRenderCandidatos(texto, candidatos);
     }
 
     // --- Paso 1: busqueda manual (mismo patron que renderAddItemList) ---
     articuloSearch.addEventListener('input', () => {
+      // Tipear cancela la desambiguacion en curso y devuelve la camara a decodificar.
+      if (articuloCandidatos) {
+        articuloCandidatos = null;
+        articuloReanudarScanner();
+      }
       articuloRenderLista(articuloSearch.value.trim().toLowerCase());
     });
+
+    // Fila de articulo del paso 1: la comparten la lista del catalogo y la de candidatos.
+    function articuloOptionHtml(it) {
+      const src = it.imagen || it.imagenAlt || '';
+      const imgHtml = src
+        ? '<img src="' + escapeHtml(src) + '" onerror="imgFallback(this, \'\', \'add-item-img-ph\')" loading="lazy">'
+        : '<div class="add-item-img-ph">&#128247;</div>';
+      return '<div class="add-item-option" data-codigo="' + escapeHtml(it.codigo) + '">' +
+        imgHtml +
+        '<div><div class="opt-name">' + escapeHtml(it.nombre) + '</div><div class="opt-code">' + escapeHtml(it.codigo) + '</div></div>' +
+        '</div>';
+    }
 
     function articuloRenderLista(filter) {
       let filtered = sheetsAllItems;
@@ -4584,24 +4676,47 @@
         );
       }
       const limited = filtered.slice(0, 50);
-      articuloList.innerHTML = limited.map(it => {
-        const src = it.imagen || it.imagenAlt || '';
-        const imgHtml = src
-          ? '<img src="' + escapeHtml(src) + '" onerror="imgFallback(this, \'\', \'add-item-img-ph\')" loading="lazy">'
-          : '<div class="add-item-img-ph">&#128247;</div>';
-        return '<div class="add-item-option" data-codigo="' + escapeHtml(it.codigo) + '">' +
-          imgHtml +
-          '<div><div class="opt-name">' + escapeHtml(it.nombre) + '</div><div class="opt-code">' + escapeHtml(it.codigo) + '</div></div>' +
-          '</div>';
-      }).join('');
+      articuloList.innerHTML = limited.map(articuloOptionHtml).join('');
       if (limited.length === 0) {
         articuloList.innerHTML = '<div class="articulo-empty">Sin resultados</div>';
       }
     }
 
+    // Un codigo escaneado que pertenece a varios articulos: se listan en el propio
+    // paso 1 (con el visor arriba) para que el usuario elija cual es.
+    function articuloRenderCandidatos(codigoEscaneado, codigos) {
+      articuloCandidatos = { codigo: codigoEscaneado, codigos };
+      articuloMostrarPaso(1);
+      const filas = codigos.map(c => {
+        const info = sheetsData[c] || {};
+        return articuloOptionHtml({
+          codigo: c,
+          nombre: info.nombre || c,
+          imagen: info.imagen,
+          imagenAlt: info.imagenAlt
+        });
+      }).join('');
+      articuloList.innerHTML =
+        '<div class="articulo-multi">' +
+          '<div class="articulo-multi-tx">' + codigos.length + ' articulos con este codigo' +
+            '<span class="articulo-multi-code">' + escapeHtml(codigoEscaneado) + '</span></div>' +
+          '<button type="button" class="articulo-multi-cancel" data-multi-cancel>Cancelar</button>' +
+        '</div>' + filas;
+      articuloList.scrollTop = 0;
+    }
+
+    // Vuelve al catalogo normal y reenciende la decodificacion.
+    function articuloSalirCandidatos() {
+      articuloCandidatos = null;
+      articuloRenderLista(articuloSearch.value.trim().toLowerCase());
+      articuloReanudarScanner();
+    }
+
     articuloList.addEventListener('click', (e) => {
+      if (e.target.closest('[data-multi-cancel]')) { articuloSalirCandidatos(); return; }
       const option = e.target.closest('.add-item-option');
-      if (!option) return;
+      if (!option) return;   // clicks sobre el aviso no seleccionan nada
+      articuloCandidatos = null;
       articuloPausarScanner();
       articuloSeleccionar(option.dataset.codigo);
     });
@@ -4719,6 +4834,7 @@
     function articuloVolverAPaso1() {
       articuloActual = null;
       articuloResultados = [];
+      articuloCandidatos = null;
       articuloMostrarPaso(1);
       articuloSearch.value = '';
       articuloRenderLista('');
