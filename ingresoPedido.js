@@ -872,9 +872,14 @@ function getTipoCliente() {
   // y los artículos sin código de barras se hallan por nombre/código.
   // Cuando es true (desbloqueado con contraseña): búsqueda manual completa por nombre.
   let busquedaManualHabilitada = false;
-  // Referencia asignada por el IIFE del modal de contraseña, para poder desactivar
-  // la búsqueda manual desde otras partes (se desactiva tras agregar cada artículo).
+  // Modo Whatsapp: la búsqueda manual queda habilitada de forma indefinida (no se
+  // desactiva tras agregar cada artículo). Se desbloquea con la contraseña del modal.
+  let busquedaManualPersistente = false;
+  const WHATSAPP_MODE_KEY = 'hpModoWhatsapp';
+  // Referencias asignadas por el IIFE del modal de contraseña, para poder activar o
+  // desactivar la búsqueda manual desde otras partes.
   let desactivarBusquedaManual = null;
+  let activarBusquedaManual = null;
 
   function initializeSearchArticulos() {
     if (!searchInput || !searchResults) return;
@@ -1184,8 +1189,9 @@ function getTipoCliente() {
     debouncedCalculations();
 
     // La búsqueda manual es de un solo uso: se desactiva tras agregar cada artículo
-    // para evitar el abuso de esta función de emergencia.
-    if (busquedaManualHabilitada && typeof desactivarBusquedaManual === 'function') {
+    // para evitar el abuso de esta función de emergencia. En modo Whatsapp queda fija.
+    if (busquedaManualHabilitada && !busquedaManualPersistente &&
+        typeof desactivarBusquedaManual === 'function') {
       desactivarBusquedaManual();
     }
 
@@ -3306,6 +3312,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     
     if (window.desactivarModoAdmin) window.desactivarModoAdmin();
     if (window.contraerExtraCliente) window.contraerExtraCliente();
+
+    // El modo Whatsapp sobrevive al restablecimiento: reponer vendedor y búsqueda manual
+    if (busquedaManualPersistente) {
+      if (form.vendedor) form.vendedor.value = 'WhatsApp';
+      if (!busquedaManualHabilitada && typeof activarBusquedaManual === 'function') {
+        activarBusquedaManual();
+      }
+    }
+
     console.log('✅ Formulario restablecido correctamente');
   }
 
@@ -3318,17 +3333,28 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     });
   }
 
-  // === MODAL CONTRASEÑA ADMIN ===
+  // === MODAL CONTRASEÑA ADMIN / WHATSAPP ===
+  // Un mismo modal (#adminPassOverlay) atiende ambos accesos; `modoPass` decide
+  // qué contraseña se valida y qué se activa al confirmar.
   (function() {
-    const ADMIN_PASS = '47623212';
+    const ADMIN_PASS    = '47623212';
+    const WHATSAPP_PASS = '2381';
     const overlay = document.getElementById('adminPassOverlay');
     const input   = document.getElementById('adminPassInput');
     const errDiv  = document.getElementById('adminPassError');
+    const titulo  = document.getElementById('adminPassTitle');
     const btnConf = document.getElementById('adminPassConfirmBtn');
     const btnCanc = document.getElementById('adminPassCancelBtn');
     const adminBtn = document.getElementById('adminModeBtn');
+    const whatsappBtn = document.getElementById('whatsappModeBtn');
 
-    function abrirModal() {
+    let modoPass = 'admin';
+
+    function abrirModal(modo) {
+      modoPass = modo || 'admin';
+      if (titulo) {
+        titulo.textContent = modoPass === 'whatsapp' ? 'Modo WhatsApp' : 'Acceso Administrador';
+      }
       input.value = '';
       errDiv.style.display = 'none';
       overlay.style.display = 'flex';
@@ -3339,13 +3365,48 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       overlay.style.display = 'none';
     }
 
+    function activarModoAdmin() {
+      mostrarClientesAdmin = true;
+      cargarClientes();
+      if (form.nombre.value.trim() === 'n/a') form.nombre.value = '';
+      adminBtn.style.background = '#6c4eb6';
+      adminBtn.style.color = '#fff';
+    }
+
+    // persistir=false se usa al restaurar el modo desde sessionStorage tras una recarga
+    function activarModoWhatsapp(persistir) {
+      busquedaManualPersistente = true;
+      if (typeof activarBusquedaManual === 'function') activarBusquedaManual();
+      if (whatsappBtn) {
+        whatsappBtn.style.background = '#25D366';
+        whatsappBtn.style.color = '#fff';
+        whatsappBtn.title = 'Desactivar modo WhatsApp';
+      }
+      if (persistir !== false) {
+        try { sessionStorage.setItem(WHATSAPP_MODE_KEY, '1'); } catch (e) {}
+      }
+      // Preseleccionar el vendedor sólo si está vacío y no se está editando un pedido
+      if (!pedidoId && form.vendedor && !form.vendedor.value) form.vendedor.value = 'WhatsApp';
+    }
+
+    function desactivarModoWhatsapp() {
+      busquedaManualPersistente = false;
+      if (busquedaManualHabilitada && typeof desactivarBusquedaManual === 'function') {
+        desactivarBusquedaManual();
+      }
+      if (whatsappBtn) {
+        whatsappBtn.style.background = '';
+        whatsappBtn.style.color = '';
+        whatsappBtn.title = '';
+      }
+      try { sessionStorage.removeItem(WHATSAPP_MODE_KEY); } catch (e) {}
+    }
+
     function confirmar() {
-      if (input.value === ADMIN_PASS) {
-        mostrarClientesAdmin = true;
-        cargarClientes();
-        if (form.nombre.value.trim() === 'n/a') form.nombre.value = '';
-        adminBtn.style.background = '#6c4eb6';
-        adminBtn.style.color = '#fff';
+      const passEsperada = modoPass === 'whatsapp' ? WHATSAPP_PASS : ADMIN_PASS;
+      if (input.value === passEsperada) {
+        if (modoPass === 'whatsapp') activarModoWhatsapp(true);
+        else activarModoAdmin();
         cerrarModal();
       } else {
         errDiv.style.display = 'block';
@@ -3362,7 +3423,23 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       adminBtn.style.color = '';
     };
 
-    adminBtn.addEventListener('click', abrirModal);
+    // Expuesto para restaurar el modo tras una recarga (ver bloque al final del archivo)
+    window.restaurarModoWhatsapp = function() {
+      let guardado = null;
+      try { guardado = sessionStorage.getItem(WHATSAPP_MODE_KEY); } catch (e) {}
+      if (guardado === '1') activarModoWhatsapp(false);
+    };
+
+    adminBtn.addEventListener('click', function() { abrirModal('admin'); });
+
+    if (whatsappBtn) {
+      whatsappBtn.addEventListener('click', function() {
+        // Toggle: si el modo ya está activo se apaga sin pedir contraseña
+        if (busquedaManualPersistente) desactivarModoWhatsapp();
+        else abrirModal('whatsapp');
+      });
+    }
+
     btnConf.addEventListener('click', confirmar);
     btnCanc.addEventListener('click', cerrarModal);
 
@@ -3432,6 +3509,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     // Exponer al scope exterior para desactivar el modo manual tras agregar un artículo
     desactivarBusquedaManual = desactivarModoManual;
+    // Exponer el activador para el modo Whatsapp (búsqueda manual indefinida)
+    activarBusquedaManual = activarModoManual;
 
     function confirmar() {
       if (input.value === MANUAL_PASS) {
@@ -3448,6 +3527,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // Toggle: si ya está activo, se desactiva sin pedir contraseña
       if (busquedaManualHabilitada) {
         desactivarModoManual();
+      } else if (busquedaManualPersistente) {
+        // En modo Whatsapp el usuario ya se autenticó: puede reactivarla libremente
+        activarModoManual();
       } else {
         abrirModal();
       }
@@ -3465,5 +3547,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       else if (e.key === 'Escape') cerrarModal();
     });
   })();
+
+  // === RESTAURAR MODO WHATSAPP TRAS UNA RECARGA ===
+  // Debe ejecutarse después de ambos IIFEs: el de búsqueda manual asigna
+  // `activarBusquedaManual` y el del modal expone `restaurarModoWhatsapp`.
+  if (typeof window.restaurarModoWhatsapp === 'function') window.restaurarModoWhatsapp();
 
 });
