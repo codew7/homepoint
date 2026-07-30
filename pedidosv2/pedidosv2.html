@@ -3968,6 +3968,18 @@
       ph.innerHTML = '&#128247;';
       el.replaceWith(ph);
     }
+
+    // Igual que imgFallback pero sin placeholder: donde la miniatura no reserva
+    // espacio (cabecera del paso 2 de Buscar articulo) simplemente se oculta.
+    function imgFallbackOcultar(el, alt) {
+      if (alt && el.dataset.imgAlt !== '1') {
+        el.dataset.imgAlt = '1';
+        el.src = alt;
+        return;
+      }
+      el.onerror = null;
+      el.style.display = 'none';
+    }
     lightbox.addEventListener('click', () => {
       lightbox.classList.remove('active');
       lightboxImg.onerror = null;
@@ -4657,8 +4669,9 @@
     // Fila de articulo del paso 1: la comparten la lista del catalogo y la de candidatos.
     function articuloOptionHtml(it) {
       const src = it.imagen || it.imagenAlt || '';
+      const alt = (it.imagenAlt && it.imagenAlt !== src) ? it.imagenAlt : '';
       const imgHtml = src
-        ? '<img src="' + escapeHtml(src) + '" onerror="imgFallback(this, \'\', \'add-item-img-ph\')" loading="lazy">'
+        ? '<img src="' + escapeHtml(src) + '" onerror="imgFallback(this, \'' + escapeHtml(alt) + '\', \'add-item-img-ph\')" loading="lazy">'
         : '<div class="add-item-img-ph">&#128247;</div>';
       return '<div class="add-item-option" data-codigo="' + escapeHtml(it.codigo) + '">' +
         imgHtml +
@@ -4729,9 +4742,10 @@
         nombre: info.nombre || codigo,
         imagen: info.imagen || info.imagenAlt || ''
       };
+      const infoImgAlt = (info.imagenAlt && info.imagenAlt !== articuloActual.imagen) ? info.imagenAlt : '';
       articuloMostrarPaso(2);
       articuloItemInfo.innerHTML =
-        (articuloActual.imagen ? '<img src="' + escapeHtml(articuloActual.imagen) + '" onerror="this.style.display=\'none\'">' : '') +
+        (articuloActual.imagen ? '<img src="' + escapeHtml(articuloActual.imagen) + '" onerror="imgFallbackOcultar(this, \'' + escapeHtml(infoImgAlt) + '\')">' : '') +
         '<div style="min-width:0"><div class="opt-name">' + escapeHtml(articuloActual.nombre) + '</div>' +
         '<div class="opt-code">' + escapeHtml(codigo) + '</div></div>';
       articuloFooter.style.display = 'none';

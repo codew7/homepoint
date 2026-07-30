@@ -138,3 +138,14 @@ La columna L del Sheet admite varios códigos por artículo, y nada impide que d
 - **UI en el propio paso 1**, sin overlay nuevo: `articuloRenderCandidatos()` pinta en `#articuloList` un aviso `.articulo-multi` (sticky, con el código leído y un botón Cancelar) seguido de las filas. Reutiliza `articuloOptionHtml()` —extraído del `.map` de `articuloRenderLista`— así que elegir un candidato entra por la delegación de click que ya existía. **El CSS del aviso va scopeado a `#articuloModal`** porque `.add-item-list` se comparte con `#addItemModal`.
 - **Se pausa el escáner también en el caso múltiple.** Si el decoder siguiera activo, pasados los 2500 ms del dedupe volvería a repintar la lista justo cuando el dedo va a tocar un candidato. Sale del modo (y reanuda con `articuloReanudarScanner()`) el botón Cancelar y tipear en `#articuloSearch`; `articuloCandidatos` se limpia además al elegir, al volver del paso 2 y al abrir el modal.
 - Los casos de 1 y 0 candidatos quedaron idénticos (paso 2 directo / toast "Codigo no encontrado"), igual que los pasos 1-3 de `articuloOnScan` y toda la config del escáner.
+
+## Recent Changes (2026-07-30)
+
+### Fallback de imagen: 1er link → 4to link
+
+La columna B del Sheet trae hasta 4 URLs separadas por coma. `cargarSheets()` guarda `imagen` (`imgPartes[0]`) e `imagenAlt` (`imgPartes[3]`) en `sheetsData`/`sheetsAllItems`, y `mapImg[nombre]` conserva el array completo. Si el primer link falla (404, permiso, host caído), `imgFallback(el, alt, phClass)` reintenta con el cuarto y recién entonces reemplaza el `<img>` por el placeholder 📷; marca `el.dataset.imgAlt = '1'` para no entrar en bucle si el alternativo también falla. `openLightbox(url, alt)` hace lo mismo con un flag local.
+
+- Cubre las 4 listas con miniatura: items del pedido (`renderUnificado`), Agregar artículo (`renderAddItemList`), catálogo/candidatos de Buscar artículo (`articuloOptionHtml`) y la cabecera del paso 2 (`articuloSeleccionar`).
+- El paso 2 usa `imgFallbackOcultar()` en vez de `imgFallback()`: ahí la miniatura no reserva espacio, así que tras agotar los dos links se oculta en lugar de dejar un placeholder.
+- El `alt` se pasa vacío cuando coincide con el `src` (artículo con un solo link, o con el primero vacío y solo el cuarto cargado), para no reintentar la misma URL.
+- Las cards del pedido llaman `openLightbox(this.src)`: `this.src` ya es la URL que efectivamente cargó, con el fallback aplicado. `pvOpenLightbox(nombre)` sí resuelve contra `mapImg` y pasa ambos links.
