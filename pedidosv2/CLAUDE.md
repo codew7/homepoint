@@ -149,3 +149,7 @@ La columna B del Sheet trae hasta 4 URLs separadas por coma. `cargarSheets()` gu
 - El paso 2 usa `imgFallbackOcultar()` en vez de `imgFallback()`: ahí la miniatura no reserva espacio, así que tras agotar los dos links se oculta en lugar de dejar un placeholder.
 - El `alt` se pasa vacío cuando coincide con el `src` (artículo con un solo link, o con el primero vacío y solo el cuarto cargado), para no reintentar la misma URL.
 - Las cards del pedido llaman `openLightbox(this.src)`: `this.src` ya es la URL que efectivamente cargó, con el fallback aplicado. `pvOpenLightbox(nombre)` sí resuelve contra `mapImg` y pasa ambos links.
+
+### Barra de solo lectura según el motivo
+
+`#statusBar` aparece con `isBlocked` (status `CANCELADO` o `DESPACHADO/ENTREGADO`) y era roja en ambos casos. Ahora `claseStatusBar(status)` agrega el modificador `.entregado` para `DESPACHADO/ENTREGADO`, que la pinta con `--success-soft`/`--success`; `CANCELADO` sigue en rojo. La función centraliza los **tres** puntos que arman la barra (carga inicial y los dos listeners `on('value')`), que antes escribían el string de clases a mano — si se agrega un cuarto, debe usarla.
