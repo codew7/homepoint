@@ -566,8 +566,14 @@ function mostrarPagina(pagina, datos = productos) {
                 if (selectCategorias) {
                     const rect = selectCategorias.getBoundingClientRect();
                     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    // En escritorio el header queda fijo arriba: hay que descontar
+                    // su alto o el filtro aterriza escondido detrás. En móvil el
+                    // header no es fijo y offsetHeaderFijo() devuelve 0.
+                    const offsetHeader = typeof window.offsetHeaderFijo === 'function'
+                        ? window.offsetHeaderFijo()
+                        : 0;
                     window.scrollTo({
-                        top: rect.top + scrollTop - 20, // 20px de margen superior opcional
+                        top: rect.top + scrollTop - offsetHeader - 20, // 20px de margen superior
                         behavior: 'smooth'
                     });
                 }
@@ -1008,7 +1014,7 @@ function pedirTipoEntregaSiHaceFalta(onElegido) {
         onElegido();
         return;
     }
-    mostrarModalTipoEntrega(onElegido); // definida en mayorista.html
+    mostrarModalTipoEntrega(onElegido); // definida en catalogo.html
 }
 
 function agregarAlCarrito(nombre, precio, cantidad, codigo, categoria) {
@@ -1231,7 +1237,10 @@ function actualizarCarrito() {
     const cartList = document.getElementById('cart-list');
     const cartFloatBtn = document.getElementById('cartFloatBtn');
     const cartBadge = document.getElementById('cartBadge');
-    const tabbarBadge = document.getElementById('tabbarBadge');
+    // Puede haber más de uno: el del header en escritorio y el de la barra
+    // inferior en móvil (solo uno está visible por vez, pero ambos se mantienen
+    // al día para que no queden contadores desfasados al cambiar el ancho)
+    const badgesNav = document.querySelectorAll('.js-badge-carrito');
 
     cartList.innerHTML = '';
 
@@ -1295,13 +1304,13 @@ function actualizarCarrito() {
         cartBadge.textContent = totalUnidades;
     }
 
-    // Mismo contador en la barra de navegación inferior, que es la vía real de
-    // acceso al carrito (el botón flotante quedó oculto). Con el carrito vacío
-    // el globo desaparece en lugar de mostrar un 0.
-    if (tabbarBadge) {
-        tabbarBadge.textContent = totalUnidades;
-        tabbarBadge.style.display = totalUnidades > 0 ? 'flex' : 'none';
-    }
+    // Mismo contador en los accesos de navegación, que son la vía real al
+    // carrito (el botón flotante quedó oculto). Con el carrito vacío el globo
+    // desaparece en lugar de mostrar un 0.
+    badgesNav.forEach(badge => {
+        badge.textContent = totalUnidades;
+        badge.style.display = totalUnidades > 0 ? 'flex' : 'none';
+    });
 
     // Renderizar items con botón de eliminar
     carrito.forEach((item, index) => {

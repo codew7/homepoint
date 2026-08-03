@@ -45,7 +45,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
     <script src="config.js"></script>
-    <script src="mayorista.js" defer></script>
+    <script src="catalogo.js" defer></script>
     
     <style>
     /* ==========================================================================
@@ -287,8 +287,68 @@
         padding-left: 8px;
     }
 
-    /* Acciones a la derecha del header: selector de tema + menú hamburguesa */
+    /* Acciones a la derecha del header: navegación (solo escritorio) + selector
+       de tema + menú hamburguesa */
     .header-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+
+    /* Navegación dentro del header · en móvil no existe: ahí la misma función la
+       cumple la barra inferior (sección 21). Se muestra recién en ≥901px. */
+    .header-nav { display: none; }
+
+    .header-nav-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        height: 42px;
+        padding: 0 14px;
+        background: none;
+        border: 1px solid transparent;
+        border-radius: var(--radio-sm);
+        color: var(--tinta-700);
+        font-family: var(--ui);
+        font-size: .86rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background var(--t), color var(--t), border-color var(--t);
+    }
+
+    .header-nav-item:hover {
+        background: var(--superficie-2);
+        border-color: var(--borde);
+        color: var(--tinta-900);
+    }
+
+    .header-nav-item.is-activo {
+        background: var(--verde-050);
+        border-color: var(--verde-100);
+        color: var(--verde-800);
+        font-weight: 700;
+    }
+
+    .header-nav-item > i,
+    .header-nav-icono { font-size: 15px; color: var(--verde-600); }
+    .header-nav-item.is-activo > i,
+    .header-nav-item.is-activo .header-nav-icono { color: var(--verde-800); }
+
+    /* Ancla del globo del carrito y del punto de pedidos. El min-width reserva
+       el lugar que el globo ocupa al sobresalir: sin él, el número se monta
+       sobre la primera letra de la etiqueta. */
+    .header-nav-icono {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px;
+    }
+
+    .header-divisor {
+        width: 1px;
+        height: 26px;
+        flex: none;
+        background: var(--borde-fuerte);
+        display: none;   /* solo tiene sentido cuando hay navegación al lado */
+    }
 
     /* Menú hamburguesa */
     .hamburger-menu { position: relative; flex: none; }
@@ -2701,11 +2761,15 @@
 
     .tabbar-item.is-activo .tabbar-label { font-weight: 700; }
 
-    /* Mismo lenguaje que .cart-badge del botón flotante que reemplaza */
-    .tabbar-badge {
+    /* Globo del carrito y punto de pedidos · compartidos por la barra inferior
+       (móvil) y la navegación del header (escritorio): el JS los busca por las
+       clases .js-badge-carrito y .js-punto-pedido y actualiza todas las copias,
+       así nunca quedan dos contadores distintos. Mismo lenguaje visual que
+       .cart-badge del botón flotante al que reemplazan. */
+    .nav-badge {
         position: absolute;
         top: -7px;
-        left: 11px;
+        left: 9px;
         min-width: 18px;
         height: 18px;
         padding: 0 5px;
@@ -2723,10 +2787,10 @@
     }
 
     /* Aviso sin número: solo señala que hay un pedido guardado en este navegador */
-    .tabbar-punto {
+    .nav-punto {
         position: absolute;
         top: -3px;
-        left: 13px;
+        left: 11px;
         width: 8px;
         height: 8px;
         background: var(--verde-600);
@@ -2734,6 +2798,13 @@
         border-radius: 50%;
         display: none;
     }
+
+    /* Dentro del header el fondo del hover cambia, así que el borde del globo
+       lo acompaña para que no se vea un halo blanco sobre gris */
+    .header-nav-item:hover .nav-badge,
+    .header-nav-item:hover .nav-punto { border-color: var(--superficie-2); }
+    .header-nav-item.is-activo .nav-badge,
+    .header-nav-item.is-activo .nav-punto { border-color: var(--verde-050); }
 
     /* --- Paneles inferiores (categorías y último pedido) --- */
     .sheet-backdrop {
@@ -2954,41 +3025,81 @@
         animation: fadeIn .2s ease;
     }
 
-    /* --- Escritorio: la barra se vuelve una píldora centrada ---
-       El centrado va con left/right:0 + margin-inline:auto y NO con
-       translateX(-50%): los paneles entran con la animación slideInUp, que anima
-       transform, y un translateX en la misma propiedad se pierde mientras la
-       animación corre (el panel arrancaría corrido media pantalla a la derecha y
-       saltaría al lugar al terminar). Con márgenes automáticos, transform queda
-       libre para la animación. */
+    /* --- Escritorio (≥901px): las acciones viven en el header ---
+       La barra inferior desaparece y su lugar lo toma el grupo .header-nav, con
+       el header fijo arriba para que quede siempre a mano. Móvil no cambia en
+       nada: todo lo de acá está dentro de la media query. */
     @media (min-width: 901px) {
-        .tabbar {
-            left: 0;
-            right: 0;
-            bottom: 20px;
-            width: min(560px, calc(100% - 40px));
-            margin-inline: auto;
-            height: var(--tabbar-alto);
-            padding: 0 8px;
-            border: 1px solid var(--borde);
-            border-radius: var(--radio-full);
-            box-shadow: var(--sombra-3);
+        /* La barra inferior y el hueco que reservaba dejan de existir */
+        .tabbar { display: none; }
+        body { padding-bottom: 0; }
+
+        /* El carrito y WhatsApp vuelven a sus posiciones originales, ya que no
+           hay nada fijo abajo con lo que puedan chocar */
+        .cart-container { bottom: 22px; }
+        #whatsappFloatMenu { bottom: 28px; }
+
+        .header-nav { display: flex; align-items: center; gap: 2px; }
+        .header-divisor { display: block; }
+
+        /* Header fijo · sticky y no fixed: sigue ocupando su lugar en el flujo,
+           así no hace falta compensar con padding en el contenido de abajo.
+           z-index por debajo del panel del carrito (2001), de los paneles (2500)
+           y de los modales (3000), pero por encima del contenido. */
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 1800;
+            box-shadow: 0 6px 20px -16px rgba(17,24,39,.5);
         }
 
-        .tabbar-item { border-radius: var(--radio-full); }
-        .tabbar-item:hover { background: var(--superficie-2); }
-        .tabbar-label { font-size: .7rem; }
+        /* Más bajo que en reposo: un header fijo de 92px se come demasiada
+           pantalla en un notebook. El logo acompaña la reducción. */
+        .site-header-inner { min-height: 72px; padding: 12px 0; }
+        .brand img { width: 226px; }
+        .brand-tag { font-size: .68rem; letter-spacing: .15em; }
 
-        /* Los paneles acompañan a la píldora: centrados y por encima de ella */
+        /* En modo edición hay un aviso fijo arriba (lo inyecta mayorista.js con
+           position:fixed y top:0). El header se corre para no quedar debajo. */
+        body:has(#aviso-edicion-pedido) .site-header { top: 54px; }
+
+        /* Los paneles cuelgan del header, cerca de los botones que los abren, en
+           lugar de subir desde abajo. Entran con slideDown por el mismo motivo.
+           No se usa translate para posicionarlos: la animación ocupa transform
+           (ver el comentario del centrado más arriba). */
+        /* El tope exacto lo pone abrirSheet() con el alto real del header; este
+           valor es solo el punto de partida antes de que el JS lo ajuste. */
         .sheet {
-            bottom: calc(var(--tabbar-alto) + 32px);
-            width: min(520px, calc(100% - 40px));
-            margin-inline: auto;
+            top: 92px;
+            bottom: auto;
+            left: auto;
+            right: 20px;
+            width: min(400px, calc(100% - 40px));
+            max-height: min(70vh, 520px);
             border: 1px solid var(--borde);
             border-radius: var(--radio-lg);
         }
 
+        .sheet.active { animation: slideDown .24s ease-out; }
         .sheet-body { padding-bottom: 16px; }
+
+        /* El aviso del carrito vacío aparece junto al botón que lo provocó */
+        .tabbar-aviso {
+            bottom: auto;
+            left: auto;
+            right: 20px;
+            margin-inline: 0;
+        }
+
+        /* Acá los paneles se comportan como el desplegable del hamburguesa, y un
+           desplegable no atenúa la página. El fondo sigue existiendo para
+           capturar el click de cierre, pero invisible: con el velo oscuro el
+           header quedaría difuminado detrás de un panel que cuelga de él. */
+        .sheet-backdrop {
+            background: none;
+            backdrop-filter: none;
+            animation: none;
+        }
     }
 
     /* ---------- 22 · RESPONSIVE ---------- */
@@ -3365,6 +3476,41 @@
         </div>
 
         <div class="header-actions">
+            <!-- Las mismas cuatro acciones que en móvil viven en la barra
+                 inferior. No se duplica lógica: los handlers se enganchan por
+                 [data-accion], así que estos botones y los de la barra comparten
+                 el mismo código (ver el script del final). El CSS muestra unos u
+                 otros según el ancho. -->
+            <div class="header-nav" id="headerNav">
+                <button type="button" class="header-nav-item" data-accion="categorias" aria-haspopup="dialog" aria-expanded="false">
+                    <i class="fas fa-layer-group" aria-hidden="true"></i>
+                    <span>Categorías</span>
+                </button>
+
+                <button type="button" class="header-nav-item" data-accion="buscar">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <span>Buscar</span>
+                </button>
+
+                <button type="button" class="header-nav-item" data-accion="carrito">
+                    <span class="header-nav-icono">
+                        <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                        <span class="nav-badge js-badge-carrito">0</span>
+                    </span>
+                    <span>Carrito</span>
+                </button>
+
+                <button type="button" class="header-nav-item" data-accion="pedidos" aria-haspopup="dialog" aria-expanded="false">
+                    <span class="header-nav-icono">
+                        <i class="fas fa-receipt" aria-hidden="true"></i>
+                        <span class="nav-punto js-punto-pedido" aria-hidden="true"></span>
+                    </span>
+                    <span>Pedidos</span>
+                </button>
+            </div>
+
+            <span class="header-divisor" aria-hidden="true"></span>
+
             <button id="themeToggleBtn" class="hamburger-button" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro">
                 <i class="fas fa-moon" aria-hidden="true"></i>
             </button>
@@ -3585,28 +3731,28 @@
          abren un panel inferior; Buscar lleva el foco al campo de búsqueda y
          Carrito reutiliza toggleCart(). La lógica está en el script del final. -->
     <nav class="tabbar" id="tabbar" aria-label="Navegación del catálogo">
-        <button type="button" class="tabbar-item" id="tabCategorias" aria-haspopup="dialog" aria-expanded="false">
+        <button type="button" class="tabbar-item" data-accion="categorias" aria-haspopup="dialog" aria-expanded="false">
             <span class="tabbar-icono"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
             <span class="tabbar-label">Categorías</span>
         </button>
 
-        <button type="button" class="tabbar-item" id="tabBuscar">
+        <button type="button" class="tabbar-item" data-accion="buscar">
             <span class="tabbar-icono"><i class="fas fa-search" aria-hidden="true"></i></span>
             <span class="tabbar-label">Buscar</span>
         </button>
 
-        <button type="button" class="tabbar-item" id="tabCarrito">
+        <button type="button" class="tabbar-item" data-accion="carrito">
             <span class="tabbar-icono">
                 <i class="fas fa-shopping-cart" aria-hidden="true"></i>
-                <span class="tabbar-badge" id="tabbarBadge">0</span>
+                <span class="nav-badge js-badge-carrito">0</span>
             </span>
             <span class="tabbar-label">Carrito</span>
         </button>
 
-        <button type="button" class="tabbar-item" id="tabPedidos" aria-haspopup="dialog" aria-expanded="false">
+        <button type="button" class="tabbar-item" data-accion="pedidos" aria-haspopup="dialog" aria-expanded="false">
             <span class="tabbar-icono">
                 <i class="fas fa-receipt" aria-hidden="true"></i>
-                <span class="tabbar-punto" id="tabbarPuntoPedido" aria-hidden="true"></span>
+                <span class="nav-punto js-punto-pedido" aria-hidden="true"></span>
             </span>
             <span class="tabbar-label">Pedidos</span>
         </button>
@@ -4789,14 +4935,15 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Deja el ítem "Carrito" de la barra inferior iluminado mientras el panel está
-// abierto. Se llama desde todos los caminos que cambian cartExpanded (este
-// toggle, el cierre por click externo y el vaciado del carrito en
-// actualizarCarrito()), así el resaltado nunca queda pegado.
+// Deja iluminado el botón "Carrito" mientras el panel está abierto, tanto en el
+// header (escritorio) como en la barra inferior (móvil). Se llama desde todos los
+// caminos que cambian cartExpanded (este toggle, el cierre por click externo y el
+// vaciado del carrito en actualizarCarrito()), así el resaltado nunca queda pegado.
 function sincronizarTabCarrito() {
-    const tab = document.getElementById('tabCarrito');
-    if (!tab) return;
-    tab.classList.toggle('is-activo', typeof cartExpanded !== 'undefined' && cartExpanded);
+    const abierto = typeof cartExpanded !== 'undefined' && cartExpanded;
+    document.querySelectorAll('[data-accion="carrito"]').forEach(btn => {
+        btn.classList.toggle('is-activo', abierto);
+    });
 }
 window.sincronizarTabCarrito = sincronizarTabCarrito;
 
@@ -4852,18 +4999,44 @@ if (cartContainer) {
 // funciones de ese archivo (leerUltimoPedidoLocal, PEDIDOS_VERSION) se ejecuta
 // dentro de handlers o de DOMContentLoaded, nunca en el nivel superior.
 (function () {
-    const backdrop      = document.getElementById('sheetBackdrop');
-    const sheets        = [document.getElementById('sheetCategorias'), document.getElementById('sheetPedido')];
-    const tabCategorias = document.getElementById('tabCategorias');
-    const tabBuscar     = document.getElementById('tabBuscar');
-    const tabCarrito    = document.getElementById('tabCarrito');
-    const tabPedidos    = document.getElementById('tabPedidos');
+    const backdrop = document.getElementById('sheetBackdrop');
+    const sheets   = [document.getElementById('sheetCategorias'), document.getElementById('sheetPedido')];
 
-    // Qué tab se ilumina con cada panel abierto
-    const tabDeSheet = {
-        sheetCategorias: tabCategorias,
-        sheetPedido: tabPedidos
+    // Todos los disparadores de una acción, estén en el header (escritorio) o en
+    // la barra inferior (móvil). Ambos conjuntos comparten estos handlers.
+    function botonesDe(accion) {
+        return document.querySelectorAll('[data-accion="' + accion + '"]');
+    }
+
+    function marcarActivo(accion, activo) {
+        botonesDe(accion).forEach(btn => {
+            btn.classList.toggle('is-activo', activo);
+            if (btn.hasAttribute('aria-expanded')) {
+                btn.setAttribute('aria-expanded', activo ? 'true' : 'false');
+            }
+        });
+    }
+
+    // Qué acción se ilumina con cada panel abierto
+    const accionDeSheet = {
+        sheetCategorias: 'categorias',
+        sheetPedido: 'pedidos'
     };
+
+    // Cuánto tapa el header cuando está fijo, medido hasta su borde inferior.
+    // Sirve para dos cosas: descontarlo de los scrolls programáticos (si no, el
+    // destino aterriza escondido detrás) y apoyar los paneles justo debajo.
+    // Se consulta el position calculado y no el ancho de la ventana: en móvil el
+    // header no es sticky y devuelve 0, así que ahí nada cambia. Se mide el
+    // borde inferior y no el alto porque en modo edición el header baja 54px
+    // para dejar pasar el aviso fijo.
+    function offsetHeaderFijo() {
+        const header = document.querySelector('.site-header');
+        if (!header) return 0;
+        if (getComputedStyle(header).position !== 'sticky') return 0;
+        return Math.round(header.getBoundingClientRect().bottom);
+    }
+    window.offsetHeaderFijo = offsetHeaderFijo;
 
     function cerrarCarritoSiEstaAbierto() {
         // Vía toggleCart() y no tocando clases a mano: así cartExpanded queda
@@ -4876,11 +5049,7 @@ if (cartContainer) {
         sheets.forEach(sheet => {
             if (!sheet) return;
             sheet.classList.remove('active');
-            const tab = tabDeSheet[sheet.id];
-            if (tab) {
-                tab.classList.remove('is-activo');
-                tab.setAttribute('aria-expanded', 'false');
-            }
+            marcarActivo(accionDeSheet[sheet.id], false);
         });
         if (backdrop) backdrop.classList.remove('active');
     }
@@ -4892,16 +5061,18 @@ if (cartContainer) {
         const yaEstaba = sheet.classList.contains('active');
         cerrarSheets();
         cerrarCarritoSiEstaAbierto();
-        if (yaEstaba) return;   // segundo toque en el mismo tab: cierra
+        if (yaEstaba) return;   // segundo toque en el mismo botón: cierra
+
+        // En escritorio el panel cuelga del header, así que su tope se calcula
+        // con el alto real del header y no con un valor fijo: ese alto cambia con
+        // el largo del logo, con el breakpoint y con el aviso del modo edición.
+        // En móvil el panel va anclado abajo y el estilo inline se retira.
+        const tope = offsetHeaderFijo();
+        sheet.style.top = tope ? (tope + 8) + 'px' : '';
 
         sheet.classList.add('active');
         if (backdrop) backdrop.classList.add('active');
-
-        const tab = tabDeSheet[id];
-        if (tab) {
-            tab.classList.add('is-activo');
-            tab.setAttribute('aria-expanded', 'true');
-        }
+        marcarActivo(accionDeSheet[id], true);
     }
 
     if (backdrop) backdrop.addEventListener('click', cerrarSheets);
@@ -4912,6 +5083,18 @@ if (cartContainer) {
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') cerrarSheets();
+    });
+
+    // Al cruzar el breakpoint con un panel abierto, el panel cambia de anclaje
+    // (colgado del header en escritorio, apoyado abajo en móvil). Se recalcula el
+    // tope para que no quede el valor del otro modo: en móvil se retira el estilo
+    // inline y manda el bottom:0 del CSS.
+    window.addEventListener('resize', function () {
+        const abierto = sheets.find(s => s && s.classList.contains('active'));
+        if (!abierto) return;
+
+        const tope = offsetHeaderFijo();
+        abierto.style.top = tope ? (tope + 8) + 'px' : '';
     });
 
     // Aviso breve sobre la barra (se usa para el carrito vacío)
@@ -4926,6 +5109,9 @@ if (cartContainer) {
         aviso.className = 'tabbar-aviso';
         aviso.setAttribute('role', 'status');
         aviso.textContent = texto;
+        // Igual que los paneles: bajo el header en escritorio, sobre la barra en móvil
+        const tope = offsetHeaderFijo();
+        if (tope) aviso.style.top = (tope + 8) + 'px';
         document.body.appendChild(aviso);
 
         avisoTimer = setTimeout(() => aviso.remove(), 2200);
@@ -4981,17 +5167,17 @@ if (cartContainer) {
         });
     }
 
-    if (tabCategorias) {
-        tabCategorias.addEventListener('click', function (e) {
+    botonesDe('categorias').forEach(btn => {
+        btn.addEventListener('click', function (e) {
             e.stopPropagation();
             pintarCategorias();
             abrirSheet('sheetCategorias');
         });
-    }
+    });
 
     // --- Buscar ---
-    if (tabBuscar) {
-        tabBuscar.addEventListener('click', function (e) {
+    botonesDe('buscar').forEach(btn => {
+        btn.addEventListener('click', function (e) {
             e.stopPropagation();
             cerrarSheets();
             cerrarCarritoSiEstaAbierto();
@@ -4999,7 +5185,7 @@ if (cartContainer) {
             const controls = document.querySelector('.controls');
             const input = document.getElementById('buscar');
             if (controls) {
-                const y = controls.getBoundingClientRect().top + window.pageYOffset - 20;
+                const y = controls.getBoundingClientRect().top + window.pageYOffset - offsetHeaderFijo() - 16;
                 window.scrollTo({ top: y, behavior: 'smooth' });
             }
             // El foco va después del scroll: mostrarPagina() omite su propio
@@ -5007,11 +5193,11 @@ if (cartContainer) {
             // haría que el navegador reposicione la vista por su cuenta.
             if (input) setTimeout(() => input.focus(), 320);
         });
-    }
+    });
 
     // --- Carrito ---
-    if (tabCarrito) {
-        tabCarrito.addEventListener('click', function (e) {
+    botonesDe('carrito').forEach(btn => {
+        btn.addEventListener('click', function (e) {
             // Imprescindible: el listener global de cierre (más arriba) cierra el
             // carrito ante cualquier click fuera del panel. Sin esto, el mismo
             // click lo abriría y lo cerraría.
@@ -5023,9 +5209,9 @@ if (cartContainer) {
                 return;
             }
 
-            toggleCart();   // ya sincroniza el resaltado del tab
+            toggleCart();   // ya sincroniza el resaltado de los botones
         });
-    }
+    });
 
     // --- Pedidos ---
     function formatearMontoPedido(n) {
@@ -5113,8 +5299,8 @@ if (cartContainer) {
         cont.appendChild(otro);
     }
 
-    if (tabPedidos) {
-        tabPedidos.addEventListener('click', function (e) {
+    botonesDe('pedidos').forEach(btn => {
+        btn.addEventListener('click', function (e) {
             e.stopPropagation();
 
             const pedido = typeof leerUltimoPedidoLocal === 'function' ? leerUltimoPedidoLocal() : null;
@@ -5130,17 +5316,16 @@ if (cartContainer) {
             pintarFichaPedido(pedido);
             abrirSheet('sheetPedido');
         });
-    }
+    });
 
     // El punto sobre "Pedidos" avisa que hay un pedido registrado en este
     // navegador. La llama guardarUltimoPedidoLocal() en mayorista.js para que
     // aparezca en el momento en que se confirma un pedido, sin recargar.
     window.refrescarPuntoPedido = function () {
-        const punto = document.getElementById('tabbarPuntoPedido');
-        if (!punto) return;
-
         const hay = typeof leerUltimoPedidoLocal === 'function' && !!leerUltimoPedidoLocal();
-        punto.style.display = hay ? 'block' : 'none';
+        document.querySelectorAll('.js-punto-pedido').forEach(p => {
+            p.style.display = hay ? 'block' : 'none';
+        });
     };
 
     // Recién acá mayorista.js ya se ejecutó (es defer) y sus funciones existen
