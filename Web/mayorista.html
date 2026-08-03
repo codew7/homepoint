@@ -4,10 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="version" content="2.0">
+    <!-- Tema inicial · corre antes del primer pintado para que no haya destello
+         de modo claro. Prioridad: la elección manual guardada; si el usuario
+         nunca tocó el interruptor, se adopta la preferencia del sistema
+         operativo (Windows, macOS, Android e iOS la exponen todos vía
+         prefers-color-scheme). El seguimiento en vivo del sistema está en
+         mayorista.js. -->
     <script>
-        if (localStorage.getItem('theme') === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        }
+        (function () {
+            var guardado = null;
+            try { guardado = localStorage.getItem('theme'); } catch (e) {}
+            var oscuro = guardado
+                ? guardado === 'dark'
+                : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (oscuro) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -256,7 +269,7 @@
         color: var(--tinta-400);
         text-transform: uppercase;
         letter-spacing: .17em;
-        padding-left: 4px;
+        padding-left: 8px;
     }
 
     /* Acciones a la derecha del header: selector de tema + menú hamburguesa */
@@ -381,7 +394,7 @@
         margin: 0 auto 26px;
         background: var(--superficie);
         border: 1px solid var(--borde);
-        border-radius: var(--radio-md);
+        border-radius: var(--radio-lg);
         display: grid;
         grid-template-columns: 1fr 1fr;
         align-items: center;
@@ -390,45 +403,67 @@
     .info-band-item {
         display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 14px 20px;
+        gap: 16px;
+        padding: 18px 24px;
         min-width: 0;
     }
 
     /* Divisor entre las dos columnas: se dibuja en la segunda para no dejar
-       un borde suelto cuando se apilan en móvil. */
-    .info-band-item + .info-band-item { border-left: 1px solid var(--borde); }
+       un borde suelto cuando se apilan en móvil. Va como pseudo-elemento y no
+       como border-left para poder acortarlo: la línea no toca los bordes de la
+       franja, queda centrada respecto del alto del ítem. */
+    .info-band-item + .info-band-item { position: relative; }
 
+    .info-band-item + .info-band-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 46px;
+        background: var(--borde-fuerte);
+    }
+
+    /* Ícono suelto, sin píldora ni círculo: sólo el glifo en el color de acento
+       (--navy, que el modo oscuro redefine a verde). El ancho fijo es lo que
+       alinea el arranque del texto de los dos ítems, aunque el camión y el
+       signo $ tengan siluetas de ancho distinto. */
     .info-band-icon {
-        width: 34px;
-        height: 34px;
+        width: 30px;
         flex: none;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: var(--navy);
-        color: #fff;
-        border-radius: 50%;
-        font-size: 13px;
+        background: none;
+        color: var(--navy);
+        border-radius: 0;
+        font-size: 23px;
     }
 
     .info-band-text {
-        font-size: .82rem;
-        line-height: 1.35;
+        font-size: .84rem;
+        line-height: 1.45;
         color: var(--tinta-600);
         min-width: 0;
     }
 
     .info-band-text strong {
         display: block;
-        font-size: .8rem;
+        font-size: .92rem;
         font-weight: 700;
-        letter-spacing: .05em;
+        letter-spacing: .02em;
         text-transform: uppercase;
-        color: var(--tinta-600);
+        color: var(--tinta-900);
     }
 
-    .info-band-text b { color: var(--navy); font-weight: 700; }
+    /* En bloque para que el destacado caiga siempre en su propia línea y los
+       dos ítems queden con la misma silueta de dos renglones. */
+    .info-band-text b {
+        display: block;
+        color: var(--navy);
+        font-weight: 700;
+    }
 
     /* ---------- 7 · BARRA DE FILTROS ---------- */
     .controls {
@@ -2576,8 +2611,10 @@
         .site-header-inner { min-height: 76px; padding: 14px 0; }
         .brand img { width: 210px; }
         .brand-tag { font-size: .66rem; letter-spacing: .14em; }
-        .info-band-item { padding: 12px 16px; gap: 12px; }
-        .info-band-text, .info-band-text strong { font-size: .76rem; }
+        .info-band-item { padding: 14px 18px; gap: 13px; }
+        .info-band-icon { width: 26px; font-size: 20px; }
+        .info-band-text { font-size: .78rem; }
+        .info-band-text strong { font-size: .84rem; }
         .footer-grid { grid-template-columns: 1fr; gap: 28px; }
         .site-footer { padding: 30px 24px 26px; }
         .entrega-opciones { grid-template-columns: 1fr; }
@@ -2601,9 +2638,13 @@
 
         /* Las dos columnas de la franja se apilan y el divisor pasa a horizontal */
         .info-band { grid-template-columns: 1fr; }
-        .info-band-item + .info-band-item {
-            border-left: none;
-            border-top: 1px solid var(--borde);
+        .info-band-item + .info-band-item::before {
+            left: 16px;
+            right: 16px;
+            top: 0;
+            transform: none;
+            width: auto;
+            height: 1px;
         }
 
         .controls {
@@ -2717,10 +2758,15 @@
 
     /* logo.png es un isotipo oscuro (pensado para fondos claros); en modo
        oscuro se reemplaza por logoblanco.png en el header, el pie y la
-       pantalla de carga. */
-    .logo-dark { display: none; }
-    [data-theme="dark"] .logo-light { display: none; }
-    [data-theme="dark"] .logo-dark { display: block; }
+       pantalla de carga.
+       -------------------------------------------------------------------
+       Los selectores llevan el tipo `img` a propósito: sin él quedan en
+       especificidad (0,1,0) y `.brand img { display:block }` (0,1,1) los
+       pisa, dejando el logo oculto visible como una caja vacía que empuja
+       al .brand-tag. No quitar el `img`. */
+    img.logo-dark { display: none; }
+    [data-theme="dark"] img.logo-light { display: none; }
+    [data-theme="dark"] img.logo-dark { display: block; }
     </style>
 
     <!-- === CONFIGURACIÓN POPUP DE MANTENIMIENTO === -->
@@ -2956,7 +3002,7 @@
             </div>
         </div>
     </div>
-    <img src="whatsapp.png" alt="Contactar por WhatsApp" id="whatsappFloatBtn" onclick="toggleMenuWsp(event)" width="54" height="54">
+    <img src="whatsapp.png" alt="Contactar por WhatsApp" id="whatsappFloatBtn" onclick="toggleMenuWsp(event)" width="49" height="49">
 </div>
 
 <!-- Modal para buscar último pedido -->
@@ -3021,15 +3067,23 @@
     </div>
 </div>
 
-<!-- Franja informativa -->
+<!-- Franja informativa · cada ítem son dos líneas: el dato principal y su
+     aclaración. En el primero el orden es título + detalle; en el segundo la
+     frase arranca arriba y remata en el destacado. -->
 <div class="info-band">
     <div class="info-band-item">
         <span class="info-band-icon"><i class="fas fa-truck" aria-hidden="true"></i></span>
-        <span class="info-band-text"><strong>Envíos a todo el país</strong></span>
+        <span class="info-band-text">
+            <strong>Envíos a todo el país</strong>
+            Rápidos y seguros
+        </span>
     </div>
     <div class="info-band-item">
-        <span class="info-band-icon"><i class="fas fa-tag" aria-hidden="true"></i></span>
-        <span class="info-band-text">Los valores publicados se encuentran <b>actualizados</b></span>
+        <span class="info-band-icon"><i class="fas fa-dollar-sign" aria-hidden="true"></i></span>
+        <span class="info-band-text">
+            Los valores publicados se encuentran
+            <b>en pesos argentinos</b>
+        </span>
     </div>
 </div>
 

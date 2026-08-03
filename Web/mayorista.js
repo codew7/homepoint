@@ -1930,8 +1930,25 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // === Modo oscuro ===
+// El tema del primer pintado ya lo resolvió el script inline del <head>: usa la
+// elección manual guardada y, si no hay ninguna, la preferencia del sistema
+// operativo. Acá sólo se sincroniza el ícono, se atiende el interruptor manual y
+// se sigue al sistema en vivo mientras el usuario no haya elegido a mano.
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 const themeToggleIcon = themeToggleBtn.querySelector('i');
+const THEME_STORAGE_KEY = 'theme';
+const consultaTemaSistema = window.matchMedia
+    ? window.matchMedia('(prefers-color-scheme: dark)')
+    : null;
+
+function temaGuardado() {
+    try {
+        return localStorage.getItem(THEME_STORAGE_KEY);
+    } catch (e) {
+        console.error('Error al leer el tema desde localStorage:', e);
+        return null;
+    }
+}
 
 function aplicarIconoTema(tema) {
     themeToggleIcon.classList.toggle('fa-moon', tema !== 'dark');
@@ -1941,18 +1958,45 @@ function aplicarIconoTema(tema) {
     themeToggleBtn.setAttribute('title', etiqueta);
 }
 
-aplicarIconoTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-
-themeToggleBtn.addEventListener('click', function() {
-    const nuevoTema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    if (nuevoTema === 'dark') {
+// El modo claro es la ausencia del atributo, no un valor propio: así los
+// selectores [data-theme="dark"] del CSS siguen siendo el único interruptor.
+function aplicarTema(tema) {
+    if (tema === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else {
         document.documentElement.removeAttribute('data-theme');
     }
-    localStorage.setItem('theme', nuevoTema);
-    aplicarIconoTema(nuevoTema);
+    aplicarIconoTema(tema);
+}
+
+aplicarIconoTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+themeToggleBtn.addEventListener('click', function() {
+    const nuevoTema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    aplicarTema(nuevoTema);
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, nuevoTema);
+    } catch (e) {
+        console.error('Error al guardar el tema en localStorage:', e);
+    }
 });
+
+// Si el usuario nunca eligió a mano, la página acompaña al sistema en tiempo
+// real (Windows y Android cambian solos al anochecer, iOS y macOS igual). Una
+// vez que tocó el interruptor, su elección manda y este listener no hace nada.
+if (consultaTemaSistema) {
+    const alCambiarTemaSistema = function(evento) {
+        if (temaGuardado()) return;
+        aplicarTema(evento.matches ? 'dark' : 'light');
+    };
+
+    if (typeof consultaTemaSistema.addEventListener === 'function') {
+        consultaTemaSistema.addEventListener('change', alCambiarTemaSistema);
+    } else if (typeof consultaTemaSistema.addListener === 'function') {
+        // Safari < 14 (iOS 13 y anteriores) sólo tiene la API vieja.
+        consultaTemaSistema.addListener(alCambiarTemaSistema);
+    }
+}
 
 // === Menú Hamburguesa ===
 const hamburgerBtn = document.getElementById('hamburgerBtn');
