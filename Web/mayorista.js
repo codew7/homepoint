@@ -1929,6 +1929,31 @@ document.addEventListener('DOMContentLoaded', function() {
     cargarCarritoLocal();
 });
 
+// === Modo oscuro ===
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+const themeToggleIcon = themeToggleBtn.querySelector('i');
+
+function aplicarIconoTema(tema) {
+    themeToggleIcon.classList.toggle('fa-moon', tema !== 'dark');
+    themeToggleIcon.classList.toggle('fa-sun', tema === 'dark');
+    const etiqueta = tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+    themeToggleBtn.setAttribute('aria-label', etiqueta);
+    themeToggleBtn.setAttribute('title', etiqueta);
+}
+
+aplicarIconoTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+themeToggleBtn.addEventListener('click', function() {
+    const nuevoTema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    if (nuevoTema === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('theme', nuevoTema);
+    aplicarIconoTema(nuevoTema);
+});
+
 // === Menú Hamburguesa ===
 const hamburgerBtn = document.getElementById('hamburgerBtn');
 const hamburgerDropdown = document.getElementById('hamburgerDropdown');
