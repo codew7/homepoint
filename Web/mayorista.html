@@ -108,6 +108,18 @@
         --t:180ms cubic-bezier(.4,0,.2,1);
         --ancho:1340px;
 
+        /* Barra de navegación inferior · el alto va en px a propósito: cualquier
+           medida en vh cambia sola cuando Chrome o Safari móvil muestran u
+           ocultan la barra de direcciones, y es lo que hace que una barra fija
+           aparezca cortada o desplazada. --tabbar-hueco es el alto real que
+           ocupa (incluye el área segura de iOS) y lo reutilizan el
+           padding-bottom del body, el panel del carrito y el botón de WhatsApp
+           para no quedar tapados ni pisarla. */
+        --tabbar-alto:60px;
+        --tabbar-hueco:calc(var(--tabbar-alto) + env(safe-area-inset-bottom, 0px));
+        --tabbar-z:1900;
+        --sheet-z:2500;
+
         --ui:'Plus Jakarta Sans','Segoe UI',system-ui,-apple-system,sans-serif;
         --display:var(--ui);   /* claro.png no usa serif: una sola familia */
 
@@ -158,10 +170,13 @@
 
     html { -webkit-text-size-adjust: 100%; }
 
+    /* El padding inferior reserva el lugar de la barra de navegación fija: sin
+       él, el pie de página y el carrusel del final quedan tapados en cuanto se
+       llega al fondo del documento. */
     body {
         font-family: var(--ui);
         margin: 0;
-        padding: 0;
+        padding: 0 0 calc(var(--tabbar-hueco) + 16px);
         background-color: var(--bg);
         color: var(--tinta-900);
         font-size: 16px;
@@ -1175,6 +1190,12 @@
     }
 
     /* ---------- 12 · CARRITO ---------- */
+    /* El botón flotante quedó reemplazado por el ítem "Carrito" de la barra de
+       navegación inferior, así que no se muestra nunca.
+       NO SACAR EL NODO DEL HTML: toggleCart() (script del final) le escribe
+       .style.display sin comprobar que exista y lanzaría un TypeError. Por esa
+       misma razón el ocultado necesita !important: el estilo inline que le
+       escriben toggleCart() y actualizarCarrito() le ganaría a la cascada. */
     .cart-float-btn {
         position: fixed;
         bottom: 28px;
@@ -1185,7 +1206,7 @@
         border: none;
         border-radius: var(--radio-md);
         box-shadow: var(--sombra-3);
-        display: none;
+        display: none !important;
         align-items: center;
         justify-content: center;
         cursor: pointer;
@@ -1216,9 +1237,11 @@
         animation: pulse-badge 2.4s infinite;
     }
 
+    /* Se apoya justo arriba de la barra inferior (su z-index es mayor, así que
+       el panel se dibuja por encima sin tapar los botones de navegación). */
     .cart-container {
         position: fixed;
-        bottom: 22px;
+        bottom: calc(var(--tabbar-hueco) + 12px);
         left: 22px;
         background: var(--superficie);
         padding: 0;
@@ -2306,9 +2329,12 @@
     .media-modal-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 
     /* ---------- 17 · WHATSAPP FLOTANTE ---------- */
+    /* Sube por encima de la barra de navegación inferior. En escritorio la barra
+       es una píldora centrada y no llega hasta acá, pero se corrige en todos los
+       anchos: entre 900 y 1100px las dos piezas quedan a tiro. */
     #whatsappFloatMenu {
         position: fixed;
-        bottom: 28px;
+        bottom: calc(var(--tabbar-hueco) + 16px);
         right: 22px;
         z-index: 1100;
         display: flex;
@@ -2594,7 +2620,378 @@
 
     .maintenance-close-btn:hover { background: var(--verde-700); }
 
-    /* ---------- 21 · RESPONSIVE ---------- */
+    /* ---------- 21 · BARRA DE NAVEGACIÓN INFERIOR ----------
+       Reúne las cuatro acciones que el cliente repite todo el tiempo:
+       Categorías, Buscar, Carrito y Pedidos. Un solo componente con dos
+       presentaciones: en móvil una barra de ancho completo pegada al borde
+       inferior, y de 901px para arriba la misma barra convertida en píldora
+       centrada y acotada (en un monitor ancho, una barra de borde a borde se
+       lee como un error de maquetación).
+
+       DECISIONES QUE SOSTIENEN LA BARRA EN CUALQUIER PANTALLA — no revertirlas
+       sin leer esto:
+       · Alto en px (--tabbar-alto), nunca vh: en móvil el viewport cambia solo
+         cuando el navegador esconde la barra de direcciones.
+       · env(safe-area-inset-bottom): en iPhone el indicador de home se come el
+         borde inferior. Sin esto, las etiquetas quedan debajo del área táctil.
+       · Grid de columnas iguales + min-width:0: no puede desbordar a ningún
+         ancho, ni siquiera con etiquetas largas.
+       · Siempre visible, sin ocultarse al scrollear: un auto-hide atado al
+         scroll es justamente lo que deja la barra a medio camino.
+       · z-index escalonado: barra (1900) < panel del carrito (2001) < paneles
+         inferiores (2500) < modales del checkout (3000). */
+    .tabbar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: var(--tabbar-hueco);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: stretch;
+        background: var(--superficie);
+        border-top: 1px solid var(--borde);
+        box-shadow: 0 -6px 24px -14px rgba(17,24,39,.22);
+        z-index: var(--tabbar-z);
+    }
+
+    .tabbar-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        min-width: 0;
+        padding: 0 2px;
+        background: none;
+        border: none;
+        border-radius: var(--radio-sm);
+        color: var(--tinta-600);
+        font-family: var(--ui);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: color var(--t);
+    }
+
+    .tabbar-item:hover { color: var(--tinta-900); }
+    .tabbar-item.is-activo { color: var(--verde-800); }
+
+    /* El contenedor del ícono ancla el globo del carrito y el punto de Pedidos */
+    .tabbar-icono {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 22px;
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .tabbar-label {
+        max-width: 100%;
+        font-size: .66rem;
+        font-weight: 600;
+        letter-spacing: -.005em;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .tabbar-item.is-activo .tabbar-label { font-weight: 700; }
+
+    /* Mismo lenguaje que .cart-badge del botón flotante que reemplaza */
+    .tabbar-badge {
+        position: absolute;
+        top: -7px;
+        left: 11px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        background: var(--ambar);
+        color: #fff;
+        border: 2px solid var(--superficie);
+        border-radius: var(--radio-full);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: .62rem;
+        font-weight: 800;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Aviso sin número: solo señala que hay un pedido guardado en este navegador */
+    .tabbar-punto {
+        position: absolute;
+        top: -3px;
+        left: 13px;
+        width: 8px;
+        height: 8px;
+        background: var(--verde-600);
+        border: 2px solid var(--superficie);
+        border-radius: 50%;
+        display: none;
+    }
+
+    /* --- Paneles inferiores (categorías y último pedido) --- */
+    .sheet-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15,20,28,.55);
+        backdrop-filter: blur(6px);
+        display: none;
+        z-index: var(--sheet-z);
+        animation: fadeIn .2s ease;
+    }
+
+    .sheet-backdrop.active { display: block; }
+
+    .sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--superficie);
+        border: 1px solid var(--borde);
+        border-bottom: none;
+        border-radius: var(--radio-lg) var(--radio-lg) 0 0;
+        box-shadow: var(--sombra-3);
+        display: none;
+        flex-direction: column;
+        max-height: min(72vh, 520px);
+        z-index: calc(var(--sheet-z) + 1);
+    }
+
+    .sheet.active {
+        display: flex;
+        animation: slideInUp .26s ease-out;
+    }
+
+    .sheet-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex: none;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--borde);
+    }
+
+    .sheet-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .sheet-header h3 i { color: var(--verde-600); font-size: .88em; }
+
+    .sheet-close {
+        width: 34px;
+        height: 34px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--superficie-2);
+        color: var(--tinta-600);
+        border: none;
+        border-radius: 50%;
+        font-size: .95rem;
+        cursor: pointer;
+        transition: background var(--t), color var(--t);
+    }
+
+    .sheet-close:hover { background: var(--borde); color: var(--tinta-900); }
+
+    /* El scroll vive acá dentro, no en el panel: así el encabezado queda fijo.
+       El padding inferior cubre el área segura de iOS, porque el panel se
+       dibuja por encima de la barra y llega hasta el borde de la pantalla. */
+    .sheet-body {
+        padding: 12px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .sheet-body::-webkit-scrollbar { width: 8px; }
+    .sheet-body::-webkit-scrollbar-thumb {
+        background: var(--borde-fuerte);
+        border-radius: var(--radio-full);
+    }
+
+    /* Lista de categorías */
+    .sheet-opcion {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        background: none;
+        border: none;
+        border-radius: var(--radio-sm);
+        color: var(--tinta-700);
+        font-family: var(--ui);
+        font-size: .9rem;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        transition: background var(--t), color var(--t);
+    }
+
+    .sheet-opcion:hover { background: var(--superficie-2); color: var(--tinta-900); }
+
+    .sheet-opcion.is-activo {
+        background: var(--verde-050);
+        color: var(--verde-800);
+        font-weight: 700;
+    }
+
+    .sheet-opcion i { color: var(--verde-600); flex: none; font-size: .9em; opacity: 0; }
+    .sheet-opcion.is-activo i { opacity: 1; }
+
+    .sheet-vacio {
+        padding: 22px 14px;
+        text-align: center;
+        color: var(--tinta-400);
+        font-size: .88rem;
+    }
+
+    /* Ficha del último pedido */
+    .pedido-ficha {
+        background: var(--superficie-2);
+        border: 1px solid var(--borde);
+        border-radius: var(--radio-md);
+        padding: 16px;
+    }
+
+    .pedido-ficha-fecha {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: .9rem;
+        font-weight: 700;
+        color: var(--tinta-900);
+    }
+
+    .pedido-ficha-fecha i { color: var(--verde-600); }
+
+    .pedido-ficha-datos {
+        margin: 6px 0 0;
+        font-size: .84rem;
+        color: var(--tinta-600);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .pedido-ficha-datos strong { color: var(--verde-800); font-weight: 700; }
+
+    .pedido-ficha-btn {
+        width: 100%;
+        margin-top: 14px;
+        padding: 13px 16px;
+        background: var(--verde-600);
+        color: #fff;
+        border: none;
+        border-radius: var(--radio-sm);
+        font-family: var(--ui);
+        font-size: .9rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        transition: background var(--t);
+    }
+
+    .pedido-ficha-btn:hover { background: var(--verde-700); }
+
+    .pedido-otro {
+        width: 100%;
+        margin-top: 10px;
+        padding: 12px;
+        background: none;
+        border: none;
+        color: var(--verde-700);
+        font-family: var(--ui);
+        font-size: .85rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: var(--radio-sm);
+        transition: background var(--t);
+    }
+
+    .pedido-otro:hover { background: var(--verde-050); }
+
+    /* Aviso breve para el carrito vacío: evita abrir un panel en blanco.
+       Se centra con márgenes automáticos y no con translateX, por el mismo
+       motivo explicado en la píldora de escritorio más abajo. */
+    .tabbar-aviso {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: calc(var(--tabbar-hueco) + 16px);
+        width: fit-content;
+        max-width: calc(100% - 32px);
+        margin-inline: auto;
+        padding: 11px 18px;
+        background: var(--verde-900);
+        color: #fff;
+        border-radius: var(--radio-full);
+        box-shadow: var(--sombra-3);
+        font-size: .85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        z-index: calc(var(--tabbar-z) + 1);
+        animation: fadeIn .2s ease;
+    }
+
+    /* --- Escritorio: la barra se vuelve una píldora centrada ---
+       El centrado va con left/right:0 + margin-inline:auto y NO con
+       translateX(-50%): los paneles entran con la animación slideInUp, que anima
+       transform, y un translateX en la misma propiedad se pierde mientras la
+       animación corre (el panel arrancaría corrido media pantalla a la derecha y
+       saltaría al lugar al terminar). Con márgenes automáticos, transform queda
+       libre para la animación. */
+    @media (min-width: 901px) {
+        .tabbar {
+            left: 0;
+            right: 0;
+            bottom: 20px;
+            width: min(560px, calc(100% - 40px));
+            margin-inline: auto;
+            height: var(--tabbar-alto);
+            padding: 0 8px;
+            border: 1px solid var(--borde);
+            border-radius: var(--radio-full);
+            box-shadow: var(--sombra-3);
+        }
+
+        .tabbar-item { border-radius: var(--radio-full); }
+        .tabbar-item:hover { background: var(--superficie-2); }
+        .tabbar-label { font-size: .7rem; }
+
+        /* Los paneles acompañan a la píldora: centrados y por encima de ella */
+        .sheet {
+            bottom: calc(var(--tabbar-alto) + 32px);
+            width: min(520px, calc(100% - 40px));
+            margin-inline: auto;
+            border: 1px solid var(--borde);
+            border-radius: var(--radio-lg);
+        }
+
+        .sheet-body { padding-bottom: 16px; }
+    }
+
+    /* ---------- 22 · RESPONSIVE ---------- */
     @media (max-width: 1180px) {
         .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .footer-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -2623,6 +3020,11 @@
 
     @media (max-width: 600px) {
         body { font-size: 15px; }
+
+        /* Un poco más baja en móvil, donde el alto de pantalla es el recurso
+           escaso. Al ir por el token, el padding del body, el panel del carrito
+           y el botón de WhatsApp se reacomodan solos. */
+        :root { --tabbar-alto: 56px; }
 
         .contenedor,
         .site-header-inner,
@@ -2697,7 +3099,7 @@
         .cart-float-btn i { font-size: 19px; }
 
         .cart-container {
-            bottom: 12px;
+            bottom: calc(var(--tabbar-hueco) + 10px);
             left: 12px;
             right: 12px;
             min-width: 0;
@@ -2709,7 +3111,7 @@
         #cart-list { padding: 10px; max-height: 210px; }
         .cart-total-amount { font-size: 1.18rem; }
 
-        #whatsappFloatMenu { bottom: 20px; right: 16px; }
+        #whatsappFloatMenu { right: 16px; }
 
         .total-row { padding: 15px; font-size: .72rem; }
         .total-row strong { font-size: 1.28rem; }
@@ -2724,14 +3126,19 @@
     }
 
     @media (max-width: 400px) {
-        .cart-container { bottom: 8px; left: 8px; right: 8px; }
+        .cart-container { bottom: calc(var(--tabbar-hueco) + 8px); left: 8px; right: 8px; }
         .cart-container button span { display: none; }
         .cart-container button i { font-size: 1.1em; }
         .card > img { height: 112px; }
         .brand img { width: 170px; }
+
+        /* Cuatro ítems entran cómodos incluso acá (unos 85px cada uno): la
+           etiqueta se achica en lugar de desaparecer, que sería peor de usar. */
+        .tabbar-label { font-size: .59rem; }
+        .tabbar-icono { font-size: 17px; }
     }
 
-    /* ---------- 22 · MOVIMIENTO REDUCIDO ---------- */
+    /* ---------- 23 · MOVIMIENTO REDUCIDO ---------- */
     @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after {
             animation-duration: .01ms !important;
@@ -2743,7 +3150,7 @@
         .card:hover > img { transform: none; }
     }
 
-    /* ---------- 23 · MODO OSCURO (excepciones sin variable) ----------
+    /* ---------- 24 · MODO OSCURO (excepciones sin variable) ----------
        Casi todo el sitio está construido sobre var(--...), así que redefinir
        los tokens en la sección 1 ya repinta el 95% de la interfaz. Acá sólo
        van los pocos valores que se escribieron sueltos (no como token) y por
@@ -3164,10 +3571,71 @@
         </div>
     </div>
 
-    <!-- Botón flotante del carrito (minimizado) -->
+    <!-- Botón flotante del carrito · lo reemplazó el ítem "Carrito" de la barra
+         inferior, así que el CSS lo oculta. NO ELIMINAR EL NODO: toggleCart() y
+         actualizarCarrito() le escriben .style.display y toggleCart() lo hace sin
+         comprobar que exista (ver el comentario en la sección 12 del CSS). -->
     <div class="cart-float-btn" id="cartFloatBtn" onclick="toggleCart()" role="button" tabindex="0" aria-label="Abrir carrito">
         <i class="fas fa-shopping-cart" aria-hidden="true"></i>
         <span class="cart-badge" id="cartBadge">0</span>
+    </div>
+
+    <!-- === BARRA DE NAVEGACIÓN INFERIOR ===
+         Las cuatro acciones frecuentes, siempre a mano. Categorías y Pedidos
+         abren un panel inferior; Buscar lleva el foco al campo de búsqueda y
+         Carrito reutiliza toggleCart(). La lógica está en el script del final. -->
+    <nav class="tabbar" id="tabbar" aria-label="Navegación del catálogo">
+        <button type="button" class="tabbar-item" id="tabCategorias" aria-haspopup="dialog" aria-expanded="false">
+            <span class="tabbar-icono"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+            <span class="tabbar-label">Categorías</span>
+        </button>
+
+        <button type="button" class="tabbar-item" id="tabBuscar">
+            <span class="tabbar-icono"><i class="fas fa-search" aria-hidden="true"></i></span>
+            <span class="tabbar-label">Buscar</span>
+        </button>
+
+        <button type="button" class="tabbar-item" id="tabCarrito">
+            <span class="tabbar-icono">
+                <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                <span class="tabbar-badge" id="tabbarBadge">0</span>
+            </span>
+            <span class="tabbar-label">Carrito</span>
+        </button>
+
+        <button type="button" class="tabbar-item" id="tabPedidos" aria-haspopup="dialog" aria-expanded="false">
+            <span class="tabbar-icono">
+                <i class="fas fa-receipt" aria-hidden="true"></i>
+                <span class="tabbar-punto" id="tabbarPuntoPedido" aria-hidden="true"></span>
+            </span>
+            <span class="tabbar-label">Pedidos</span>
+        </button>
+    </nav>
+
+    <!-- Fondo compartido por los dos paneles inferiores -->
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+
+    <!-- Panel de categorías · la lista se arma al abrir, copiando las opciones
+         que mayorista.js ya inyectó en el <select id="categorias"> -->
+    <div class="sheet" id="sheetCategorias" role="dialog" aria-modal="true" aria-labelledby="sheetCategoriasTitulo">
+        <div class="sheet-header">
+            <h3 id="sheetCategoriasTitulo"><i class="fas fa-layer-group" aria-hidden="true"></i> Categorías</h3>
+            <button type="button" class="sheet-close" data-cerrar-sheet aria-label="Cerrar">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="sheet-body" id="sheetCategoriasLista"></div>
+    </div>
+
+    <!-- Panel del último pedido registrado en este navegador -->
+    <div class="sheet" id="sheetPedido" role="dialog" aria-modal="true" aria-labelledby="sheetPedidoTitulo">
+        <div class="sheet-header">
+            <h3 id="sheetPedidoTitulo"><i class="fas fa-receipt" aria-hidden="true"></i> Tu último pedido</h3>
+            <button type="button" class="sheet-close" data-cerrar-sheet aria-label="Cerrar">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="sheet-body" id="sheetPedidoCuerpo"></div>
     </div>
 
     <!-- Contenedor del carrito de compras (expandido) -->
@@ -4321,12 +4789,23 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Deja el ítem "Carrito" de la barra inferior iluminado mientras el panel está
+// abierto. Se llama desde todos los caminos que cambian cartExpanded (este
+// toggle, el cierre por click externo y el vaciado del carrito en
+// actualizarCarrito()), así el resaltado nunca queda pegado.
+function sincronizarTabCarrito() {
+    const tab = document.getElementById('tabCarrito');
+    if (!tab) return;
+    tab.classList.toggle('is-activo', typeof cartExpanded !== 'undefined' && cartExpanded);
+}
+window.sincronizarTabCarrito = sincronizarTabCarrito;
+
 function toggleCart() {
     const cartContainer = document.getElementById('cartContainer');
     const cartFloatBtn = document.getElementById('cartFloatBtn');
-    
+
     cartExpanded = !cartExpanded;
-    
+
     if (cartExpanded) {
         cartContainer.classList.add('active');
         cartFloatBtn.style.display = 'none';
@@ -4337,6 +4816,8 @@ function toggleCart() {
             cartFloatBtn.style.display = 'flex';
         }
     }
+
+    sincronizarTabCarrito();
 }
 
 // Cerrar carrito al hacer clic fuera de él
@@ -4360,6 +4841,313 @@ if (cartContainer) {
         event.stopPropagation();
     });
 }
+
+// === BARRA DE NAVEGACIÓN INFERIOR ===
+// Cuatro accesos: Categorías, Buscar, Carrito y Pedidos. Nada de esto duplica
+// lógica existente: Categorías empuja el <select> que ya filtra, Buscar mueve el
+// foco al campo que ya busca y Carrito llama al mismo toggleCart() de arriba.
+//
+// OJO CON EL ORDEN DE CARGA: este script es inline y corre durante el parseo,
+// antes que mayorista.js (que va con defer). Por eso todo lo que necesita
+// funciones de ese archivo (leerUltimoPedidoLocal, PEDIDOS_VERSION) se ejecuta
+// dentro de handlers o de DOMContentLoaded, nunca en el nivel superior.
+(function () {
+    const backdrop      = document.getElementById('sheetBackdrop');
+    const sheets        = [document.getElementById('sheetCategorias'), document.getElementById('sheetPedido')];
+    const tabCategorias = document.getElementById('tabCategorias');
+    const tabBuscar     = document.getElementById('tabBuscar');
+    const tabCarrito    = document.getElementById('tabCarrito');
+    const tabPedidos    = document.getElementById('tabPedidos');
+
+    // Qué tab se ilumina con cada panel abierto
+    const tabDeSheet = {
+        sheetCategorias: tabCategorias,
+        sheetPedido: tabPedidos
+    };
+
+    function cerrarCarritoSiEstaAbierto() {
+        // Vía toggleCart() y no tocando clases a mano: así cartExpanded queda
+        // coherente y el listener global de cierre no vuelve a alternarlo cuando
+        // este mismo click burbujee hasta document.
+        if (typeof cartExpanded !== 'undefined' && cartExpanded) toggleCart();
+    }
+
+    function cerrarSheets() {
+        sheets.forEach(sheet => {
+            if (!sheet) return;
+            sheet.classList.remove('active');
+            const tab = tabDeSheet[sheet.id];
+            if (tab) {
+                tab.classList.remove('is-activo');
+                tab.setAttribute('aria-expanded', 'false');
+            }
+        });
+        if (backdrop) backdrop.classList.remove('active');
+    }
+
+    function abrirSheet(id) {
+        const sheet = document.getElementById(id);
+        if (!sheet) return;
+
+        const yaEstaba = sheet.classList.contains('active');
+        cerrarSheets();
+        cerrarCarritoSiEstaAbierto();
+        if (yaEstaba) return;   // segundo toque en el mismo tab: cierra
+
+        sheet.classList.add('active');
+        if (backdrop) backdrop.classList.add('active');
+
+        const tab = tabDeSheet[id];
+        if (tab) {
+            tab.classList.add('is-activo');
+            tab.setAttribute('aria-expanded', 'true');
+        }
+    }
+
+    if (backdrop) backdrop.addEventListener('click', cerrarSheets);
+
+    document.querySelectorAll('[data-cerrar-sheet]').forEach(btn => {
+        btn.addEventListener('click', cerrarSheets);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') cerrarSheets();
+    });
+
+    // Aviso breve sobre la barra (se usa para el carrito vacío)
+    let avisoTimer = null;
+    function mostrarAvisoTabbar(texto) {
+        const previo = document.getElementById('tabbarAviso');
+        if (previo) previo.remove();
+        if (avisoTimer) clearTimeout(avisoTimer);
+
+        const aviso = document.createElement('div');
+        aviso.id = 'tabbarAviso';
+        aviso.className = 'tabbar-aviso';
+        aviso.setAttribute('role', 'status');
+        aviso.textContent = texto;
+        document.body.appendChild(aviso);
+
+        avisoTimer = setTimeout(() => aviso.remove(), 2200);
+    }
+
+    // --- Categorías ---
+    // La lista se copia del <select id="categorias"> en cada apertura. Es a
+    // propósito: mayorista.js llena ese select recién cuando responde la hoja de
+    // cálculo, así que leerlo al abrir es lo que hace que el panel esté al día.
+    function pintarCategorias() {
+        const select = document.getElementById('categorias');
+        const cont = document.getElementById('sheetCategoriasLista');
+        if (!select || !cont) return;
+
+        cont.innerHTML = '';
+
+        // Solo está la opción fija: el catálogo todavía se está cargando
+        if (select.options.length <= 1) {
+            const vacio = document.createElement('p');
+            vacio.className = 'sheet-vacio';
+            vacio.textContent = 'Cargando categorías…';
+            cont.appendChild(vacio);
+            return;
+        }
+
+        Array.from(select.options).forEach(opcion => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sheet-opcion';
+            if (opcion.value === select.value) btn.classList.add('is-activo');
+
+            const texto = document.createElement('span');
+            texto.textContent = opcion.textContent;
+
+            const check = document.createElement('i');
+            check.className = 'fas fa-check';
+            check.setAttribute('aria-hidden', 'true');
+
+            btn.appendChild(texto);
+            btn.appendChild(check);
+
+            btn.addEventListener('click', function () {
+                // aplicarFiltros() vive dentro del .then() del fetch en
+                // mayorista.js y no es accesible desde acá, así que se empuja el
+                // select y se dispara su evento 'change': filtra por el mismo
+                // camino que usa el control de la barra de filtros.
+                select.value = opcion.value;
+                select.dispatchEvent(new Event('change'));
+                cerrarSheets();
+            });
+
+            cont.appendChild(btn);
+        });
+    }
+
+    if (tabCategorias) {
+        tabCategorias.addEventListener('click', function (e) {
+            e.stopPropagation();
+            pintarCategorias();
+            abrirSheet('sheetCategorias');
+        });
+    }
+
+    // --- Buscar ---
+    if (tabBuscar) {
+        tabBuscar.addEventListener('click', function (e) {
+            e.stopPropagation();
+            cerrarSheets();
+            cerrarCarritoSiEstaAbierto();
+
+            const controls = document.querySelector('.controls');
+            const input = document.getElementById('buscar');
+            if (controls) {
+                const y = controls.getBoundingClientRect().top + window.pageYOffset - 20;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+            }
+            // El foco va después del scroll: mostrarPagina() omite su propio
+            // scroll automático cuando #buscar tiene el foco, y enfocarlo antes
+            // haría que el navegador reposicione la vista por su cuenta.
+            if (input) setTimeout(() => input.focus(), 320);
+        });
+    }
+
+    // --- Carrito ---
+    if (tabCarrito) {
+        tabCarrito.addEventListener('click', function (e) {
+            // Imprescindible: el listener global de cierre (más arriba) cierra el
+            // carrito ante cualquier click fuera del panel. Sin esto, el mismo
+            // click lo abriría y lo cerraría.
+            e.stopPropagation();
+            cerrarSheets();
+
+            if (typeof carrito === 'undefined' || carrito.length === 0) {
+                mostrarAvisoTabbar('Tu carrito está vacío');
+                return;
+            }
+
+            toggleCart();   // ya sincroniza el resaltado del tab
+        });
+    }
+
+    // --- Pedidos ---
+    function formatearMontoPedido(n) {
+        return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function formatearFechaPedido(timestamp) {
+        const fecha = new Date(timestamp);
+        if (isNaN(fecha.getTime())) return '';
+
+        const opciones = { day: 'numeric', month: 'long' };
+        // El año solo aparece si el pedido no es de este año
+        if (fecha.getFullYear() !== new Date().getFullYear()) opciones.year = 'numeric';
+        return fecha.toLocaleDateString('es-AR', opciones);
+    }
+
+    function abrirBusquedaPorEmail() {
+        cerrarSheets();
+        const modal = document.getElementById('ultimoPedidoModal');
+        const input = document.getElementById('ultimoPedidoEmailInput');
+        if (!modal) return;
+
+        modal.style.display = 'flex';
+        if (input) {
+            input.value = '';
+            setTimeout(() => input.focus(), 100);
+        }
+    }
+
+    function pintarFichaPedido(pedido) {
+        const cont = document.getElementById('sheetPedidoCuerpo');
+        if (!cont) return;
+
+        cont.innerHTML = '';
+
+        const ficha = document.createElement('div');
+        ficha.className = 'pedido-ficha';
+
+        const fecha = document.createElement('div');
+        fecha.className = 'pedido-ficha-fecha';
+        const fechaTexto = formatearFechaPedido(pedido.timestamp);
+        fecha.innerHTML = '<i class="fas fa-calendar-day" aria-hidden="true"></i>';
+        fecha.appendChild(document.createTextNode(
+            fechaTexto ? 'Pedido del ' + fechaTexto : 'Tu pedido registrado'
+        ));
+        ficha.appendChild(fecha);
+
+        // Unidades y total solo si se conocen: un pedido registrado al abrir el
+        // link del email puede no traerlos.
+        if (pedido.unidades > 0 || pedido.total > 0) {
+            const datos = document.createElement('p');
+            datos.className = 'pedido-ficha-datos';
+            const partes = [];
+            if (pedido.unidades > 0) {
+                partes.push(pedido.unidades + (pedido.unidades === 1 ? ' artículo' : ' artículos'));
+            }
+            datos.textContent = partes.join(' · ');
+            if (pedido.total > 0) {
+                if (partes.length) datos.appendChild(document.createTextNode(' · '));
+                const total = document.createElement('strong');
+                total.textContent = formatearMontoPedido(pedido.total);
+                datos.appendChild(total);
+            }
+            ficha.appendChild(datos);
+        }
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pedido-ficha-btn';
+        btn.innerHTML = '<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i><span>Ver mi pedido</span>';
+        btn.addEventListener('click', function () {
+            const version = typeof PEDIDOS_VERSION !== 'undefined' ? PEDIDOS_VERSION : '';
+            window.open('pedidos.html?id=' + pedido.id + '&v=' + version, '_blank');
+            cerrarSheets();
+        });
+        ficha.appendChild(btn);
+
+        cont.appendChild(ficha);
+
+        const otro = document.createElement('button');
+        otro.type = 'button';
+        otro.className = 'pedido-otro';
+        otro.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i><span>Buscar otro pedido por email</span>';
+        otro.addEventListener('click', abrirBusquedaPorEmail);
+        cont.appendChild(otro);
+    }
+
+    if (tabPedidos) {
+        tabPedidos.addEventListener('click', function (e) {
+            e.stopPropagation();
+
+            const pedido = typeof leerUltimoPedidoLocal === 'function' ? leerUltimoPedidoLocal() : null;
+
+            // Sin nada guardado (o con un registro ilegible) el cliente va directo
+            // a la búsqueda por email, que es la única vía que le queda.
+            if (!pedido) {
+                cerrarCarritoSiEstaAbierto();
+                abrirBusquedaPorEmail();
+                return;
+            }
+
+            pintarFichaPedido(pedido);
+            abrirSheet('sheetPedido');
+        });
+    }
+
+    // El punto sobre "Pedidos" avisa que hay un pedido registrado en este
+    // navegador. La llama guardarUltimoPedidoLocal() en mayorista.js para que
+    // aparezca en el momento en que se confirma un pedido, sin recargar.
+    window.refrescarPuntoPedido = function () {
+        const punto = document.getElementById('tabbarPuntoPedido');
+        if (!punto) return;
+
+        const hay = typeof leerUltimoPedidoLocal === 'function' && !!leerUltimoPedidoLocal();
+        punto.style.display = hay ? 'block' : 'none';
+    };
+
+    // Recién acá mayorista.js ya se ejecutó (es defer) y sus funciones existen
+    document.addEventListener('DOMContentLoaded', function () {
+        window.refrescarPuntoPedido();
+    });
+})();
 </script>
 
 </body>

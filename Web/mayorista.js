@@ -198,6 +198,48 @@ function cargarCarritoLocal() {
     }
 }
 
+// === Último pedido del cliente (para el acceso rápido de la barra inferior) ===
+// Solo se registran los pedidos de envío: son los únicos que llegan a Firebase y
+// por lo tanto los únicos con un id que pueda abrir pedidos.html. Los de retiro
+// se cierran por WhatsApp y no tienen id, así que no se guardan (el cliente
+// siempre conserva la búsqueda por email del modal #ultimoPedidoModal).
+const ULTIMO_PEDIDO_STORAGE_KEY = 'ultimoPedidoMayorista';
+
+function guardarUltimoPedidoLocal({ id, email, unidades, total, timestamp }) {
+    if (!id) return;
+
+    try {
+        localStorage.setItem(ULTIMO_PEDIDO_STORAGE_KEY, JSON.stringify({
+            id: id,
+            email: email || '',
+            timestamp: timestamp || Date.now(),
+            unidades: unidades || 0,
+            total: total || 0
+        }));
+    } catch (e) {
+        console.error('Error al guardar el último pedido en localStorage:', e);
+    }
+    // La barra inferior muestra un punto en "Pedidos" cuando hay algo guardado
+    if (typeof window.refrescarPuntoPedido === 'function') window.refrescarPuntoPedido();
+}
+
+// Devuelve el registro guardado o null. Tolera JSON corrupto y registros viejos
+// sin id: en ambos casos el llamador cae en la búsqueda por email.
+function leerUltimoPedidoLocal() {
+    try {
+        const crudo = localStorage.getItem(ULTIMO_PEDIDO_STORAGE_KEY);
+        if (!crudo) return null;
+
+        const pedido = JSON.parse(crudo);
+        if (!pedido || typeof pedido !== 'object' || !pedido.id) return null;
+
+        return pedido;
+    } catch (e) {
+        console.error('Error al leer el último pedido desde localStorage:', e);
+        return null;
+    }
+}
+
 // === soporte para editar un pedido existente ===
 const urlParams    = new URLSearchParams(window.location.search);
 const pedidoEditId = urlParams.get('pedido');   // si viene de pedidos.html
@@ -239,6 +281,22 @@ if (modoEdicion) {
                 // Guardar snapshot de los items originales para el auto-guardado
                 itemsOriginalesPedido = JSON.parse(JSON.stringify(pedidoExistente.items || []));
                 console.log('Datos del pedido existente cargados:', pedidoExistente);
+
+                // Quien llega desde el link del email también deja registrado el pedido
+                // en este navegador, así "Pedidos" de la barra inferior le sirve después.
+                // Se usan los datos reales del pedido, no los del carrito (que en modo
+                // edición solo contiene los artículos que se están agregando ahora).
+                const itemsPedido = pedidoExistente.items || [];
+                guardarUltimoPedidoLocal({
+                    id: pedidoEditId,
+                    email: (pedidoExistente.cliente || {}).email || '',
+                    timestamp: pedidoExistente.timestamp,
+                    unidades: itemsPedido.reduce((sum, it) => sum + (Number(it.cantidad) || 0), 0),
+                    total: itemsPedido.reduce((sum, it) => {
+                        const precio = parseFloat(String(it.valorUSD).replace(/[^0-9.-]+/g, '')) || 0;
+                        return sum + precio * (Number(it.cantidad) || 0);
+                    }, 0)
+                });
             }
         })
         .catch(error => {
@@ -1173,24 +1231,16 @@ function actualizarCarrito() {
     const cartList = document.getElementById('cart-list');
     const cartFloatBtn = document.getElementById('cartFloatBtn');
     const cartBadge = document.getElementById('cartBadge');
+    const tabbarBadge = document.getElementById('tabbarBadge');
 
     cartList.innerHTML = '';
 
-    // Calcular total de unidades
-    let totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
-
-    // Calcular total monetario del carrito
-    let totalMonto = carrito.reduce((sum, item) => {
-        const precioUnit = parseFloat(String(item.precio).replace(/[^0-9.-]+/g, '')) || 0;
-        return sum + precioUnit * item.cantidad;
-    }, 0);
-    // Aplicar descuento del 10%: solo en envíos, con total > $100.000 y 5 o más unidades
-    const UMBRAL_DESCUENTO = 100000;
-    const UMBRAL_UNIDADES = 5;
-    const PORCENTAJE_DESCUENTO = 0.10;
-    const aplicaDescuento = entregaConDescuento() && totalMonto > UMBRAL_DESCUENTO && totalUnidades >= UMBRAL_UNIDADES;
-    const montoDescuento = aplicaDescuento ? totalMonto * PORCENTAJE_DESCUENTO : 0;
-    const totalFinal = totalMonto - montoDescuento;
+    const resumen = calcularResumenCarrito();
+    const totalUnidades  = resumen.unidades;
+    const totalMonto     = resumen.totalBruto;
+    const aplicaDescuento = resumen.aplicaDescuento;
+    const montoDescuento = resumen.montoDescuento;
+    const totalFinal     = resumen.totalFinal;
 
     const formatearMonto = (n) => '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
@@ -1224,6 +1274,9 @@ function actualizarCarrito() {
         if (cartContainer) {
             cartContainer.classList.remove('active');
             if (typeof cartExpanded !== 'undefined') cartExpanded = false;
+            // Este camino no pasa por toggleCart(), así que el resaltado del ítem
+            // "Carrito" de la barra inferior se apaga a mano
+            if (typeof window.sincronizarTabCarrito === 'function') window.sincronizarTabCarrito();
         }
         // Carrito vacío: el próximo artículo vuelve a ser "el primero" y se pregunta de nuevo
         if (!modoEdicion && tipoEntrega) {
@@ -1240,6 +1293,14 @@ function actualizarCarrito() {
     // Actualizar badge
     if (cartBadge) {
         cartBadge.textContent = totalUnidades;
+    }
+
+    // Mismo contador en la barra de navegación inferior, que es la vía real de
+    // acceso al carrito (el botón flotante quedó oculto). Con el carrito vacío
+    // el globo desaparece en lugar de mostrar un 0.
+    if (tabbarBadge) {
+        tabbarBadge.textContent = totalUnidades;
+        tabbarBadge.style.display = totalUnidades > 0 ? 'flex' : 'none';
     }
 
     // Renderizar items con botón de eliminar
@@ -1512,13 +1573,41 @@ function limpiarCarrito() {
     guardarCarritoLocal();
 }
 
-// Función para calcular el total del carrito en pesos
-function calcularTotalCarrito() {
-    return carrito.reduce((sum, item) => {
-        // Limpiar el precio de caracteres no numéricos y convertir a número
-        const precioLimpio = parseFloat(item.precio.toString().replace(/[^0-9.-]/g, ''));
-        return sum + (precioLimpio * item.cantidad);
+// Resumen del carrito en un solo lugar: unidades, total y descuento.
+// El descuento del 10% corre solo en envíos, con total > $100.000 y 5 o más
+// unidades. Lo consumen actualizarCarrito() (para pintar el panel),
+// calcularTotalCarrito() (validación del monto mínimo) y el registro del último
+// pedido, así la cifra que se guarda es la misma que vio el cliente en pantalla.
+function calcularResumenCarrito() {
+    const UMBRAL_DESCUENTO = 100000;
+    const UMBRAL_UNIDADES = 5;
+    const PORCENTAJE_DESCUENTO = 0.10;
+
+    const unidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+
+    const totalBruto = carrito.reduce((sum, item) => {
+        const precioUnit = parseFloat(String(item.precio).replace(/[^0-9.-]+/g, '')) || 0;
+        return sum + precioUnit * item.cantidad;
     }, 0);
+
+    const aplicaDescuento = entregaConDescuento()
+        && totalBruto > UMBRAL_DESCUENTO
+        && unidades >= UMBRAL_UNIDADES;
+    const montoDescuento = aplicaDescuento ? totalBruto * PORCENTAJE_DESCUENTO : 0;
+
+    return {
+        unidades: unidades,
+        totalBruto: totalBruto,
+        aplicaDescuento: aplicaDescuento,
+        montoDescuento: montoDescuento,
+        totalFinal: totalBruto - montoDescuento
+    };
+}
+
+// Función para calcular el total del carrito en pesos (sin descuento aplicado:
+// el monto mínimo de pedido se evalúa sobre el valor de lista)
+function calcularTotalCarrito() {
+    return calcularResumenCarrito().totalBruto;
 }
 
 // Modal de notificación de monto mínimo de pedido
@@ -1894,6 +1983,17 @@ function _enviarPedidoFinalConfirmado() {
             return pedidoRef.set(pedidoObj).then(() => pedidoId);
         })
         .then((pedidoId) => {
+            // Registrar el pedido en este navegador para el acceso rápido de la
+            // barra inferior. Va antes de limpiarCarrito(): después el carrito
+            // está vacío y ya no se podrían leer las unidades ni el total.
+            const resumenPedido = calcularResumenCarrito();
+            guardarUltimoPedidoLocal({
+                id: pedidoId,
+                email: datosExtraCliente.email || '',
+                unidades: resumenPedido.unidades,
+                total: resumenPedido.totalFinal
+            });
+
             // Enviar email automático
             if (datosExtraCliente.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datosExtraCliente.email)) {
                 emailjs.send("service_lu9cpxk", "template_xqo1j5z", {
