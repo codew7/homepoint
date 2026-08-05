@@ -357,16 +357,6 @@
       flex: 1;
       min-width: 0;
     }
-    .pedidos-panel-nota {
-      width: 100%;
-      font-size: 12px;
-      color: var(--text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-style: italic;
-      order: 10;
-    }
     .pedidos-panel-loading {
       padding: 40px;
       text-align: center;
@@ -409,21 +399,6 @@
     .historial-search input:focus {
       border-color: var(--accent);
     }
-    .badge-en-preparacion {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 7px;
-      border-radius: 6px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      letter-spacing: .2px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-
     .badge-listo {
       display: inline-flex;
       align-items: center;
@@ -437,6 +412,192 @@
       letter-spacing: .2px;
       flex-shrink: 0;
       white-space: nowrap;
+    }
+
+    /* =========================================
+       RIEL DE 3 TRAMOS (panel de pedidos pendientes)
+
+       Los tres hitos de un pedido no son etiquetas sueltas, son un pipeline:
+       se arma -> se cierra el precio -> se cobra. El riel los apila y se llena
+       de abajo hacia arriba, asi la ALTURA de lo lleno dice cuanto avanzo y la
+       POSICION del hueco dice donde se trabo, sin tener que leer la fila.
+
+       Todo va prefijado .pp- y scopeado a .pp-item--rail: .pedidos-panel-item,
+       .pedidos-panel-nombre y .pedidos-panel-fecha se comparten con
+       #historialPanel, que debe seguir viendose exactamente igual.
+       ========================================= */
+    .pp-item--rail {
+      position: relative;
+      padding-left: 28px;
+    }
+
+    /* El riel va en absoluto, NO como hijo flex: .pedidos-panel-item es
+       flex-wrap y la nota cae a una segunda linea con width:100% + order:10.
+       Un align-self:stretch solo estiraria dentro de su propia linea flex, asi
+       que en las filas con nota el riel quedaria a media altura. */
+    .pp-rail {
+      position: absolute;
+      left: 12px;
+      top: 10px;
+      bottom: 10px;
+      width: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border-radius: 3px;
+    }
+    /* Radio chico a proposito: con 3px sobre 6px de ancho el segmento se vuelve
+       una pildora y en las filas de una sola linea se lee como un punto suelto
+       en vez de como un tramo de barra. */
+    .pp-seg {
+      flex: 1;
+      border-radius: 1.5px;
+      background: var(--border);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+      transition: background .25s var(--ease-out);
+    }
+    .pp-seg--armado.is-on  { background: var(--success); box-shadow: none; }
+    .pp-seg--cerrado.is-on { background: #d97706; box-shadow: none; }
+    .pp-seg--pago.is-on    { background: #1e60a8; box-shadow: none; }
+
+    /* "Esperando pago" se distingue por TEXTURA ademas de color: rayado = en
+       curso pero no cobrado. Asi no depende de percibir el matiz. */
+    .pp-seg--pago.is-wait {
+      background: repeating-linear-gradient(
+        45deg,
+        #d97706 0 2.5px,
+        #fde8c8 2.5px 5px
+      );
+      box-shadow: inset 0 0 0 1px rgba(217,119,6,.45);
+    }
+
+    /* Graduacion 3/3: el riel pierde las separaciones y se funde en una barra
+       verde continua. El cambio de FORMA (segmentado -> solido) es lo que hace
+       que la fila salte sin leerla. */
+    .pp-item--rail.is-listo {
+      background: linear-gradient(90deg, var(--success-soft), transparent 55%);
+    }
+    .pp-item--rail.is-listo .pp-rail {
+      gap: 0;
+      overflow: hidden;
+      box-shadow: 0 0 10px var(--success-glow);
+    }
+    .pp-item--rail.is-listo .pp-seg {
+      border-radius: 0;
+      background: var(--success);
+      box-shadow: none;
+    }
+
+    /* Toggle de cobro. Arranca fantasma (borde punteado, sin fondo) para no
+       competir con el nombre; recien se pinta cuando hay algo que decir. */
+    .pp-btn-pago {
+      flex-shrink: 0;
+      width: 32px;
+      height: 28px;
+      padding: 0;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      transition: all .18s var(--ease-out);
+    }
+    .pp-btn-pago:hover { border-color: var(--text-muted); color: var(--text-secondary); }
+    .pp-btn-pago:active { transform: scale(.88); }
+    .pp-btn-pago.is-solicitado {
+      border: 1px solid #d97706;
+      background: #fef3c7;
+      color: #d97706;
+    }
+    .pp-btn-pago.is-pago {
+      border: 1px solid #1e60a8;
+      background: #1e60a8;
+      color: #fff;
+    }
+    .pp-btn-pago:disabled { opacity: .45; cursor: default; transform: none; }
+
+    /* Encabezado de grupo por etapa */
+    .pp-grupo {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 7px 16px 6px 28px;
+      background: var(--surface-warm);
+      border-bottom: 1px solid var(--border-light);
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .pp-grupo--listo { color: var(--success); background: var(--success-soft); }
+    .pp-grupo-count {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    /* Antiguedad: pedido trabado hace demasiado */
+    .pedidos-panel-fecha.is-viejo { color: var(--danger); font-weight: 700; }
+
+    /* Resumen bajo el titulo del panel */
+    .pp-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .pp-resumen {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: .2px;
+    }
+    .pp-resumen b { color: var(--success); font-weight: 800; }
+    .pp-resumen i { color: var(--danger); font-style: normal; font-weight: 800; }
+
+    /* Leyenda: el riel es compacto pero no autoexplicativo. Se muestra una sola
+       vez, con el mismo orden vertical que tienen los tramos en las filas. */
+    .pp-leyenda {
+      display: flex;
+      align-items: stretch;
+      gap: 9px;
+      padding: 9px 16px;
+      border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+      background: var(--surface-warm);
+    }
+    .pp-leyenda-rail {
+      width: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .pp-leyenda-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+    /* min-height para que el mini-riel de al lado tenga alto suficiente y se lea
+       como una barra segmentada, no como tres puntos apilados. */
+    .pp-leyenda-labels span {
+      flex: 1;
+      min-height: 14px;
+      display: flex;
+      align-items: center;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      line-height: 1;
     }
 
     /* =========================================
@@ -2570,8 +2731,24 @@
   <div class="pedidos-panel" id="pedidosPanel">
     <div class="pedidos-panel-box">
       <div class="pedidos-panel-header">
-        <h3>Pedidos pendientes</h3>
+        <div class="pp-title">
+          <h3>Pedidos pendientes</h3>
+          <span class="pp-resumen" id="pedidosResumen"></span>
+        </div>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
+      </div>
+      <!-- Leyenda del riel: mismo orden vertical que los tramos de cada fila -->
+      <div class="pp-leyenda">
+        <span class="pp-leyenda-rail" aria-hidden="true">
+          <i class="pp-seg pp-seg--pago is-on"></i>
+          <i class="pp-seg pp-seg--cerrado is-on"></i>
+          <i class="pp-seg pp-seg--armado is-on"></i>
+        </span>
+        <span class="pp-leyenda-labels">
+          <span>Pago</span>
+          <span>Cerrado</span>
+          <span>Armado</span>
+        </span>
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
         <div class="pedidos-panel-empty">Presiona "Pedidos" para cargar</div>
@@ -3325,6 +3502,89 @@
       if (v.includes('CERRADO'))    return 'status-badge--closed';
       if (v.includes('ABIERTO'))    return 'status-badge--open';
       return '';
+    }
+
+    // ==========================================
+    // ETAPAS DE UN PEDIDO (riel del panel de pendientes)
+    // Armado -> Cerrado -> Pago. El unico dato ambiguo es el pago, que sale del
+    // campo `nota` (texto libre alimentado por la hoja notas!A:A del Sheet).
+    // ==========================================
+
+    // Minusculas, sin acentos, sin espacios de mas: 'Señado ' y 'senado' comparan igual.
+    function normalizarNota(nota) {
+      return (nota == null ? '' : String(nota))
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+    }
+
+    // Notas que significan COBRADO. Agregar aca si aparecen valores nuevos en
+    // la hoja notas!A:A; el match es EXACTO a proposito (ver estadoPago).
+    const NOTAS_PAGADO = ['pago', 'pagado', 'abonado', 'señado', 'senado'];
+    const NOTAS_PAGADO_SET = new Set(NOTAS_PAGADO.map(normalizarNota));
+
+    // 'pagado' | 'espera' | 'sin-dato'.
+    // El orden de los chequeos es lo que evita el falso positivo clasico:
+    // 'esperando pago' contiene 'pago', pero como el match de cobrado es exacto
+    // nunca puede escalar a 'pagado' — cae en 'espera'. Cualquier nota futura
+    // del Sheet que mencione pago hereda ese piso seguro.
+    function estadoPago(nota) {
+      const n = normalizarNota(nota);
+      if (!n) return 'sin-dato';
+      if (NOTAS_PAGADO_SET.has(n)) return 'pagado';
+      if (n.indexOf('pag') !== -1) return 'espera';
+      return 'sin-dato';
+    }
+
+    // Valores que escribe el boton de pago del panel. 'Pago' entra en
+    // NOTAS_PAGADO (tramo azul solido); 'Pago Solicitado' no, y como menciona
+    // pago cae en 'espera' (tramo rayado). El riel refleja el toggle solo.
+    const NOTA_PAGO_SOLICITADO = 'Pago Solicitado';
+    const NOTA_PAGO = 'Pago';
+
+    // Ciclo de tres pasos: (sin nota) -> Solicitado -> Pago -> (sin nota).
+    // Avanza segun el ESTADO VISUAL del boton, no segun el texto exacto: si se
+    // ve azul el proximo toque lo apaga, tambien cuando la nota venia del Sheet
+    // ('pagado', 'esperando pago') y no la escribio este boton.
+    // Vacia con '' y no con null para dejar el campo como lo deja el notaSelect
+    // del footer, cuya opcion '---' vale ''.
+    function siguienteNotaPago(nota) {
+      const estado = estadoPago(nota);
+      if (estado === 'espera') return NOTA_PAGO;
+      if (estado === 'pagado') return '';
+      return NOTA_PAGO_SOLICITADO;
+    }
+
+    function pedidoEtapas(p) {
+      const armado = p.todosListos === true;
+      const cerrado = p.status === 'CERRADO' || p.locked === true;
+      const pago = estadoPago(p.nota);
+      const score = (armado ? 1 : 0) + (cerrado ? 1 : 0) + (pago === 'pagado' ? 1 : 0);
+      return {
+        armado: armado,
+        cerrado: cerrado,
+        pago: pago,
+        score: score,
+        // Los dos grupos altos miran el pipeline completo; los dos bajos miran
+        // el avance de armado: alcanza con un item en 'y' para estar En curso.
+        rank: score === 3 ? 3
+            : score === 2 ? 2
+            : (p.algunoListo ? 1 : 0)
+      };
+    }
+
+    // Un pedido trabado mas de esto se marca en rojo en la lista.
+    const PEDIDO_VIEJO_DIAS = 7;
+
+    function textoAntiguedad(ts) {
+      if (!ts) return { texto: '', viejo: false };
+      const dias = Math.floor((Date.now() - ts) / 86400000);
+      if (dias <= 0) return { texto: 'hoy', viejo: false };
+      return {
+        texto: 'hace ' + dias + ' d',
+        viejo: dias >= PEDIDO_VIEJO_DIAS
+      };
     }
 
     // ==========================================
@@ -4244,6 +4504,8 @@
     // ==========================================
     const pedidosPanel = document.getElementById('pedidosPanel');
     const pedidosPanelList = document.getElementById('pedidosPanelList');
+    const pedidosResumen = document.getElementById('pedidosResumen');
+    let pedidosCache = [];
 
     document.getElementById('btnPedidos').addEventListener('click', () => {
       pedidosPanel.classList.add('active');
@@ -4260,6 +4522,7 @@
 
     async function cargarPedidosPendientes() {
       pedidosPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando pedidos...</div>';
+      pedidosResumen.textContent = '';
 
       try {
         // Consulta 1: status ABIERTO
@@ -4274,47 +4537,175 @@
           .equalTo('CERRADO')
           .once('value');
 
-        const pedidos = [];
+        pedidosCache = [];
 
         const recolectarPendiente = (child) => {
           const p = child.val();
           const items = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
           const todosListos = items.length > 0 && items.every(it => it && it.listo === 'y');
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, todosListos: todosListos, nota: p.nota || '', timestamp: p.timestamp || 0 });
+          const algunoListo = items.some(it => it && it.listo === 'y');
+          const fila = {
+            id: child.key,
+            nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre',
+            status: p.status,
+            locked: p.locked === true,
+            todosListos: todosListos,
+            algunoListo: algunoListo,
+            nota: p.nota || '',
+            timestamp: p.timestamp || 0
+          };
+          // Las etapas se calculan una sola vez, en la carga: el sort, el
+          // agrupado y el resumen las leen despues sin recomputarlas.
+          pedidosCache.push(Object.assign(fila, pedidoEtapas(fila)));
         };
 
         snapAbierto.forEach(recolectarPendiente);
         snapCerrado.forEach(recolectarPendiente);
 
-        // Ordenar por timestamp descendente (más recientes primero)
-        pedidos.sort((a, b) => b.timestamp - a.timestamp);
+        // Primero los que ya se pueden despachar y, dentro de cada etapa, los
+        // mas viejos arriba: son los que llevan mas tiempo trabados en ese paso.
+        pedidosCache.sort((a, b) => (b.rank - a.rank) || (a.timestamp - b.timestamp));
 
-        if (pedidos.length === 0) {
-          pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
-          return;
-        }
-
-        pedidosPanelList.innerHTML = pedidos.map(p =>
-          '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
-          '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
-          (p.todosListos ? '<span class=\"badge-listo\">✅ Completo</span>' : p.enPreparacion === 'si' ? '<span class=\"badge-en-preparacion\">&#9881;&#65039; En prep.</span>' : '') +
-          '<span class="status-badge ' + getStatusClass(p.status) + '">' + emojiStatus(p.status) + escapeHtml(p.status) + '</span>' +
-          (p.nota ? '<span class="pedidos-panel-nota">📝 ' + escapeHtml(p.nota) + '</span>' : '') +
-          '</div>'
-        ).join('');
+        renderPedidosPendientes();
       } catch (err) {
         console.error('Error cargando pedidos:', err);
+        pedidosResumen.textContent = '';
         pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">Error al cargar pedidos</div>';
       }
     }
 
+    const PP_GRUPOS = {
+      3: 'Listos para salir',
+      2: 'Casi listos',
+      1: 'En curso',
+      0: 'Sin avance'
+    };
+
+    function ppSeg(hito, clase, titulo) {
+      return '<i class="pp-seg pp-seg--' + hito + ' ' + clase + '" title="' + escapeHtml(titulo) + '" aria-hidden="true"></i>';
+    }
+
+    // El riel se lee de abajo hacia arriba (armado -> cerrado -> pago), asi que
+    // el orden en el DOM es el inverso: el primer hijo queda arriba.
+    function ppRailHtml(p) {
+      const pagoClase = p.pago === 'pagado' ? 'is-on' : p.pago === 'espera' ? 'is-wait' : 'is-off';
+      const pagoTitulo = p.pago === 'pagado' ? 'Pago registrado'
+                       : p.pago === 'espera' ? 'Esperando pago'
+                       : 'Sin dato de pago';
+      const etiqueta = 'Armado: ' + (p.armado ? 'si' : 'no') +
+                       '. Cerrado: ' + (p.cerrado ? 'si' : 'no') +
+                       '. ' + pagoTitulo + '.';
+      return '<span class="pp-rail" role="img" aria-label="' + escapeHtml(etiqueta) + '">' +
+        ppSeg('pago', pagoClase, pagoTitulo) +
+        ppSeg('cerrado', p.cerrado ? 'is-on' : 'is-off', p.cerrado ? 'Pedido cerrado' : 'Falta cerrar') +
+        ppSeg('armado', p.armado ? 'is-on' : 'is-off', p.armado ? 'Armado completo' : 'Falta armar') +
+        '</span>';
+    }
+
+    // Toggle de cobro. Escribe el campo `nota`, que es de donde sale el tramo
+    // superior del riel, asi que el efecto del toque se ve en el acto.
+    function ppBotonPagoHtml(p) {
+      const clase = p.pago === 'pagado' ? ' is-pago' : p.pago === 'espera' ? ' is-solicitado' : '';
+      const titulo = p.pago === 'pagado' ? 'Cobrado. Tocar para borrar la nota'
+                   : p.pago === 'espera' ? 'Pago solicitado. Tocar para marcar Pago'
+                   : 'Tocar para marcar Pago Solicitado';
+      return '<button type="button" class="pp-btn-pago' + clase + '"' +
+        ' data-pago-id="' + escapeHtml(p.id) + '"' +
+        ' title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">$</button>';
+    }
+
+    function ppFilaHtml(p) {
+      const ant = textoAntiguedad(p.timestamp);
+      const listo = p.score === 3;
+      return '<div class="pedidos-panel-item pp-item--rail' + (listo ? ' is-listo' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+        ppRailHtml(p) +
+        '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+        (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
+        ppBotonPagoHtml(p) +
+        '</div>';
+    }
+
+    function renderPedidosPendientes() {
+      if (pedidosCache.length === 0) {
+        pedidosResumen.textContent = '';
+        pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
+        return;
+      }
+
+      const conteo = { 0: 0, 1: 0, 2: 0, 3: 0 };
+      let sinCobrar = 0;
+      pedidosCache.forEach(p => {
+        conteo[p.rank]++;
+        if (p.pago !== 'pagado') sinCobrar++;
+      });
+
+      pedidosResumen.innerHTML = pedidosCache.length + ' pendientes · ' +
+        '<b>' + conteo[3] + ' listos para salir</b> · ' +
+        '<i>' + sinCobrar + ' sin cobrar</i>';
+
+      let html = '';
+      let grupoActual = null;
+      pedidosCache.forEach(p => {
+        if (p.rank !== grupoActual) {
+          grupoActual = p.rank;
+          html += '<div class="pp-grupo' + (grupoActual === 3 ? ' pp-grupo--listo' : '') + '">' +
+                  '<span>' + PP_GRUPOS[grupoActual] + '</span>' +
+                  '<span class="pp-grupo-count">' + conteo[grupoActual] + '</span>' +
+                  '</div>';
+        }
+        html += ppFilaHtml(p);
+      });
+
+      pedidosPanelList.innerHTML = html;
+    }
+
     pedidosPanelList.addEventListener('click', (e) => {
+      // El boton de pago vive dentro de la fila: se atiende primero y se corta,
+      // si no el mismo click abriria el pedido.
+      const btnPago = e.target.closest('.pp-btn-pago');
+      if (btnPago) {
+        ppToggleNotaPago(btnPago);
+        return;
+      }
       const item = e.target.closest('.pedidos-panel-item');
       if (!item) return;
       const id = item.dataset.id;
       pedidosPanel.classList.remove('active');
       cargarPedido(id);
     });
+
+    async function ppToggleNotaPago(btn) {
+      if (btn.disabled) return;
+      const id = btn.dataset.pagoId;
+      const p = pedidosCache.find(x => x.id === id);
+      if (!p) return;
+
+      const nueva = siguienteNotaPago(p.nota);
+      btn.disabled = true;
+      try {
+        const ahora = Date.now();
+        // Mismos campos que escribe el notaSelect del footer.
+        await db.ref('pedidos/' + id).update({
+          nota: nueva,
+          notaFecha: ahora,
+          lastUpdated: ahora
+        });
+
+        p.nota = nueva;
+        Object.assign(p, pedidoEtapas(p));
+
+        // Se repinta SOLO esta fila. Un re-render completo reordenaria la lista
+        // y el pedido saltaria de grupo justo debajo del dedo; el orden se
+        // recalcula la proxima vez que se abre el panel.
+        const fila = btn.closest('.pedidos-panel-item');
+        if (fila) fila.outerHTML = ppFilaHtml(p);
+        showToast(nueva ? 'Nota: ' + nueva : 'Nota eliminada');
+      } catch (err) {
+        console.error('Error actualizando nota de pago:', err);
+        btn.disabled = false;
+        showToast('No se pudo actualizar la nota');
+      }
+    }
 
     // ==========================================
     // PANEL HISTORIAL (DESPACHADOS WEB, ULTIMOS 45 DIAS)
