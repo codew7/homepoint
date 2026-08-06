@@ -9,6 +9,7 @@ Sistema de gestión de pedidos para distribuidor "HomePoint". App web HTML está
 ## Arquitectura
 
 - **pedidosv2.html** — Unified order management + dispatch/packing app (tablet-optimized). Single-file con CSS/JS inline. Features: Firebase Auth, QR scanning, unified view con item packing checklist + controles financieros, Firebase realtime listener, quantity controls, progress bar, PWA installable.
+- **pedidosv2Basic.html** — Variante de `pedidosv2.html`. Comparte estructura y estilos; su panel de pedidos pendientes **no lleva el botón de pago** (ver Recent Changes 2026-08-06). Los cambios de UI que toquen el panel hay que replicarlos a mano en los dos archivos.
 - **manifest.json** — Web App Manifest para PWA (Android/iOS/Windows).
 - **sw.js** — Service Worker (caches app shell, network-first strategy).
 - **config.js** — Shared config: Firebase credentials + Google Sheets API (API_KEY, SPREADSHEET_ID, RANGO).
@@ -41,7 +42,7 @@ Sistema de gestión de pedidos para distribuidor "HomePoint". App web HTML está
 
 ### Financial
 - Subtotal, descuento (%), recargo (%), envío, TOTAL FINAL.
-- TOTAL FINAL clickeable → copia cotización a clipboard (subtotal, descuentos, recargos, total, medio de pago, alias si Transferencia).
+- TOTAL FINAL clickeable → copia cotización a clipboard (subtotal, descuentos, recargos, total, medio de pago, alias si Transferencia), cierra/sella el pedido y marca la nota `Pago Solicitado`.
 - Auto-save via `programarActualizacion()` (2s debounce).
 
 ### Pago + Entrega
@@ -153,3 +154,37 @@ La columna B del Sheet trae hasta 4 URLs separadas por coma. `cargarSheets()` gu
 ### Barra de solo lectura según el motivo
 
 `#statusBar` aparece con `isBlocked` (status `CANCELADO` o `DESPACHADO/ENTREGADO`) y era roja en ambos casos. Ahora `claseStatusBar(status)` agrega el modificador `.entregado` para `DESPACHADO/ENTREGADO`, que la pinta con `--success-soft`/`--success`; `CANCELADO` sigue en rojo. La función centraliza los **tres** puntos que arman la barra (carga inicial y los dos listeners `on('value')`), que antes escribían el string de clases a mano — si se agrega un cuarto, debe usarla.
+
+## Recent Changes (2026-08-06)
+
+### Paleta del riel de pedidos pendientes + estado "en preparación"
+
+Los tres hitos del riel (`.pp-seg`) pasaron a una paleta por hito: **Completo `#C0CA33`** (verde lima), **Cerrado `#FFA726`** (naranja claro), **Pago `#9575CD`** (violeta). El botón `$` de cobro (`.pp-btn-pago`) acompaña el violeta del hito que escribe.
+
+- **El lima conserva `box-shadow: inset 0 0 0 1px rgba(0,0,0,.12)`** en vez de `none` como los otros dos: sobre `--surface` (#fff) tiene poco contraste y sin el borde el tramo desaparece. Las dos tramas rayadas llevan su propio inset por el mismo motivo (base clara).
+- **Tercer estado en el tramo de armado.** Era binario (`todosListos`), así que un pedido a medio armar se veía igual que uno sin tocar. `pedidoEtapas()` ahora devuelve `enPreparacion` (`!armado && p.algunoListo`), y `ppRailHtml()` elige entre `is-on` / `is-wait` / `is-off`. El dato ya venía de `recolectarPendiente()` — **no hace falta releer items**. Se deriva en `pedidoEtapas()` y no en la vista porque `ppToggleNotaPago()` reusa esa función para repintar una fila suelta sobre el mismo objeto de `pedidosCache`. No afecta `score` ni `rank` (esos pedidos ya caían en el grupo "En curso").
+- **Rayado = arrancó pero no terminó**, en los dos estados intermedios: *en preparación* (verde `#66BB6A` sobre `#E8F5E9`) y *esperando pago* (violeta `#9575CD` sobre `#ede7f6`). **La trama es idéntica en ambos** —45°, 2.5px sobre 5px de paso—: lo que ya los separa es el color y, sobre todo, la posición fija de cada tramo en el riel. El verde de la trama **no** es el lima del tramo lleno: al ser rayas sobre base clara, repetirlo daría dos estados casi iguales.
+- **Terminología**: el hito se llama **"Completo"**, no "Armado" (leyenda, `title` y `aria-label`). Los grupos son **"Para Despachar"** (rank 3), "Casi listos" (2), "En curso" (1) y **"Nuevos"** (0).
+- **Antigüedad sin preposición**: `textoAntiguedad()` devuelve `"9 días"` / `"1 día"` en vez de `"hace 9 d"`. `hoy` queda igual.
+- **Resumen del panel** (`#pedidosResumen`): `<total> pedidos · <n> para despachar`. El conteo "en curso" se quitó a pedido — la fila de grupo ya lo muestra.
+- **La leyenda es un solo bloque en dos columnas** (`.pp-leyenda-labels` + `.pp-leyenda-tex`), no una línea extra: el panel es una lista y cada renglón del encabezado es un pedido menos visible. **`.pp-leyenda-labels` no lleva `flex: 1`**: si esa columna se estira empuja la de texturas contra el borde derecho y las dos mitades se leen como leyendas distintas. La separación entre columnas es un `margin-left: 100px` en `.pp-leyenda-tex`; con `flex-shrink: 0` y `white-space: nowrap`, si llegara a cortarse en pantallas angostas el reemplazo es `min(100px, 12vw)`. Las muestras anulan el `flex: 1` de `.pp-seg`, pensado para repartir alto dentro del riel.
+- `.pp-item--rail.is-listo` sigue fundiendo el riel entero en verde sólido con 3/3. No colisiona con la trama: exige `armado === true`.
+- **Sin toast al tocar el botón `$`.** `ppToggleNotaPago()` ya no confirma por texto: el riel cambia de color debajo del dedo. El toast de **error** sí queda — ahí la fila se repinta igual y nada más delataría que no se guardó.
+
+### `marcarPagoSolicitado()` al copiar el TOTAL FINAL
+
+Copiar el total es el acto de pasarle el precio al cliente, o sea el momento en que el pedido queda esperando cobro. El `onclick` de `#pvTotalFinal` ahora, además de `sellarYCerrarCotizacion()` y el clipboard, escribe `nota: 'Pago Solicitado'` + `notaFecha` + `lastUpdated` (los mismos tres campos que el `notaSelect` del footer y el botón `$` del panel), así que el riel pasa solo al tramo violeta rayado.
+
+- **No se corta por `locked`**, a diferencia de `sellarYCerrarCotizacion()`: un pedido ya cerrado que se vuelve a cotizar igual necesita quedar marcado.
+- **Dos salidas tempranas** para no pisar información: si `estadoPago(nota) === 'pagado'` sería un retroceso, y si la nota ya decía lo mismo solo movería `notaFecha`.
+- Sincroniza el `<select>` del footer **agregando la `<option>` si no existiera**: las opciones vienen de la hoja `notas!A:A` y asignar un `value` sin option no hace nada, dejando el footer mostrando la nota anterior.
+- No hay pisada con el cierre: `pvCerrarPedido()` escribe `locked`/`status`/`items`/`pagos`, nunca `nota`.
+- **Enviar la cotización por mensaje** (el otro llamador de `sellarYCerrarCotizacion()`) quedó sin marcar.
+
+### Port del panel de pendientes a `pedidosv2Basic.html`
+
+`pedidosv2Basic.html` recibió el panel completo —riel, agrupación, resumen, leyenda, antigüedad— **sin el botón de pago**: no existen `.pp-btn-pago`, `ppBotonPagoHtml()`, `ppToggleNotaPago()`, `siguienteNotaPago()` ni las constantes `NOTA_PAGO*`. **El tramo violeta del riel sí está**: se deriva de `nota` vía `estadoPago()`, es de solo lectura.
+
+- Se portaron `normalizarNota` / `NOTAS_PAGADO` / `estadoPago` / `pedidoEtapas` / `textoAntiguedad` y se reescribió `cargarPedidosPendientes()` con `recolectarPendiente` + `renderPedidosPendientes`. Los datos coinciden: Basic ya usaba `items[].listo === 'y'`.
+- **Las filas perdieron los badges viejos** (`badge-en-preparacion`, `status-badge`) y la línea de nota `📝`: el riel codifica lo mismo. `.badge-en-preparacion` y `.pedidos-panel-nota` quedaron como CSS sin uso, a propósito.
+- Ojo con el nombre: `enPreparacion` es a la vez un campo de Firebase (`'si'|'listo'`) y la propiedad booleana que agrega `pedidoEtapas()` a las filas de `pedidosCache`. No se cruzan porque `recolectarPendiente` arma la fila con campos explícitos y no copia el de Firebase.

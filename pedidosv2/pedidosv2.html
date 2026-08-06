@@ -456,19 +456,35 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
       transition: background .25s var(--ease-out);
     }
-    .pp-seg--armado.is-on  { background: var(--success); box-shadow: none; }
-    .pp-seg--cerrado.is-on { background: #d97706; box-shadow: none; }
-    .pp-seg--pago.is-on    { background: #1e60a8; box-shadow: none; }
+    /* El lima conserva un inset apenas visible: sobre --surface (#fff) tiene
+       poco contraste y sin el borde el tramo se pierde. Los otros dos se
+       despegan solos del fondo. */
+    .pp-seg--armado.is-on  { background: #C0CA33; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+    .pp-seg--cerrado.is-on { background: #FFA726; box-shadow: none; }
+    .pp-seg--pago.is-on    { background: #9575CD; box-shadow: none; }
 
-    /* "Esperando pago" se distingue por TEXTURA ademas de color: rayado = en
-       curso pero no cobrado. Asi no depende de percibir el matiz. */
+    /* Los dos estados intermedios se distinguen por TEXTURA ademas de color:
+       rayado = el hito arranco pero no termino (en preparacion / esperando
+       pago). Asi no depende de percibir el matiz. La trama es la MISMA en los
+       dos —45deg, 2.5px sobre 5px de paso— porque lo que ya los separa es el
+       color y, sobre todo, la posicion fija de cada tramo en el riel. */
     .pp-seg--pago.is-wait {
       background: repeating-linear-gradient(
         45deg,
-        #d97706 0 2.5px,
-        #fde8c8 2.5px 5px
+        #9575CD 0 2.5px,
+        #ede7f6 2.5px 5px
       );
-      box-shadow: inset 0 0 0 1px rgba(217,119,6,.45);
+      box-shadow: inset 0 0 0 1px rgba(149,117,205,.45);
+    }
+    /* Verde y no el lima del tramo lleno: al ser una trama sobre base clara,
+       repetir el lima daria dos estados casi iguales. */
+    .pp-seg--armado.is-wait {
+      background: repeating-linear-gradient(
+        45deg,
+        #66BB6A 0 2.5px,
+        #E8F5E9 2.5px 5px
+      );
+      box-shadow: inset 0 0 0 1px rgba(102,187,106,.45);
     }
 
     /* Graduacion 3/3: el riel pierde las separaciones y se funde en una barra
@@ -508,14 +524,16 @@
     }
     .pp-btn-pago:hover { border-color: var(--text-muted); color: var(--text-secondary); }
     .pp-btn-pago:active { transform: scale(.88); }
+    /* Mismo eje de color que el tramo "pago" del riel: el boton y el segmento
+       que escribe tienen que leerse como lo mismo. */
     .pp-btn-pago.is-solicitado {
-      border: 1px solid #d97706;
-      background: #fef3c7;
-      color: #d97706;
+      border: 1px solid #9575CD;
+      background: #ede7f6;
+      color: #6a4bab;
     }
     .pp-btn-pago.is-pago {
-      border: 1px solid #1e60a8;
-      background: #1e60a8;
+      border: 1px solid #9575CD;
+      background: #9575CD;
       color: #fff;
     }
     .pp-btn-pago:disabled { opacity: .45; cursor: default; transform: none; }
@@ -558,7 +576,6 @@
       letter-spacing: .2px;
     }
     .pp-resumen b { color: var(--success); font-weight: 800; }
-    .pp-resumen i { color: var(--danger); font-style: normal; font-weight: 800; }
 
     /* Leyenda: el riel es compacto pero no autoexplicativo. Se muestra una sola
        vez, con el mismo orden vertical que tienen los tramos en las filas. */
@@ -578,11 +595,13 @@
       gap: 2px;
       flex-shrink: 0;
     }
+    /* Sin flex:1 a proposito: si esta columna se estira, empuja la de texturas
+       contra el borde derecho y las dos mitades de la leyenda se leen como dos
+       bloques distintos. Sin crecer, quedan juntas y el aire sobra a la derecha. */
     .pp-leyenda-labels {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      flex: 1;
       min-width: 0;
     }
     /* min-height para que el mini-riel de al lado tenga alto suficiente y se lea
@@ -598,6 +617,39 @@
       letter-spacing: .8px;
       color: var(--text-muted);
       line-height: 1;
+    }
+
+    /* Que significa cada trama. Segunda columna de la MISMA leyenda —sin borde
+       ni separador que la parta en dos— pegada a la anterior: son cinco estados
+       del mismo riel. Va al lado y no abajo para no gastar alto: el panel es una
+       lista y cada linea del encabezado es una fila menos de pedidos. El title
+       de cada tramo no alcanza como explicacion: en tablet no hay hover. */
+    .pp-leyenda-tex {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-left: 100px;
+    }
+    .pp-leyenda-tex > span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+    /* .pp-seg trae flex:1 para repartir alto dentro del riel; como muestra
+       suelta necesita medida propia. */
+    .pp-leyenda-tex .pp-seg {
+      flex: none;
+      width: 6px;
+      height: 14px;
     }
 
     /* =========================================
@@ -2747,7 +2799,11 @@
         <span class="pp-leyenda-labels">
           <span>Pago</span>
           <span>Cerrado</span>
-          <span>Armado</span>
+          <span>Completo</span>
+        </span>
+        <span class="pp-leyenda-tex">
+          <span><i class="pp-seg pp-seg--armado is-wait" aria-hidden="true"></i>En preparación</span>
+          <span><i class="pp-seg pp-seg--pago is-wait" aria-hidden="true"></i>Esperando pago</span>
         </span>
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
@@ -3538,14 +3594,14 @@
     }
 
     // Valores que escribe el boton de pago del panel. 'Pago' entra en
-    // NOTAS_PAGADO (tramo azul solido); 'Pago Solicitado' no, y como menciona
+    // NOTAS_PAGADO (tramo violeta solido); 'Pago Solicitado' no, y como menciona
     // pago cae en 'espera' (tramo rayado). El riel refleja el toggle solo.
     const NOTA_PAGO_SOLICITADO = 'Pago Solicitado';
     const NOTA_PAGO = 'Pago';
 
     // Ciclo de tres pasos: (sin nota) -> Solicitado -> Pago -> (sin nota).
     // Avanza segun el ESTADO VISUAL del boton, no segun el texto exacto: si se
-    // ve azul el proximo toque lo apaga, tambien cuando la nota venia del Sheet
+    // ve violeta el proximo toque lo apaga, tambien cuando la nota venia del Sheet
     // ('pagado', 'esperando pago') y no la escribio este boton.
     // Vacia con '' y no con null para dejar el campo como lo deja el notaSelect
     // del footer, cuya opcion '---' vale ''.
@@ -3563,6 +3619,11 @@
       const score = (armado ? 1 : 0) + (cerrado ? 1 : 0) + (pago === 'pagado' ? 1 : 0);
       return {
         armado: armado,
+        // Algun item tildado pero no todos: el pedido se esta armando. Se
+        // resuelve aca y no en la vista porque este es el unico lugar donde se
+        // derivan las etapas; ppToggleNotaPago() reusa la funcion sobre el mismo
+        // objeto de pedidosCache, que conserva algunoListo.
+        enPreparacion: !armado && p.algunoListo === true,
         cerrado: cerrado,
         pago: pago,
         score: score,
@@ -3582,7 +3643,7 @@
       const dias = Math.floor((Date.now() - ts) / 86400000);
       if (dias <= 0) return { texto: 'hoy', viejo: false };
       return {
-        texto: 'hace ' + dias + ' d',
+        texto: dias + (dias === 1 ? ' día' : ' días'),
         viejo: dias >= PEDIDO_VIEJO_DIAS
       };
     }
@@ -4575,10 +4636,10 @@
     }
 
     const PP_GRUPOS = {
-      3: 'Listos para salir',
+      3: 'Para Despachar',
       2: 'Casi listos',
       1: 'En curso',
-      0: 'Sin avance'
+      0: 'Nuevos'
     };
 
     function ppSeg(hito, clase, titulo) {
@@ -4592,13 +4653,18 @@
       const pagoTitulo = p.pago === 'pagado' ? 'Pago registrado'
                        : p.pago === 'espera' ? 'Esperando pago'
                        : 'Sin dato de pago';
-      const etiqueta = 'Armado: ' + (p.armado ? 'si' : 'no') +
+      const armadoClase = p.armado ? 'is-on' : p.enPreparacion ? 'is-wait' : 'is-off';
+      const armadoTitulo = p.armado ? 'Completo'
+                         : p.enPreparacion ? 'En preparacion'
+                         : 'Sin preparar';
+      // El aria-label prefija el hito: suelto, "Completo." no dice de que.
+      const etiqueta = 'Items: ' + armadoTitulo.toLowerCase() +
                        '. Cerrado: ' + (p.cerrado ? 'si' : 'no') +
                        '. ' + pagoTitulo + '.';
       return '<span class="pp-rail" role="img" aria-label="' + escapeHtml(etiqueta) + '">' +
         ppSeg('pago', pagoClase, pagoTitulo) +
         ppSeg('cerrado', p.cerrado ? 'is-on' : 'is-off', p.cerrado ? 'Pedido cerrado' : 'Falta cerrar') +
-        ppSeg('armado', p.armado ? 'is-on' : 'is-off', p.armado ? 'Armado completo' : 'Falta armar') +
+        ppSeg('armado', armadoClase, armadoTitulo) +
         '</span>';
     }
 
@@ -4633,15 +4699,14 @@
       }
 
       const conteo = { 0: 0, 1: 0, 2: 0, 3: 0 };
-      let sinCobrar = 0;
       pedidosCache.forEach(p => {
         conteo[p.rank]++;
-        if (p.pago !== 'pagado') sinCobrar++;
       });
 
-      pedidosResumen.innerHTML = pedidosCache.length + ' pendientes · ' +
-        '<b>' + conteo[3] + ' listos para salir</b> · ' +
-        '<i>' + sinCobrar + ' sin cobrar</i>';
+      // El conteo sale de los mismos rank que agrupan la lista, asi que el
+      // resumen y los encabezados de grupo no pueden discrepar.
+      pedidosResumen.innerHTML = pedidosCache.length + ' pedidos · ' +
+        '<b>' + conteo[3] + ' para despachar</b>';
 
       let html = '';
       let grupoActual = null;
@@ -4697,9 +4762,11 @@
         // Se repinta SOLO esta fila. Un re-render completo reordenaria la lista
         // y el pedido saltaria de grupo justo debajo del dedo; el orden se
         // recalcula la proxima vez que se abre el panel.
+        // Sin toast de confirmacion: el propio riel ya cambia de color debajo del
+        // dedo, avisarlo por texto es redundante. El de error si queda, porque ahi
+        // la fila se repinta igual y nada mas delataria que no se guardo.
         const fila = btn.closest('.pedidos-panel-item');
         if (fila) fila.outerHTML = ppFilaHtml(p);
-        showToast(nueva ? 'Nota: ' + nueva : 'Nota eliminada');
       } catch (err) {
         console.error('Error actualizando nota de pago:', err);
         btn.disabled = false;
@@ -5728,6 +5795,48 @@
       await pvCerrarPedido(true);
     }
 
+    // Copiar el TOTAL FINAL es el acto de pasarle el precio al cliente, o sea el
+    // momento exacto en que el pedido queda esperando cobro. Se escribe la misma
+    // nota que pone el boton de pago del panel para que el riel lo muestre rayado
+    // sin tener que tocar nada mas.
+    //
+    // A diferencia de sellarYCerrarCotizacion() NO se corta por locked: un pedido
+    // ya cerrado que se vuelve a cotizar igual necesita quedar marcado.
+    // Las dos salidas tempranas evitan pisar informacion: si ya esta cobrado seria
+    // un retroceso, y si ya decia lo mismo solo moveria notaFecha.
+    async function marcarPagoSolicitado() {
+      if (!pedidoId || !pedidoActual) return;
+      if (estadoPago(pedidoActual.nota) === 'pagado') return;
+      if (pedidoActual.nota === NOTA_PAGO_SOLICITADO) return;
+
+      const ahora = Date.now();
+      try {
+        // Mismos campos que escribe el notaSelect del footer.
+        await db.ref('pedidos/' + pedidoId).update({
+          nota: NOTA_PAGO_SOLICITADO,
+          notaFecha: ahora,
+          lastUpdated: ahora
+        });
+        pedidoActual.nota = NOTA_PAGO_SOLICITADO;
+
+        // El select solo acepta valores que existan como <option>, y las opciones
+        // vienen de la hoja notas!A:A: si ahi no figura, se agrega para que el
+        // footer no quede mostrando la nota anterior.
+        if (notaSelect) {
+          const existe = Array.prototype.some.call(notaSelect.options, o => o.value === NOTA_PAGO_SOLICITADO);
+          if (!existe) {
+            const opt = document.createElement('option');
+            opt.value = NOTA_PAGO_SOLICITADO;
+            opt.textContent = NOTA_PAGO_SOLICITADO;
+            notaSelect.appendChild(opt);
+          }
+          notaSelect.value = NOTA_PAGO_SOLICITADO;
+        }
+      } catch (err) {
+        console.error('Error marcando Pago Solicitado:', err);
+      }
+    }
+
     function actualizarCalculosPV() {
       const subtotal = pvCalcSubtotal();
       const totalDiv = document.getElementById('pvTotal');
@@ -5771,6 +5880,7 @@
       // Click para copiar resumen al portapapeles
       totalFinalDiv.onclick = function() {
         sellarYCerrarCotizacion();
+        marcarPagoSolicitado();
         const texto = pvBuildCotizacionTexto();
         navigator.clipboard.writeText(texto).then(() => {
           const textoOriginal = totalFinalDiv.textContent;

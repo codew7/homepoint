@@ -440,6 +440,208 @@
     }
 
     /* =========================================
+       RIEL DE 3 TRAMOS (panel de pedidos pendientes)
+
+       Los tres hitos de un pedido no son etiquetas sueltas, son un pipeline:
+       se arma -> se cierra el precio -> se cobra. El riel los apila y se llena
+       de abajo hacia arriba, asi la ALTURA de lo lleno dice cuanto avanzo y la
+       POSICION del hueco dice donde se trabo, sin tener que leer la fila.
+
+       Todo va prefijado .pp- y scopeado a .pp-item--rail para no tocar las
+       clases .pedidos-panel-* genericas.
+       ========================================= */
+    .pp-item--rail {
+      position: relative;
+      padding-left: 28px;
+    }
+
+    /* El riel va en absoluto, NO como hijo flex: .pedidos-panel-item es
+       flex-wrap y un align-self:stretch solo estiraria dentro de su propia
+       linea flex, asi que en una fila de dos lineas quedaria a media altura. */
+    .pp-rail {
+      position: absolute;
+      left: 12px;
+      top: 10px;
+      bottom: 10px;
+      width: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border-radius: 3px;
+    }
+    /* Radio chico a proposito: con 3px sobre 6px de ancho el segmento se vuelve
+       una pildora y en las filas de una sola linea se lee como un punto suelto
+       en vez de como un tramo de barra. */
+    .pp-seg {
+      flex: 1;
+      border-radius: 1.5px;
+      background: var(--border);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+      transition: background .25s var(--ease-out);
+    }
+    /* El lima conserva un inset apenas visible: sobre --surface (#fff) tiene
+       poco contraste y sin el borde el tramo se pierde. Los otros dos se
+       despegan solos del fondo. */
+    .pp-seg--armado.is-on  { background: #C0CA33; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+    .pp-seg--cerrado.is-on { background: #FFA726; box-shadow: none; }
+    .pp-seg--pago.is-on    { background: #9575CD; box-shadow: none; }
+
+    /* Los dos estados intermedios se distinguen por TEXTURA ademas de color:
+       rayado = el hito arranco pero no termino (en preparacion / esperando
+       pago). Asi no depende de percibir el matiz. La trama es la MISMA en los
+       dos —45deg, 2.5px sobre 5px de paso— porque lo que ya los separa es el
+       color y, sobre todo, la posicion fija de cada tramo en el riel. */
+    .pp-seg--pago.is-wait {
+      background: repeating-linear-gradient(
+        45deg,
+        #9575CD 0 2.5px,
+        #ede7f6 2.5px 5px
+      );
+      box-shadow: inset 0 0 0 1px rgba(149,117,205,.45);
+    }
+    /* Verde y no el lima del tramo lleno: al ser una trama sobre base clara,
+       repetir el lima daria dos estados casi iguales. */
+    .pp-seg--armado.is-wait {
+      background: repeating-linear-gradient(
+        45deg,
+        #66BB6A 0 2.5px,
+        #E8F5E9 2.5px 5px
+      );
+      box-shadow: inset 0 0 0 1px rgba(102,187,106,.45);
+    }
+
+    /* Graduacion 3/3: el riel pierde las separaciones y se funde en una barra
+       verde continua. El cambio de FORMA (segmentado -> solido) es lo que hace
+       que la fila salte sin leerla. */
+    .pp-item--rail.is-listo {
+      background: linear-gradient(90deg, var(--success-soft), transparent 55%);
+    }
+    .pp-item--rail.is-listo .pp-rail {
+      gap: 0;
+      overflow: hidden;
+      box-shadow: 0 0 10px var(--success-glow);
+    }
+    .pp-item--rail.is-listo .pp-seg {
+      border-radius: 0;
+      background: var(--success);
+      box-shadow: none;
+    }
+
+    /* Encabezado de grupo por etapa */
+    .pp-grupo {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 7px 16px 6px 28px;
+      background: var(--surface-warm);
+      border-bottom: 1px solid var(--border-light);
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .pp-grupo--listo { color: var(--success); background: var(--success-soft); }
+    .pp-grupo-count {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    /* Antiguedad: pedido trabado hace demasiado */
+    .pedidos-panel-fecha.is-viejo { color: var(--danger); font-weight: 700; }
+
+    /* Resumen bajo el titulo del panel */
+    .pp-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .pp-resumen {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: .2px;
+    }
+    .pp-resumen b { color: var(--success); font-weight: 800; }
+
+    /* Leyenda: el riel es compacto pero no autoexplicativo. Se muestra una sola
+       vez, con el mismo orden vertical que tienen los tramos en las filas. */
+    .pp-leyenda {
+      display: flex;
+      align-items: stretch;
+      gap: 9px;
+      padding: 9px 16px;
+      border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+      background: var(--surface-warm);
+    }
+    .pp-leyenda-rail {
+      width: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    /* Sin flex:1 a proposito: si esta columna se estira, empuja la de texturas
+       contra el borde derecho y las dos mitades de la leyenda se leen como dos
+       bloques distintos. Sin crecer, quedan juntas y el aire sobra a la derecha. */
+    .pp-leyenda-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    /* min-height para que el mini-riel de al lado tenga alto suficiente y se lea
+       como una barra segmentada, no como tres puntos apilados. */
+    .pp-leyenda-labels span {
+      flex: 1;
+      min-height: 14px;
+      display: flex;
+      align-items: center;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+
+    /* Que significa cada trama. Segunda columna de la MISMA leyenda —sin borde
+       ni separador que la parta en dos— pegada a la anterior: son cinco estados
+       del mismo riel. Va al lado y no abajo para no gastar alto: el panel es una
+       lista y cada linea del encabezado es una fila menos de pedidos. El title
+       de cada tramo no alcanza como explicacion: en tablet no hay hover. */
+    .pp-leyenda-tex {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-left: 100px;
+    }
+    .pp-leyenda-tex > span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+    /* .pp-seg trae flex:1 para repartir alto dentro del riel; como muestra
+       suelta necesita medida propia. */
+    .pp-leyenda-tex .pp-seg {
+      flex: none;
+      width: 6px;
+      height: 14px;
+    }
+
+    /* =========================================
        STATUS BAR
        ========================================= */
     .status-bar {
@@ -2376,8 +2578,28 @@
   <div class="pedidos-panel" id="pedidosPanel">
     <div class="pedidos-panel-box">
       <div class="pedidos-panel-header">
-        <h3>Pedidos pendientes</h3>
+        <div class="pp-title">
+          <h3>Pedidos pendientes</h3>
+          <span class="pp-resumen" id="pedidosResumen"></span>
+        </div>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
+      </div>
+      <!-- Leyenda del riel: mismo orden vertical que los tramos de cada fila -->
+      <div class="pp-leyenda">
+        <span class="pp-leyenda-rail" aria-hidden="true">
+          <i class="pp-seg pp-seg--pago is-on"></i>
+          <i class="pp-seg pp-seg--cerrado is-on"></i>
+          <i class="pp-seg pp-seg--armado is-on"></i>
+        </span>
+        <span class="pp-leyenda-labels">
+          <span>Pago</span>
+          <span>Cerrado</span>
+          <span>Completo</span>
+        </span>
+        <span class="pp-leyenda-tex">
+          <span><i class="pp-seg pp-seg--armado is-wait" aria-hidden="true"></i>En preparación</span>
+          <span><i class="pp-seg pp-seg--pago is-wait" aria-hidden="true"></i>Esperando pago</span>
+        </span>
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
         <div class="pedidos-panel-empty">Presiona "Pedidos" para cargar</div>
@@ -3410,10 +3632,78 @@
     function cargarLocalStorage() { /* no-op */ }
 
     // ==========================================
+    // ETAPAS DE UN PEDIDO (riel del panel de pendientes)
+    // Armado -> Cerrado -> Pago. El unico dato ambiguo es el pago, que sale del
+    // campo `nota` (texto libre alimentado por la hoja notas!A:A del Sheet).
+    // ==========================================
+
+    // Minusculas, sin acentos, sin espacios de mas: 'Señado ' y 'senado' comparan igual.
+    function normalizarNota(nota) {
+      return (nota == null ? '' : String(nota))
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+    }
+
+    // Notas que significan COBRADO. Agregar aca si aparecen valores nuevos en
+    // la hoja notas!A:A; el match es EXACTO a proposito (ver estadoPago).
+    const NOTAS_PAGADO = ['pago', 'pagado', 'abonado', 'señado', 'senado'];
+    const NOTAS_PAGADO_SET = new Set(NOTAS_PAGADO.map(normalizarNota));
+
+    // 'pagado' | 'espera' | 'sin-dato'.
+    // El orden de los chequeos es lo que evita el falso positivo clasico:
+    // 'esperando pago' contiene 'pago', pero como el match de cobrado es exacto
+    // nunca puede escalar a 'pagado' — cae en 'espera'. Cualquier nota futura
+    // del Sheet que mencione pago hereda ese piso seguro.
+    function estadoPago(nota) {
+      const n = normalizarNota(nota);
+      if (!n) return 'sin-dato';
+      if (NOTAS_PAGADO_SET.has(n)) return 'pagado';
+      if (n.indexOf('pag') !== -1) return 'espera';
+      return 'sin-dato';
+    }
+
+    function pedidoEtapas(p) {
+      const armado = p.todosListos === true;
+      const cerrado = p.status === 'CERRADO' || p.locked === true;
+      const pago = estadoPago(p.nota);
+      const score = (armado ? 1 : 0) + (cerrado ? 1 : 0) + (pago === 'pagado' ? 1 : 0);
+      return {
+        armado: armado,
+        // Algun item tildado pero no todos: el pedido se esta armando.
+        enPreparacion: !armado && p.algunoListo === true,
+        cerrado: cerrado,
+        pago: pago,
+        score: score,
+        // Los dos grupos altos miran el pipeline completo; los dos bajos miran
+        // el avance de armado: alcanza con un item en 'y' para estar En curso.
+        rank: score === 3 ? 3
+            : score === 2 ? 2
+            : (p.algunoListo ? 1 : 0)
+      };
+    }
+
+    // Un pedido trabado mas de esto se marca en rojo en la lista.
+    const PEDIDO_VIEJO_DIAS = 7;
+
+    function textoAntiguedad(ts) {
+      if (!ts) return { texto: '', viejo: false };
+      const dias = Math.floor((Date.now() - ts) / 86400000);
+      if (dias <= 0) return { texto: 'hoy', viejo: false };
+      return {
+        texto: dias + (dias === 1 ? ' día' : ' días'),
+        viejo: dias >= PEDIDO_VIEJO_DIAS
+      };
+    }
+
+    // ==========================================
     // PANEL DE PEDIDOS (ABIERTO / CERRADO)
     // ==========================================
     const pedidosPanel = document.getElementById('pedidosPanel');
     const pedidosPanelList = document.getElementById('pedidosPanelList');
+    const pedidosResumen = document.getElementById('pedidosResumen');
+    let pedidosCache = [];
 
     document.getElementById('btnPedidos').addEventListener('click', () => {
       pedidosPanel.classList.add('active');
@@ -3430,6 +3720,7 @@
 
     async function cargarPedidosPendientes() {
       pedidosPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando pedidos...</div>';
+      pedidosResumen.textContent = '';
 
       try {
         // Consulta 1: status ABIERTO
@@ -3444,38 +3735,117 @@
           .equalTo('CERRADO')
           .once('value');
 
-        const pedidos = [];
+        pedidosCache = [];
 
-        snapAbierto.forEach(child => {
+        const recolectarPendiente = (child) => {
           const p = child.val();
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, nota: p.nota || '', timestamp: p.timestamp || 0 });
-        });
+          const items = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
+          const todosListos = items.length > 0 && items.every(it => it && it.listo === 'y');
+          const algunoListo = items.some(it => it && it.listo === 'y');
+          const fila = {
+            id: child.key,
+            nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre',
+            status: p.status,
+            locked: p.locked === true,
+            todosListos: todosListos,
+            algunoListo: algunoListo,
+            nota: p.nota || '',
+            timestamp: p.timestamp || 0
+          };
+          // Las etapas se calculan una sola vez, en la carga: el sort, el
+          // agrupado y el resumen las leen despues sin recomputarlas.
+          pedidosCache.push(Object.assign(fila, pedidoEtapas(fila)));
+        };
 
-        snapCerrado.forEach(child => {
-          const p = child.val();
-          pedidos.push({ id: child.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status, enPreparacion: p.enPreparacion, nota: p.nota || '', timestamp: p.timestamp || 0 });
-        });
+        snapAbierto.forEach(recolectarPendiente);
+        snapCerrado.forEach(recolectarPendiente);
 
-        // Ordenar por timestamp descendente (más recientes primero)
-        pedidos.sort((a, b) => b.timestamp - a.timestamp);
+        // Primero los que ya se pueden despachar y, dentro de cada etapa, los
+        // mas viejos arriba: son los que llevan mas tiempo trabados en ese paso.
+        pedidosCache.sort((a, b) => (b.rank - a.rank) || (a.timestamp - b.timestamp));
 
-        if (pedidos.length === 0) {
-          pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
-          return;
-        }
-
-        pedidosPanelList.innerHTML = pedidos.map(p =>
-          '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
-          '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
-          (p.enPreparacion === 'si' ? '<span class=\"badge-en-preparacion\">&#9881;&#65039; En prep.</span>' : p.enPreparacion === 'listo' ? '<span class=\"badge-listo\">✅ Listo</span>' : '') +
-          '<span class="status-badge ' + getStatusClass(p.status) + '">' + emojiStatus(p.status) + escapeHtml(p.status) + '</span>' +
-          (p.nota ? '<span class="pedidos-panel-nota">📝 ' + escapeHtml(p.nota) + '</span>' : '') +
-          '</div>'
-        ).join('');
+        renderPedidosPendientes();
       } catch (err) {
         console.error('Error cargando pedidos:', err);
+        pedidosResumen.textContent = '';
         pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">Error al cargar pedidos</div>';
       }
+    }
+
+    const PP_GRUPOS = {
+      3: 'Para Despachar',
+      2: 'Casi listos',
+      1: 'En curso',
+      0: 'Nuevos'
+    };
+
+    function ppSeg(hito, clase, titulo) {
+      return '<i class="pp-seg pp-seg--' + hito + ' ' + clase + '" title="' + escapeHtml(titulo) + '" aria-hidden="true"></i>';
+    }
+
+    // El riel se lee de abajo hacia arriba (armado -> cerrado -> pago), asi que
+    // el orden en el DOM es el inverso: el primer hijo queda arriba.
+    function ppRailHtml(p) {
+      const pagoClase = p.pago === 'pagado' ? 'is-on' : p.pago === 'espera' ? 'is-wait' : 'is-off';
+      const pagoTitulo = p.pago === 'pagado' ? 'Pago registrado'
+                       : p.pago === 'espera' ? 'Esperando pago'
+                       : 'Sin dato de pago';
+      const armadoClase = p.armado ? 'is-on' : p.enPreparacion ? 'is-wait' : 'is-off';
+      const armadoTitulo = p.armado ? 'Completo'
+                         : p.enPreparacion ? 'En preparacion'
+                         : 'Sin preparar';
+      // El aria-label prefija el hito: suelto, "Completo." no dice de que.
+      const etiqueta = 'Items: ' + armadoTitulo.toLowerCase() +
+                       '. Cerrado: ' + (p.cerrado ? 'si' : 'no') +
+                       '. ' + pagoTitulo + '.';
+      return '<span class="pp-rail" role="img" aria-label="' + escapeHtml(etiqueta) + '">' +
+        ppSeg('pago', pagoClase, pagoTitulo) +
+        ppSeg('cerrado', p.cerrado ? 'is-on' : 'is-off', p.cerrado ? 'Pedido cerrado' : 'Falta cerrar') +
+        ppSeg('armado', armadoClase, armadoTitulo) +
+        '</span>';
+    }
+
+    function ppFilaHtml(p) {
+      const ant = textoAntiguedad(p.timestamp);
+      const listo = p.score === 3;
+      return '<div class="pedidos-panel-item pp-item--rail' + (listo ? ' is-listo' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+        ppRailHtml(p) +
+        '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+        (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
+        '</div>';
+    }
+
+    function renderPedidosPendientes() {
+      if (pedidosCache.length === 0) {
+        pedidosResumen.textContent = '';
+        pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
+        return;
+      }
+
+      const conteo = { 0: 0, 1: 0, 2: 0, 3: 0 };
+      pedidosCache.forEach(p => {
+        conteo[p.rank]++;
+      });
+
+      // El conteo sale de los mismos rank que agrupan la lista, asi que el
+      // resumen y los encabezados de grupo no pueden discrepar.
+      pedidosResumen.innerHTML = pedidosCache.length + ' pedidos · ' +
+        '<b>' + conteo[3] + ' para despachar</b>';
+
+      let html = '';
+      let grupoActual = null;
+      pedidosCache.forEach(p => {
+        if (p.rank !== grupoActual) {
+          grupoActual = p.rank;
+          html += '<div class="pp-grupo' + (grupoActual === 3 ? ' pp-grupo--listo' : '') + '">' +
+                  '<span>' + PP_GRUPOS[grupoActual] + '</span>' +
+                  '<span class="pp-grupo-count">' + conteo[grupoActual] + '</span>' +
+                  '</div>';
+        }
+        html += ppFilaHtml(p);
+      });
+
+      pedidosPanelList.innerHTML = html;
     }
 
     pedidosPanelList.addEventListener('click', (e) => {
