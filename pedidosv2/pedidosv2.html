@@ -2716,7 +2716,7 @@
         <div class="msg-dropdown" id="msgDropdown">
           <div class="msg-dropdown-item" data-msg="1">&#128172; Saludo Inicial</div>
           <div class="msg-dropdown-item" data-msg="2">&#128172; Cotización</div>
-          <div class="msg-dropdown-item" data-msg="3" style="opacity:.4;cursor:not-allowed;font-style:italic">&#128172; Próximamente</div>
+          <div class="msg-dropdown-item" data-msg="3">&#128172; Convertir a Retiro</div>
         </div>
       </div>
       <button class="footer-btn-base btn-toggle-estado" id="btnToggleEstado">Cerrar Pedido</button>
@@ -3598,6 +3598,11 @@
     // pago cae en 'espera' (tramo rayado). El riel refleja el toggle solo.
     const NOTA_PAGO_SOLICITADO = 'Pago Solicitado';
     const NOTA_PAGO = 'Pago';
+
+    // La escribe "Convertir a Retiro". No toca el eje de cobro: normalizada no
+    // esta en NOTAS_PAGADO_SET ni menciona pago, asi que estadoPago() la deja en
+    // 'sin-dato' y el tramo violeta del riel queda igual que sin nota.
+    const NOTA_RETIRA = 'Retira';
 
     // Ciclo de tres pasos: (sin nota) -> Solicitado -> Pago -> (sin nota).
     // Avanza segun el ESTADO VISUAL del boton, no segun el texto exacto: si se
@@ -5810,33 +5815,57 @@
       if (!pedidoId || !pedidoActual) return;
       if (estadoPago(pedidoActual.nota) === 'pagado') return;
       if (pedidoActual.nota === NOTA_PAGO_SOLICITADO) return;
+      await pvEscribirNota(NOTA_PAGO_SOLICITADO);
+    }
+
+    // Punto unico por el que el codigo escribe la nota del pedido: los mismos
+    // tres campos que manda el notaSelect del footer al cambiar, mas la
+    // sincronizacion del propio select.
+    //
+    // El select solo acepta valores que existan como <option>, y las opciones
+    // vienen de la hoja notas!A:A: si el valor no figura ahi se agrega, si no el
+    // footer quedaria mostrando la nota anterior.
+    //
+    // Los guards de que valor corresponde escribir quedan en el llamador: aca no
+    // hay forma de saber si sobrescribir seria un retroceso.
+    async function pvEscribirNota(valor) {
+      if (!pedidoId || !pedidoActual) return false;
 
       const ahora = Date.now();
       try {
-        // Mismos campos que escribe el notaSelect del footer.
         await db.ref('pedidos/' + pedidoId).update({
-          nota: NOTA_PAGO_SOLICITADO,
+          nota: valor,
           notaFecha: ahora,
           lastUpdated: ahora
         });
-        pedidoActual.nota = NOTA_PAGO_SOLICITADO;
+        pedidoActual.nota = valor;
 
-        // El select solo acepta valores que existan como <option>, y las opciones
-        // vienen de la hoja notas!A:A: si ahi no figura, se agrega para que el
-        // footer no quede mostrando la nota anterior.
         if (notaSelect) {
-          const existe = Array.prototype.some.call(notaSelect.options, o => o.value === NOTA_PAGO_SOLICITADO);
+          const existe = Array.prototype.some.call(notaSelect.options, o => o.value === valor);
           if (!existe) {
             const opt = document.createElement('option');
-            opt.value = NOTA_PAGO_SOLICITADO;
-            opt.textContent = NOTA_PAGO_SOLICITADO;
+            opt.value = valor;
+            opt.textContent = valor;
             notaSelect.appendChild(opt);
           }
-          notaSelect.value = NOTA_PAGO_SOLICITADO;
+          notaSelect.value = valor;
         }
+        return true;
       } catch (err) {
-        console.error('Error marcando Pago Solicitado:', err);
+        console.error('Error guardando nota "' + valor + '":', err);
+        return false;
       }
+    }
+
+    // Convertir a retiro cambia como se entrega el pedido, asi que queda asentado
+    // en el propio pedido y no solo en el mensaje que se manda.
+    // A diferencia de marcarPagoSolicitado() no hay estado que pueda retroceder:
+    // el unico guard evita mover notaFecha si ya decia lo mismo. Tampoco se corta
+    // por locked — un pedido ya cerrado igual puede pasar a retiro.
+    async function marcarRetira() {
+      if (!pedidoId || !pedidoActual) return;
+      if (pedidoActual.nota === NOTA_RETIRA) return;
+      await pvEscribirNota(NOTA_RETIRA);
     }
 
     function actualizarCalculosPV() {
@@ -6379,9 +6408,102 @@
       pvEnviarMensaje(item.dataset.msg);
     });
 
+    // El pedido de retiro va SIEMPRE a la linea comercial, no al cliente: el
+    // operador arma el mismo mensaje que nos manda un cliente desde el catalogo
+    // web. Mismo destino que WHATSAPP_URL de CatalogoWeb/catalogo.js.
+    const WHATSAPP_RETIRO_TEL = '5491121891006';
+
+    // Umbral a partir del cual el mensaje pasa a formato compacto, para que la URL
+    // de WhatsApp no quede tan larga que la app termine truncandola.
+    const WHATSAPP_MSG_MAX_CHARS = 1500;
+
+    // Normaliza a los 10 digitos nacionales (sin +54, sin 9, sin 0, sin 15) para
+    // IMPRIMIR el telefono dentro del texto. Port de normalizarTelefonoAr() de
+    // CatalogoWeb/catalogo.html.
+    //
+    // Ojo: no es la normalizacion que hace pvEnviarMensaje() unas lineas mas
+    // abajo, que va al reves —arma el formato internacional 54...— porque ahi el
+    // numero es el DESTINO de la URL y no texto del mensaje.
+    function pvNormalizarTelefonoAr(valor) {
+      let d = (valor || '').replace(/\D/g, '');
+      if (d.startsWith('0054')) d = d.slice(4);
+      else if (d.startsWith('54')) d = d.slice(2);
+      if (d.length === 11 && d.startsWith('9')) d = d.slice(1);
+      if (d.startsWith('0')) d = d.slice(1);
+      if (d.length === 12) {
+        for (const corte of [2, 3, 4]) {
+          if (d.slice(corte, corte + 2) === '15') {
+            d = d.slice(0, corte) + d.slice(corte + 2);
+            break;
+          }
+        }
+      }
+      return d;
+    }
+
+    // Arma el pedido actual con el MISMO formato que genera el catalogo web para
+    // un pedido de retiro (construirMensajeWhatsAppRetiro(), CatalogoWeb/catalogo.js):
+    // mismo titulo, mismos separadores —17 caracteres U+2500, NO guiones ASCII—,
+    // misma sangria de 3 espacios y mismo fallback 'Sin nombre'. Lo unico que
+    // cambia son las fuentes de datos: cliente/items de Firebase en vez de
+    // datosExtraCliente/carrito.
+    //
+    // Deliberadamente NO lleva precios, totales, direccion ni medio de pago: el
+    // original tampoco, y el punto es que los dos mensajes lleguen iguales.
+    function pvBuildMensajeRetiro() {
+      const SEPARADOR = '─────────────────';
+      const cliente = (pedidoActual && pedidoActual.cliente) || {};
+      const items = (pedidoActual && pedidoActual.items) || [];
+      const telefono = pvNormalizarTelefonoAr(cliente.telefono);
+
+      const encabezado = ['🛒 *NUEVO PEDIDO - RETIRO*', ''];
+      encabezado.push('👤 *Cliente:* ' + (cliente.nombre || 'Sin nombre'));
+      if (telefono) {
+        encabezado.push('📞 ' + telefono);
+      }
+      encabezado.push('', SEPARADOR, '*ARTÍCULOS*', '');
+
+      const pie = ['', SEPARADOR];
+
+      // Formato detallado: una linea por dato, mas facil de leer
+      const detallado = [];
+      items.forEach((item, i) => {
+        detallado.push((i + 1) + '. ' + item.nombre);
+        if (item.codigo) detallado.push('   Cód: ' + item.codigo);
+        detallado.push('   Cantidad: ' + item.cantidad, '');
+      });
+      detallado.pop(); // quitar la linea en blanco sobrante del ultimo item
+
+      const mensaje = [...encabezado, ...detallado, ...pie].join('\n');
+      if (mensaje.length <= WHATSAPP_MSG_MAX_CHARS) return mensaje;
+
+      // Formato compacto: una linea por articulo para pedidos grandes
+      const compacto = items.map((item, i) => {
+        const codigo = item.codigo ? ' (' + item.codigo + ')' : '';
+        return (i + 1) + '. ' + item.cantidad + ' x ' + item.nombre + codigo;
+      });
+      return [...encabezado, ...compacto, ...pie].join('\n');
+    }
+
     function pvEnviarMensaje(tipo) {
-      if (tipo === '3') return; // Vacante
       if (!pedidoActual || !pedidoActual.cliente) { showToast('Sin informacion del cliente'); return; }
+
+      // Sale antes de los guards de telefono: el destino es la linea comercial y
+      // no el cliente, asi que un pedido sin telefono igual se puede enviar (el
+      // mensaje simplemente omite esa linea, igual que en el catalogo).
+      // A diferencia de la Cotizacion no sella ni cierra el pedido —no fija
+      // precios ni pide cobro—, pero si deja la nota en 'Retira'.
+      if (tipo === '3') {
+        if (!pedidoActual.items || !pedidoActual.items.length) { showToast('El pedido no tiene articulos'); return; }
+        const msgRetiro = pvBuildMensajeRetiro();
+        // Sin await, igual que sellarYCerrarCotizacion() en la rama de abajo: el
+        // window.open tiene que salir en el mismo tick del click o el navegador
+        // lo toma por popup no solicitado y lo bloquea.
+        marcarRetira();
+        window.open('https://api.whatsapp.com/send/?phone=' + WHATSAPP_RETIRO_TEL + '&text=' + encodeURIComponent(msgRetiro), '_blank');
+        return;
+      }
+
       const cliente = pedidoActual.cliente;
       const nombreCliente = cliente.nombre || 'Cliente';
       const telefono = cliente.telefono;
