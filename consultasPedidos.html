@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consulta de Pedidos — Firebase Backup</title>
+  <style>
+    /* ─── Reset & Variables ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --surface-alt: #f8f9fb;
+      --border: #e1e4e8;
+      --border-light: #eef0f3;
+      --text: #1a1d21;
+      --text-secondary: #5a6068;
+      --text-muted: #8b929a;
+      --primary: #2563eb;
+      --primary-light: #dbeafe;
+      --primary-hover: #1d4ed8;
+      --success: #059669;
+      --success-light: #d1fae5;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --info: #7c3aed;
+      --info-light: #ede9fe;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,.1), 0 4px 8px rgba(0,0,0,.06);
+      --transition: 200ms cubic-bezier(.4,0,.2,1);
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    .app-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      color: #fff;
+      padding: 28px 32px 24px;
+      box-shadow: var(--shadow-md);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .app-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -.3px;
+    }
+    .app-header p {
+      font-size: 13px;
+      opacity: .8;
+      margin-top: 4px;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-stats {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+    .header-stat {
+      text-align: center;
+      background: rgba(255,255,255,.12);
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+    }
+    .header-stat .val {
+      font-size: 20px;
+      font-weight: 700;
+      display: block;
+    }
+    .header-stat .lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      opacity: .75;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* ─── Loader ─────────────────────────────────────────────────── */
+
+    /* ─── Search / Filters ───────────────────────────────────────── */
+    .filters-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .filters-card.visible { display: block; }
+    .filters-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      align-items: end;
+    }
+    .filter-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+    }
+    .filter-group input,
+    .filter-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+    }
+    .filter-group input:focus,
+    .filter-group select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    .filter-group input::placeholder { color: var(--text-muted); }
+
+    .filter-actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition), transform 80ms;
+      font-family: inherit;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { background: var(--surface-alt); }
+
+    /* ─── Results Bar ────────────────────────────────────────────── */
+    .results-bar {
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .results-bar.visible { display: flex; }
+    .results-bar .count { font-weight: 600; color: var(--text); }
+    .sort-select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-family: inherit;
+      background: var(--surface);
+      cursor: pointer;
+      outline: none;
+    }
+
+    /* ─── Pedido Card ────────────────────────────────────────────── */
+    .pedidos-list { display: flex; flex-direction: column; gap: 16px; }
+
+    .pedido-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transition: box-shadow var(--transition);
+    }
+    .pedido-card:hover { box-shadow: var(--shadow-md); }
+
+    .pedido-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-light);
+      gap: 12px;
+      flex-wrap: wrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    .pedido-header:hover { background: var(--surface-alt); }
+
+    .pedido-id-block {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pedido-number {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      white-space: nowrap;
+    }
+    .pedido-client-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .pedido-meta {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-entregado { background: var(--success-light); color: var(--success); }
+    .badge-abierto   { background: var(--warning-light); color: var(--warning); }
+    .badge-cancelado { background: var(--danger-light);  color: var(--danger); }
+    .badge-cerrado   { background: var(--info-light);    color: var(--info); }
+    .badge-default   { background: #f1f3f5; color: #495057; }
+
+    .badge-pago      { background: #e8f5e9; color: #2e7d32; }
+    .badge-entrega   { background: #e3f2fd; color: #1565c0; }
+    .badge-factura   { background: #fff3e0; color: #e65100; }
+
+    .btn-editar {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background var(--transition), transform 80ms;
+    }
+    .btn-editar:hover { background: var(--primary-hover); }
+    .btn-editar:active { transform: scale(.97); }
+
+    .chevron {
+      width: 20px;
+      height: 20px;
+      transition: transform var(--transition);
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .pedido-card.open .chevron { transform: rotate(180deg); }
+
+    /* ─── Pedido Body ────────────────────────────────────────────── */
+    .pedido-body {
+      display: none;
+      padding: 0 20px 20px;
+    }
+    .pedido-card.open .pedido-body { display: block; }
+
+    .detail-sections {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 700px) {
+      .detail-sections { grid-template-columns: 1fr; }
+    }
+
+    .detail-section {
+      background: var(--surface-alt);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+    }
+    .detail-section h4 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row .lbl {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .detail-row .val {
+      font-weight: 600;
+      text-align: right;
+      word-break: break-word;
+      max-width: 60%;
+    }
+
+    /* ─── Items Table ────────────────────────────────────────────── */
+    .items-section h4 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .items-table thead th {
+      text-align: left;
+      padding: 8px 10px;
+      background: var(--surface-alt);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+    }
+    .items-table tbody td {
+      padding: 10px 10px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: middle;
+    }
+    .items-table tbody tr:last-child td { border-bottom: none; }
+    .items-table tbody tr:hover { background: var(--surface-alt); }
+
+    .item-code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .item-category {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: #f1f3f5;
+      padding: 2px 7px;
+      border-radius: 3px;
+    }
+    .items-total-row {
+      font-weight: 700;
+      background: var(--surface-alt);
+    }
+    .items-total-row td {
+      border-top: 2px solid var(--border) !important;
+      padding-top: 10px !important;
+    }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    .highlight {
+      background: #fff59d;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    /* ─── Pagination ─────────────────────────────────────────────── */
+    .pagination {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      margin-top: 28px;
+    }
+    .pagination.visible { display: flex; flex-wrap: wrap; }
+    .page-btn {
+      min-width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      font-family: inherit;
+      color: var(--text);
+    }
+    .page-btn:hover { background: var(--surface-alt); border-color: var(--primary); }
+    .page-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .page-btn:disabled {
+      opacity: .4;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* ─── Empty / Loading ──────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+      display: none;
+    }
+    .empty-state.visible { display: block; }
+    .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
+    .empty-state h3 { font-size: 16px; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-state p { font-size: 13px; }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .loading-overlay.visible { display: flex; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Nota visual ────────────────────────────────────────────── */
+    .nota-block {
+      background: #fff8e1;
+      border-left: 3px solid var(--warning);
+      padding: 8px 12px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      font-size: 12px;
+      color: #795548;
+      margin-top: 12px;
+    }
+    .nota-block strong { color: var(--warning); }
+
+    /* ─── File Fallback ──────────────────────────────────────────── */
+    .file-fallback {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px 24px;
+      margin-bottom: 20px;
+      text-align: center;
+      border: 2px dashed var(--border);
+      transition: border-color var(--transition);
+    }
+    .file-fallback.drag-over { border-color: var(--primary); background: var(--primary-light); }
+    .file-fallback .icon { font-size: 36px; margin-bottom: 10px; }
+    .file-fallback h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+    .file-fallback p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+    .file-fallback-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .file-error { margin-top: 12px; font-size: 12px; color: var(--danger); background: var(--danger-light); padding: 8px 12px; border-radius: var(--radius-sm); display: none; }
+    .file-error.visible { display: block; }
+
+    /* ─── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+      .filters-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 600px) {
+      .app-header { padding: 18px 16px; }
+      .container { padding: 16px 10px 40px; }
+      .filters-grid { grid-template-columns: 1fr; }
+      .filter-actions { grid-template-columns: 1fr; }
+      .pedido-header { padding: 12px 14px; }
+      .detail-sections { grid-template-columns: 1fr; }
+      .items-table { font-size: 12px; }
+      .items-table thead th, .items-table tbody td { padding: 6px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <span id="loadingText" style="font-size:14px;color:var(--text-secondary)">Procesando archivo JSON…</span>
+</div>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="header-row">
+    <div>
+      <h1>📋 Consulta de Pedidos</h1>
+      <p id="headerSubtitle">Carga un archivo de backup JSON para comenzar</p>
+      <a href="topVentas.html" style="display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;padding:6px 14px;border:1px solid rgba(255,255,255,.25);border-radius:6px;transition:all 200ms;margin-top:8px;" onmouseover="this.style.background='rgba(255,255,255,.15)';this.style.color='#fff'" onmouseout="this.style.background='';this.style.color='rgba(255,255,255,.85)'">📊 Dashboard Top Ventas →</a>
+    </div>
+    <div class="header-stats" id="headerStats" style="display:none">
+      <div class="header-stat"><span class="val" id="statTotal">0</span><span class="lbl">Pedidos</span></div>
+      <div class="header-stat"><span class="val" id="statArticles">0</span><span class="lbl">Artículos</span></div>
+      <div class="header-stat"><span class="val" id="statFiltered">0</span><span class="lbl">Mostrados</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- File Fallback (visible cuando falla Drive) -->
+  <div class="file-fallback" id="fileFallback" style="display:none"
+    ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+    <div class="icon">📂</div>
+    <h3>No se pudo conectar a Google Drive</h3>
+    <p>Arrastrá el archivo JSON de backup aquí, o usá el botón para seleccionarlo.</p>
+    <div class="file-fallback-actions">
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Seleccionar archivo JSON</button>
+      <button class="btn btn-outline" onclick="retryDrive()">🔄 Reintentar Drive</button>
+    </div>
+    <div class="file-error" id="fileError"></div>
+    <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFileInput(this)">
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-card" id="filtersCard">
+    <div class="filters-title">🔍 Filtros de búsqueda</div>
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label for="filterName">Nombre del cliente</label>
+        <input type="text" id="filterName" placeholder="Ej: María, Juan…">
+      </div>
+      <div class="filter-group">
+        <label for="filterArticle">Nombre de artículo</label>
+        <input type="text" id="filterArticle" placeholder="Ej: Auricular, Parlante…">
+      </div>
+      <div class="filter-group">
+        <label for="filterCode">Código de artículo</label>
+        <input type="text" id="filterCode" placeholder="Ej: 10112, 10676…">
+      </div>
+      <div class="filter-group">
+        <label for="filterNota">Nota</label>
+        <input type="text" id="filterNota" placeholder="Buscar en notas…">
+      </div>
+      <div class="filter-group">
+        <label for="filterTipoEntrega">Tipo de entrega</label>
+        <select id="filterTipoEntrega">
+          <option value="">Todos</option>
+          <option value="Local">Local</option>
+          <option value="Envios">Envíos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterMedioPago">Medio de pago</label>
+        <select id="filterMedioPago">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" id="btnSearch">Buscar</button>
+        <button class="btn btn-outline" id="btnClear">Limpiar</button>
+        <button class="btn btn-outline" id="btnExpandAll">Expandir todos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Bar -->
+  <div class="results-bar" id="resultsBar">
+    <span><span class="count" id="resultCount">0</span> pedidos encontrados</span>
+    <select class="sort-select" id="sortSelect">
+      <option value="date-desc">Más reciente primero</option>
+      <option value="date-asc">Más antiguo primero</option>
+      <option value="name-asc">Nombre A → Z</option>
+      <option value="name-desc">Nombre Z → A</option>
+      <option value="total-desc">Mayor importe primero</option>
+      <option value="total-asc">Menor importe primero</option>
+    </select>
+  </div>
+
+  <!-- Pedidos List -->
+  <div class="pedidos-list" id="pedidosList"></div>
+
+  <!-- Empty State -->
+  <div class="empty-state" id="emptyState">
+    <div class="icon">🔎</div>
+    <h3>No se encontraron pedidos</h3>
+    <p>Intenta cambiar los filtros de búsqueda</p>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+let allPedidos = [];      // Array of pedido objects (parsed)
+let filteredPedidos = [];
+let currentPage = 1;
+const PAGE_SIZE = 25;
+
+// DOM refs
+const $ = (s) => document.getElementById(s);
+const filtersCard    = $('filtersCard');
+const pedidosList    = $('pedidosList');
+const emptyState     = $('emptyState');
+const resultsBar     = $('resultsBar');
+const paginationEl   = $('pagination');
+const loadingOverlay = $('loadingOverlay');
+
+// ═══════════════════════════════════════════════════════════════
+// Google Drive Loading
+// ═══════════════════════════════════════════════════════════════
+// URL del Apps Script que sirve el backup de Drive sin restricciones CORP.
+// Reemplazar con la URL de tu implementación en script.google.com
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzs8fJtVLkdUjOwx76miDSku6m-tVp371iqfxjepxgWydumKKHhd7w0zLHTMZxDo95Cw/exec';
+
+async function loadFromDrive() {
+  $('loadingText').textContent = 'Descargando desde Google Drive…';
+  loadingOverlay.classList.add('visible');
+  $('fileFallback').style.display = 'none';
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, { redirect: 'follow' });
+    if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
+    const text = await response.text();
+    if (text.trim().startsWith('<')) {
+      throw new Error('El script devolvió HTML en lugar de JSON. Verificá que esté bien implementado y con acceso "Cualquier persona".');
+    }
+    const raw = JSON.parse(text);
+    const pedidosObj = raw.pedidos || raw;
+    $('headerSubtitle').textContent = `Archivo cargado desde Google Drive — procesando…`;
+    parsePedidos(pedidosObj);
+  } catch (err) {
+    console.error('Drive fetch error:', err);
+    $('headerSubtitle').textContent = 'No se pudo conectar a Google Drive — cargá el archivo manualmente';
+    $('fileFallback').style.display = 'block';
+  } finally {
+    loadingOverlay.classList.remove('visible');
+    $('loadingText').textContent = 'Procesando archivo JSON…';
+  }
+}
+
+function retryDrive() {
+  loadFromDrive();
+}
+
+// ─── File fallback handlers ───────────────────────────────────────────────
+function handleFileInput(input) {
+  const file = input.files[0];
+  if (file) readLocalFile(file);
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  $('fileFallback').classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  $('fileFallback').classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  $('fileFallback').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) readLocalFile(file);
+}
+
+function readLocalFile(file) {
+  if (!file.name.endsWith('.json')) {
+    showFileError('El archivo debe ser un JSON (.json)');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const raw = JSON.parse(e.target.result);
+      const pedidosObj = raw.pedidos || raw;
+      $('headerSubtitle').textContent = `Archivo local cargado: ${file.name}`;
+      $('fileFallback').style.display = 'none';
+      parsePedidos(pedidosObj);
+    } catch (err) {
+      showFileError('El archivo no es un JSON válido: ' + err.message);
+    }
+  };
+  reader.onerror = () => showFileError('Error al leer el archivo.');
+  reader.readAsText(file);
+}
+
+function showFileError(msg) {
+  const el = $('fileError');
+  el.textContent = msg;
+  el.classList.add('visible');
+  setTimeout(() => el.classList.remove('visible'), 5000);
+}
+
+// Cargar automáticamente desde Google Drive al iniciar
+loadFromDrive();
+
+// ═══════════════════════════════════════════════════════════════
+// Parse
+// ═══════════════════════════════════════════════════════════════
+function parsePedidos(obj) {
+  allPedidos = Object.entries(obj).map(([key, p]) => {
+    // Solo procesar pedidos DESPACHADO/ENTREGADO
+    if (p.status !== 'DESPACHADO/ENTREGADO') return null;
+    
+    const items = Array.isArray(p.items) ? p.items : (p.items ? Object.values(p.items) : []);
+    const totalUSD = items.reduce((sum, it) => {
+      const price = parseFloat(it.valorU || it.valorUSD) || 0;
+      const qty   = parseInt(it.cantidad) || 0;
+      return sum + (price * qty);
+    }, 0);
+    const totalArticles = items.reduce((sum, it) => sum + (parseInt(it.cantidad) || 0), 0);
+
+    return {
+      key,
+      id: p.id || key,
+      clientName:  p.cliente?.nombre   || '—',
+      clientEmail: p.cliente?.email    || '',
+      clientPhone: p.cliente?.telefono || '',
+      clientDNI:   p.cliente?.dni      || '',
+      clientAddr:  p.cliente?.direccion|| '',
+      clientProv:  p.cliente?.provincia|| '',
+      clientLocal: p.cliente?.localidad|| '',
+      status:      p.status  || '—',
+      tipoPago:    p.pagos?.medioPago || p.tipoPago || p.medioPago || '—',
+      tipoEntrega: p.tipoEntrega || p.entrega || '—',
+      facturado:   p.facturado ? 'Sí' : 'No',
+      fact:        p.fact || '',
+      cotizacion:  p.cotizacionCierre || 0,
+      timestamp:   p.timestamp || 0,
+      fecha:       p.fecha || p.timestamp || 0,
+      lastUpdated: p.lastUpdated || 0,
+      vendedor:    p.vendedor || '',
+      nota:        p.nota || '',
+      notaFecha:   p.notaFecha || '',
+      tipoCliente: p.tipoCliente || '',
+      descuento:   p.descuento || 0,
+      recargo:     p.recargo || 0,
+      costoEnvio:  p.costos?.envio || p.envio || 0,
+      locked:      p.locked || false,
+      items,
+      totalUSD,
+      totalArticles,
+      _raw: p
+    };
+  }).filter(p => p !== null); // Eliminar nulls (pedidos filtrados)
+
+  // Count total articles
+  const totalArticles = allPedidos.reduce((s, p) => s + p.totalArticles, 0);
+
+  // Update UI
+  filtersCard.classList.add('visible');
+  $('headerStats').style.display = 'flex';
+  $('headerSubtitle').textContent = `Archivo cargado — ${allPedidos.length.toLocaleString()} pedidos`;
+  $('statTotal').textContent = allPedidos.length.toLocaleString();
+  $('statArticles').textContent = totalArticles.toLocaleString();
+
+  populateMedioPagoFilter();
+  applyFilters();
+}
+
+// Clave normalizada para agrupar medios de pago (minúsculas, sin acentos, sin espacios extra)
+function medioPagoKey(str) {
+  return normalize((str || '').trim()).replace(/\s+/g, ' ');
+}
+
+// Etiqueta canónica en Title Case (ej: "TRANSFERENCIA" / "transferencia" → "Transferencia")
+function medioPagoLabel(str) {
+  return (str || '').trim().toLowerCase().replace(/\s+/g, ' ')
+    .replace(/(^|\s)\p{L}/gu, ch => ch.toUpperCase());
+}
+
+// Puebla el <select> de medio de pago agrupando los alias equivalentes (mayúsculas/acentos/espacios)
+function populateMedioPagoFilter() {
+  const sel = $('filterMedioPago');
+  const prev = sel.value;
+  // Map clave-normalizada → etiqueta canónica para mostrar
+  const grupos = new Map();
+  allPedidos.forEach(p => {
+    if (!p.tipoPago || p.tipoPago === '—') return;
+    const key = medioPagoKey(p.tipoPago);
+    if (key && !grupos.has(key)) grupos.set(key, medioPagoLabel(p.tipoPago));
+  });
+
+  const claves = [...grupos.keys()].sort((a, b) => grupos.get(a).localeCompare(grupos.get(b), 'es'));
+
+  sel.innerHTML = '<option value="">Todos</option>' +
+    claves.map(k => `<option value="${esc(k)}">${esc(grupos.get(k))}</option>`).join('');
+
+  // Preservar la selección previa si sigue disponible
+  if (prev && grupos.has(prev)) sel.value = prev;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Filtering
+// ═══════════════════════════════════════════════════════════════
+function normalize(str) {
+  return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function applyFilters() {
+  const nameQ    = normalize($('filterName').value.trim());
+  const articleQ = normalize($('filterArticle').value.trim());
+  const codeQ    = $('filterCode').value.trim().toLowerCase();
+  const notaQ    = normalize($('filterNota').value.trim());
+  const tipoEntregaQ = $('filterTipoEntrega').value;
+  const medioPagoQ = $('filterMedioPago').value;
+
+  filteredPedidos = allPedidos.filter(p => {
+    if (nameQ && !normalize(p.clientName).includes(nameQ)) return false;
+    if (notaQ && !normalize(p.nota).includes(notaQ)) return false;
+    if (medioPagoQ && medioPagoKey(p.tipoPago) !== medioPagoQ) return false;
+
+    // Filtro de tipo de entrega: Local vs Envíos
+    if (tipoEntregaQ === 'Local') {
+      const isLocal = normalize(p.tipoEntrega).includes('local') || 
+                      normalize(p.tipoEntrega).includes('retiro');
+      if (!isLocal) return false;
+    } else if (tipoEntregaQ === 'Envios') {
+      const isLocal = normalize(p.tipoEntrega).includes('local') || 
+                      normalize(p.tipoEntrega).includes('retiro');
+      if (isLocal) return false;
+    }
+
+    if (articleQ) {
+      const found = p.items.some(it => normalize(it.nombre || '').includes(articleQ));
+      if (!found) return false;
+    }
+
+    if (codeQ) {
+      const found = p.items.some(it => {
+        const code = (it.codigo || '').toLowerCase();
+        const barcode = (it.codigoBarras || '').toLowerCase();
+        return code.includes(codeQ) || barcode.includes(codeQ);
+      });
+      if (!found) return false;
+    }
+
+    return true;
+  });
+
+  sortPedidos();
+  currentPage = 1;
+  renderPage();
+}
+
+function sortPedidos() {
+  const sortVal = $('sortSelect').value;
+  filteredPedidos.sort((a, b) => {
+    switch (sortVal) {
+      case 'date-desc':  return b.timestamp - a.timestamp;
+      case 'date-asc':   return a.timestamp - b.timestamp;
+      case 'name-asc':   return a.clientName.localeCompare(b.clientName);
+      case 'name-desc':  return b.clientName.localeCompare(a.clientName);
+      case 'total-desc': return b.totalUSD - a.totalUSD;
+      case 'total-asc':  return a.totalUSD - b.totalUSD;
+      default: return 0;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Rendering
+// ═══════════════════════════════════════════════════════════════
+function renderPage() {
+  const total = filteredPedidos.length;
+  $('statFiltered').textContent = total.toLocaleString();
+  $('resultCount').textContent = total.toLocaleString();
+  resultsBar.classList.toggle('visible', total > 0 || allPedidos.length > 0);
+  emptyState.classList.toggle('visible', total === 0);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filteredPedidos.slice(start, start + PAGE_SIZE);
+
+  pedidosList.innerHTML = pageItems.map(renderPedidoCard).join('');
+  renderPagination(totalPages);
+}
+
+function statusBadgeClass(status) {
+  const s = (status || '').toUpperCase();
+  if (s.includes('ENTREGADO') || s.includes('DESPACHADO')) return 'badge-entregado';
+  if (s.includes('ABIERTO'))   return 'badge-abierto';
+  if (s.includes('CANCELADO')) return 'badge-cancelado';
+  if (s.includes('CERRADO'))   return 'badge-cerrado';
+  return 'badge-default';
+}
+
+function formatDate(ts) {
+  if (!ts) return '—';
+  // Normalizar strings tipo "YYYY-MM-DD HH:mm:ss" (el espacio no lo parsea Safari)
+  const val = (typeof ts === 'string') ? ts.replace(' ', 'T') : ts;
+  const d = new Date(val);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function esc(str) {
+  const el = document.createElement('span');
+  el.textContent = str;
+  return el.innerHTML;
+}
+
+function highlightMatch(text, query) {
+  if (!query || !text) return esc(text || '—');
+  const escaped = esc(text);
+  const normText = normalize(text);
+  const normQ = normalize(query);
+  const idx = normText.indexOf(normQ);
+  if (idx === -1) return escaped;
+  const before = esc(text.substring(0, idx));
+  const match  = esc(text.substring(idx, idx + query.length));
+  const after  = esc(text.substring(idx + query.length));
+  return `${before}<span class="highlight">${match}</span>${after}`;
+}
+
+function renderPedidoCard(p) {
+  const nameQ    = $('filterName').value.trim();
+  const articleQ = $('filterArticle').value.trim();
+  const codeQ    = $('filterCode').value.trim();
+
+  const clientNameHTML = highlightMatch(p.clientName, nameQ);
+  const dateStr = formatDate(p.fecha);
+  const updatedStr = p.lastUpdated ? formatDate(p.lastUpdated) : '—';
+
+  // Items table rows
+  let itemsHTML = '';
+  let runningTotal = 0;
+  p.items.forEach((it, i) => {
+    const qty    = parseInt(it.cantidad) || 0;
+    const price  = parseFloat(it.valorU || it.valorUSD) || 0;
+    const sub    = qty * price;
+    runningTotal += sub;
+    const code   = it.codigo || '';
+    const barcode = it.codigoBarras || '';
+    const cat    = it.categoria || '';
+    const nameHL = highlightMatch(it.nombre || '—', articleQ);
+    const codeHL = code ? highlightMatch(code, codeQ) : '<span style="color:var(--text-muted)">—</span>';
+
+    // Determine if this item matches the code filter (to add visual emphasis)
+    const matchesCode = codeQ && (normalize(code).includes(normalize(codeQ)) || normalize(barcode).includes(normalize(codeQ)));
+
+    itemsHTML += `
+      <tr${matchesCode ? ' style="background:#fffde7"' : ''}>
+        <td class="text-center">${i + 1}</td>
+        <td><span class="item-code">${codeHL}</span></td>
+        <td>${nameHL}${cat ? ` <span class="item-category">${esc(cat)}</span>` : ''}</td>
+        <td class="text-center">${qty}</td>
+        <td class="text-right">$${price.toFixed(2)}</td>
+        <td class="text-right"><strong>$${sub.toFixed(2)}</strong></td>
+      </tr>`;
+  });
+
+  // Total row
+  itemsHTML += `
+    <tr class="items-total-row">
+      <td colspan="3" class="text-right">Total</td>
+      <td class="text-center"><strong>${p.totalArticles}</strong></td>
+      <td></td>
+      <td class="text-right"><strong>$${p.totalUSD.toFixed(2)}</strong></td>
+    </tr>`;
+
+  // Nota
+  let notaHTML = '';
+  if (p.nota) {
+    notaHTML = `<div class="nota-block"><strong>📝 Nota:</strong> ${esc(p.nota)}${p.notaFecha ? ` <em>(${esc(p.notaFecha)})</em>` : ''}</div>`;
+  }
+
+  return `
+    <div class="pedido-card" data-id="${esc(p.key)}">
+      <div class="pedido-header" onclick="toggleCard(this)">
+        <div class="pedido-id-block">
+          <span class="pedido-number">${esc(p.id)}</span>
+          <span class="pedido-client-name">${clientNameHTML}</span>
+        </div>
+        <div class="pedido-meta">
+          <span class="badge badge-default">📅 ${dateStr}</span>
+          ${p.tipoEntrega !== '—' ? `<span class="badge badge-entrega">🚚 ${esc(p.tipoEntrega)}</span>` : ''}
+          ${p.facturado === 'Sí' ? '<span class="badge badge-factura">📄 Facturado</span>' : ''}
+          <a class="btn-editar" href="https://homepoint-admin.dev.ar/ingresoPedido.html?id=${encodeURIComponent(p.key)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">✏️ Editar</a>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div class="pedido-body">
+        <div class="detail-sections">
+          <div class="detail-section">
+            <h4>👤 Cliente</h4>
+            <div class="detail-row"><span class="lbl">Nombre</span><span class="val">${clientNameHTML}</span></div>
+            <div class="detail-row"><span class="lbl">Teléfono</span><span class="val">${esc(p.clientPhone || '—')}</span></div>
+            <div class="detail-row"><span class="lbl">Email</span><span class="val">${esc(p.clientEmail || '—')}</span></div>
+            <div class="detail-row"><span class="lbl">DNI</span><span class="val">${esc(p.clientDNI || '—')}</span></div>
+            <div class="detail-row"><span class="lbl">Dirección</span><span class="val">${esc(p.clientAddr || '—')}</span></div>
+            ${p.clientProv ? `<div class="detail-row"><span class="lbl">Provincia</span><span class="val">${esc(p.clientProv)}</span></div>` : ''}
+            ${p.clientLocal ? `<div class="detail-row"><span class="lbl">Localidad</span><span class="val">${esc(p.clientLocal)}</span></div>` : ''}
+            ${p.tipoCliente ? `<div class="detail-row"><span class="lbl">Tipo</span><span class="val">${esc(p.tipoCliente)}</span></div>` : ''}
+          </div>
+          <div class="detail-section">
+            <h4>📦 Detalles del Pedido</h4>
+            <div class="detail-row"><span class="lbl">Fecha creación</span><span class="val">${dateStr}</span></div>
+            <div class="detail-row"><span class="lbl">Última actualización</span><span class="val">${updatedStr}</span></div>
+            <div class="detail-row"><span class="lbl">Estado</span><span class="val"><span class="badge ${statusBadgeClass(p.status)}">${esc(p.status)}</span></span></div>
+            <div class="detail-row"><span class="lbl">Medio de pago</span><span class="val">${esc(p.tipoPago)}</span></div>
+            <div class="detail-row"><span class="lbl">Tipo de entrega</span><span class="val">${esc(p.tipoEntrega)}</span></div>
+            ${p.vendedor ? `<div class="detail-row"><span class="lbl">Vendedor</span><span class="val">${esc(p.vendedor)}</span></div>` : ''}
+          </div>
+        </div>
+
+        <div class="items-section">
+          <h4>🛒 Artículos (${p.items.length} líneas — ${p.totalArticles} unidades)</h4>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th class="text-center" style="width:40px">#</th>
+                <th style="width:90px">Código</th>
+                <th>Artículo</th>
+                <th class="text-center" style="width:60px">Cant.</th>
+                <th class="text-right" style="width:90px">Precio USD</th>
+                <th class="text-right" style="width:100px">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHTML}
+            </tbody>
+          </table>
+        </div>
+        ${notaHTML}
+      </div>
+    </div>`;
+}
+
+function renderPagination(totalPages) {
+  if (totalPages <= 1) { paginationEl.classList.remove('visible'); return; }
+  paginationEl.classList.add('visible');
+
+  let html = `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>◀</button>`;
+
+  const maxButtons = 7;
+  let startP = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+  let endP   = Math.min(totalPages, startP + maxButtons - 1);
+  if (endP - startP < maxButtons - 1) startP = Math.max(1, endP - maxButtons + 1);
+
+  if (startP > 1) { html += `<button class="page-btn" onclick="goPage(1)">1</button>`; if (startP > 2) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`; }
+  for (let i = startP; i <= endP; i++) {
+    html += `<button class="page-btn${i === currentPage ? ' active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (endP < totalPages) { if (endP < totalPages - 1) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`; html += `<button class="page-btn" onclick="goPage(${totalPages})">${totalPages}</button>`; }
+
+  html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>▶</button>`;
+  paginationEl.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Interactions
+// ═══════════════════════════════════════════════════════════════
+function toggleCard(headerEl) {
+  headerEl.closest('.pedido-card').classList.toggle('open');
+}
+
+function goPage(n) {
+  const totalPages = Math.ceil(filteredPedidos.length / PAGE_SIZE);
+  if (n < 1 || n > totalPages) return;
+  currentPage = n;
+  renderPage();
+  window.scrollTo({ top: pedidosList.offsetTop - 80, behavior: 'smooth' });
+}
+
+// event listeners
+$('btnSearch').addEventListener('click', applyFilters);
+$('btnClear').addEventListener('click', () => {
+  $('filterName').value = '';
+  $('filterArticle').value = '';
+  $('filterCode').value = '';
+  $('filterNota').value = '';
+  $('filterTipoEntrega').value = '';
+  $('filterMedioPago').value = '';
+  applyFilters();
+});
+$('sortSelect').addEventListener('change', () => { sortPedidos(); currentPage = 1; renderPage(); });
+
+// Expand/Collapse all
+$('btnExpandAll').addEventListener('click', () => {
+  const isExpanding = $('btnExpandAll').textContent === 'Expandir todos';
+  document.querySelectorAll('.pedido-card').forEach(card => {
+    if (isExpanding) {
+      card.classList.add('open');
+    } else {
+      card.classList.remove('open');
+    }
+  });
+  $('btnExpandAll').textContent = isExpanding ? 'Contraer todos' : 'Expandir todos';
+});
+
+// Enter key on filters
+['filterName','filterArticle','filterCode','filterNota'].forEach(id => {
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
+});
+
+// Debounced live search (300ms)
+let _debounce;
+['filterName','filterArticle','filterCode','filterNota'].forEach(id => {
+  $(id).addEventListener('input', () => { clearTimeout(_debounce); _debounce = setTimeout(applyFilters, 300); });
+});
+$('filterTipoEntrega').addEventListener('change', applyFilters);
+$('filterMedioPago').addEventListener('change', applyFilters);
+</script>
+</body>
+</html>

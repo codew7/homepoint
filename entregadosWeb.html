@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos Entregados Web</title>
+  <link rel="icon" href="faviconnegro.png" type="image/png">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="config.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background-color: #f5f5f5;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #2c3e50;
+    }
+
+    .filter-section {
+      margin-bottom: 20px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .pedidos-list {
+      list-style: none;
+    }
+
+    .pedido-item {
+      padding: 12px 15px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.2s;
+      cursor: pointer;
+    }
+
+    .pedido-item:hover {
+      background-color: #f9f9f9;
+    }
+
+    .pedido-info {
+      flex: 1;
+    }
+
+    .pedido-nombre {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 16px;
+    }
+
+    .pedido-id {
+      color: #999;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .pedido-fecha {
+      color: #999;
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .count {
+      color: #999;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Pedidos Entregados Web</h1>
+    
+    <div class="filter-section">
+      <input 
+        type="text" 
+        id="searchInput" 
+        class="search-input" 
+        placeholder="Buscar por nombre de cliente..."
+      >
+    </div>
+
+    <div class="count" id="count"></div>
+
+    <div id="loading" class="loading">Cargando pedidos...</div>
+    <ul id="pedidosList" class="pedidos-list" style="display: none;"></ul>
+    <div id="noResults" class="no-results" style="display: none;">No se encontraron pedidos</div>
+  </div>
+
+  <script>
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+
+    // Autenticación
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        cargarPedidos();
+      } else {
+        window.location.href = 'login.html';
+      }
+    });
+
+    let pedidosData = [];
+
+    function cargarPedidos() {
+      console.log('🔍 Iniciando carga de pedidos...');
+      const pedidosRef = firebase.database().ref('pedidos');
+      
+      // Optimización: filtrar por status (campo indexado en Firebase)
+      pedidosRef.orderByChild('status').equalTo('DESPACHADO/ENTREGADO').once('value')
+        .then(snapshot => {
+          console.log('📦 Snapshot recibido, procesando...');
+          pedidosData = [];
+          
+          snapshot.forEach(child => {
+            const pedido = child.val();
+            
+            // Filtrar solo los creados desde web
+            const createdBy = (pedido.createdBy || pedido.createdby || pedido.createdBt || '').toString().toLowerCase();
+            
+            if (createdBy === 'web') {
+              pedidosData.push({
+                id: child.key,
+                nombre: pedido.cliente?.nombre || 'Sin nombre',
+                fecha: pedido.fecha || pedido.timestamp || '',
+                timestamp: pedido.timestamp || 0
+              });
+            }
+          });
+
+          console.log(`✅ Pedidos encontrados: ${pedidosData.length}`);
+          
+          // Ordenar por fecha más reciente
+          pedidosData.sort((a, b) => b.timestamp - a.timestamp);
+          
+          document.getElementById('loading').style.display = 'none';
+          mostrarPedidos(pedidosData);
+        })
+        .catch(error => {
+          console.error('❌ Error al cargar pedidos:', error);
+          document.getElementById('loading').innerHTML = 'Error al cargar pedidos';
+        });
+    }
+
+    function mostrarPedidos(pedidos) {
+      const lista = document.getElementById('pedidosList');
+      const noResults = document.getElementById('noResults');
+      const count = document.getElementById('count');
+      
+      lista.innerHTML = '';
+      count.textContent = `${pedidos.length} pedido${pedidos.length !== 1 ? 's' : ''}`;
+
+      if (pedidos.length === 0) {
+        lista.style.display = 'none';
+        noResults.style.display = 'block';
+        return;
+      }
+
+      lista.style.display = 'block';
+      noResults.style.display = 'none';
+
+      pedidos.forEach(pedido => {
+        const li = document.createElement('li');
+        li.className = 'pedido-item';
+        
+        const fechaFormateada = formatearFecha(pedido.fecha);
+        
+        li.innerHTML = `
+          <div class="pedido-info">
+            <div class="pedido-nombre">${pedido.nombre}</div>
+            <div class="pedido-id">#${pedido.id}</div>
+          </div>
+          <div class="pedido-fecha">${fechaFormateada}</div>
+        `;
+        
+        // Hacer clickeable para abrir el pedido
+        li.onclick = () => {
+          window.open(`https://home-point.com.ar/pedidos.html?id=${pedido.id}&admin=true`, '_blank');
+        };
+        
+        lista.appendChild(li);
+      });
+    }
+
+    function formatearFecha(fecha) {
+      if (!fecha) return 'Sin fecha';
+      
+      try {
+        // Si es timestamp
+        if (typeof fecha === 'number') {
+          const date = new Date(fecha);
+          return date.toLocaleDateString('es-AR');
+        }
+        
+        // Si es string
+        if (typeof fecha === 'string') {
+          // Formato DD/MM/YYYY
+          if (fecha.includes('/')) {
+            return fecha;
+          }
+          // Intentar parsear como fecha
+          const date = new Date(fecha);
+          if (!isNaN(date)) {
+            return date.toLocaleDateString('es-AR');
+          }
+        }
+        
+        return fecha;
+      } catch {
+        return fecha;
+      }
+    }
+
+    // Búsqueda en tiempo real
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+      const termino = e.target.value.toLowerCase().trim();
+      
+      if (termino === '') {
+        mostrarPedidos(pedidosData);
+        return;
+      }
+
+      const filtrados = pedidosData.filter(pedido => 
+        pedido.nombre.toLowerCase().includes(termino) ||
+        pedido.id.toLowerCase().includes(termino)
+      );
+
+      mostrarPedidos(filtrados);
+    });
+  </script>
+</body>
+</html>

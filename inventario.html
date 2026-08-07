@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Inventario</title>
+  <link rel="icon" href="faviconnegro.png" type="image/png">
+  
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  
+  <!-- Select2 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  
+  <!-- jQuery y Select2 JS -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  
+  <!-- Firebase Auth Check -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="config.js"></script>
+  <script>
+    // Inicializar Firebase (proyecto principal: pedidos-87064 → movimientos)
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    // Sistema de autenticación
+    let admin = false; // Declarar admin al principio para evitar errores de hoisting
+    let authResolved = false; // Flag para controlar si la autenticación se resolvió
+    
+    // Lista de emails de administradores
+    const adminEmails = ["distribuidorahomepoint@gmail.com"];
+
+    // Función para inicializar la página después de la autenticación
+    function inicializarPagina() {
+      // Si la página ya está cargada, ejecutar inmediatamente
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log('Página inicializada para usuario autenticado');
+          // Continuar con la inicialización de la página de inventario
+          inicializarInventario();
+        });
+      } else {
+        console.log('Página inicializada para usuario autenticado');
+        // Continuar con la inicialización de la página de inventario
+        inicializarInventario();
+      }
+    }
+
+    // Función para redirigir a login con parámetro de retorno
+    function redirigirALogin() {
+      const currentUrl = encodeURIComponent(window.location.href);
+      window.location.href = `login.html?redirect=${currentUrl}`;
+    }
+
+    // Timeout de seguridad: verificar autenticación después de 5 segundos
+    setTimeout(() => {
+      if (!authResolved) {
+        console.warn('Timeout de autenticación - redirigiendo a login');
+        redirigirALogin();
+      }
+    }, 5000);
+
+    firebase.auth().onAuthStateChanged(user => {
+      console.log('Firebase Auth State Changed:', user ? 'Usuario autenticado' : 'No hay usuario');
+      authResolved = true; // Marcar que la autenticación se resolvió
+      
+      if (user) {
+        // Usuario autenticado
+        console.log('Usuario autenticado:', user.email);
+        
+        // Verificar si es administrador
+        if (adminEmails.includes(user.email)) {
+          admin = true;
+          console.log('Usuario es administrador:', user.email);
+          
+          // Mostrar indicador de administrador
+          const adminIndicator = document.getElementById('adminIndicator');
+          const userIndicator = document.getElementById('userIndicator');
+          if (adminIndicator) {
+            adminIndicator.style.display = 'block';
+            adminIndicator.classList.add('show');
+          }
+          if (userIndicator) {
+            userIndicator.style.display = 'none';
+            userIndicator.classList.remove('show');
+          }
+        } else {
+          // Usuario normal (no administrador)
+          admin = false;
+          console.log('Usuario normal:', user.email);
+          
+          // Mostrar indicador de usuario normal
+          const adminIndicator = document.getElementById('adminIndicator');
+          const userIndicator = document.getElementById('userIndicator');
+          const userEmail = document.getElementById('userEmail');
+          
+          if (adminIndicator) {
+            adminIndicator.style.display = 'none';
+            adminIndicator.classList.remove('show');
+          }
+          if (userIndicator) {
+            userIndicator.style.display = 'block';
+            userIndicator.classList.add('show');
+          }
+          if (userEmail) {
+            userEmail.textContent = user.email;
+          }
+        }
+        
+        // Usuario autenticado, inicializar página
+        console.log('Inicializando página para usuario autenticado...');
+        inicializarPagina();
+      } else {
+        // No hay usuario autenticado, redirigir a login
+        console.log('No hay usuario autenticado, redirigiendo a login...');
+        redirigirALogin();
+      }
+    });
+
+    // Función para cerrar sesión
+    function cerrarSesion() {
+      if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        firebase.auth().signOut()
+          .then(() => {
+            console.log('Sesión cerrada exitosamente');
+            // La redirección se manejará automáticamente por onAuthStateChanged
+          })
+          .catch(error => {
+            console.error('Error al cerrar sesión:', error);
+            alert('Error al cerrar sesión: ' + error.message);
+          });
+      }
+    }
+  </script>
+  <!-- Fin Firebase Auth Check -->
+  
+  <style>
+    :root {
+      --bg: #dfe4ec;
+      --surface: #ffffff;
+      --surface-2: #eef1f6;
+      --surface-3: #e5eaf1;
+      --border: #d3d9e2;
+      --border-strong: #bcc4d0;
+      --header-bg: #1e293b;
+      --header-2: #273449;
+      --header-text: #f1f5f9;
+      --text: #1f2937;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-soft: #e8f0fe;
+      --success: #16a34a;
+      --success-dark: #15803d;
+      --success-soft: #e6f6ec;
+      --danger: #dc2626;
+      --danger-dark: #b91c1c;
+      --danger-soft: #fdecec;
+      --warning: #d97706;
+      --warning-soft: #fbf1e0;
+      --radius: 10px;
+      --radius-sm: 7px;
+      --shadow: 0 1px 3px rgba(16,24,40,.10), 0 1px 2px rgba(16,24,40,.06);
+      --shadow-md: 0 6px 18px rgba(16,24,40,.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: linear-gradient(180deg, var(--header-2), var(--header-bg));
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      padding: 0.85rem 1.25rem;
+      box-shadow: 0 2px 10px rgba(16,24,40,.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.3rem;
+      color: var(--header-text);
+      letter-spacing: .2px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    header h1 i { color: #93b4fb; }
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1200px;
+      margin: 1.25rem auto;
+      padding: 0 1.25rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    /* Sección de Ingreso */
+    .ingreso-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: .85rem;
+    }
+    .ingreso-form {
+      display: flex;
+      flex-direction: column;
+      gap: .85rem;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+      color: var(--muted);
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    select, input[type="number"], input[readonly], input[type="text"] {
+      padding: 0.55rem 0.7rem;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 1rem;
+      background: var(--surface-2);
+      color: var(--text);
+      transition: border 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+    select:focus, input:focus {
+      border-color: var(--primary);
+      background: var(--surface);
+      box-shadow: 0 0 0 3px var(--primary-soft);
+      outline: none;
+    }
+    /* Panel de artículo seleccionado */
+    .articulo-panel {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: .75rem .9rem;
+      animation: fadeInScale 0.3s ease-out;
+    }
+    .articulo-img {
+      width: 84px;
+      height: 84px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .articulo-datos {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: .45rem;
+    }
+    .articulo-nombre {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .dato-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: .25rem .6rem;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .chip b {
+      color: var(--text);
+      font-weight: 600;
+      letter-spacing: .3px;
+    }
+    .chip i { color: var(--primary); }
+    /* Toggle de análisis */
+    .analisis-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .85rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
+      margin: 0;
+      cursor: pointer;
+      user-select: none;
+      align-self: flex-start;
+      padding: .2rem 0;
+    }
+    .analisis-toggle input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+      margin: 0;
+    }
+    .analisis-toggle i { color: var(--primary); }
+    /* Fila de acción */
+    .accion-row {
+      display: flex;
+      gap: .6rem;
+      align-items: stretch;
+    }
+    .cantidad-input {
+      flex: 1 1 auto;
+      min-width: 90px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .btn-agregar, .btn-quitar {
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 0 1.25rem;
+      font-size: .98rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s, box-shadow .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      justify-content: center;
+      white-space: nowrap;
+    }
+    .btn-agregar {
+      background: var(--success);
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(22,163,74,.25);
+    }
+    .btn-agregar:hover { background: var(--success-dark); }
+    .btn-quitar {
+      background: var(--danger);
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(220,38,38,.25);
+    }
+    .btn-quitar:hover { background: var(--danger-dark); }
+    .btn-agregar:active, .btn-quitar:active { transform: translateY(1px); }
+    .feedback {
+      font-size: 0.95rem;
+      min-height: 1.2em;
+      transition: color 0.2s;
+      text-align: center;
+      font-weight: 600;
+    }
+    .feedback:empty { min-height: 0; }
+    .feedback.success {
+      color: var(--success-dark);
+    }
+    .feedback.error {
+      color: var(--danger);
+    }
+    /* Tabla de Movimientos */
+    .tabla-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .tabla-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .tabla-header .titulo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .search-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .search-group input {
+      padding: 0.5rem 0.7rem;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: .95rem;
+      background: var(--surface-2);
+      min-width: 240px;
+    }
+    .search-group select {
+      background: var(--surface-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: .95rem;
+      padding: 0.5rem 0.7rem;
+    }
+    #btnCargarTodos {
+      padding: .5rem 1rem;
+      font-size: .9rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    #btnCargarTodos:hover { background: var(--primary-dark); }
+    #tablaContainer {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .tabla-movimientos {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 0.9rem;
+    }
+    .tabla-movimientos th, .tabla-movimientos td {
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .tabla-movimientos thead th {
+      position: sticky;
+      top: 0;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tabla-movimientos tbody tr {
+      transition: background 0.15s;
+      border-bottom: 1px solid var(--border);
+    }
+    .tabla-movimientos tbody tr:last-child { border-bottom: none; }
+    .tabla-movimientos tbody tr:hover {
+      background: var(--surface-2);
+    }
+    .tabla-movimientos td.col-nombre {
+      white-space: normal;
+      min-width: 220px;
+      font-weight: 500;
+    }
+    /* Badges de tipo de movimiento */
+    .entrada, .salida, .retiro {
+      display: inline-block;
+      font-weight: 600;
+      font-size: .8rem;
+      padding: .2rem .55rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .entrada {
+      color: var(--success-dark);
+      background: var(--success-soft);
+    }
+    .salida {
+      color: var(--danger-dark);
+      background: var(--danger-soft);
+    }
+    .retiro {
+      color: var(--warning);
+      background: var(--warning-soft);
+    }
+    .acciones-btns {
+      display: flex;
+      gap: 0.35rem;
+    }
+    .btn-accion {
+      background: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0.25rem 0.45rem;
+      border-radius: 6px;
+      transition: background 0.15s, border-color .15s;
+    }
+    .btn-accion:hover {
+      background: var(--surface-2);
+      border-color: var(--border);
+    }
+    /* Edit buttons should remain visible but be non-interactive */
+    .btn-accion:disabled,
+    .btn-accion[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(40%);
+      pointer-events: none;
+    }
+    .paginacion {
+      display: flex;
+      gap: 0.35rem;
+      justify-content: flex-end;
+      margin-top: 0.25rem;
+      flex-wrap: wrap;
+    }
+    .paginacion button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.35rem 0.75rem;
+      font-size: .9rem;
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 600;
+      transition: background 0.15s, border-color .15s, color .15s;
+    }
+    .paginacion button.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .paginacion button:hover:not(.active) {
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+    }
+    @media (max-width: 700px) {
+      main {
+        padding: 0 0.75rem 1.5rem;
+      }
+      .tabla-header {
+        align-items: stretch;
+      }
+      .search-group { width: 100%; }
+      .search-group input { flex: 1 1 auto; min-width: 0; }
+      .articulo-panel { flex-wrap: wrap; }
+      #stockDisplay { align-self: flex-start; }
+      .accion-row { flex-wrap: wrap; }
+      .cantidad-input { flex: 1 1 100%; }
+      .btn-agregar, .btn-quitar { flex: 1 1 45%; padding: .65rem 1rem; }
+    }
+    @media (max-width: 500px) {
+      header h1 {
+        font-size: 1.15rem;
+      }
+      main {
+        padding: 0 0.5rem 1.25rem;
+      }
+    }
+    /* Animaciones */
+    .fade-in {
+      animation: fadeIn 0.7s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: none; }
+    }
+    .loading {
+      color: var(--muted);
+      font-style: italic;
+      font-size: 1rem;
+      padding: 1.5rem 1rem;
+      text-align: center;
+    }
+
+    /* Estilos para indicadores de usuario */
+    #adminIndicator,
+    #userIndicator {
+      animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation-delay: 0.6s;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    #adminIndicator.show,
+    #userIndicator.show {
+      display: block !important;
+    }
+
+    /* Estilos para botones de logout */
+    #logoutBtn:hover,
+    #logoutBtnUser:hover {
+      background: rgba(255,255,255,0.18) !important;
+      border-color: rgba(255,255,255,0.35) !important;
+    }
+
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Estilos personalizados para Select2 */
+    .select2-container {
+      width: 100% !important;
+    }
+    
+    .select2-container--default .select2-selection--single {
+      background: var(--surface-2) !important;
+      border: 1.5px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+      height: 44px !important;
+      padding: 0.55rem 0.7rem !important;
+      font-size: 1rem !important;
+      color: var(--text) !important;
+      transition: border 0.15s, box-shadow 0.15s !important;
+    }
+
+    .select2-container--default .select2-selection--single:focus,
+    .select2-container--default.select2-container--open .select2-selection--single {
+      border-color: var(--primary) !important;
+      box-shadow: 0 0 0 3px var(--primary-soft) !important;
+      outline: none !important;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+      color: var(--text) !important;
+      line-height: 28px !important;
+      padding-left: 0 !important;
+      padding-right: 20px !important;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+      height: 40px !important;
+      right: 8px !important;
+    }
+    
+    .select2-dropdown {
+      border: 1.5px solid var(--border) !important;
+      border-radius: 7px !important;
+      background: #fff !important;
+      box-shadow: var(--shadow) !important;
+    }
+    
+    .select2-container--default .select2-search--dropdown .select2-search__field {
+      border: 1.5px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+      background: var(--surface) !important;
+      padding: 0.5rem 0.7rem !important;
+      font-size: 1rem !important;
+    }
+
+    .select2-container--default .select2-search--dropdown .select2-search__field:focus {
+      border-color: var(--primary) !important;
+      outline: none !important;
+    }
+    
+    .select2-container--default .select2-results__option {
+      padding: 0.7rem !important;
+      font-size: 1rem !important;
+      color: var(--text) !important;
+    }
+    
+    .select2-container--default .select2-results__option--highlighted[aria-selected] {
+      background-color: var(--primary-soft) !important;
+      color: var(--primary-dark) !important;
+    }
+
+    .select2-container--default .select2-results__option[aria-selected=true] {
+      background-color: var(--primary) !important;
+      color: #fff !important;
+      font-weight: 600 !important;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__placeholder {
+      color: #999 !important;
+    }
+
+    /* Ocultar flechas de input number */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    /* Estilos para el indicador de stock */
+    #stockDisplay {
+      flex-shrink: 0;
+      align-self: center;
+      padding: .4rem .75rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 0.85rem;
+      font-weight: 700;
+      white-space: nowrap;
+      text-align: center;
+      transition: all 0.2s ease;
+      animation: fadeInScale 0.4s ease-out;
+    }
+
+    #stockDisplay.stock-alto {
+      background: var(--success-soft) !important;
+      border-color: rgba(22, 163, 74, 0.25) !important;
+      color: var(--success-dark) !important;
+    }
+
+    #stockDisplay.stock-bajo {
+      background: var(--warning-soft) !important;
+      border-color: rgba(217, 119, 6, 0.25) !important;
+      color: var(--warning) !important;
+    }
+
+    #stockDisplay.stock-agotado {
+      background: var(--danger-soft) !important;
+      border-color: rgba(220, 38, 38, 0.25) !important;
+      color: var(--danger) !important;
+    }
+
+    #stockDisplay.stock-cargando {
+      background: var(--surface) !important;
+      border-color: var(--border) !important;
+      color: var(--muted) !important;
+    }
+
+    @keyframes fadeInScale {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    /* Animación de pulso para el stock bajo */
+    #stockDisplay.stock-bajo {
+      animation: fadeInScale 0.4s ease-out, pulseLow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseLow {
+      0%, 100% { 
+        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.1);
+      }
+      50% { 
+        box-shadow: 0 2px 12px rgba(255, 152, 0, 0.3);
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1><i class="bi bi-boxes"></i> Gestión de Inventario</h1>
+    
+    <!-- Indicadores de usuario -->
+    <div id="adminIndicator" style="position: absolute; top: 11px; right: 20px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); padding: 6px 8px 6px 12px; border-radius: 999px; font-size: 0.82rem; display: none; color: #e2e8f0; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.25);">
+      <i class="bi bi-shield-check" style="color:#34d399;"></i> Modo Administrador
+      <button id="logoutBtn" style="margin-left: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); border-radius: 999px; padding: 4px 8px; font-size: 0.75rem; color: #e2e8f0; cursor: pointer; transition: all 0.2s ease;" title="Cerrar sesión">
+        <i class="bi bi-box-arrow-right"></i>
+      </button>
+    </div>
+    <div id="userIndicator" style="position: absolute; top: 11px; right: 20px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); padding: 6px 8px 6px 12px; border-radius: 999px; font-size: 0.82rem; display: none; color: #e2e8f0; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.25);">
+      <i class="bi bi-person-check" style="color:#93b4fb;"></i> <span id="userEmail"></span>
+      <button id="logoutBtnUser" style="margin-left: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); border-radius: 999px; padding: 4px 8px; font-size: 0.75rem; color: #e2e8f0; cursor: pointer; transition: all 0.2s ease;" title="Cerrar sesión">
+        <i class="bi bi-box-arrow-right"></i>
+      </button>
+    </div>
+  </header>
+  <main>
+    <!-- SECCIÓN 1: Ingreso de Stock -->
+    <section class="ingreso-section fade-in">
+      <form class="ingreso-form" id="formIngreso" autocomplete="off">
+        <input type="hidden" id="codigo" />
+        <input type="hidden" id="valorUSD" />
+        <div class="form-group">
+          <label for="producto">Artículo</label>
+          <select id="producto" required>
+            <option value="">Cargando productos...</option>
+          </select>
+        </div>
+
+        <label class="analisis-toggle" title="Al seleccionar un artículo, filtra el historial por su nombre para revisar sus movimientos">
+          <input type="checkbox" id="chkAnalisis" />
+          <i class="bi bi-graph-up-arrow"></i> Análisis: al seleccionar, filtrar el historial por este artículo
+        </label>
+
+        <!-- Panel de artículo seleccionado -->
+        <div class="articulo-panel" id="articuloPanel" style="display:none;">
+          <img id="imgArticulo" class="articulo-img" src="" alt="Imagen artículo" />
+          <div class="articulo-datos">
+            <div class="articulo-nombre" id="infoNombre">—</div>
+            <div class="dato-chips">
+              <span class="chip"><i class="bi bi-upc"></i> Código:&nbsp;<b id="codigoDisplay">—</b></span>
+              <span class="chip"><i class="bi bi-upc-scan"></i> C. Barras:&nbsp;<b id="codigoBarrasDisplay">—</b></span>
+            </div>
+          </div>
+          <div id="stockDisplay" style="display:none;">
+            <i class="bi bi-box-seam"></i> Stock: <span id="stockCantidad">-</span>
+          </div>
+        </div>
+
+        <!-- Fila de acción -->
+        <div class="accion-row">
+          <input type="number" id="cantidad" min="1" required placeholder="Cantidad" class="cantidad-input" />
+          <button type="submit" class="btn-agregar" id="btnAgregar"><i class="bi bi-plus-lg"></i> Agregar</button>
+          <button type="button" class="btn-quitar" id="btnQuitar"><i class="bi bi-dash-lg"></i> Quitar</button>
+        </div>
+      </form>
+      <div class="feedback" id="feedbackIngreso"></div>
+    </section>
+    <!-- SECCIÓN 2: Historial de Movimientos -->
+    <section class="tabla-section fade-in">
+      <div class="tabla-header">
+        <div class="titulo"><i class="bi bi-clock-history"></i> Historial de Movimientos</div>
+        <div class="search-group">
+          <input type="text" id="busqueda" placeholder="🔎 Nombre o código..." />
+          <select id="tipoFiltro">
+            <option value="">Todos</option>
+            <option value="ENTRADA">Entrada</option>
+            <option value="SALIDA">Salida</option>
+            <option value="RETIRO">Retiro</option>
+          </select>
+          <button id="btnCargarTodos"><i class="bi bi-arrow-clockwise"></i> Cargar Todos</button>
+        </div>
+      </div>
+      <div id="tablaContainer">
+        <div class="loading">Presiona "Cargar Todos" para ver el historial de movimientos.</div>
+      </div>
+      <div class="paginacion" id="paginacion"></div>
+    </section>
+  </main>
+  <!-- Firebase scripts duplicados eliminados -->
+  <script>
+    // Variable para bloquear la interfaz durante procesos críticos de Firebase
+    let procesoCriticoEnEjecucion = false;
+
+    // Estado de conexión persistente — se actualiza en tiempo real
+    let firebaseConectado = false;
+    db.ref('.info/connected').on('value', snap => {
+      firebaseConectado = snap.val() === true;
+    });
+
+    // Verificar conexión activa con Firebase antes de escribir
+    async function verificarConexionFirebase(timeoutMs = 5000) {
+      // Si ya sabemos que está conectado, retornar inmediatamente
+      if (firebaseConectado) return true;
+      // Si no, esperar a que se conecte (o timeout)
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), timeoutMs);
+        const unsub = db.ref('.info/connected').on('value', snap => {
+          if (snap.val() === true) {
+            clearTimeout(timer);
+            db.ref('.info/connected').off('value', unsub);
+            resolve(true);
+          }
+        });
+      });
+    }
+
+    // Envolver promesa con timeout
+    function conTimeout(promise, ms, msg) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+      ]);
+    }
+
+    // Prevenir cierre de ventana durante procesos críticos
+    window.addEventListener('beforeunload', function(e) {
+      if (procesoCriticoEnEjecucion) {
+        e.preventDefault();
+        e.returnValue = 'Hay un proceso de registro en curso. Si cierra la ventana, los datos pueden no guardarse correctamente.';
+        return e.returnValue;
+      }
+    });
+    
+    // Función para bloquear toda la interfaz durante procesos críticos
+    function bloquearInterfaz(mensaje = 'Guardando datos...') {
+      procesoCriticoEnEjecucion = true;
+      
+      // Crear overlay de bloqueo si no existe
+      let overlay = document.getElementById('overlayBloqueo');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'overlayBloqueo';
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.7);
+          z-index: 999999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+        `;
+        
+        const contenido = document.createElement('div');
+        contenido.style.cssText = `
+          background: white;
+          padding: 30px 50px;
+          border-radius: 10px;
+          text-align: center;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        `;
+        
+        const spinner = document.createElement('div');
+        spinner.style.cssText = `
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #6c4eb6;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 15px;
+        `;
+        
+        const texto = document.createElement('p');
+        texto.id = 'overlayTexto';
+        texto.style.cssText = `
+          font-size: 1.2rem;
+          font-weight: 600;
+          color: #333;
+          margin: 0;
+        `;
+        texto.textContent = mensaje;
+        
+        contenido.appendChild(spinner);
+        contenido.appendChild(texto);
+        overlay.appendChild(contenido);
+        document.body.appendChild(overlay);
+        
+        // Agregar animación de spinner
+        if (!document.getElementById('spinnerStyle')) {
+          const style = document.createElement('style');
+          style.id = 'spinnerStyle';
+          style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+          document.head.appendChild(style);
+        }
+      } else {
+        overlay.style.display = 'flex';
+        const texto = document.getElementById('overlayTexto');
+        if (texto) texto.textContent = mensaje;
+      }
+      
+      // Deshabilitar todos los controles interactivos
+      document.querySelectorAll('input, select, button, textarea').forEach(el => {
+        el.disabled = true;
+      });
+    }
+    
+    // Función para desbloquear la interfaz
+    function desbloquearInterfaz() {
+      procesoCriticoEnEjecucion = false;
+      
+      const overlay = document.getElementById('overlayBloqueo');
+      if (overlay) {
+        overlay.style.display = 'none';
+      }
+      
+      // Habilitar todos los controles interactivos
+      document.querySelectorAll('input, select, button, textarea').forEach(el => {
+        el.disabled = false;
+      });
+      
+      // Volver a deshabilitar el botón de editar que debe permanecer deshabilitado
+      document.querySelectorAll('.btn-accion[title="Modificar"]').forEach(btn => {
+        btn.disabled = true;
+      });
+    }
+    
+    // Función para inicializar la funcionalidad de inventario
+    function inicializarInventario() {
+      // Event listeners para los botones de logout
+      const logoutBtn = document.getElementById('logoutBtn');
+      const logoutBtnUser = document.getElementById('logoutBtnUser');
+      
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', cerrarSesion);
+      }
+      if (logoutBtnUser) {
+        logoutBtnUser.addEventListener('click', cerrarSesion);
+      }
+
+      // Resto de la funcionalidad de inventario
+      cargarProductos();
+      // No se cargan movimientos al inicio: el usuario debe presionar "Cargar Todos"
+      configurarEventListeners();
+    }
+
+    function configurarEventListeners() {
+      // Botón Cargar Todos
+      const btnCargarTodos = document.getElementById('btnCargarTodos');
+      if (btnCargarTodos) {
+        btnCargarTodos.addEventListener('click', function() {
+          cargarMovimientos(true);
+        });
+      }
+      // Inicializar select2 si aún no se ha hecho
+      if (!$('#producto').hasClass('select2-hidden-accessible')) {
+        inicializarSelect2();
+      }
+
+      // Validaciones en tiempo real
+      document.getElementById('cantidad').addEventListener('input', function() {
+        // Permitir campo vacío pero no valores negativos o cero
+        if (this.value !== '' && (this.value < 1 || this.value == 0)) {
+          this.value = 1;
+        }
+      });
+      // Manejo de formulario de ingreso
+      document.getElementById('formIngreso').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        await procesarMovimiento('ENTRADA');
+      });
+
+      // Manejo del botón Quitar Stock
+      document.getElementById('btnQuitar').addEventListener('click', async function(e) {
+        e.preventDefault();
+        await procesarMovimiento('RETIRO');
+      });
+
+      // Filtrar movimientos por búsqueda
+      document.getElementById('busqueda').addEventListener('input', function() {
+        paginaActual = 1;
+        filtrarMovimientos();
+      });
+      document.getElementById('tipoFiltro').addEventListener('change', function() {
+        paginaActual = 1;
+        filtrarMovimientos();
+      });
+
+      // Checkbox de análisis: por defecto desactivado (no se persiste entre sesiones)
+      const chkAnalisis = document.getElementById('chkAnalisis');
+      if (chkAnalisis) {
+        chkAnalisis.checked = false;
+      }
+    }
+
+    // Análisis rápido: coloca el nombre del artículo en el filtro del historial
+    // y carga los movimientos si aún no se cargaron.
+    function aplicarAnalisisHistorial(nombre) {
+      const busqueda = document.getElementById('busqueda');
+      if (!busqueda) return;
+      busqueda.value = nombre;
+      // El filtro de tipo se coloca automáticamente en ENTRADA
+      const tipoFiltro = document.getElementById('tipoFiltro');
+      if (tipoFiltro) tipoFiltro.value = 'ENTRADA';
+      paginaActual = 1;
+      if (movimientosCargados) {
+        filtrarMovimientos();
+      } else {
+        // cargarMovimientos(true) filtra al terminar usando el valor recién puesto
+        cargarMovimientos(true);
+      }
+    }
+
+    // Función para procesar movimientos (ENTRADA o RETIRO)
+    async function procesarMovimiento(tipo) {
+      const productoSel = document.getElementById('producto');
+      const codigo = document.getElementById('codigo').value.trim();
+      const cantidad = parseInt(document.getElementById('cantidad').value);
+      const nombre = productoSel.options[productoSel.selectedIndex]?.text || '';
+      
+      if (!codigo || !nombre || isNaN(cantidad) || cantidad < 1) {
+        mostrarFeedback('Completa todos los campos correctamente', 'error');
+        return;
+      }
+      
+      const mov = {
+        timestamp: Date.now(),
+        codigo,
+        nombre,
+        cantidad,
+        tipo: tipo
+      };
+      
+      try {
+        // BLOQUEAR INTERFAZ durante proceso crítico
+        const mensajeBloqueo = tipo === 'ENTRADA' ? 'Registrando ingreso de stock...' : 'Registrando retiro de stock...';
+        bloquearInterfaz(mensajeBloqueo);
+
+        // Verificar conexión con Firebase antes de escribir
+        let conectado = false;
+        try {
+          conectado = await verificarConexionFirebase(5000);
+        } catch (_) {
+          conectado = false;
+        }
+        if (!conectado) {
+          desbloquearInterfaz();
+          mostrarFeedback('Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.', 'error');
+          return;
+        }
+
+        // Registrar movimiento con verificación de escritura
+        const newId = await conTimeout(
+          registrarMovimiento(mov),
+          15000,
+          'Timeout: la escritura tardó demasiado. Verifica tu conexión.'
+        );
+
+        // Agregar al array local para mostrar en tiempo real sin releer Firebase
+        movimientos.unshift({ ...mov, _id: newId });
+        filtrarMovimientos();
+
+        // Actualizar el stock mostrado si el artículo sigue seleccionado
+        if (codigo && document.getElementById('codigo').value === codigo) {
+          await cargarStockDisponible(codigo);
+        }
+
+        // DESBLOQUEAR INTERFAZ después de completar proceso
+        desbloquearInterfaz();
+
+        const mensaje = tipo === 'ENTRADA' ? 'Stock agregado y verificado en Firebase!' : 'Stock retirado y verificado en Firebase!';
+        mostrarFeedback(mensaje, 'success');
+
+        // Solo limpiar cantidad, mantener producto seleccionado para facilitar múltiples operaciones
+        document.getElementById('cantidad').value = '';
+        document.getElementById('cantidad').focus();
+      } catch (e) {
+        // DESBLOQUEAR INTERFAZ en caso de error
+        desbloquearInterfaz();
+        console.error('Error al procesar movimiento:', e);
+        mostrarFeedback('Error: ' + e.message, 'error');
+      }
+    }
+
+    // Función para inicializar Select2
+    function inicializarSelect2() {
+      const $select = $('#producto');
+      
+      // Destruir Select2 existente si existe
+      if ($select.hasClass('select2-hidden-accessible')) {
+        $select.select2('destroy');
+      }
+      
+      // Inicializar Select2 con configuración personalizada
+      $select.select2({
+        placeholder: 'Selecciona un producto...',
+        allowClear: true,
+        width: '100%',
+        matcher: function(params, data) {
+          if (!params.term || params.term.trim() === '') return data;
+          const term = params.term.trim().toLowerCase();
+          const nombre = (data.text || '').toLowerCase();
+          const codigo = ($(data.element).attr('data-codigo') || '').toLowerCase();
+          return (nombre.includes(term) || codigo.includes(term)) ? data : null;
+        },
+        language: {
+          noResults: function() {
+            return "No se encontraron productos";
+          },
+          searching: function() {
+            return "Buscando...";
+          }
+        }
+      });
+
+      // Enfocar automáticamente en el campo de búsqueda cuando se abre el dropdown
+      $select.on('select2:open', function() {
+        setTimeout(function() {
+          document.querySelector('.select2-search__field').focus();
+        }, 100);
+      });
+
+      // Event listener para cuando se selecciona un producto
+      $select.on('select2:select', function(e) {
+        const opt = e.target.options[e.target.selectedIndex];
+        const codigo = opt.getAttribute('data-codigo') || '';
+        const nombre = opt.text || '';
+        document.getElementById('codigo').value = codigo;
+        document.getElementById('valorUSD').value = opt.getAttribute('data-valorusd') || '';
+
+        // Mostrar panel de artículo con nombre, código y código de barras (columna L de Sheets)
+        const codigoBarras = opt.getAttribute('data-codigobarras') || '';
+        document.getElementById('articuloPanel').style.display = 'flex';
+        document.getElementById('infoNombre').textContent = nombre;
+        document.getElementById('codigoDisplay').textContent = codigo || '—';
+        document.getElementById('codigoBarrasDisplay').textContent = codigoBarras || '—';
+
+        const imgRaw = opt.getAttribute('data-imgraw') || '';
+        const img = document.getElementById('imgArticulo');
+        // Misma lógica que mayorista.js: 1er link → 4to link → placeholder
+        let imageUrls = [];
+        if (imgRaw.indexOf(',') !== -1) {
+          imageUrls = imgRaw.split(',').map(u => getCacheBustedURL(u.trim()));
+        } else if (imgRaw.trim()) {
+          imageUrls.push(getCacheBustedURL(imgRaw.trim()));
+        }
+        img.referrerPolicy = 'no-referrer';
+        let fallbackStep = 0; // 0 = primer link, 1 = cuarto link, 2 = no-disponible
+        img.onerror = function() {
+          if (fallbackStep === 0 && imageUrls[3]) {
+            fallbackStep = 1;
+            this.src = imageUrls[3];
+          } else {
+            fallbackStep = 2;
+            this.src = getCacheBustedURL('no-disponible.png');
+          }
+        };
+        img.src = imageUrls[0] || getCacheBustedURL('no-disponible.png');
+        img.style.display = 'block';
+        
+        // Cargar y mostrar stock disponible
+        if (codigo) {
+          cargarStockDisponible(codigo);
+        }
+
+        // Análisis opcional: filtrar el historial por este artículo
+        const chkAnalisis = document.getElementById('chkAnalisis');
+        if (chkAnalisis && chkAnalisis.checked && nombre) {
+          aplicarAnalisisHistorial(nombre);
+        }
+
+        // Enfocar automáticamente el campo cantidad después de seleccionar un producto
+        setTimeout(function() {
+          document.getElementById('cantidad').focus();
+        }, 100);
+      });
+
+      // Event listener para cuando se limpia la selección
+      $select.on('select2:clear', function(e) {
+        document.getElementById('codigo').value = '';
+        document.getElementById('valorUSD').value = '';
+        document.getElementById('articuloPanel').style.display = 'none';
+        document.getElementById('imgArticulo').style.display = 'none';
+        document.getElementById('stockDisplay').style.display = 'none';
+
+        // Si el análisis está activo, limpiar también los filtros del historial
+        const chkAnalisis = document.getElementById('chkAnalisis');
+        if (chkAnalisis && chkAnalisis.checked) {
+          const busqueda = document.getElementById('busqueda');
+          const tipoFiltro = document.getElementById('tipoFiltro');
+          const teniaFiltro = (busqueda && busqueda.value) || (tipoFiltro && tipoFiltro.value);
+          if (teniaFiltro) {
+            if (busqueda) busqueda.value = '';
+            if (tipoFiltro) tipoFiltro.value = '';
+            paginaActual = 1;
+            filtrarMovimientos();
+          }
+        }
+      });
+
+      // Event listener para abrir Select2 con la tecla TAB
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab' && !e.shiftKey) {
+          // Solo abrir si no hay otro elemento enfocado y el select2 no está ya abierto
+          if (!$select.hasClass('select2-container--open')) {
+            e.preventDefault();
+            $select.select2('open');
+          }
+        }
+      });
+    }
+
+    // Usar firebaseConfig y GOOGLE_SHEETS_CONFIG desde config.js
+
+    // Construir URL de Google Sheets
+    const SHEETS_URL = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+
+    // Cache busting para imágenes (misma lógica que mayorista.js)
+    const CACHE_VERSION = "2.2";
+    function getCacheBustedURL(url) {
+      if (!url || url === 'no-disponible.png') return url;
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}v=${CACHE_VERSION}`;
+    }
+
+    // Variables globales
+    let productos = [];
+    let movimientos = [];
+    let movimientosFiltrados = [];
+    let paginaActual = 1;
+    const MOVS_POR_PAGINA = 30;
+    let editandoId = null;
+    let movimientosCargados = false; // true una vez que se cargó el historial completo
+
+    // Utilidades
+    function formatearFecha(ts) {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return 'Fecha inválida';
+      // yyyy-mm-dd HH:MM:SS (24hs)
+      const pad = n => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+    function mostrarFeedback(msg, tipo = 'success') {
+      const fb = document.getElementById('feedbackIngreso');
+      fb.textContent = msg;
+      fb.className = 'feedback ' + tipo;
+      setTimeout(() => { fb.textContent = ''; }, 10000);
+    }
+    function mostrarLoadingTabla(msg = 'Cargando movimientos...') {
+      document.getElementById('tablaContainer').innerHTML = `<div class="loading">${msg}</div>`;
+    }
+
+    // Función para cargar y mostrar el stock disponible de un artículo (desde Google Sheets)
+    // Cache local para evitar llamadas repetidas a la API
+    let stockCache = null;
+    let stockCacheTimestamp = 0;
+    const STOCK_CACHE_DURATION = 60000; // 1 minuto de cache
+    
+    async function cargarStockDisponible(codigo) {
+      const stockDisplay = document.getElementById('stockDisplay');
+      const stockCantidad = document.getElementById('stockCantidad');
+      
+      // Limpiar estilos inline para que las clases CSS funcionen
+      stockDisplay.style.background = '';
+      stockDisplay.style.borderColor = '';
+      stockDisplay.style.color = '';
+      
+      // Mostrar estado de carga
+      stockDisplay.style.display = 'block';
+      stockDisplay.className = 'stock-cargando';
+      stockCantidad.textContent = 'Cargando...';
+      
+      try {
+        // Verificar si tenemos cache válido
+        const ahora = Date.now();
+        if (!stockCache || (ahora - stockCacheTimestamp) > STOCK_CACHE_DURATION) {
+          // Consultar Google Sheets
+          const response = await fetch(SHEETS_URL);
+          const data = await response.json();
+          const rows = data.values || [];
+          
+          // Crear mapa de stock por código (columna 2 = código, columna 10 = stock)
+          stockCache = {};
+          for (let i = 1; i < rows.length; i++) { // Empezar desde 1 para saltar header
+            const row = rows[i];
+            const codigoProducto = row[2] || '';
+            const stockActual = Number(row[10]) || 0;
+            if (codigoProducto) {
+              stockCache[codigoProducto] = stockActual;
+            }
+          }
+          stockCacheTimestamp = ahora;
+          console.log('Stock cargado desde Google Sheets:', Object.keys(stockCache).length, 'productos');
+        }
+        
+        // Buscar el stock del código solicitado
+        const stockActual = stockCache[codigo] || 0;
+        stockCantidad.textContent = stockActual;
+        
+        // Aplicar clase CSS según el stock disponible
+        stockDisplay.className = '';
+        if (stockActual > 10) {
+          stockDisplay.className = 'stock-alto';
+        } else if (stockActual > 0) {
+          stockDisplay.className = 'stock-bajo';
+        } else {
+          stockDisplay.className = 'stock-agotado';
+        }
+        
+      } catch (error) {
+        console.error('Error al cargar stock disponible desde Google Sheets:', error);
+        stockCantidad.textContent = 'Error';
+        stockDisplay.className = 'stock-agotado';
+      }
+    }
+
+    // Cargar productos desde Google Sheets
+    // Optimizaciones:
+    //   1. Cache en localStorage (TTL 10 min) → evita el fetch en cada recarga
+    //   2. Rellena stockCache con los mismos datos → elimina el segundo fetch a Sheets
+    //   3. Construye el HTML como string y lo asigna una sola vez → evita O(n²) en DOM
+    const PRODUCTOS_CACHE_KEY = 'inv_productos_v3';
+    const PRODUCTOS_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+    // Normaliza el contenido de la columna L (puede traer varios códigos separados por comas)
+    function normalizarCodigoBarras(raw) {
+      if (!raw) return '';
+      return String(raw)
+        .split(',')
+        .map(c => c.trim())
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    async function cargarProductos() {
+      const select = document.getElementById('producto');
+      try {
+        let productosArr = null;
+        let nuevoStockCache = null;
+
+        // 1. Intentar usar caché de localStorage
+        try {
+          const cached = localStorage.getItem(PRODUCTOS_CACHE_KEY);
+          if (cached) {
+            const { data, stockData, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < PRODUCTOS_CACHE_TTL) {
+              productosArr = data;
+              nuevoStockCache = stockData;
+            }
+          }
+        } catch (_) { /* ignorar errores de localStorage */ }
+
+        // 2. Si no hay caché válido, hacer fetch y construir ambos caches en una sola pasada
+        if (!productosArr) {
+          const res = await fetch(SHEETS_URL);
+          const data = await res.json();
+          const rows = data.values || [];
+          productosArr = [];
+          nuevoStockCache = {};
+
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const codigo = row[2] || '';
+            const nombre = row[3] || '';
+            const valorUSD = row[8] ? String(row[8]).trim() : '';
+            const imgRaw = row[1] ? String(row[1]).trim() : '';
+            const codigoBarras = normalizarCodigoBarras(row[11]); // columna L
+            if (codigo && nombre) {
+              productosArr.push({ codigo, nombre, valorUSD, imgRaw, codigoBarras });
+            }
+            // Aprovechar la misma pasada para construir el mapa de stock (col 10)
+            if (codigo) {
+              nuevoStockCache[codigo] = Number(row[10]) || 0;
+            }
+          }
+
+          // Guardar en localStorage para próximas cargas
+          try {
+            localStorage.setItem(PRODUCTOS_CACHE_KEY, JSON.stringify({
+              data: productosArr,
+              stockData: nuevoStockCache,
+              timestamp: Date.now()
+            }));
+          } catch (_) { /* ignorar si localStorage está lleno */ }
+        }
+
+        // Rellenar stockCache global para que cargarStockDisponible no necesite otro fetch
+        if (nuevoStockCache && !stockCache) {
+          stockCache = nuevoStockCache;
+          stockCacheTimestamp = Date.now();
+        }
+
+        productos = productosArr;
+        productos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+
+        // 3. Construir todo el HTML como un string y asignarlo una sola vez al DOM
+        let optionsHtml = '<option value="">Selecciona un producto...</option>';
+        for (const prod of productos) {
+          optionsHtml += `<option value="${prod.codigo}" data-nombre="${prod.nombre}" data-codigo="${prod.codigo}" data-valorusd="${prod.valorUSD}" data-codigobarras="${(prod.codigoBarras || '').replace(/"/g, '&quot;')}" data-imgraw="${(prod.imgRaw || '').replace(/"/g, '&quot;')}">${prod.nombre}</option>`;
+        }
+        select.innerHTML = optionsHtml;
+
+        inicializarSelect2();
+      } catch (e) {
+        select.innerHTML = '<option value="">Error al cargar productos</option>';
+      }
+    }
+
+    // Registrar movimiento en Firebase con verificación de escritura
+    async function registrarMovimiento(mov) {
+      try {
+        const ref = db.ref('movimientos').push();
+        await ref.set(mov);
+
+        // Verificar que los datos se guardaron correctamente leyendo de vuelta
+        const snap = await ref.once('value');
+        if (!snap.exists()) {
+          throw new Error('El registro no se encontró en Firebase después de guardar');
+        }
+        const saved = snap.val();
+        if (saved.timestamp !== mov.timestamp || saved.codigo !== mov.codigo) {
+          throw new Error('Los datos guardados no coinciden con los enviados');
+        }
+
+        console.log('Movimiento verificado en Firebase:', ref.key);
+        return ref.key;
+      } catch (error) {
+        console.error('Error en registrarMovimiento:', error);
+        throw error;
+      }
+    }
+
+    // Cargar movimientos desde Firebase (solo del día o todos)
+    function cargarMovimientos(cargarTodos = false) {
+      mostrarLoadingTabla();
+      let ref = db.ref('movimientos');
+      if (!cargarTodos) {
+        // Calcular timestamp de inicio y fin del día actual (zona local)
+        const ahora = new Date();
+        const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0, 0).getTime();
+        const finDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999).getTime();
+        ref = ref.orderByChild('timestamp').startAt(inicioDia).endAt(finDia);
+      }
+      ref.once('value', snap => {
+        movimientos = [];
+        snap.forEach(child => {
+          let mov = { ...child.val(), _id: child.key };
+          // Normalizar timestamp: si es string, intentar convertir a número
+          if (typeof mov.timestamp === 'string') {
+            if (!isNaN(Number(mov.timestamp))) {
+              mov.timestamp = Number(mov.timestamp);
+            } else {
+              let d = new Date(mov.timestamp);
+              mov.timestamp = isNaN(d.getTime()) ? 0 : d.getTime();
+            }
+          }
+          movimientos.push(mov);
+        });
+        movimientos.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+        if (cargarTodos) movimientosCargados = true;
+        filtrarMovimientos();
+      });
+    }
+
+    function filtrarMovimientos() {
+      const q = document.getElementById('busqueda').value.trim().toLowerCase();
+      const tipo = document.getElementById('tipoFiltro').value;
+      movimientosFiltrados = movimientos.filter(m => {
+        const coincideBusqueda = m.nombre.toLowerCase().includes(q) || m.codigo.toLowerCase().includes(q);
+        const coincideTipo = !tipo || m.tipo === tipo;
+        return coincideBusqueda && coincideTipo;
+      });
+      // Ordenar siempre por fecha (timestamp) de forma descendente (coerción a número por seguridad)
+      movimientosFiltrados.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+      renderTabla();
+    }
+
+    // Renderizar tabla de movimientos
+    function renderTabla() {
+      const cont = document.getElementById('tablaContainer');
+      if (!movimientosFiltrados.length) {
+        cont.innerHTML = '<div class="loading">No hay movimientos registrados.</div>';
+        document.getElementById('paginacion').innerHTML = '';
+        return;
+      }
+      // Paginación
+      const total = movimientosFiltrados.length;
+      const totalPaginas = Math.ceil(total / MOVS_POR_PAGINA);
+      if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+      const ini = (paginaActual - 1) * MOVS_POR_PAGINA;
+      const fin = ini + MOVS_POR_PAGINA;
+      const pageMovs = movimientosFiltrados.slice(ini, fin);
+      let html = `<table class="tabla-movimientos">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Nombre</th>
+            <th>Cantidad</th>
+            <th>Tipo</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      pageMovs.forEach(mov => {
+        let tipoClass = '';
+        let tipoTexto = '';
+        
+        if (mov.tipo === 'ENTRADA') {
+          tipoClass = 'entrada';
+          tipoTexto = 'ENTRADA';
+        } else if (mov.tipo === 'SALIDA') {
+          tipoClass = 'salida';
+          tipoTexto = 'SALIDA';
+        } else if (mov.tipo === 'RETIRO') {
+          tipoClass = 'retiro';
+          tipoTexto = 'RETIRO';
+        }
+
+        html += `<tr>
+          <td>${formatearFecha(mov.timestamp)}</td>
+          <td class="col-nombre" title="pedidoId: ${mov.pedidoId ? String(mov.pedidoId).replace(/"/g, '&quot;') : 'Sin pedido'}" style="cursor:help;">${mov.nombre}</td>
+          <td>${mov.cantidad}</td>
+          <td><span class="${tipoClass}">${tipoTexto}</span></td>
+          <td>
+            <div class="acciones-btns">
+              <button class="btn-accion" title="Modificar" disabled aria-disabled="true">✏️</button>
+              <button class="btn-accion" title="Eliminar" onclick="eliminarMovimiento('${mov._id}')">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      cont.innerHTML = html;
+      // Paginación con máximo 10 botones y ...
+      let pagHtml = '';
+      if (totalPaginas <= 10) {
+        for (let i = 1; i <= totalPaginas; i++) {
+          pagHtml += `<button class="${i === paginaActual ? 'active' : ''}" onclick="cambiarPagina(${i})">${i}</button>`;
+        }
+      } else {
+        if (paginaActual <= 6) {
+          for (let i = 1; i <= 8; i++) {
+            pagHtml += `<button class="${i === paginaActual ? 'active' : ''}" onclick="cambiarPagina(${i})">${i}</button>`;
+          }
+          pagHtml += '<span style="padding:0 0.3rem;">...</span>';
+          pagHtml += `<button onclick="cambiarPagina(${totalPaginas})">${totalPaginas}</button>`;
+        } else if (paginaActual >= totalPaginas - 5) {
+          pagHtml += `<button onclick="cambiarPagina(1)">1</button>`;
+          pagHtml += '<span style="padding:0 0.3rem;">...</span>';
+          for (let i = totalPaginas - 7; i <= totalPaginas; i++) {
+            pagHtml += `<button class="${i === paginaActual ? 'active' : ''}" onclick="cambiarPagina(${i})">${i}</button>`;
+          }
+        } else {
+          pagHtml += `<button onclick="cambiarPagina(1)">1</button>`;
+          pagHtml += '<span style="padding:0 0.3rem;">...</span>';
+          for (let i = paginaActual - 4; i <= paginaActual + 3; i++) {
+            pagHtml += `<button class="${i === paginaActual ? 'active' : ''}" onclick="cambiarPagina(${i})">${i}</button>`;
+          }
+          pagHtml += '<span style="padding:0 0.3rem;">...</span>';
+          pagHtml += `<button onclick="cambiarPagina(${totalPaginas})">${totalPaginas}</button>`;
+        }
+      }
+      document.getElementById('paginacion').innerHTML = pagHtml;
+    }
+
+    window.cambiarPagina = function(pag) {
+      paginaActual = pag;
+      renderTabla();
+    }
+
+    // Eliminar movimiento con verificación
+    window.eliminarMovimiento = async function(id) {
+      if (!confirm('¿Seguro que deseas eliminar este movimiento?')) return;
+
+      try {
+        bloquearInterfaz('Eliminando movimiento...');
+
+        // Verificar conexión
+        let conectado = false;
+        try {
+          conectado = await verificarConexionFirebase(5000);
+        } catch (_) {
+          conectado = false;
+        }
+        if (!conectado) {
+          desbloquearInterfaz();
+          mostrarFeedback('Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.', 'error');
+          return;
+        }
+
+        const ref = db.ref('movimientos/' + id);
+        await conTimeout(ref.remove(), 15000, 'Timeout al eliminar. Verifica tu conexión.');
+
+        // Verificar que se eliminó correctamente
+        const snap = await ref.once('value');
+        if (snap.exists()) {
+          throw new Error('El registro sigue existiendo después de intentar eliminarlo');
+        }
+
+        // Sincronizar array local
+        movimientos = movimientos.filter(m => m._id !== id);
+        filtrarMovimientos();
+        desbloquearInterfaz();
+        mostrarFeedback('Movimiento eliminado y verificado en Firebase', 'success');
+      } catch (e) {
+        desbloquearInterfaz();
+        console.error('Error al eliminar movimiento:', e);
+        mostrarFeedback('Error al eliminar: ' + e.message, 'error');
+      }
+    }
+
+    // Editar movimiento (modal inline)
+    window.editarMovimiento = function(id) {
+      const mov = movimientos.find(m => m._id === id);
+      if (!mov) return;
+      const nuevaCantidad = prompt('Editar cantidad:', mov.cantidad);
+      if (nuevaCantidad === null) return;
+      const cantidadNum = parseInt(nuevaCantidad);
+      if (isNaN(cantidadNum) || cantidadNum < 1) {
+        mostrarFeedback('Cantidad inválida','error');
+        return;
+      }
+      db.ref('movimientos/' + id).update({ cantidad: cantidadNum });
+      mostrarFeedback('Movimiento modificado','success');
+    }
+  </script>
+</body>
+</html>

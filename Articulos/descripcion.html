@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f7f8fb">
+<title>Descripción · HomePoint</title>
+<link rel="icon" href="../faviconnegro.png" type="image/png">
+
+<!-- Firebase SDK (sin Storage: acá no se sube ninguna foto) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<!-- Lector de códigos de barras (cámara del móvil) -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<!-- Config (pedidos-87064 + Google Sheets) -->
+<script src="../config.js"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --card-2:#f8f9fc;
+  --card-3:#f1f3f9;
+  --text:#0e1424;
+  --text-2:#3a4256;
+  --muted:#7a8398;
+  --faint:#a9b0c1;
+  --border:#e8eaf1;
+  --border-2:#dfe2ec;
+  --primary:#2b2f37;
+  --primary-600:#181b21;
+  --primary-soft:#eef0f3;
+  --primary-soft-2:#e0e3e9;
+  --primary-glow:rgba(31,35,42,.26);
+  --lime:#7cb342;
+  --lime-600:#5a9216;
+  --lime-soft:#eef6e2;
+  --success:#7cb342;
+  --success-600:#5a9216;
+  --success-soft:#eef6e2;
+  --danger:#f43f5e;
+  --danger-600:#e11d48;
+  --danger-soft:#fdebee;
+  --amber:#f59e0b;
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',monospace;
+  --r:20px;
+  --r-md:16px;
+  --r-sm:12px;
+  --r-xs:10px;
+  --sh-sm:0 1px 2px rgba(14,20,36,.05),0 1px 3px rgba(14,20,36,.04);
+  --sh:0 4px 14px -4px rgba(14,20,36,.10),0 2px 6px -2px rgba(14,20,36,.06);
+  --sh-lg:0 18px 44px -16px rgba(14,20,36,.22),0 6px 16px -8px rgba(14,20,36,.10);
+  --sh-primary:0 10px 26px -8px var(--primary-glow);
+}
+
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-feature-settings:'cv01','ss01'}
+body{
+  min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  background:
+    radial-gradient(900px 480px at 50% -10%, rgba(31,35,42,.06), transparent 70%),
+    radial-gradient(700px 420px at 100% 0%, rgba(124,179,66,.07), transparent 65%),
+    var(--bg);
+  background-attachment:fixed;
+}
+::selection{background:var(--primary-soft-2);color:var(--primary-600)}
+
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ====== LOGIN ====== */
+.login{
+  position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(800px 460px at 50% -5%, rgba(31,35,42,.08), transparent 70%),var(--bg);
+  transition:opacity .5s ease,transform .5s ease;
+}
+.login.hidden{opacity:0;transform:scale(1.02);pointer-events:none}
+.login-card{width:100%;max-width:392px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-lg);padding:36px 30px 30px;animation:pop-in .55s cubic-bezier(.2,.8,.25,1)}
+@keyframes pop-in{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.login-logo{width:52px;height:52px;border-radius:15px;margin-bottom:20px;background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);display:flex;align-items:center;justify-content:center}
+.login-tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--lime-600);margin-bottom:10px;font-weight:600}
+.login-card h1{font-weight:800;font-size:1.6rem;line-height:1.1;letter-spacing:-.025em;margin-bottom:6px}
+.login-card .sub{color:var(--muted);font-size:.9rem;margin-bottom:26px}
+.field{margin-bottom:15px}
+.field label{display:block;font-size:.74rem;font-weight:600;color:var(--text-2);margin-bottom:7px}
+.inp{
+  width:100%;padding:13px 14px;background:var(--card);
+  border:1px solid var(--border-2);border-radius:var(--r-sm);
+  font-family:var(--font);font-size:.95rem;color:var(--text);outline:none;
+  transition:border-color .18s,box-shadow .18s,background .18s;
+}
+.inp:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.inp::placeholder{color:var(--faint)}
+.dim-side{flex:1;min-width:0;padding:13px 10px}
+.btn{font-family:var(--font);cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s,background .18s,opacity .18s}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn-primary{width:100%;padding:14px;border-radius:var(--r-sm);font-weight:700;font-size:.98rem;letter-spacing:.01em;color:#fff;background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary);margin-top:6px}
+.btn-primary:active{box-shadow:0 5px 16px -8px var(--primary-glow)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed}
+.login-err{min-height:1.1em;color:var(--danger-600);font-size:.82rem;font-weight:600;margin-top:12px;text-align:center}
+
+/* ====== TOPBAR ====== */
+.topbar{
+  position:sticky;top:0;z-index:60;
+  background:rgba(246,247,251,.78);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--border);
+  padding:max(11px,env(safe-area-inset-top)) 16px 11px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{width:36px;height:36px;border-radius:11px;flex-shrink:0;border:none;padding:0;background:linear-gradient(135deg,var(--primary),#3d424c);box-shadow:var(--sh-primary);display:flex;align-items:center;justify-content:center}
+.brand .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.brand .tt b{font-weight:800;font-size:1rem;letter-spacing:-.02em}
+.brand .tt span{font-size:.68rem;color:var(--muted);font-weight:500;margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.conn{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--muted);padding:5px 10px 5px 8px;background:var(--card);border:1px solid var(--border);border-radius:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-soft);position:relative}
+.dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--success);animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite}
+@keyframes ping{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(2.6);opacity:0}}
+.dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.dot.off::after{display:none}
+.icon-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;transition:all .16s}
+.icon-btn:active{transform:translateY(1px) scale(.97)}
+.icon-btn.keyset{border-color:var(--lime);color:var(--lime-600);background:var(--lime-soft)}
+.logout-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer;transition:all .16s}
+.logout-btn:active{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
+
+/* ====== LAYOUT ====== */
+.wrap{max-width:min(1180px,96vw);margin:0 auto;padding:18px 16px max(40px,env(safe-area-inset-bottom))}
+
+/* ====== HEAD ====== */
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 16px}
+.page-head .ttl{display:flex;flex-direction:column;gap:4px}
+.page-head h1{font-size:1.4rem;font-weight:800;letter-spacing:-.03em}
+.page-head .count{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+
+/* ====== STAT PILLS ====== */
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.stat{flex:1;min-width:120px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--sh-sm);padding:12px 15px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--mono);font-size:1.25rem;font-weight:700;letter-spacing:-.01em}
+.stat span{font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat.warn b{color:var(--amber)}
+.stat.ok b{color:var(--success-600)}
+
+/* ====== TOOLS ====== */
+.tabla-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:13px}
+.tbl-search{flex:1;min-width:180px}
+.filterbtn{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:11px 15px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--text-2);white-space:nowrap;transition:all .16s}
+.filterbtn:hover{border-color:var(--border-2)}
+.filterbtn.on{background:var(--lime-soft);border-color:var(--lime);color:var(--lime-600)}
+.filterbtn .sw{width:30px;height:17px;border-radius:10px;background:var(--border-2);position:relative;transition:background .18s}
+.filterbtn .sw::after{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
+.filterbtn.on .sw{background:var(--lime)}
+.filterbtn.on .sw::after{transform:translateX(13px)}
+
+/* ====== SCAN BUTTON ====== */
+.scan-btn{
+  display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;
+  padding:11px 16px;font-family:var(--font);font-size:.82rem;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary);
+  cursor:pointer;white-space:nowrap;transition:transform .12s cubic-bezier(.2,.8,.25,1),box-shadow .18s;
+}
+.scan-btn:active{transform:translateY(1px) scale(.985)}
+.scan-btn svg{color:var(--lime)}
+@media(max-width:520px){.scan-btn{flex:1;justify-content:center;min-width:130px}}
+
+/* ====== SCANNER OVERLAY ====== */
+.scanner{position:fixed;inset:0;z-index:1150;background:#0b0f1a;display:none;flex-direction:column}
+.scanner.active{display:flex}
+.scanner-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:max(14px,env(safe-area-inset-top)) 18px 14px;color:#fff;z-index:2}
+.scanner-head .st{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.scanner-head .st b{font-size:1.02rem;font-weight:800;letter-spacing:-.02em}
+.scanner-head .st span{font-size:.72rem;color:rgba(255,255,255,.55);font-weight:500;margin-top:2px}
+.scanner-actions{display:flex;gap:9px;flex-shrink:0}
+.scanner-icon-btn{width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s}
+.scanner-icon-btn:active{background:rgba(255,255,255,.16)}
+.scanner-icon-btn.on{background:var(--lime);border-color:var(--lime);color:#0b0f1a}
+.scanner-stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
+#scannerReader{width:100%;height:100%}
+#scannerReader video{width:100%!important;height:100%!important;object-fit:cover!important;display:block}
+/* guía de encuadre */
+.scanner-stage::after{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(80vw,340px);height:min(32vh,170px);
+  border:2px solid rgba(255,255,255,.9);border-radius:16px;
+  box-shadow:0 0 0 100vmax rgba(0,0,0,.4);pointer-events:none;z-index:1;
+}
+.scan-result{
+  position:absolute;left:50%;bottom:20px;transform:translateX(-50%) translateY(20px);z-index:3;
+  display:flex;align-items:center;gap:12px;background:rgba(20,24,34,.94);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:11px 18px;
+  max-width:calc(100vw - 32px);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
+}
+.scan-result.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.scan-result .sr-icon{width:34px;height:34px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.scan-result .sr-txt{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.scan-result .sr-txt b{font-size:.9rem;font-weight:700;color:#fff}
+.scan-result .sr-txt span{font-size:.76rem;color:rgba(255,255,255,.62);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:64vw}
+.scan-result.ok .sr-icon{background:var(--success)}
+.scan-result.warn .sr-icon{background:var(--amber)}
+.scan-result.err .sr-icon{background:var(--danger)}
+.scanner-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;color:rgba(255,255,255,.85);font-size:.92rem;line-height:1.6;z-index:4}
+.scanner-foot{background:#0b0f1a;border-top:1px solid rgba(255,255,255,.08);padding:14px 18px max(14px,env(safe-area-inset-bottom));color:rgba(255,255,255,.5);font-size:.78rem;text-align:center;line-height:1.5}
+
+/* ====== TABLE ====== */
+.tabla-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
+table.art{border-collapse:collapse;width:100%;font-size:.84rem}
+table.art th,table.art td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+table.art thead th{position:sticky;top:0;background:var(--card-2);font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;z-index:1;white-space:nowrap}
+table.art tbody tr{cursor:pointer;transition:background .12s}
+table.art tbody tr:hover > td{background:var(--lime-soft)}
+table.art tbody tr:last-child td{border-bottom:none}
+/* fila encontrada por escaneo: destello para ubicarla de un vistazo */
+table.art tbody tr.hit > td{animation:hit-flash 2.4s ease-out}
+@keyframes hit-flash{0%,55%{background:#e2efce}100%{background:transparent}}
+table.art td.codcol{font-family:var(--mono);font-weight:700;color:var(--text-2);white-space:nowrap}
+table.art td.namecol{font-weight:600;color:var(--text);max-width:280px;min-width:140px}
+table.art td.desccol{color:var(--text-2);max-width:340px;min-width:160px;cursor:text}
+table.art td.desccol:hover .dtxt,table.art td.desccol:hover .dempty{text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:2px}
+table.art td.desccol .dtxt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:.8rem;line-height:1.35}
+table.art td.desccol .dempty{color:var(--faint);font-style:italic}
+table.art td.medcol{color:var(--text-2);max-width:170px;min-width:120px;cursor:text}
+table.art td.medcol:hover .dtxt,table.art td.medcol:hover .dempty{text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:2px}
+table.art td.medcol .dtxt{font-size:.8rem;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.art td.medcol .dempty{color:var(--faint);font-style:italic;font-size:.8rem}
+.thumb-wrap{position:relative;width:46px;height:46px}
+table.art .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;background:var(--card-2);display:block;border:1px solid var(--border)}
+.thumb-empty{width:46px;height:46px;border-radius:9px;background:var(--card-2);border:1.5px dashed var(--border-2);display:flex;align-items:center;justify-content:center;color:var(--faint)}
+.rowbtn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:9px;padding:9px 13px;font-family:var(--font);font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform .12s,box-shadow .18s,background .18s}
+.rowbtn:active{transform:translateY(1px) scale(.98)}
+.rowbtn.assign{background:linear-gradient(135deg,var(--primary),#383d47);color:#fff;box-shadow:var(--sh-primary)}
+.rowbtn.assign svg{color:var(--lime)}
+.rowbtn.replace{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.rowbtn.replace:hover{border-color:var(--primary);color:var(--primary)}
+/* atajo "Foto": misma jerarquía visual que Editar, pero se distingue por el icono */
+.rowbtn.usefoto{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.rowbtn.usefoto:hover{border-color:var(--lime);color:var(--primary)}
+.rowbtn.usefoto svg{color:var(--lime)}
+.rowacts{display:inline-flex;align-items:center;gap:7px;justify-content:flex-end}
+.col-act{text-align:right;white-space:nowrap}
+.tabla-empty{padding:44px 20px;text-align:center;color:var(--muted);font-size:.9rem}
+
+/* ====== PAGER ====== */
+.tabla-pager{display:none;align-items:center;justify-content:space-between;gap:12px;margin:14px 2px 0;flex-wrap:wrap}
+.tabla-pager.show{display:flex}
+.pager-info{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.pager-btns{display:flex;align-items:center;gap:9px}
+.pager-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-2);background:var(--card);border-radius:10px;padding:9px 14px;font-family:var(--font);font-size:.82rem;font-weight:700;color:var(--text-2);cursor:pointer;transition:all .16s}
+.pager-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.pager-btn:disabled{opacity:.4;cursor:not-allowed}
+.pager-pages{font-size:.8rem;font-weight:700;color:var(--text-2);min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* ====== CÁMARA ====== */
+.cam{position:fixed;inset:0;z-index:950;background:#0e0f13;display:none;flex-direction:column}
+.cam.active{display:flex;animation:rise .3s ease}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.cam-top{padding:max(16px,env(safe-area-inset-top)) 18px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cam-top .ct{display:flex;flex-direction:column;line-height:1.2;min-width:0;color:#fff}
+.cam-top .ct b{font-size:.96rem;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62vw}
+.cam-top .ct span{font-family:var(--mono);font-size:.72rem;color:rgba(255,255,255,.55);margin-top:2px}
+.cam-x{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:1.4rem;cursor:pointer;flex-shrink:0;transition:background .16s}
+.cam-x:active{background:rgba(255,255,255,.25)}
+.cam-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;gap:16px;min-height:0;overflow-y:auto}
+.cam-frame{position:relative;width:100%;max-width:440px;aspect-ratio:1/1;border-radius:20px;overflow:hidden;background:#000;box-shadow:0 0 0 1px rgba(255,255,255,.08);flex-shrink:0}
+.cam-frame video,.cam-frame img{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.cam-frame img{display:none}
+.cam-frame.shot video{display:none}
+.cam-frame.shot img{display:block}
+.cam-corner{position:absolute;width:30px;height:30px;border:3px solid var(--lime);pointer-events:none}
+.cam-frame.shot .cam-corner{display:none}
+.cam-corner.tl{top:12px;left:12px;border-right:0;border-bottom:0;border-top-left-radius:9px}
+.cam-corner.tr{top:12px;right:12px;border-left:0;border-bottom:0;border-top-right-radius:9px}
+.cam-corner.bl{bottom:12px;left:12px;border-right:0;border-top:0;border-bottom-left-radius:9px}
+.cam-corner.br{bottom:12px;right:12px;border-left:0;border-top:0;border-bottom-right-radius:9px}
+.cam-hint{color:rgba(255,255,255,.6);font-size:.82rem;text-align:center;max-width:420px}
+.cam-usefoto{display:none;align-items:center;justify-content:center;gap:8px;padding:10px 18px;border-radius:var(--r-sm);font-weight:800;font-size:.82rem;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.cam-usefoto.show{display:inline-flex}
+.cam-usefoto:active{background:rgba(255,255,255,.2)}
+.cam-usefoto:disabled{opacity:.55;cursor:not-allowed}
+
+/* controles: modo captura vs modo revisión */
+.cam-ctrl{display:flex;align-items:center;justify-content:center;gap:40px;padding:16px 20px max(20px,env(safe-area-inset-bottom))}
+.cam-ctrl.hidden{display:none}
+.cam-shot{width:74px;height:74px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);box-shadow:0 0 0 2px #0e0f13 inset;cursor:pointer;transition:transform .12s}
+.cam-shot:active{transform:scale(.92)}
+.cam-mini{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s}
+.cam-mini:active{background:rgba(255,255,255,.25)}
+
+/* panel de revisión con descripción editable */
+.cam-review{display:none;flex-direction:column;gap:12px;padding:12px 18px max(18px,env(safe-area-inset-bottom));width:100%;max-width:520px;margin:0 auto}
+.cam-review.show{display:flex}
+.desc-label{display:flex;align-items:center;justify-content:space-between;gap:10px;color:rgba(255,255,255,.85);font-size:.76rem;font-weight:700;letter-spacing:.02em}
+.desc-count{font-family:var(--mono);font-size:.68rem;color:rgba(255,255,255,.45);font-weight:500}
+.desc-area{
+  width:100%;min-height:180px;max-height:46vh;resize:vertical;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:var(--r-sm);
+  color:#fff;font-family:var(--font);font-size:.92rem;line-height:1.5;padding:12px 13px;outline:none;
+  transition:border-color .18s,box-shadow .18s;
+}
+.desc-area:focus{border-color:var(--lime);box-shadow:0 0 0 3px rgba(124,179,66,.22)}
+.desc-area::placeholder{color:rgba(255,255,255,.4)}
+.review-btns{display:flex;gap:10px}
+.review-btns .btn{flex:1;padding:14px;border-radius:var(--r-sm);font-weight:800;font-size:.92rem}
+.cam-retake{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.cam-retake:active{background:rgba(255,255,255,.2)}
+.cam-regen{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.cam-regen:active{background:rgba(255,255,255,.2)}
+.cam-save{width:100%;padding:17px;border-radius:var(--r-sm);font-weight:800;font-size:1rem;background:linear-gradient(135deg,var(--lime),#9ccc65);color:#0e1424}
+.cam-save:active{transform:scale(.98)}
+.cam-save:disabled{opacity:.55;cursor:not-allowed}
+.hidden-file{display:none}
+
+/* ====== MODAL API KEY ====== */
+.modal{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(14,20,36,.42);backdrop-filter:blur(3px)}
+.modal.active{display:flex;animation:fade .2s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal-card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-lg);padding:26px 24px 22px;animation:pop-in .35s cubic-bezier(.2,.8,.25,1)}
+.modal-card h2{font-size:1.15rem;font-weight:800;letter-spacing:-.02em;margin-bottom:6px}
+.modal-card p{font-size:.84rem;color:var(--muted);line-height:1.5;margin-bottom:16px}
+.modal-card p a{color:var(--lime-600);font-weight:700;text-decoration:none}
+.modal-card p a:hover{text-decoration:underline}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions .btn{flex:1;padding:12px;border-radius:var(--r-sm);font-weight:700;font-size:.9rem}
+.mbtn-cancel{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.mbtn-cancel:hover{border-color:var(--primary);color:var(--primary)}
+.mbtn-save{color:#fff;background:linear-gradient(135deg,var(--primary),#383d47);box-shadow:var(--sh-primary)}
+.mbtn-save:disabled{opacity:.6;cursor:not-allowed}
+.modal-err{min-height:1em;color:var(--danger-600);font-size:.78rem;font-weight:600;margin-top:9px}
+
+/* ====== MODAL API KEY ====== */
+.key-wrap{position:relative}
+.key-wrap .inp{padding-right:46px}                    /* espacio para el ojo */
+.key-eye{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+  background:none;border:none;border-radius:8px;color:var(--faint);cursor:pointer;transition:color .16s,background .16s;
+}
+.key-eye:hover{color:var(--text-2);background:var(--lime-soft)}
+.key-status{display:flex;align-items:center;gap:7px;font-size:.76rem;font-weight:600;color:var(--muted);margin-top:9px}
+.key-status .kdot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.key-status.on .kdot{background:var(--lime-600)}
+.key-status code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.74rem;color:var(--text-2)}
+.mbtn-del{flex:0 0 auto!important;background:var(--card);border:1px solid var(--border-2);color:var(--danger-600);padding:12px 14px!important}
+.mbtn-del:hover{border-color:var(--danger-600);background:rgba(225,29,72,.06)}
+
+/* ====== MODAL DESCRIPCIÓN (ver / editar) ====== */
+.modal-card.wide{max-width:640px}
+.dm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.dm-head .dm-tt{min-width:0}
+.dm-head h2{margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-head .dm-cod{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.dm-x{width:34px;height:34px;flex-shrink:0;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text-2);font-size:1.2rem;line-height:1;cursor:pointer;transition:all .16s}
+.dm-x:hover{border-color:var(--danger);color:var(--danger-600)}
+.dm-label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.74rem;font-weight:700;color:var(--text-2);margin-bottom:7px}
+.dm-count{font-family:var(--mono);font-size:.68rem;color:var(--faint);font-weight:500}
+.dm-area{
+  width:100%;min-height:240px;max-height:52vh;resize:vertical;
+  background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);
+  color:var(--text);font-family:var(--font);font-size:.9rem;line-height:1.6;padding:13px 14px;outline:none;
+  white-space:pre-wrap;transition:border-color .18s,box-shadow .18s;
+}
+.dm-area:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--lime-soft)}
+.dm-area::placeholder{color:var(--faint)}
+
+/* ====== BLOCK OVERLAY ====== */
+/* por encima de los modales (1200) para que el spinner se vea al guardar desde el editor */
+.block{position:fixed;inset:0;z-index:1250;background:rgba(14,15,19,.55);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.block.active{display:flex}
+.spinner{width:44px;height:44px;border:3.5px solid rgba(255,255,255,.25);border-top-color:var(--lime);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.block-text{font-size:.9rem;font-weight:600;color:#fff}
+
+/* ====== TOAST ====== */
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(140px);z-index:1300;background:var(--text);color:#fff;border-radius:14px;padding:13px 20px;font-size:.86rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:9px;max-width:calc(100vw - 28px);transition:transform .4s cubic-bezier(.34,1.4,.64,1)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{background:linear-gradient(135deg,var(--danger-600),#fb5577)}
+.toast.ok{background:linear-gradient(135deg,var(--success-600),#8bc34a)}
+
+/* ====== SUCCESS STAMP ====== */
+.success-stamp{position:fixed;inset:0;z-index:2000;display:none;align-items:center;justify-content:center;background:rgba(14,20,36,.28);pointer-events:none}
+.success-stamp.active{display:flex}
+.stamp{width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,var(--success),#9ccc65);box-shadow:0 18px 40px -10px rgba(124,179,66,.55);display:flex;align-items:center;justify-content:center;animation:stamp-pop .6s cubic-bezier(.34,1.56,.64,1)}
+.stamp svg{width:54px;height:54px;color:#fff}
+@keyframes stamp-pop{0%{transform:scale(0) rotate(-16deg);opacity:0}60%{transform:scale(1.12) rotate(5deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+
+@media (max-width:480px){
+  .page-head h1{font-size:1.2rem}
+  table.art th,table.art td{padding:9px 9px}
+  .rowbtn{padding:9px 10px;gap:5px}
+  .rowacts{gap:5px}
+  /* la descripción se mantiene visible (es el acceso al editor); la tabla scrollea en horizontal */
+  table.art td.desccol{max-width:200px;min-width:130px}
+  table.art td.medcol{max-width:120px;min-width:90px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+    </div>
+    <div class="login-tag">HomePoint · Admin</div>
+    <h1>Descripciones</h1>
+    <div class="sub">Iniciá sesión para generar descripciones de artículos.</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" class="inp" id="loginEmail" placeholder="correo@ejemplo.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" class="inp" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn">Ingresar</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+    </span>
+    <span class="tt"><b>Descripciones</b><span>Leer packaging con IA</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="conn"><span class="dot" id="connDot"></span><span id="connTxt">online</span></span>
+    <button class="icon-btn" id="keyBtn" title="Configurar API key de Gemini">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+    </button>
+    <button class="logout-btn" id="logoutBtn" title="Salir">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <div class="ttl">
+      <h1>Descripciones de artículos</h1>
+      <span class="count" id="pageCount">Cargando artículos…</span>
+    </div>
+  </div>
+
+  <!-- ===== STATS ===== -->
+  <div class="stats">
+    <div class="stat ok"><b id="statCon">–</b><span>Con descripción</span></div>
+    <div class="stat warn"><b id="statSin">–</b><span>Sin descripción</span></div>
+  </div>
+
+  <!-- ===== TOOLS ===== -->
+  <div class="tabla-tools">
+    <input type="text" class="inp tbl-search" id="tablaSearch" placeholder="Buscar por nombre, código o cód. de barras…" autocomplete="off">
+    <button class="scan-btn" id="scanBtn" type="button" title="Buscar un artículo escaneando su código de barras">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+      Escanear
+    </button>
+    <button class="filterbtn" id="filterBtn" type="button" title="Mostrar solo artículos sin descripción">
+      <span class="sw"></span>
+      Solo sin descripción
+    </button>
+  </div>
+
+  <!-- ===== TABLE ===== -->
+  <div class="tabla-scroll">
+    <table class="art" id="artTable">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Foto</th>
+          <th>Nombre</th>
+          <th class="desccol">Descripción</th>
+          <th>Medidas</th>
+          <th class="col-act">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="artTbody"></tbody>
+    </table>
+  </div>
+  <div class="tabla-empty" id="tablaEmpty" style="display:none">No hay artículos.</div>
+
+  <!-- ===== PAGER ===== -->
+  <div class="tabla-pager" id="tablaPager">
+    <span class="pager-info" id="pagerInfo"></span>
+    <div class="pager-btns">
+      <button class="pager-btn" id="pagerPrev">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Anterior
+      </button>
+      <span class="pager-pages" id="pagerPages"></span>
+      <button class="pager-btn" id="pagerNext">
+        Siguiente
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== CÁMARA ===== -->
+<div class="cam" id="cam">
+  <div class="cam-top">
+    <div class="ct">
+      <b id="camName">Artículo</b>
+      <span id="camCod">#—</span>
+    </div>
+    <button class="cam-x" id="camClose" type="button">&times;</button>
+  </div>
+  <div class="cam-body">
+    <div class="cam-frame" id="camFrame">
+      <video id="camVideo" playsinline autoplay muted></video>
+      <img id="camPreview" alt="">
+      <span class="cam-corner tl"></span><span class="cam-corner tr"></span>
+      <span class="cam-corner bl"></span><span class="cam-corner br"></span>
+    </div>
+    <div class="cam-hint" id="camHint">Tomá una foto nítida del packaging o la etiqueta para leer los datos del producto.</div>
+
+    <!-- opcional: usar la foto ya cargada del artículo en vez de sacar una nueva -->
+    <button class="btn cam-usefoto" id="camUseFoto" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      Usar la foto del artículo
+    </button>
+
+    <!-- panel de revisión con descripción editable (dentro del body para poder scrollear) -->
+    <div class="cam-review" id="camReview">
+      <div class="desc-label">
+        <span>Descripción generada</span>
+        <span class="desc-count" id="descCount">0</span>
+      </div>
+      <textarea class="desc-area" id="descArea" placeholder="La descripción generada aparecerá acá (datos importantes + resumen). Podés editarla antes de guardar." rows="10"></textarea>
+      <div class="review-btns">
+        <button class="btn cam-retake" id="camRetake" type="button">Repetir</button>
+        <button class="btn cam-regen" id="camRegen" type="button">Regenerar</button>
+      </div>
+      <button class="btn cam-save" id="camSave" type="button">Guardar descripción</button>
+    </div>
+  </div>
+  <!-- controles de captura -->
+  <div class="cam-ctrl" id="camCtrl">
+    <button class="cam-mini" id="camFlip" type="button" title="Cambiar cámara">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="cam-shot" id="camShot" type="button" title="Tomar foto"></button>
+    <button class="cam-mini" id="camGallery" type="button" title="Elegir de la galería">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    </button>
+  </div>
+  <input type="file" id="photoFile" class="hidden-file" accept="image/*">
+</div>
+
+<!-- ===== MODAL API KEY ===== -->
+<div class="modal" id="keyModal">
+  <div class="modal-card">
+    <h2>API key de Gemini</h2>
+    <p>Es gratuita y se consigue en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Se guarda solo en este navegador, así que hay que cargarla una vez en cada dispositivo que uses.</p>
+    <div class="field" style="margin-bottom:6px">
+      <label>Tu API key</label>
+      <div class="key-wrap">
+        <input type="password" class="inp" id="keyInput" placeholder="Pegá tu API key" autocomplete="off" spellcheck="false">
+        <button class="key-eye" id="keyEye" type="button" title="Mostrar / ocultar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="key-status" id="keyStatus"><span class="kdot"></span><span id="keyStatusTxt">No hay ninguna key cargada</span></div>
+    <div class="modal-err" id="keyErr"></div>
+    <div class="modal-actions">
+      <button class="btn mbtn-del" id="keyDelete" type="button" title="Borrar la key guardada">Borrar</button>
+      <button class="btn mbtn-cancel" id="keyCancel" type="button">Cancelar</button>
+      <button class="btn mbtn-save" id="keySave" type="button">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== BLOCK ===== -->
+<div class="block" id="block">
+  <div class="spinner"></div>
+  <div class="block-text" id="blockText">Cargando…</div>
+</div>
+
+<!-- ===== SUCCESS STAMP ===== -->
+<div class="success-stamp" id="successStamp">
+  <div class="stamp">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+</div>
+
+<!-- ===== MODAL DESCRIPCIÓN (ver / editar) ===== -->
+<div class="modal" id="descModal">
+  <div class="modal-card wide">
+    <div class="dm-head">
+      <div class="dm-tt">
+        <h2 id="dmName">Artículo</h2>
+        <span class="dm-cod" id="dmCod">#—</span>
+      </div>
+      <button class="dm-x" id="dmClose" type="button" title="Cerrar">&times;</button>
+    </div>
+    <div class="dm-label">
+      <span>Descripción</span>
+      <span class="dm-count" id="dmCount">0 caracteres</span>
+    </div>
+    <textarea class="dm-area" id="dmArea" placeholder="Este artículo todavía no tiene descripción. Podés escribirla acá o generarla con la cámara." spellcheck="true"></textarea>
+    <div class="modal-actions">
+      <button class="btn mbtn-cancel" id="dmCancel" type="button">Cancelar</button>
+      <button class="btn mbtn-save" id="dmSave" type="button">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL TAMAÑO / PESO ===== -->
+<div class="modal" id="dimModal">
+  <div class="modal-card">
+    <div class="dm-head">
+      <div class="dm-tt">
+        <h2 id="dimName">Artículo</h2>
+        <span class="dm-cod" id="dimCod">#—</span>
+      </div>
+      <button class="dm-x" id="dimClose" type="button" title="Cerrar">&times;</button>
+    </div>
+    <div class="field">
+      <label>Tamaño (cm) · largo × ancho × alto — el alto es opcional para objetos planos</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" class="inp dim-side" id="dimLado1" placeholder="70" min="0" step="0.1" inputmode="decimal" style="text-align:center">
+        <span style="color:var(--muted);font-weight:700">×</span>
+        <input type="number" class="inp dim-side" id="dimLado2" placeholder="30" min="0" step="0.1" inputmode="decimal" style="text-align:center">
+        <span style="color:var(--muted);font-weight:700">×</span>
+        <input type="number" class="inp dim-side" id="dimLado3" placeholder="40 (opc.)" min="0" step="0.1" inputmode="decimal" style="text-align:center">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Peso (kg)</label>
+      <input type="number" class="inp" id="dimPeso" placeholder="0" min="0" step="0.01" inputmode="decimal">
+    </div>
+    <div class="modal-actions">
+      <button class="btn mbtn-cancel" id="dimCancel" type="button">Cancelar</button>
+      <button class="btn mbtn-save" id="dimSave" type="button">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCANNER ===== -->
+<div class="scanner" id="scanner">
+  <div class="scanner-head">
+    <div class="st">
+      <b>Buscar por código</b>
+      <span>Apuntá al código de barras del artículo</span>
+    </div>
+    <div class="scanner-actions">
+      <button class="scanner-icon-btn" id="torchBtn" type="button" title="Linterna">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+      </button>
+      <button class="scanner-icon-btn" id="scanCloseBtn" type="button" title="Cerrar">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="scanner-stage">
+    <div id="scannerReader"></div>
+    <div class="scan-result" id="scanResult">
+      <div class="sr-icon" id="scanResultIcon"></div>
+      <div class="sr-txt">
+        <b id="scanResultTitle"></b>
+        <span id="scanResultSub"></span>
+      </div>
+    </div>
+    <div class="scanner-error" id="scannerError" style="display:none"></div>
+  </div>
+  <div class="scanner-foot">Al reconocer el código, se cierra la cámara y el artículo queda filtrado en la lista.</div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  Firebase init (sin Storage)
+// ============================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const articulosRef = db.ref('articulos');
+
+const $ = id => document.getElementById(id);
+
+// ============================================================
+//  Gemini
+// ============================================================
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+// Un solo modelo: "flash lite" es el más barato y rápido, y para leer una etiqueta le sobra.
+// El segundo es solo red de contención por si el alias "-latest" deja de existir (404):
+// no hay selector de modelo en la UI, la elección no es del usuario.
+const GEMINI_MODEL = 'gemini-flash-lite-latest';
+const GEMINI_MODEL_FALLBACK = 'gemini-2.0-flash-lite';
+const GEMINI_MODEL_CANDIDATES = [GEMINI_MODEL, GEMINI_MODEL_FALLBACK];
+const GEMINI_KEY_STORAGE = 'geminiApiKey';
+const GEMINI_MODEL_STORAGE = 'geminiModel';        // modelo que funcionó, cacheado
+const GEMINI_THINK_STORAGE = 'geminiThinkMode';    // variante de thinkingConfig que aceptó el modelo
+
+// La API key de Gemini la carga el usuario desde el modal (botón de la topbar) y se guarda
+// solo en este navegador. No se versiona ninguna key en el código: si se revoca, se cambia
+// desde la UI sin tocar el archivo.
+function getGeminiKey(){
+  try { return (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(); } catch(_){ return ''; }
+}
+function setGeminiKey(k){ try { localStorage.setItem(GEMINI_KEY_STORAGE, k.trim()); } catch(_){} }
+function clearGeminiKey(){ try { localStorage.removeItem(GEMINI_KEY_STORAGE); } catch(_){} }
+
+// Muestra la key sin exponerla entera: primeros 6 + últimos 4.
+function maskGeminiKey(k){
+  if (!k) return '';
+  return k.length <= 12 ? k.slice(0, 2) + '…' : k.slice(0, 6) + '…' + k.slice(-4);
+}
+// Se versiona el caché del modelo: al cambiar la preferencia (p.ej. priorizar los "lite"),
+// se bumpea MODEL_PREF_VER para descartar el modelo recordado con el criterio viejo.
+const MODEL_PREF_VER = '3';
+function leerPref(clave){
+  try {
+    const raw = (localStorage.getItem(clave) || '').trim();
+    const sep = raw.indexOf('|');
+    if (sep < 0) return '';                                  // formato viejo (sin versión) → ignorar
+    return raw.slice(0, sep) === MODEL_PREF_VER ? raw.slice(sep + 1) : '';
+  } catch(_){ return ''; }
+}
+function guardarPref(clave, v){ try { v ? localStorage.setItem(clave, MODEL_PREF_VER + '|' + v) : localStorage.removeItem(clave); } catch(_){} }
+
+function getCachedModel(){ return leerPref(GEMINI_MODEL_STORAGE); }
+function setCachedModel(m){ guardarPref(GEMINI_MODEL_STORAGE, m); }
+
+// Cómo apagar el "thinking" (que agrega latencia y quema tokens de salida sin aportar
+// nada para leer una etiqueta) depende de la familia del modelo, y los alias "-latest"
+// cambian de familia sin aviso: 2.5 usa thinkingBudget, 3.x usa thinkingLevel, 2.0 no
+// soporta nada de esto. En vez de adivinar por el nombre, se prueban las variantes en
+// orden y se cachea la que el modelo aceptó, para no gastar requests en cada generación.
+const THINK_MODES = ['budget', 'level', 'none'];
+function getCachedThink(){ const t = leerPref(GEMINI_THINK_STORAGE); return THINK_MODES.includes(t) ? t : ''; }
+function setCachedThink(t){ guardarPref(GEMINI_THINK_STORAGE, t); }
+function thinkingCfgDe(modo){
+  if (modo === 'budget') return { thinkingBudget: 0 };
+  if (modo === 'level') return { thinkingLevel: 'low' };
+  return null;
+}
+
+// Cuota agotada (429): la API dice en cuántos segundos reintentar. Hasta que pase ese
+// tiempo no se manda nada más — cada request extra solo suma al límite que ya se pasó.
+let geminiCooldownHasta = 0;
+function segundosDeCooldown(){ return Math.max(0, Math.ceil((geminiCooldownHasta - Date.now()) / 1000)); }
+// Lee el retryDelay ("21s") de los details del 429; si no viene, asume un minuto.
+function retrasoDe429(data){
+  const det = (data && data.error && data.error.details) || [];
+  for (const d of det){
+    const s = parseFloat(String(d && d.retryDelay || '').replace('s', ''));
+    if (!isNaN(s) && s > 0) return Math.min(120, Math.ceil(s) + 1);
+  }
+  const m = /retry in ([\d.]+)s/i.exec(String((data && data.error && data.error.message) || ''));
+  if (m) return Math.min(120, Math.ceil(parseFloat(m[1])) + 1);
+  return 60;
+}
+
+// Las API keys de Gemini se envían por header x-goog-api-key (funciona con el formato
+// nuevo "AQ." y con el viejo "AIza"; el query ?key= no sirve con las nuevas).
+const genUrl = model => `${GEMINI_BASE}/models/${model}:generateContent`;
+
+// Prompt para leer el packaging: transcribe los datos importantes + un resumen breve.
+function buildPrompt(nombre){
+  const ctx = nombre ? `El artículo se llama aproximadamente "${nombre}". ` : '';
+  return `Sos un asistente que analiza fotos de packaging y etiquetas de productos para un catálogo. ${ctx}` +
+    `Mirá la imagen y leé TODA la información visible. Devolvé la respuesta en español con EXACTAMENTE estas dos secciones, en este orden:\n\n` +
+    `Descripción:\n` +
+    `- Un párrafo breve y claro (2 a 4 oraciones, tono comercial neutro) que describa el producto. ` +
+    `Empezá directo con el producto, sin muletillas ni frases de relleno tipo "Este producto es...", ` +
+    `"Se trata de...", "El artículo es..." — por ejemplo, escribí "Suplemento de ácido fólico en comprimidos." ` +
+    `en vez de "Este producto es un suplemento de ácido fólico en comprimidos.".\n\n` +
+    `Info:\n` +
+    `- Transcribí como lista los datos relevantes que aparezcan en el packaging: marca, nombre del producto, ` +
+    `contenido/peso/tamaño/cantidad, modelo o código, material o ingredientes, uso o características destacadas, ` +
+    `advertencias o instrucciones. Una línea por dato, con formato "Etiqueta: valor". Incluí solo los que se vean.\n\n` +
+    `No inventes datos que no se vean en la imagen. Si algún dato no está, omitilo (no escribas "no visible"). ` +
+    `Respetá los títulos "Descripción:" e "Info:" tal cual.`;
+}
+
+// Distingue un error real de API key de cualquier otro 400. La API devuelve 400
+// INVALID_ARGUMENT tanto para keys inválidas como para requests mal armados, así que
+// no alcanza con el status: hay que mirar el mensaje/reason del cuerpo.
+function esErrorDeKey(status, data){
+  if (status === 403) return true;                      // key sin permisos / API deshabilitada
+  if (status !== 400) return false;
+  const err = (data && data.error) || {};
+  if (/API[ _]key not valid|API_KEY_INVALID|expired|invalid api key/i.test(String(err.message || ''))) return true;
+  return (err.details || []).some(d => d && /API_KEY/.test(String(d.reason || '')));
+}
+
+// Una llamada a generateContent con un modelo y una variante de thinking concretos.
+// Devuelve {ok, status, data}.
+async function callGenerate(model, key, base64, nombre, modoThinking){
+  const genCfg = { temperature: 0.3, maxOutputTokens: 700 };
+  const th = thinkingCfgDe(modoThinking);
+  if (th) genCfg.thinkingConfig = th;
+  let res;
+  try {
+    res = await fetch(genUrl(model), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: buildPrompt(nombre) },
+          { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+        ] }],
+        generationConfig: genCfg
+      })
+    });
+  } catch (err){
+    const e = new Error('No se pudo conectar con Gemini. Verificá tu internet.'); e.code = 'NETWORK'; throw e;
+  }
+  const data = await res.json().catch(() => ({}));
+  // Se loguea el error crudo de la API: es lo único que dice por qué falló realmente.
+  if (!res.ok) console.warn('Gemini', model, res.status, (data && data.error) || data);
+  return { ok: res.ok, status: res.status, data };
+}
+
+// Llama a Gemini con la imagen en base64, usando el modelo cacheado (o el principal) y
+// la variante de thinking que ya se sabe que acepta. En el caso normal es UN solo request:
+// las alternativas se recorren nada más cuando la API rechaza la combinación actual.
+async function generarDescripcionGemini(base64, nombre){
+  const key = getGeminiKey();
+  if (!key){ const e = new Error('Falta la API key'); e.code = 'NO_KEY'; throw e; }
+  if (!base64){ const e = new Error('No hay imagen para analizar. Sacá la foto de nuevo.'); e.code = 'EMPTY'; throw e; }
+  const espera = segundosDeCooldown();
+  if (espera){
+    const e = new Error('Cuota de Gemini agotada. Esperá ' + espera + ' s antes de reintentar.'); e.code = 'QUOTA'; throw e;
+  }
+
+  // Modelos: el que funcionó la última vez primero, después los candidatos. Sin repetir.
+  const cached = getCachedModel();
+  const modelos = [];
+  const push = m => { if (m && !modelos.includes(m)) modelos.push(m); };
+  push(cached);
+  for (const m of GEMINI_MODEL_CANDIDATES){ push(m); }
+  // Variantes de thinking: la cacheada primero.
+  const cachedThink = getCachedThink();
+  const modosBase = [];
+  const pushModo = t => { if (t && !modosBase.includes(t)) modosBase.push(t); };
+  pushModo(cachedThink);
+  for (const t of THINK_MODES){ pushModo(t); }
+
+  let r = null, model = null, transient = null, badReq = null;
+  buscar:
+  for (const cand of modelos){
+    // Los 2.0 no soportan thinkingConfig en ninguna forma: se les manda sin nada.
+    const modos = /2\.0/.test(cand) ? ['none'] : modosBase;
+    let modeloInservible = true;   // salvo que falle por algo pasajero, este modelo no sirve
+    for (const modo of modos){
+      const resp = await callGenerate(cand, key, base64, nombre, modo);
+      if (resp.status === 404){ break; }                                                 // modelo deprecado/inexistente → siguiente modelo
+      if (resp.status === 429 || resp.status === 503){ transient = { r: resp, model: cand }; modeloInservible = false; break; } // pasajero: el modelo sigue siendo válido
+      // 400 que no es de key: la API rechazó ESTE request. Casi siempre es la variante de
+      // thinking → se prueba la siguiente con el mismo modelo antes de descartarlo.
+      if (resp.status === 400 && !esErrorDeKey(resp.status, resp.data)){
+        if (!badReq) badReq = { r: resp, model: cand };
+        if (getCachedThink() === modo) setCachedThink('');
+        continue;
+      }
+      r = resp; model = cand;
+      if (resp.ok) setCachedThink(modo);                                                 // combinación que anda → recordarla
+      break buscar;                                                                      // respuesta definitiva (200/403…)
+    }
+    if (modeloInservible && getCachedModel() === cand) setCachedModel('');               // no volver a probarlo primero la próxima vez
+  }
+  if (model){ if (r && r.ok) setCachedModel(model); }             // recordar el modelo que respondió bien
+  else if (transient){ r = transient.r; model = transient.model; } // saturado/limitado → usar esa respuesta para el mensaje
+  else if (badReq){ r = badReq.r; model = badReq.model; }          // todo rechazado → mostrar el error real de la API
+  else { const e = new Error('Ningún modelo de Gemini está disponible para tu API key.'); e.code = 'NO_MODEL'; throw e; }
+
+  if (esErrorDeKey(r.status, r.data)){ const e = new Error('API key inválida o sin permisos. Revisá tu key de aistudio.google.com/apikey.'); e.code = 'BAD_KEY'; throw e; }
+  if (r.status === 429){
+    // Se respeta el retryDelay de la API: hasta que pase, ni se intenta (ahorra cuota).
+    const s = retrasoDe429(r.data);
+    geminiCooldownHasta = Date.now() + s * 1000;
+    const e = new Error('Cuota de Gemini agotada (plan gratuito). Esperá ' + s + ' s y tocá Regenerar.'); e.code = 'QUOTA'; throw e;
+  }
+  if (r.status === 503){ const e = new Error('Los modelos de Gemini están saturados ahora mismo. Esperá unos segundos y tocá Regenerar.'); e.code = 'OVERLOAD'; throw e; }
+  if (!r.ok){
+    const apiMsg = r.data && r.data.error && r.data.error.message;
+    const e = new Error('Gemini respondió con error ' + r.status + (apiMsg ? ': ' + apiMsg : '.')); e.code = 'HTTP'; throw e;
+  }
+
+  const cand = r.data && r.data.candidates && r.data.candidates[0];
+  if (!cand){
+    const blocked = r.data && r.data.promptFeedback && r.data.promptFeedback.blockReason;
+    const e = new Error(blocked ? 'La imagen fue bloqueada por seguridad.' : 'Gemini no devolvió ninguna descripción.');
+    e.code = 'EMPTY'; throw e;
+  }
+  const parts = cand.content && cand.content.parts;
+  const text = (parts || []).map(p => p && p.text ? p.text : '').join('').trim();
+  if (!text){ const e = new Error('Gemini no devolvió texto. Probá con otra foto.'); e.code = 'EMPTY'; throw e; }
+  return text;
+}
+
+// ============================================================
+//  Connection-safety (mismo patrón que asignarImagen.html)
+// ============================================================
+let firebaseConectado = false;
+db.ref('.info/connected').on('value', snap => {
+  firebaseConectado = snap.val() === true;
+  const dot = $('connDot'), txt = $('connTxt');
+  if (dot) dot.classList.toggle('off', !firebaseConectado);
+  if (txt) txt.textContent = firebaseConectado ? 'online' : 'offline';
+});
+async function verificarConexionFirebase(timeoutMs = 5000){
+  if (firebaseConectado) return true;
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    const ref = db.ref('.info/connected');
+    const cb = snap => { if (snap.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); } };
+    ref.on('value', cb);
+  });
+}
+function conTimeout(promise, ms, msg){
+  return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+}
+let procesoCriticoEnEjecucion = false;
+window.addEventListener('beforeunload', e => {
+  if (procesoCriticoEnEjecucion){
+    e.preventDefault();
+    e.returnValue = 'Hay un guardado en curso. Si cerrás la página, la descripción puede no guardarse.';
+    return e.returnValue;
+  }
+});
+
+// ============================================================
+//  UI helpers
+// ============================================================
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+let toastTimer;
+function toast(msg, kind){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+function showBlock(text){ $('blockText').textContent = text || 'Procesando…'; $('block').classList.add('active'); }
+function hideBlock(){ $('block').classList.remove('active'); }
+function showSuccessStamp(){ const s = $('successStamp'); s.classList.add('active'); setTimeout(() => s.classList.remove('active'), 900); }
+
+// ============================================================
+//  Estado
+// ============================================================
+let articulosCache = {};      // Codigo -> registro
+let sinDescOnly = false;      // filtro activo
+let filtered = [];            // ítems (disponibles) tras búsqueda/filtro, ordenados
+let page = 0;
+const PAGE_SIZE = 60;
+
+// Disponible === "SI": el registro guarda booleano true, pero toleramos strings legacy.
+function isDisponible(a){
+  const v = a && a.Disponible;
+  if (v === true) return true;
+  return typeof v === 'string' && v.trim().toUpperCase() === 'SI';
+}
+// URL de imagen de referencia (Foto principal, o Img alternativa) — solo para reconocer el artículo.
+function imageUrl(a){ return String((a && (a.Foto || a.Img)) || '').trim(); }
+// ¿Ya tiene una descripción cargada?
+function tieneDescripcion(a){ return !!(a && typeof a.Descripcion === 'string' && a.Descripcion.trim()); }
+// Tamaño / peso: cargados a mano (Tamano: "LxAxH" o "LxA" en cm; Peso: numérico, siempre en kg).
+function tieneMedidas(a){ return !!(a && (String(a.Tamano || '').trim() || a.Peso || a.Peso === 0)); }
+function medidasTexto(a){
+  const partes = [];
+  if (a && String(a.Tamano || '').trim()) partes.push(String(a.Tamano).trim() + ' cm');
+  if (a && (a.Peso || a.Peso === 0)) partes.push(`${a.Peso} kg`);
+  return partes.join(' · ');
+}
+
+// ============================================================
+//  Carga desde Firebase
+// ============================================================
+function loadArticulos(){
+  return new Promise(resolve => {
+    articulosRef.once('value', snap => {
+      articulosCache = snap.val() || {};
+      resolve(articulosCache);
+    }, err => {
+      console.error('Error leyendo articulos:', err);
+      articulosCache = {};
+      resolve({});
+    });
+  });
+}
+
+// Solo artículos con Disponible = SI, ordenados por Código descendente (recientes primero).
+function disponibleItems(){
+  return Object.entries(articulosCache)
+    .map(([key, a]) => ({ key, ...a }))
+    .filter(isDisponible)
+    .sort((x, y) => String(y.Codigo).localeCompare(String(x.Codigo), 'es', { numeric:true }));
+}
+
+function updateStats(){
+  const items = disponibleItems();
+  let con = 0, sin = 0;
+  items.forEach(a => { if (tieneDescripcion(a)) con++; else sin++; });
+  $('statCon').textContent = con.toLocaleString('es-AR');
+  $('statSin').textContent = sin.toLocaleString('es-AR');
+}
+
+// ============================================================
+//  Tabla + búsqueda + filtro + paginación
+// ============================================================
+function recomputeFiltered(){
+  const q = $('tablaSearch').value.trim().toLowerCase();
+  filtered = disponibleItems().filter(a => {
+    if (sinDescOnly && tieneDescripcion(a)) return false;
+    if (q){
+      const hay = [a.Codigo, a.Nombre, a.CodigoBarras].map(v => String(v || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable(){
+  recomputeFiltered();
+  renderPage();
+  updateStats();
+}
+
+const CAM_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+const IMG_SM_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+const IMG_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+
+function renderPage(){
+  const tbody = $('artTbody');
+  tbody.innerHTML = '';
+
+  const totalDisp = disponibleItems().length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  page = Math.min(Math.max(0, page), totalPages - 1);
+  const start = page * PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + PAGE_SIZE);
+
+  // contador
+  let countTxt;
+  if (!totalDisp){ countTxt = '0 artículos disponibles'; }
+  else if (!filtered.length){ countTxt = `Sin coincidencias · ${totalDisp} disponibles`; }
+  else {
+    const noun = filtered.length === 1 ? 'artículo' : 'artículos';
+    const range = `${start + 1}–${start + pageItems.length}`;
+    countTxt = filtered.length === totalDisp
+      ? `${range} de ${totalDisp} ${noun}`
+      : `${range} de ${filtered.length} ${noun} (filtrado de ${totalDisp})`;
+  }
+  $('pageCount').textContent = countTxt;
+
+  $('tablaEmpty').textContent = totalDisp
+    ? (sinDescOnly
+        ? '¡Todo listo! No hay artículos disponibles sin descripción.'
+        : 'Sin resultados para tu búsqueda.')
+    : 'No hay artículos disponibles.';
+  $('tablaEmpty').style.display = pageItems.length ? 'none' : 'block';
+  $('artTable').style.display = pageItems.length ? '' : 'none';
+
+  pageItems.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.dataset.codigo = a.Codigo;
+    const url = imageUrl(a);
+    const has = tieneDescripcion(a);
+    const desc = has ? String(a.Descripcion).trim() : '';
+    const fotoCell = url
+      ? `<div class="thumb-wrap"><img class="thumb" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></div>`
+      : `<div class="thumb-empty">${IMG_ICON}</div>`;
+    const descCell = has
+      ? `<div class="dtxt">${escapeHtml(desc)}</div>`
+      : `<span class="dempty">Sin descripción</span>`;
+    // Dos acciones independientes: cámara (foto nueva) y foto ya guardada del artículo.
+    // El atajo "Foto" solo aparece si el artículo tiene imagen cargada.
+    const btnCam = has
+      ? `<button class="rowbtn replace" type="button" title="Sacar una foto nueva">${CAM_ICON} Editar</button>`
+      : `<button class="rowbtn assign" type="button" title="Sacar una foto nueva">${CAM_ICON} Generar</button>`;
+    const btnFoto = String(a.Foto || '').trim()
+      ? `<button class="rowbtn usefoto" type="button" title="Generar con la foto ya guardada del artículo">${IMG_SM_ICON} Foto</button>`
+      : '';
+    const btn = `<div class="rowacts">${btnFoto}${btnCam}</div>`;
+    const hasMed = tieneMedidas(a);
+    const medCell = hasMed
+      ? `<div class="dtxt">${escapeHtml(medidasTexto(a))}</div>`
+      : `<span class="dempty">Sin datos</span>`;
+    tr.innerHTML = `
+      <td class="codcol">#${escapeHtml(a.Codigo)}</td>
+      <td>${fotoCell}</td>
+      <td class="namecol">${escapeHtml(a.Nombre)}</td>
+      <td class="desccol">${descCell}</td>
+      <td class="medcol">${medCell}</td>
+      <td class="col-act">${btn}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  renderPager(totalPages);
+}
+
+function renderPager(totalPages){
+  const pager = $('tablaPager');
+  if (totalPages <= 1){ pager.classList.remove('show'); return; }
+  pager.classList.add('show');
+  $('pagerInfo').textContent = `${filtered.length} artículos · ${PAGE_SIZE} por página`;
+  $('pagerPages').textContent = `Página ${page + 1} / ${totalPages}`;
+  $('pagerPrev').disabled = page <= 0;
+  $('pagerNext').disabled = page >= totalPages - 1;
+}
+
+function gotoPage(p){
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  p = Math.min(Math.max(0, p), totalPages - 1);
+  if (p === page) return;
+  page = p;
+  renderPage();
+  document.querySelector('.tabla-scroll').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function imgFallback(el){
+  el.onerror = null;
+  const wrap = el.closest('.thumb-wrap');
+  if (wrap) wrap.outerHTML = `<div class="thumb-empty">${IMG_ICON}</div>`;
+}
+
+// ============================================================
+//  Procesado de imagen para Gemini (redimensiona preservando aspecto)
+// ============================================================
+// 768 px no es arbitrario: Gemini cobra la imagen en mosaicos de 768x768 (≈258 tokens cada
+// uno), así que a ese tamaño entra en UN mosaico. Con 1024 eran cuatro — 4x el costo de
+// entrada por foto sin ganar legibilidad real en una etiqueta.
+function resizeForGemini(file, maxDim = 768){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (!w || !h){ URL.revokeObjectURL(img.src); reject(new Error('Imagen inválida')); return; }
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      const W = Math.max(1, Math.round(w * scale));
+      const H = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(img.src);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);  // algo más de calidad: al bajar a 768 el texto chico es lo primero que se pierde
+      const base64 = dataUrl.split(',')[1] || '';
+      resolve({ dataUrl, base64 });
+    };
+    img.onerror = () => { try { URL.revokeObjectURL(img.src); } catch(_){} reject(new Error('No se pudo cargar la imagen')); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ============================================================
+//  Cámara
+// ============================================================
+let camStream = null;
+let camFacing = 'environment';
+let camState = { codigo: '', nombre: '', previewUrl: '', base64: '', fotoUrl: '' };
+
+// Deja el modal listo para el artículo (sin decidir de dónde sale la imagen).
+function prepararCam(codigo){
+  const a = articulosCache[codigo];
+  if (!a) return null;
+
+  // solo el campo Foto: Img se ignora como fuente para generar la descripción
+  camState = { codigo, nombre: a.Nombre || '', previewUrl: '', base64: '', fotoUrl: String(a.Foto || '').trim() };
+  $('camUseFoto').classList.toggle('show', !!camState.fotoUrl);
+  $('camName').textContent = a.Nombre || 'Artículo';
+  $('camCod').textContent = '#' + codigo;
+  const has = tieneDescripcion(a);
+  $('camHint').textContent = has
+    ? 'Este artículo ya tiene descripción. La nueva reemplazará a la anterior.'
+    : 'Tomá una foto nítida del packaging o la etiqueta para leer los datos del producto.';
+  $('descArea').value = '';
+  updateDescCount();
+  setCamMode('capture');
+  $('cam').classList.add('active');
+  return a;
+}
+
+// Camino "foto nueva": abre el modal y enciende la cámara.
+function openCameraFor(codigo){
+  if (!prepararCam(codigo)) return;
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('photoFile').click();   // sin API de cámara → selector de archivos
+    return;
+  }
+  startCamStream();
+}
+
+// Camino "foto guardada" (botón de la tabla): mismo modal, pero sin encender la cámara.
+// Si la descarga falla (típicamente CORS), cae a la cámara para no dejar el modal muerto.
+async function generarDesdeFotoGuardada(codigo){
+  if (!prepararCam(codigo)) return;
+  if (!camState.fotoUrl){ toast('Este artículo no tiene foto guardada', 'err'); openCameraFor(codigo); return; }
+  const ok = await usarFotoDelArticulo();
+  if (!ok && $('cam').classList.contains('active')) startCamStream();
+}
+
+async function startCamStream(){
+  stopCamStream();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: camFacing }, width: { ideal: 1920 }, height: { ideal: 1920 } },
+      audio: false
+    });
+    const v = $('camVideo');
+    v.srcObject = camStream;
+    v.style.transform = (camFacing === 'user') ? 'scaleX(-1)' : 'none';
+    await v.play().catch(() => {});
+  } catch (err){
+    console.error('Cámara:', err);
+    toast('No se pudo abrir la cámara. Elegí una foto.', 'err');
+    $('photoFile').click();
+  }
+}
+function stopCamStream(){
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const v = $('camVideo');
+  if (v) v.srcObject = null;
+}
+function closeCamera(){
+  $('cam').classList.remove('active');
+  stopCamStream();
+  if (camState.previewUrl){ try { URL.revokeObjectURL(camState.previewUrl); } catch(_){} }
+  camState = { codigo: '', nombre: '', previewUrl: '', base64: '', fotoUrl: '' };
+  $('camUseFoto').classList.remove('show');
+  $('photoFile').value = '';
+  $('descArea').value = '';
+}
+
+// modo 'capture' (video + disparador) vs 'review' (preview + descripción editable)
+function setCamMode(mode){
+  const review = mode === 'review';
+  $('camFrame').classList.toggle('shot', review);
+  $('camCtrl').classList.toggle('hidden', review);
+  $('camReview').classList.toggle('show', review);
+  $('camHint').style.display = review ? 'none' : '';
+  $('camUseFoto').style.display = review ? 'none' : '';
+}
+
+// Captura el cuadrado central del video (coincide con object-fit:cover del visor).
+function captureCamera(){
+  const v = $('camVideo');
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw || !vh){ toast('La cámara aún no está lista', 'err'); return; }
+  const side = Math.min(vw, vh);
+  const sx = (vw - side) / 2, sy = (vh - side) / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = side; canvas.height = side;
+  const ctx = canvas.getContext('2d');
+  if (camFacing === 'user'){ ctx.save(); ctx.translate(side, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(v, sx, sy, side, side, 0, 0, side, side);
+  if (camFacing === 'user') ctx.restore();
+  canvas.toBlob(b => {
+    if (!b){ toast('No se pudo capturar la foto', 'err'); return; }
+    procesarYGenerar(b);
+  }, 'image/jpeg', 0.95);
+}
+
+// Usa la imagen ya guardada del artículo (campo Foto/Img) como input de Gemini,
+// en lugar de sacar una foto nueva. Descarga la URL y la trata como una captura más.
+// Devuelve true si llegó a procesar la imagen (quien llame decide el plan B).
+async function usarFotoDelArticulo(){
+  const url = camState.fotoUrl;
+  if (!url) return false;
+  const btn = $('camUseFoto');
+  btn.disabled = true;
+  try {
+    showBlock('Descargando la foto…');
+    // Requiere CORS habilitado en el bucket de Storage para este origen (ver cors.json).
+    let resp;
+    try {
+      resp = await conTimeout(fetch(url, { mode: 'cors', cache: 'no-store' }), 20000, 'La descarga de la foto tardó demasiado');
+    } catch (netErr){
+      if (netErr instanceof TypeError) throw new Error('El bucket de Storage bloquea la descarga (CORS). Sacá la foto o configurá cors.json.');
+      throw netErr;
+    }
+    if (!resp.ok) throw new Error('No se pudo descargar la foto (HTTP ' + resp.status + ')');
+    const blob = await resp.blob();
+    if (!blob.size || !/^image\//.test(blob.type || 'image/')) throw new Error('El archivo no es una imagen');
+    hideBlock();
+    await procesarYGenerar(blob);
+    return true;
+  } catch (err){
+    console.error('Foto del artículo:', err);
+    hideBlock();
+    toast(err.message || 'No se pudo usar la foto del artículo', 'err');
+    return false;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Redimensiona la captura/archivo, muestra la revisión y llama a Gemini.
+async function procesarYGenerar(rawFile){
+  try {
+    showBlock('Procesando foto…');
+    const { dataUrl, base64 } = await resizeForGemini(rawFile);
+    camState.base64 = base64;
+    if (camState.previewUrl){ try { URL.revokeObjectURL(camState.previewUrl); } catch(_){} }
+    camState.previewUrl = dataUrl;
+    $('camPreview').src = dataUrl;
+    stopCamStream();               // la cámara ya no hace falta mientras se revisa
+    setCamMode('review');
+  } catch (err){
+    console.error('Procesando foto:', err);
+    hideBlock();
+    toast('No se pudo procesar la imagen', 'err');
+    return;
+  }
+  await ejecutarGeminiSobreCaptura();
+}
+
+// Llama a Gemini con la captura actual (camState.base64) y vuelca el texto en el textarea.
+async function ejecutarGeminiSobreCaptura(){
+  if (!camState.base64) return;
+  let problemaDeKey = false;
+  showBlock('Leyendo el packaging…');
+  $('camSave').disabled = true;
+  $('camRegen').disabled = true;
+  try {
+    const texto = await generarDescripcionGemini(camState.base64, camState.nombre);
+    $('descArea').value = texto;
+    updateDescCount();
+  } catch (err){
+    console.error('Gemini:', err);
+    // Los errores de key llevan directo a la solución: se abre el modal para cargarla.
+    problemaDeKey = (err.code === 'NO_KEY' || err.code === 'BAD_KEY' || err.code === 'NO_MODEL');
+    toast(err.message || 'No se pudo generar la descripción', 'err');
+    // Se deja el textarea disponible para escribir manualmente / reintentar.
+  } finally {
+    hideBlock();
+    $('camSave').disabled = false;
+    $('camRegen').disabled = false;
+    // El modal (z-1200) va después de hideBlock(): el overlay .block (z-1250) lo taparía.
+    if (problemaDeKey){
+      pendienteReintentoGemini = true;
+      openKeyModal();
+    } else {
+      $('descArea').focus();
+    }
+  }
+}
+
+function retakePhoto(){
+  camState.base64 = '';
+  if (camState.previewUrl){ try { URL.revokeObjectURL(camState.previewUrl); } catch(_){} camState.previewUrl = ''; }
+  $('photoFile').value = '';
+  $('descArea').value = '';
+  updateDescCount();
+  setCamMode('capture');
+  startCamStream();
+}
+
+function updateDescCount(){
+  const n = $('descArea').value.trim().length;
+  $('descCount').textContent = n + (n === 1 ? ' carácter' : ' caracteres');
+}
+
+// ============================================================
+//  Guardado en Firebase
+// ============================================================
+// Escribe la descripción en el nodo del artículo y verifica leyendo de vuelta.
+// Lanza si no hay conexión, si la escritura tarda demasiado o si la verificación falla.
+async function persistirDescripcion(codigo, texto){
+  showBlock('Verificando conexión…');
+  const conectado = await verificarConexionFirebase(5000).catch(() => false);
+  if (!conectado) throw new Error('Sin conexión a Firebase. Verificá tu internet.');
+
+  showBlock('Guardando…');
+  const ref = articulosRef.child(codigo);
+  await conTimeout(ref.update({ Descripcion: texto, Timestamp: firebase.database.ServerValue.TIMESTAMP }), 15000, 'Timeout: la escritura tardó demasiado.');
+
+  const check = await conTimeout(ref.child('Descripcion').once('value'), 10000, 'No se pudo verificar el guardado.');
+  if (!check.exists() || check.val() !== texto) throw new Error('La verificación del guardado falló.');
+
+  if (articulosCache[codigo]) articulosCache[codigo].Descripcion = texto;
+}
+
+async function guardarDescripcion(){
+  const codigo = camState.codigo;
+  const texto = $('descArea').value.trim();
+  if (!codigo) return;
+  if (!texto){ toast('La descripción está vacía', 'err'); $('descArea').focus(); return; }
+
+  const btn = $('camSave');
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  try {
+    await persistirDescripcion(codigo, texto);
+    hideBlock();
+    closeCamera();
+    showSuccessStamp();
+    toast(`Descripción guardada en #${codigo}`, 'ok');
+    renderTable();   // si el filtro "sin descripción" está activo, la fila desaparece
+  } catch (err){
+    console.error('Error guardando descripción:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+//  Modal ver / editar descripción (click en la celda de la tabla)
+// ============================================================
+let descModalCodigo = '';
+
+function openDescModal(codigo){
+  const a = articulosCache[codigo];
+  if (!a) return;
+  descModalCodigo = codigo;
+  $('dmName').textContent = a.Nombre || 'Artículo';
+  $('dmName').title = a.Nombre || '';
+  $('dmCod').textContent = '#' + codigo;
+  $('dmArea').value = tieneDescripcion(a) ? String(a.Descripcion).trim() : '';
+  updateDmCount();
+  $('descModal').classList.add('active');
+  setTimeout(() => $('dmArea').focus(), 60);
+}
+function closeDescModal(){
+  $('descModal').classList.remove('active');
+  descModalCodigo = '';
+  $('dmArea').value = '';
+}
+function updateDmCount(){
+  const n = $('dmArea').value.trim().length;
+  $('dmCount').textContent = n + (n === 1 ? ' carácter' : ' caracteres');
+}
+
+async function guardarDescripcionModal(){
+  const codigo = descModalCodigo;
+  if (!codigo) return;
+  const texto = $('dmArea').value.trim();
+  const actual = tieneDescripcion(articulosCache[codigo]) ? String(articulosCache[codigo].Descripcion).trim() : '';
+  if (texto === actual){ closeDescModal(); return; }          // sin cambios → no se escribe
+  if (!texto){ toast('La descripción está vacía', 'err'); $('dmArea').focus(); return; }
+
+  const btn = $('dmSave');
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  try {
+    await persistirDescripcion(codigo, texto);
+    hideBlock();
+    closeDescModal();
+    showSuccessStamp();
+    toast(`Descripción actualizada en #${codigo}`, 'ok');
+    renderTable();
+  } catch (err){
+    console.error('Error guardando descripción:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+//  Modal tamaño / peso (carga manual, sin IA)
+// ============================================================
+let dimModalCodigo = '';
+
+function openDimModal(codigo){
+  const a = articulosCache[codigo];
+  if (!a) return;
+  dimModalCodigo = codigo;
+  $('dimName').textContent = a.Nombre || 'Artículo';
+  $('dimName').title = a.Nombre || '';
+  $('dimCod').textContent = '#' + codigo;
+  const lados = String(a.Tamano || '').split(/x/i).map(s => s.trim()).filter(Boolean);
+  $('dimLado1').value = lados[0] || '';
+  $('dimLado2').value = lados[1] || '';
+  $('dimLado3').value = lados[2] || '';
+  $('dimPeso').value = (a.Peso || a.Peso === 0) ? a.Peso : '';
+  $('dimModal').classList.add('active');
+  setTimeout(() => $('dimLado1').focus(), 60);
+}
+function closeDimModal(){
+  $('dimModal').classList.remove('active');
+  dimModalCodigo = '';
+}
+
+// Escribe tamaño/peso en el nodo del artículo y verifica leyendo de vuelta (mismo patrón que la descripción).
+async function persistirMedidas(codigo, tamano, peso){
+  showBlock('Verificando conexión…');
+  const conectado = await verificarConexionFirebase(5000).catch(() => false);
+  if (!conectado) throw new Error('Sin conexión a Firebase. Verificá tu internet.');
+
+  showBlock('Guardando…');
+  const ref = articulosRef.child(codigo);
+  await conTimeout(ref.update({
+    Tamano: tamano,
+    Peso: peso,             // null borra el campo (sin peso cargado); siempre en kg
+    Timestamp: firebase.database.ServerValue.TIMESTAMP
+  }), 15000, 'Timeout: la escritura tardó demasiado.');
+
+  const check = await conTimeout(ref.once('value'), 10000, 'No se pudo verificar el guardado.');
+  const val = check.val() || {};
+  if ((val.Tamano || '') !== tamano || (val.Peso ?? null) !== peso) throw new Error('La verificación del guardado falló.');
+
+  if (articulosCache[codigo]){
+    articulosCache[codigo].Tamano = tamano;
+    articulosCache[codigo].Peso = peso;
+  }
+}
+
+// Valida un lado (número >= 0); usado tanto para los obligatorios como el opcional.
+function ladoValido(raw){
+  if (raw === '') return null;
+  const n = Number(raw);
+  return (isFinite(n) && n >= 0) ? n : null;
+}
+
+async function guardarMedidas(){
+  const codigo = dimModalCodigo;
+  if (!codigo) return;
+
+  const l1raw = $('dimLado1').value.trim();
+  const l2raw = $('dimLado2').value.trim();
+  const l3raw = $('dimLado3').value.trim();
+  if (!l1raw || !l2raw){ toast('El tamaño es obligatorio: completá al menos dos lados', 'err'); (l1raw ? $('dimLado2') : $('dimLado1')).focus(); return; }
+  const l1 = ladoValido(l1raw), l2 = ladoValido(l2raw);
+  if (l1 === null || l2 === null){ toast('Los lados deben ser números válidos', 'err'); return; }
+  let l3 = null;
+  if (l3raw !== ''){ l3 = ladoValido(l3raw); if (l3 === null){ toast('El tercer lado debe ser un número válido', 'err'); $('dimLado3').focus(); return; } }
+  const tamano = [l1, l2, l3].filter(v => v !== null).join('x');
+
+  const pesoRaw = $('dimPeso').value.trim();
+  const peso = pesoRaw === '' ? null : Number(pesoRaw);
+  if (pesoRaw !== '' && (!isFinite(peso) || peso < 0)){ toast('Peso inválido', 'err'); $('dimPeso').focus(); return; }
+
+  const btn = $('dimSave');
+  btn.disabled = true;
+  procesoCriticoEnEjecucion = true;
+  try {
+    await persistirMedidas(codigo, tamano, peso);
+    hideBlock();
+    closeDimModal();
+    showSuccessStamp();
+    toast(`Medidas guardadas en #${codigo}`, 'ok');
+    renderTable();
+  } catch (err){
+    console.error('Error guardando medidas:', err);
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    procesoCriticoEnEjecucion = false;
+    hideBlock();
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+//  Modal API key
+// ============================================================
+// Si Gemini falla por falta de key / key inválida se abre el modal y se levanta esta bandera:
+// al guardar una key nueva se reintenta solo, sin obligar a volver a sacar la foto.
+let pendienteReintentoGemini = false;
+
+function refreshKeyBtn(){ $('keyBtn').classList.toggle('keyset', !!getGeminiKey()); }
+
+function openKeyModal(){
+  const actual = getGeminiKey();
+  // El input arranca vacío aunque ya haya key: la actual se muestra enmascarada abajo.
+  // Así Guardar con el campo vacío no puede pisar por accidente una key que funciona.
+  $('keyInput').value = '';
+  $('keyInput').type = 'password';
+  $('keyInput').placeholder = actual ? 'Pegá tu nueva API key' : 'Pegá tu API key';
+  $('keyStatus').classList.toggle('on', !!actual);
+  $('keyStatusTxt').innerHTML = actual
+    ? 'Key cargada: <code>' + maskGeminiKey(actual) + '</code>'
+    : 'No hay ninguna key cargada';
+  $('keyDelete').style.display = actual ? '' : 'none';
+  $('keyErr').textContent = '';
+  $('keyModal').classList.add('active');
+  setTimeout(() => $('keyInput').focus(), 60);
+}
+
+function closeKeyModal(){
+  $('keyModal').classList.remove('active');
+  $('keyInput').value = '';   // no dejar la key colgada en el DOM
+  pendienteReintentoGemini = false;
+}
+
+function saveKeyModal(){
+  const k = $('keyInput').value.trim();
+  if (!k){ $('keyErr').textContent = 'Pegá una API key válida.'; return; }
+  // Validación laxa a propósito: solo descarta pegados obviamente rotos, sin atarse
+  // a un prefijo concreto (hoy conviven los formatos "AIza…" y "AQ.…").
+  if (k.length < 20 || /\s/.test(k)){
+    $('keyErr').textContent = 'Eso no parece una API key. Copiala completa, sin espacios.';
+    return;
+  }
+  const reintentar = pendienteReintentoGemini;
+  setGeminiKey(k);
+  setCachedModel(''); setCachedThink('');   // key nueva → re-descubrir modelo y config soportados
+  geminiCooldownHasta = 0;                  // la cuota es por proyecto: con otra key se reintenta ya
+  refreshKeyBtn();
+  closeKeyModal();
+  toast('API key guardada', 'ok');
+  // Retoma la generación que había fallado por la key.
+  if (reintentar && camState.base64) ejecutarGeminiSobreCaptura();
+}
+
+function borrarKeyModal(){
+  clearGeminiKey();
+  setCachedModel(''); setCachedThink('');
+  refreshKeyBtn();
+  closeKeyModal();
+  toast('API key eliminada', 'ok');
+}
+
+// ============================================================
+//  Escáner de códigos de barras (cámara del móvil)
+// ============================================================
+let html5Qr = null;
+let scannerRunning = false;
+let torchOn = false;
+let lastScanCode = '';
+let lastScanTime = 0;
+let scanFbTimer = null;
+let audioCtx = null;
+
+// Busca un artículo por código de barras. `CodigoBarras` puede traer varios separados
+// por coma; se tolera la diferencia de ceros a la izquierda (UPC-A vs EAN-13) y, si no
+// hay match, se cae al código interno del artículo.
+function findByBarcode(code){
+  const raw = String(code).trim();
+  if (!raw) return null;
+  const norm = raw.replace(/^0+/, '');
+  const items = Object.entries(articulosCache).map(([key, a]) => ({ key, ...a }));
+  for (const a of items){
+    const codes = String(a.CodigoBarras || '').split(',').map(s => s.trim()).filter(Boolean);
+    for (const b of codes){
+      if (b === raw || b.replace(/^0+/, '') === norm) return a;
+    }
+  }
+  return items.find(a => String(a.Codigo || '').trim() === raw) || null;
+}
+
+// Feedback sonoro + háptico
+function buzz(ok){
+  try { if (navigator.vibrate) navigator.vibrate(ok ? 35 : [40, 45, 40]); } catch(_){}
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = ok ? 900 : 240;
+    g.gain.value = 0.05;
+    o.connect(g); g.connect(audioCtx.destination);
+    const t = audioCtx.currentTime;
+    o.start(t);
+    o.stop(t + (ok ? 0.09 : 0.2));
+  } catch(_){}
+}
+
+const SR_ICONS = {
+  ok:   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  warn: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>',
+  err:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+};
+function scanFeedback(type, title, sub){
+  const el = $('scanResult');
+  $('scanResultIcon').innerHTML = SR_ICONS[type] || '';
+  $('scanResultTitle').textContent = title;
+  $('scanResultSub').textContent = sub || '';
+  el.className = 'scan-result show ' + type;
+  clearTimeout(scanFbTimer);
+  scanFbTimer = setTimeout(() => el.classList.remove('show'), 1900);
+}
+
+// Deja el artículo escaneado como único resultado de la lista y lo resalta.
+function enfocarArticulo(a){
+  // Si el filtro "solo sin descripción" está activo y el artículo ya tiene una,
+  // quedaría fuera de la lista: se apaga el filtro para poder mostrarlo.
+  if (sinDescOnly && tieneDescripcion(a)){
+    sinDescOnly = false;
+    $('filterBtn').classList.remove('on');
+  }
+  $('tablaSearch').value = a.Codigo;
+  page = 0;
+  renderTable();
+  const tr = $('artTbody').querySelector(`tr[data-codigo="${String(a.Codigo).replace(/["\\]/g, '\\$&')}"]`);
+  if (tr){
+    tr.classList.add('hit');
+    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  toast(`#${a.Codigo} · ${a.Nombre || ''}`, 'ok');
+}
+
+function onScanSuccess(decodedText){
+  const now = Date.now();
+  const code = String(decodedText).trim();
+  // El lector dispara en ráfaga sobre el mismo código: se ignoran las repeticiones.
+  if (code === lastScanCode && now - lastScanTime < 1800) return;
+  lastScanCode = code; lastScanTime = now;
+
+  const a = findByBarcode(code);
+  if (!a){
+    scanFeedback('err', 'Sin coincidencia', 'Código ' + code);
+    buzz(false);
+    return;
+  }
+  if (!isDisponible(a)){
+    scanFeedback('warn', 'No disponible', (a.Nombre || '#' + a.Codigo) + ' · no aparece en la lista');
+    buzz(false);
+    return;
+  }
+  scanFeedback('ok', 'Encontrado', a.Nombre || '#' + a.Codigo);
+  buzz(true);
+  const art = a;
+  setTimeout(async () => { await closeScanner(); enfocarArticulo(art); }, 450);   // deja ver el feedback antes de cerrar
+}
+
+async function openScanner(){
+  if (typeof Html5Qrcode === 'undefined'){
+    toast('No se pudo cargar el escáner. Verificá tu conexión.', 'err');
+    return;
+  }
+  $('scanner').classList.add('active');
+  $('scannerError').style.display = 'none';
+  $('scanResult').classList.remove('show');
+  lastScanCode = ''; lastScanTime = 0;
+  torchOn = false;
+  $('torchBtn').classList.remove('on');
+
+  const fmts = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.CODABAR
+  ];
+
+  try {
+    html5Qr = new Html5Qrcode('scannerReader', { formatsToSupport: fmts, verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, { fps: 12 }, onScanSuccess, () => {});
+    scannerRunning = true;
+  } catch (err){
+    console.error('Scanner:', err);
+    scannerRunning = false;
+    const errEl = $('scannerError');
+    errEl.style.display = 'flex';
+    errEl.textContent = 'No se pudo acceder a la cámara. Revisá los permisos del navegador. Podés seguir buscando el artículo a mano desde el buscador.';
+  }
+}
+
+async function closeScanner(){
+  if (html5Qr && scannerRunning){
+    try { await html5Qr.stop(); } catch(_){}
+    try { html5Qr.clear(); } catch(_){}
+  }
+  html5Qr = null;
+  scannerRunning = false;
+  $('scanner').classList.remove('active');
+}
+
+async function toggleTorch(){
+  if (!html5Qr || !scannerRunning) return;
+  torchOn = !torchOn;
+  try {
+    await html5Qr.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    $('torchBtn').classList.toggle('on', torchOn);
+  } catch(_){
+    torchOn = false;
+    toast('Linterna no disponible en este dispositivo', 'err');
+  }
+}
+
+// ============================================================
+//  Event listeners
+// ============================================================
+// Escáner
+$('scanBtn').addEventListener('click', openScanner);
+$('scanCloseBtn').addEventListener('click', closeScanner);
+$('torchBtn').addEventListener('click', toggleTorch);
+
+// Buscar
+let searchTimer;
+$('tablaSearch').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { page = 0; renderTable(); }, 180);
+});
+
+// Filtro "solo sin descripción"
+$('filterBtn').addEventListener('click', () => {
+  sinDescOnly = !sinDescOnly;
+  $('filterBtn').classList.toggle('on', sinDescOnly);
+  page = 0;
+  renderTable();
+});
+
+// Click en la celda de descripción → abrir el modal para leerla/editarla completa.
+// Click en el botón "Foto" → generar con la imagen ya guardada, sin pasar por la cámara.
+// Click en el resto de la fila (o en el botón de cámara) → sacar una foto nueva.
+$('artTbody').addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  if (e.target.closest('td.desccol')){ openDescModal(tr.dataset.codigo); return; }
+  if (e.target.closest('td.medcol')){ openDimModal(tr.dataset.codigo); return; }
+  if (e.target.closest('.rowbtn.usefoto')){ generarDesdeFotoGuardada(tr.dataset.codigo); return; }
+  openCameraFor(tr.dataset.codigo);
+});
+
+// Modal ver / editar descripción
+$('dmClose').addEventListener('click', closeDescModal);
+$('dmCancel').addEventListener('click', closeDescModal);
+$('dmSave').addEventListener('click', guardarDescripcionModal);
+$('dmArea').addEventListener('input', updateDmCount);
+$('descModal').addEventListener('click', e => { if (e.target === $('descModal')) closeDescModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('descModal').classList.contains('active')) closeDescModal();
+});
+
+// Modal tamaño / peso
+$('dimClose').addEventListener('click', closeDimModal);
+$('dimCancel').addEventListener('click', closeDimModal);
+$('dimSave').addEventListener('click', guardarMedidas);
+$('dimModal').addEventListener('click', e => { if (e.target === $('dimModal')) closeDimModal(); });
+$('dimLado1').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('dimLado2').focus(); } });
+$('dimLado2').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('dimLado3').focus(); } });
+$('dimLado3').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('dimPeso').focus(); } });
+$('dimPeso').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); guardarMedidas(); } });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('dimModal').classList.contains('active')) closeDimModal();
+});
+
+// Paginación
+$('pagerPrev').addEventListener('click', () => gotoPage(page - 1));
+$('pagerNext').addEventListener('click', () => gotoPage(page + 1));
+
+// Cámara
+$('camClose').addEventListener('click', closeCamera);
+$('camShot').addEventListener('click', captureCamera);
+$('camRetake').addEventListener('click', retakePhoto);
+$('camRegen').addEventListener('click', ejecutarGeminiSobreCaptura);
+$('camSave').addEventListener('click', guardarDescripcion);
+$('camGallery').addEventListener('click', () => $('photoFile').click());
+$('camUseFoto').addEventListener('click', usarFotoDelArticulo);
+$('camFlip').addEventListener('click', () => {
+  camFacing = (camFacing === 'environment') ? 'user' : 'environment';
+  startCamStream();
+});
+$('photoFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if (file) procesarYGenerar(file);
+});
+$('descArea').addEventListener('input', updateDescCount);
+
+// Modal API key
+$('keyBtn').addEventListener('click', openKeyModal);
+$('keyCancel').addEventListener('click', closeKeyModal);
+$('keySave').addEventListener('click', saveKeyModal);
+$('keyDelete').addEventListener('click', borrarKeyModal);
+$('keyInput').addEventListener('keydown', e => { if (e.key === 'Enter') saveKeyModal(); });
+$('keyModal').addEventListener('click', e => { if (e.target === $('keyModal')) closeKeyModal(); });
+$('keyEye').addEventListener('click', () => {
+  const i = $('keyInput');
+  i.type = i.type === 'password' ? 'text' : 'password';
+  i.focus();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('keyModal').classList.contains('active')) closeKeyModal();
+});
+
+// ============================================================
+//  Auth
+// ============================================================
+let appInitialized = false;
+function handleLogin(){
+  const email = $('loginEmail').value.trim();
+  const pass = $('loginPass').value;
+  const err = $('loginErr');
+  const btn = $('loginBtn');
+  if (!email || !pass){ err.textContent = 'Completá ambos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
+  auth.signInWithEmailAndPassword(email, pass).catch(e => {
+    let msg = 'Error al iniciar sesión';
+    if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) msg = 'Email o contraseña incorrectos';
+    else if (e.code === 'auth/invalid-email') msg = 'Email inválido';
+    else if (e.code === 'auth/too-many-requests') msg = 'Demasiados intentos. Esperá un momento';
+    err.textContent = msg;
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+$('loginBtn').addEventListener('click', handleLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+$('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+$('logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) auth.signOut(); });
+
+auth.onAuthStateChanged(user => {
+  if (user){
+    $('login').classList.add('hidden');
+    if (!appInitialized){ appInitialized = true; init(); }
+  } else {
+    $('login').classList.remove('hidden');
+    const btn = $('loginBtn');
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+});
+
+// ============================================================
+//  Init
+// ============================================================
+async function init(){
+  refreshKeyBtn();
+  showBlock('Cargando artículos…');
+  try {
+    await loadArticulos();
+    renderTable();
+  } catch (err){
+    console.error('Init error:', err);
+    toast('Error al cargar artículos desde Firebase', 'err');
+    $('pageCount').textContent = 'Error al cargar datos';
+  } finally {
+    hideBlock();
+    // Primer arranque en este navegador: sin key no se puede generar nada, se pide de entrada.
+    // Va después de hideBlock() porque el overlay .block (z-1250) taparía el modal (z-1200).
+    if (!getGeminiKey()) openKeyModal();
+  }
+}
+</script>
+</body>
+</html>

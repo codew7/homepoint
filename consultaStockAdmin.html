@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Stock</title>
+    <link rel="icon" href="faviconnegro.png" type="image/png">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="config.js"></script>
+    <!-- Eliminados stockManager.js y stockUpdater.js -->
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --primary: #ffe066;
+            --secondary: #fff9db;
+            --accent: #ffd43b;
+            --pastel1: #f8edeb;
+            --pastel2: #e0d6d4;
+            --pastel3: #fae697;
+            --success: #38b000;
+            --danger: #e63946;
+            --text: #333;
+            --border: #ffe066;
+            --shadow: 0 2px 8px rgba(255, 213, 59, 0.267);
+            --primary-blue: #2563eb;
+            --primary-dark: #1e40af;
+            --gray: #f3f4f6;
+            --gray-dark: #6b7280;
+            --warning: #f59e42;
+            --white: #fff;
+        }
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+            background: var(--secondary);
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: linear-gradient(90deg, var(--primary), var(--pastel1));
+            padding: 1.5rem 1rem 1.5rem 1rem;
+            box-shadow: #5c5866 0px 2px 8px 0px;
+            text-align: center;
+            position: relative;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            color: #b68900;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+        header h2 {
+            margin: 0;
+            margin-top: 0.3em;
+            font-size: 1.25rem;
+            font-weight: 500;
+            cursor: pointer;
+            color: #b68900;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 2rem auto;
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+            padding: 2rem 1rem;
+        }
+
+        .search-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            gap: 10px;
+        }
+        .checkbox-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0.7rem 1rem;
+            background: var(--gray);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .checkbox-filter:hover {
+            background: var(--pastel2);
+        }
+        .checkbox-filter input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+        .checkbox-filter label {
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text);
+            user-select: none;
+        }
+        .print-btn {
+            padding: 0.7rem 1.2rem;
+            border: none;
+            background: var(--success);
+            color: var(--white);
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .print-btn:hover {
+            background: #2d8c00;
+        }
+        .search-bar input {
+            flex: 1;
+            max-width: 400px;
+            padding: 0.7rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .search-bar button {
+            padding: 0.7rem 1.2rem;
+            border: none;
+            background: var(--primary);
+            color: var(--text);
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            min-width: 50px;
+        }
+        .search-bar button:hover {
+            background: var(--accent);
+        }
+        .refresh-btn {
+            background: var(--primary-blue) !important;
+            color: var(--white) !important;
+        }
+        .refresh-btn:hover {
+            background: var(--primary-dark) !important;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1000px;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+            background: var(--white);
+        }
+        th, td {
+            padding: 0.9rem 0.7rem;
+            text-align: left;
+        }
+        th {
+            background: var(--primary);
+            color: var(--white);
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        th:hover {
+            background: var(--accent);
+        }
+        th .sort-icon {
+            margin-left: 5px;
+            font-size: 0.8rem;
+            opacity: 0.6;
+        }
+        th.sorted-asc .sort-icon::after {
+            content: '▲';
+            opacity: 1;
+        }
+        th.sorted-desc .sort-icon::after {
+            content: '▼';
+            opacity: 1;
+        }
+        tr {
+            border-bottom: 1px solid var(--border);
+        }
+        tr:last-child {
+            border-bottom: none;
+        }
+        .stock-low {
+            background: var(--warning);
+            color: #fff;
+            font-weight: bold;
+        }
+        .stock-zero {
+            background: var(--danger);
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 120px;
+        }
+        .lds-ring {
+            display: inline-block;
+            position: relative;
+            width: 64px;
+            height: 64px;
+        }
+        .lds-ring div {
+            box-sizing: border-box;
+            display: block;
+            position: absolute;
+            width: 51px;
+            height: 51px;
+            margin: 6px;
+            border: 6px solid var(--primary);
+            border-radius: 50%;
+            animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            border-color: var(--primary) transparent transparent transparent;
+        }
+        .lds-ring div:nth-child(1) {
+            animation-delay: -0.45s;
+        }
+        .lds-ring div:nth-child(2) {
+            animation-delay: -0.3s;
+        }
+        .lds-ring div:nth-child(3) {
+            animation-delay: -0.15s;
+        }
+        @keyframes lds-ring {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: var(--danger);
+            text-align: center;
+            margin: 1rem 0;
+            font-weight: bold;
+        }
+        @media (max-width: 700px) {
+            .container {
+                padding: 1rem 0.2rem;
+            }
+            th, td {
+                padding: 0.7rem 0.3rem;
+                font-size: 0.97rem;
+            }
+            .export-btn {
+                width: 100%;
+                float: none;
+                margin-bottom: 1rem;
+            }
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+            header {
+                box-shadow: none;
+                padding: 0.5rem 0;
+                background: white !important;
+                border-bottom: 2px solid #000;
+            }
+            header h1 {
+                font-size: 1.5rem;
+                margin: 0;
+                color: #000 !important;
+            }
+            header h2 {
+                display: none;
+            }
+            .search-bar,
+            #adminIndicator,
+            #userIndicator,
+            .print-btn,
+            #accionesHeader,
+            .acciones-cell {
+                display: none !important;
+            }
+            .container {
+                box-shadow: none;
+                max-width: 100%;
+                margin: 0;
+                padding: 0.3rem;
+                background: white;
+            }
+            .table-responsive {
+                margin: 0;
+            }
+            table {
+                page-break-inside: auto;
+                border-collapse: collapse;
+                width: 100%;
+                font-size: 0.85rem;
+            }
+            th, td {
+                padding: 0.25rem 0.4rem;
+                border: 1px solid #000;
+                background: white !important;
+                color: #000 !important;
+            }
+            th {
+                font-weight: bold;
+                text-align: left;
+                border-bottom: 2px solid #000;
+            }
+            th .sort-icon {
+                display: none;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            /* Usar símbolos en lugar de colores para stock bajo/cero */
+            .stock-low td:last-child::after {
+                content: " ⚠";
+                font-weight: bold;
+            }
+            .stock-zero {
+                font-weight: bold;
+            }
+            .stock-zero td:last-child::after {
+                content: " ✕";
+            }
+        }
+
+        /* Estilos para indicadores de usuario */
+        .user-status-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 1rem 0;
+        }
+
+        #adminIndicator,
+        #userIndicator {
+            animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            animation-delay: 0.6s;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        #adminIndicator.show,
+        #userIndicator.show {
+            display: block !important;
+        }
+
+        /* Estilos para botones de logout */
+        #logoutBtn:hover,
+        #logoutBtnUser:hover {
+            background: rgba(255,255,255,0.4) !important;
+            transform: translateY(-1px);
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ===== Candado de acceso por contraseña ===== */
+        body.gate-locked {
+            overflow: hidden;
+        }
+        #accessGate {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            background: var(--secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        #accessGate .gate-box {
+            background: #fff;
+            border-radius: 16px;
+            padding: 2rem 1.8rem;
+            max-width: 360px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+            border: 1px solid var(--border);
+        }
+        #accessGate h2 {
+            margin: 0 0 0.4rem;
+            color: #b68900;
+            font-size: 1.3rem;
+        }
+        #accessGate p {
+            margin: 0 0 1.2rem;
+            color: var(--gray-dark);
+            font-size: 0.92rem;
+        }
+        #accessGate input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            font-size: 1.1rem;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            outline: none;
+            letter-spacing: 3px;
+            box-sizing: border-box;
+        }
+        #accessGate input:focus {
+            border-color: var(--accent);
+        }
+        #accessGate button {
+            margin-top: 1rem;
+            width: 100%;
+            padding: 0.8rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: #b68900;
+            transition: filter 0.2s;
+        }
+        #accessGate button:hover {
+            filter: brightness(0.95);
+        }
+        #accessGate .gate-error {
+            color: var(--danger);
+            font-size: 0.9rem;
+            margin-top: 0.8rem;
+            min-height: 1.1em;
+        }
+        @media print {
+            #accessGate { display: none !important; }
+        }
+
+        /* ===== Vista previa de imagen al pasar el cursor sobre el nombre ===== */
+        .nombre-articulo {
+            cursor: help;
+            border-bottom: 1px dotted var(--gray-dark);
+        }
+        #imgTooltip {
+            position: fixed;
+            z-index: 10050;
+            display: none;
+            pointer-events: none;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 6px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        }
+        #imgTooltip img {
+            display: block;
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #f3f4f6;
+        }
+        @media print {
+            #imgTooltip { display: none !important; }
+            .nombre-articulo { border-bottom: none; cursor: auto; }
+        }
+
+        /* ===== Botón eliminar movimientos por artículo ===== */
+        .action-btn-delete {
+            background: var(--danger);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .action-btn-delete:hover { background: #c1121f; transform: translateY(-1px); }
+        .action-btn-delete:active { transform: translateY(0); }
+
+        /* Overlay de carga */
+        .mov-loading-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+            display: none; justify-content: center; align-items: center;
+            z-index: 10000; flex-direction: column; gap: 1rem;
+        }
+        .mov-loading-overlay.visible { display: flex; }
+        .mov-loading-spinner {
+            width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: lds-ring 1s linear infinite;
+        }
+        .mov-loading-text { color: #fff; font-size: 1.1rem; font-weight: 500; }
+
+        /* Feedback toast */
+        .mov-feedback {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 1rem 1.5rem; border-radius: 10px; z-index: 10001;
+            display: none; max-width: 90%; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            font-weight: 500;
+        }
+        .mov-feedback.visible { display: block; }
+        .mov-feedback.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .mov-feedback.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+
+        /* Modal de confirmación */
+        .mov-modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+            display: none; justify-content: center; align-items: center;
+            z-index: 10002; padding: 1rem;
+        }
+        .mov-modal.visible { display: flex; }
+        .mov-modal-box {
+            background: #fff; border-radius: 16px; padding: 1.8rem;
+            max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto;
+            animation: scaleInMov 0.25s ease;
+        }
+        @keyframes scaleInMov {
+            from { transform: scale(0.85); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .mov-modal-box h3 { margin: 0 0 1rem 0; color: var(--danger); display: flex; align-items: center; gap: 8px; }
+        .mov-warning {
+            background: #fff3cd; border: 1px solid #f39c12; border-radius: 10px;
+            padding: 0.8rem 1rem; color: #856404; font-size: 0.9rem; margin-bottom: 1rem;
+        }
+        .mov-info { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1rem; }
+        .mov-info-row { display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #e9ecef; font-size: 0.92rem; gap: 1rem; }
+        .mov-info-row:last-child { border-bottom: none; }
+        .mov-info-row span { color: #6c757d; }
+        .mov-info-row strong { text-align: right; word-break: break-word; }
+        .mov-preview { max-height: 180px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 1rem; font-size: 0.82rem; }
+        .mov-preview table { width: 100%; border-collapse: collapse; min-width: 0; }
+        .mov-preview th, .mov-preview td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        .mov-preview th { background: #f8f9fa; position: sticky; top: 0; }
+        .mov-confirm-label { display: block; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text); }
+        .mov-code-hint { font-weight: 700; color: var(--danger); background:#f8f9fa; padding:1px 6px; border-radius:4px; }
+        .mov-confirm-input {
+            width: 100%; padding: 0.7rem 1rem; border: 2px solid var(--border);
+            border-radius: 10px; font-size: 1rem; margin-bottom: 1.2rem; outline: none;
+            box-sizing: border-box;
+        }
+        .mov-confirm-input:focus { border-color: var(--danger); }
+        .mov-modal-buttons { display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap; }
+        .mov-btn { padding: 10px 20px; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .mov-btn-secondary { background: #6c757d; color: #fff; }
+        .mov-btn-secondary:hover { background: #5a6268; }
+        .mov-btn-danger { background: var(--danger); color: #fff; }
+        .mov-btn-danger:hover:not(:disabled) { background: #c1121f; }
+        .mov-btn-danger:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body class="gate-locked">
+    <!-- Candado de acceso por contraseña -->
+    <div id="accessGate">
+        <div class="gate-box">
+            <h2>🔒 Acceso restringido</h2>
+            <p>Introduce la contraseña para acceder a esta página.</p>
+            <input type="password" id="gateInput" inputmode="numeric" autocomplete="off" placeholder="Contraseña" aria-label="Contraseña">
+            <button id="gateBtn" type="button">Ingresar</button>
+            <div class="gate-error" id="gateError"></div>
+        </div>
+    </div>
+
+    <header>
+        <h1>📋 Consulta de Stock 🔎</h1>
+        
+        <!-- Indicadores de usuario -->
+        <div id="adminIndicator" style="position: absolute; top: 15px; right: 20px; background: rgba(182, 137, 0, 0.9); padding: 8px 15px; border-radius: 20px; font-size: 0.85rem; display: none; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            <i class="bi bi-shield-check"></i> Modo Administrador
+            <button id="logoutBtn" style="margin-left: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.75rem; color: white; cursor: pointer; transition: all 0.3s ease;" title="Cerrar sesión">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+        <div id="userIndicator" style="position: absolute; top: 15px; right: 20px; background: rgba(56, 176, 0, 0.9); padding: 8px 15px; border-radius: 20px; font-size: 0.85rem; display: none; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            <i class="bi bi-person-check"></i> <span id="userEmail"></span>
+            <button id="logoutBtnUser" style="margin-left: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.75rem; color: white; cursor: pointer; transition: all 0.3s ease;" title="Cerrar sesión">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </header>
+    <div class="container">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Buscar por código o nombre...">
+            <button id="clearBtn" title="Limpiar búsqueda">✕</button>
+            <div class="checkbox-filter">
+                <input type="checkbox" id="zeroStockFilter">
+                <label for="zeroStockFilter">Mostrar solo < 0</label>
+            </div>            <button id="printBtn" class="print-btn" title="Imprimir reporte">
+                <i class="bi bi-printer"></i> Imprimir
+            </button>
+        </div>
+        <div id="resultCounter" style="text-align:right; font-size:0.92rem; color:var(--gray-dark); margin-bottom:0.5rem; display:none;"></div>
+        <div class="table-responsive">
+            <table id="stockTable">
+                <thead>
+                    <tr>
+                        <th data-column="codigo">Código<span class="sort-icon"></span></th>
+                        <th data-column="nombre">Nombre<span class="sort-icon"></span></th>
+                        <th data-column="stock">Stock Actual<span class="sort-icon"></span></th>
+                        <th data-column="ultimaEntrada">Ultima Entrada<span class="sort-icon"></span></th>
+                        <th id="accionesHeader" style="cursor:default; display:none;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Filas generadas dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        <div class="spinner" id="spinner" style="display:none;">
+            <div class="lds-ring"><div></div><div></div><div></div><div></div></div>
+        </div>
+        <div class="error" id="errorMsg" style="display:none;"></div>
+    </div>
+    
+    <!-- Firebase Auth Check -->
+    <script>
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        
+        // Sistema de autenticación
+        let admin = false; // Declarar admin al principio para evitar errores de hoisting
+        let authResolved = false; // Flag para controlar si la autenticación se resolvió
+        
+        // Lista de emails de administradores
+        const adminEmails = ["distribuidorahomepoint@gmail.com"];
+
+        // ===== Candado de acceso por contraseña =====
+        const ACCESS_PASSWORD = "47623212";
+        let _authListo = false;        // Firebase autenticó a un usuario válido
+        let _passwordOk = false;       // Se ingresó la contraseña correcta
+        let _stockInicializado = false; // Evita doble inicialización
+
+        // Solo se carga la página cuando AMBOS requisitos se cumplen:
+        // usuario autenticado en Firebase Y contraseña de acceso correcta.
+        function intentarInicializarStock() {
+            if (_authListo && _passwordOk && !_stockInicializado) {
+                _stockInicializado = true;
+                console.log('Acceso concedido: inicializando página de stock');
+                inicializarStock();
+            }
+        }
+
+        function concederAcceso() {
+            _passwordOk = true;
+            const gate = document.getElementById('accessGate');
+            if (gate) gate.style.display = 'none';
+            document.body.classList.remove('gate-locked');
+            intentarInicializarStock();
+        }
+
+        function configurarGate() {
+            const input = document.getElementById('gateInput');
+            const btn = document.getElementById('gateBtn');
+            const err = document.getElementById('gateError');
+            if (!input || !btn) return;
+
+            function validar() {
+                if (input.value === ACCESS_PASSWORD) {
+                    err.textContent = '';
+                    concederAcceso();
+                } else {
+                    err.textContent = 'Contraseña incorrecta';
+                    input.value = '';
+                    input.focus();
+                }
+            }
+
+            btn.addEventListener('click', validar);
+            input.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); validar(); }
+            });
+            input.focus();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', configurarGate);
+        } else {
+            configurarGate();
+        }
+
+        // Función para inicializar la página después de la autenticación
+        function inicializarPagina() {
+            // La autenticación Firebase quedó resuelta; la carga real de la página
+            // queda condicionada también a la contraseña de acceso (gate).
+            _authListo = true;
+            console.log('Usuario autenticado; esperando contraseña de acceso si falta');
+            intentarInicializarStock();
+        }
+
+        // Función para redirigir a login con parámetro de retorno
+        function redirigirALogin() {
+            const currentUrl = encodeURIComponent(window.location.href);
+            window.location.href = `login.html?redirect=${currentUrl}`;
+        }
+
+        // Timeout de seguridad: verificar autenticación después de 5 segundos
+        setTimeout(() => {
+            if (!authResolved) {
+                console.warn('Timeout de autenticación - redirigiendo a login');
+                redirigirALogin();
+            }
+        }, 5000);
+
+        firebase.auth().onAuthStateChanged(user => {
+            console.log('Firebase Auth State Changed:', user ? 'Usuario autenticado' : 'No hay usuario');
+            authResolved = true; // Marcar que la autenticación se resolvió
+            
+            if (user) {
+                // Usuario autenticado
+                console.log('Usuario autenticado:', user.email);
+                
+                // Verificar si es administrador
+                if (adminEmails.includes(user.email)) {
+                    admin = true;
+                    console.log('Usuario es administrador:', user.email);
+                    
+                    // Mostrar indicador de administrador
+                    const adminIndicator = document.getElementById('adminIndicator');
+                    const userIndicator = document.getElementById('userIndicator');
+                    if (adminIndicator) {
+                        adminIndicator.style.display = 'block';
+                        adminIndicator.classList.add('show');
+                    }
+                    if (userIndicator) {
+                        userIndicator.style.display = 'none';
+                        userIndicator.classList.remove('show');
+                    }
+                } else {
+                    // Usuario normal (no administrador)
+                    admin = false;
+                    console.log('Usuario normal:', user.email);
+                    
+                    // Mostrar indicador de usuario normal
+                    const adminIndicator = document.getElementById('adminIndicator');
+                    const userIndicator = document.getElementById('userIndicator');
+                    const userEmail = document.getElementById('userEmail');
+                    
+                    if (adminIndicator) {
+                        adminIndicator.style.display = 'none';
+                        adminIndicator.classList.remove('show');
+                    }
+                    if (userIndicator) {
+                        userIndicator.style.display = 'block';
+                        userIndicator.classList.add('show');
+                    }
+                    if (userEmail) {
+                        userEmail.textContent = user.email;
+                    }
+                }
+                
+                // Usuario autenticado, inicializar página
+                console.log('Inicializando página para usuario autenticado...');
+                inicializarPagina();
+            } else {
+                // No hay usuario autenticado, redirigir a login
+                console.log('No hay usuario autenticado, redirigiendo a login...');
+                redirigirALogin();
+            }
+        });
+
+        // Función para cerrar sesión
+        function cerrarSesion() {
+            if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+                firebase.auth().signOut()
+                    .then(() => {
+                        console.log('Sesión cerrada exitosamente');
+                        // La redirección se manejará automáticamente por onAuthStateChanged
+                    })
+                    .catch(error => {
+                        console.error('Error al cerrar sesión:', error);
+                        alert('Error al cerrar sesión: ' + error.message);
+                    });
+            }
+        }
+
+        // Event listeners para los botones de logout
+        document.addEventListener('DOMContentLoaded', function() {
+            const logoutBtn = document.getElementById('logoutBtn');
+            const logoutBtnUser = document.getElementById('logoutBtnUser');
+            
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', cerrarSesion);
+            }
+            if (logoutBtnUser) {
+                logoutBtnUser.addEventListener('click', cerrarSesion);
+            }
+        });
+    </script>
+    <!-- Fin Firebase Auth Check -->
+    
+    <script>
+        // Nueva función para inicializar la funcionalidad de stock usando Google Sheets
+        function inicializarStock() {
+            // Elementos DOM
+            const tableBody = document.getElementById('tableBody');
+            const spinner = document.getElementById('spinner');
+            const errorMsg = document.getElementById('errorMsg');
+            const searchInput = document.getElementById('searchInput');
+            const clearBtn = document.getElementById('clearBtn');
+            const zeroStockFilter = document.getElementById('zeroStockFilter');
+            const printBtn = document.getElementById('printBtn');
+            const tableHeaders = document.querySelectorAll('#stockTable thead th');
+            let stockData = [];
+            let filteredData = [];
+            let currentSort = { column: 'nombre', order: 'asc' }; // Default sort by nombre
+
+            function showSpinner(show) {
+                spinner.style.display = show ? 'flex' : 'none';
+            }
+
+            function showError(msg) {
+                errorMsg.textContent = msg;
+                errorMsg.style.display = 'block';
+                showSpinner(false);
+            }
+
+            function clearError() {
+                errorMsg.textContent = '';
+                errorMsg.style.display = 'none';
+            }
+
+            const resultCounter = document.getElementById('resultCounter');
+
+            // Escape para insertar valores en atributos HTML de forma segura
+            const escAttr = s => String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            function renderTable(data) {
+                tableBody.innerHTML = '';
+
+                // Mostrar la columna de acciones solo para administradores
+                const esAdmin = (typeof admin !== 'undefined') && admin === true;
+                const accionesHeader = document.getElementById('accionesHeader');
+                if (accionesHeader) accionesHeader.style.display = esAdmin ? '' : 'none';
+                const colCount = esAdmin ? 5 : 4;
+
+                // Actualizar contador
+                if (data.length > 0) {
+                    resultCounter.textContent = `${data.length} artículo${data.length !== 1 ? 's' : ''} encontrado${data.length !== 1 ? 's' : ''}`;
+                    resultCounter.style.display = 'block';
+                } else {
+                    resultCounter.style.display = 'none';
+                }
+
+                if (data.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;color:var(--gray-dark);">Sin resultados</td></tr>`;
+                    return;
+                }
+
+                // Usar DocumentFragment para mejor rendimiento
+                const fragment = document.createDocumentFragment();
+
+                data.forEach(item => {
+                    let stockClass = '';
+                    if (item.stock <= 0) stockClass = 'stock-zero';
+                    else if (item.stock <= 5) stockClass = 'stock-low';
+
+                    const accionesCell = esAdmin
+                        ? `<td class="acciones-cell" style="text-align:center;"><button class="action-btn-delete" data-codigo="${escAttr(item.codigo)}" data-nombre="${escAttr(item.nombre)}" title="Eliminar todos los movimientos de este artículo y aplicar RESET"><i class="bi bi-trash3"></i></button></td>`
+                        : '';
+
+                    const row = document.createElement('tr');
+                    row.className = stockClass;
+                    row.innerHTML = `
+                        <td>${item.codigo || ''}</td>
+                        <td><span class="nombre-articulo" data-img="${escAttr(item.imagen)}">${item.nombre || ''}</span></td>
+                        <td>${typeof item.stock === 'number' ? item.stock : 0}</td>
+                        <td>${item.ultimaEntrada || ''}</td>
+                        ${accionesCell}
+                    `;
+                    fragment.appendChild(row);
+                });
+
+                tableBody.appendChild(fragment);
+            }
+
+            let searchTimeout;
+
+            function sortData(data, column, order) {
+                const sorted = [...data];
+                sorted.sort((a, b) => {
+                    let valA = a[column];
+                    let valB = b[column];
+                    
+                    // Handle numeric values
+                    if (column === 'stock') {
+                        valA = Number(valA) || 0;
+                        valB = Number(valB) || 0;
+                        return order === 'asc' ? valA - valB : valB - valA;
+                    }
+                    
+                    // Handle string values
+                    valA = (valA || '').toString().toLowerCase();
+                    valB = (valB || '').toString().toLowerCase();
+                    
+                    if (order === 'asc') {
+                        return valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+                    } else {
+                        return valB.localeCompare(valA, 'es', { sensitivity: 'base' });
+                    }
+                });
+                return sorted;
+            }
+
+            function updateSortIcons() {
+                // Clear all sort classes
+                tableHeaders.forEach(th => {
+                    th.classList.remove('sorted-asc', 'sorted-desc');
+                });
+                
+                // Add sort class to current sorted column
+                tableHeaders.forEach(th => {
+                    if (th.dataset.column === currentSort.column) {
+                        th.classList.add(`sorted-${currentSort.order}`);
+                    }
+                });
+            }
+
+            function filterData() {
+                const query = searchInput.value.trim().toLowerCase();
+                const showZeroStockOnly = zeroStockFilter.checked;
+                
+                filteredData = stockData.filter(item => {
+                    // Search filter
+                    const matchesSearch = (item.codigo && item.codigo.toLowerCase().includes(query)) ||
+                                         (item.nombre && item.nombre.toLowerCase().includes(query));
+                    
+                    // Zero stock filter
+                    const matchesStockFilter = !showZeroStockOnly || (item.stock < 0);
+                    
+                    return matchesSearch && matchesStockFilter;
+                });
+                
+                // Apply current sort
+                filteredData = sortData(filteredData, currentSort.column, currentSort.order);
+                
+                renderTable(filteredData);
+                updateSortIcons();
+            }
+
+            // Debouncing para búsqueda
+            function debouncedFilterData() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    filterData();
+                }, 300);
+            }
+
+            // Event listeners
+            clearBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                filterData();
+                searchInput.focus();
+            });
+
+            searchInput.addEventListener('input', debouncedFilterData);
+            
+            zeroStockFilter.addEventListener('change', filterData);
+            
+            printBtn.addEventListener('click', () => {
+                window.print();
+            });
+            
+            // Add click event to table headers for sorting
+            tableHeaders.forEach(th => {
+                th.addEventListener('click', () => {
+                    const column = th.dataset.column;
+                    if (!column) return;
+                    
+                    // Toggle sort order if clicking the same column
+                    if (currentSort.column === column) {
+                        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.order = 'asc';
+                    }
+                    
+                    filterData();
+                });
+            });
+
+            // Consulta a Google Sheets
+            async function fetchStockData() {
+                showSpinner(true);
+                clearError();
+                try {
+                    // Configuración de Sheets (reutilizar config.js)
+                    const SHEETS_ID = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID : '';
+                    const RANGE = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.RANGO : '';
+                    const API_KEY = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.API_KEY : '';
+                    if (!SHEETS_ID || !RANGE || !API_KEY) throw new Error('Faltan datos de configuración de Google Sheets');
+
+                    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${RANGE}?key=${API_KEY}`;
+                    const response = await fetch(url, { cache: 'no-store' });
+                    const { values } = await response.json();
+                    if (!values || !values.length) throw new Error('No se encontraron datos en Sheets');
+
+                    // Asumimos que la primera fila es el header
+                    // Ajusta los índices según el log si es necesario
+                    stockData = values.slice(1).map(row => ({
+                        codigo: row[2] || '',
+                        nombre: row[3] || '',
+                        stock: Number(row[10]) || 0,
+                        ultimaEntrada: row[12] || '',
+                        // Imagen desde Google Sheets (columna 1), igual que inventario.html:
+                        // puede haber varias URLs separadas por comas → se toma la primera
+                        imagen: row[1] ? String(row[1]).split(',')[0].trim() : ''
+                    })).filter(item => item.nombre.trim() !== '');
+                    // Ordenar alfabéticamente por nombre
+                    stockData.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+
+                    filterData();
+                    showSpinner(false);
+                } catch (error) {
+                    console.error('Error al cargar datos de inventario:', error);
+                    showError('Error al cargar datos de inventario: ' + error.message);
+                }
+            }
+
+            // Event listener para actualización manual
+            document.getElementById('refreshStockBtn')?.addEventListener('click', async () => {
+                await fetchStockData();
+            });
+
+            // Exponer refresco para que la eliminación de movimientos pueda actualizar la tabla
+            window.refrescarStock = fetchStockData;
+
+            // Inicializar
+            fetchStockData();
+
+            // Auto-refresh cada 30 segundos
+            setInterval(fetchStockData, 30000);
+
+            // Refrescar al volver a la pestaña
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) fetchStockData();
+            });
+        }
+    </script>
+
+    <!-- Vista previa de imagen del artículo (hover sobre el nombre) -->
+    <div id="imgTooltip"><img id="imgTooltipImg" src="" alt="Imagen del artículo"></div>
+
+    <!-- ===== Eliminación de movimientos por artículo (solo admin) ===== -->
+    <div id="movLoadingOverlay" class="mov-loading-overlay">
+        <div class="mov-loading-spinner"></div>
+        <div class="mov-loading-text" id="movLoadingText">Procesando...</div>
+    </div>
+
+    <div id="movFeedback" class="mov-feedback"></div>
+
+    <div id="movConfirmModal" class="mov-modal">
+        <div class="mov-modal-box">
+            <h3><i class="bi bi-exclamation-triangle-fill"></i> Eliminar Movimientos y RESET</h3>
+            <div class="mov-warning">
+                ⚠️ Vas a eliminar <strong>permanentemente</strong> todos los movimientos de este artículo en el nodo <code>movimientos</code> y a reiniciar su stock creando un registro <strong>RESET</strong>. Esta acción <strong>NO se puede deshacer</strong>.
+            </div>
+            <div class="mov-info">
+                <div class="mov-info-row"><span>Código:</span><strong id="movInfoCodigo">-</strong></div>
+                <div class="mov-info-row"><span>Nombre:</span><strong id="movInfoNombre">-</strong></div>
+                <div class="mov-info-row"><span>Total de movimientos:</span><strong id="movInfoTotal">-</strong></div>
+                <div class="mov-info-row"><span>Entradas / Salidas / Retiros:</span><strong id="movInfoDesglose">-</strong></div>
+            </div>
+            <div class="mov-preview" id="movPreview"></div>
+            <label class="mov-confirm-label">Para confirmar, escribe el código <span class="mov-code-hint" id="movCodeHint"></span> exactamente:</label>
+            <input type="text" id="movConfirmInput" class="mov-confirm-input" placeholder="Escribe el código para habilitar el botón" autocomplete="off" spellcheck="false">
+            <div class="mov-modal-buttons">
+                <button class="mov-btn mov-btn-secondary" onclick="cerrarModalMov()"><i class="bi bi-x-lg"></i> Cancelar</button>
+                <button id="movBtnConfirmar" class="mov-btn mov-btn-danger" onclick="confirmarEliminacionMov()" disabled><i class="bi bi-trash3"></i> Eliminar y aplicar RESET</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== Lógica de eliminación de movimientos por artículo =====
+        const movDb = firebase.database();
+
+        // --- Patrón de seguridad de escritura (evita falsos éxitos offline) ---
+        let firebaseConectado = false;
+        movDb.ref('.info/connected').on('value', snap => {
+            firebaseConectado = snap.val() === true;
+        });
+
+        function verificarConexionFirebase(timeoutMs = 5000) {
+            if (firebaseConectado) return Promise.resolve(true);
+            return new Promise((resolve) => {
+                const timer = setTimeout(() => {
+                    movDb.ref('.info/connected').off('value', cb);
+                    resolve(false);
+                }, timeoutMs);
+                const cb = movDb.ref('.info/connected').on('value', snap => {
+                    if (snap.val() === true) {
+                        clearTimeout(timer);
+                        movDb.ref('.info/connected').off('value', cb);
+                        resolve(true);
+                    }
+                });
+            });
+        }
+
+        function conTimeout(promise, ms, msg) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+            ]);
+        }
+
+        // --- Estado de la operación en curso ---
+        let movDelCodigo = '';
+        let movDelNombre = '';
+        let movProcesoCritico = false;
+
+        // Protección contra cierre de pestaña durante una escritura crítica
+        window.addEventListener('beforeunload', function (e) {
+            if (movProcesoCritico) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        });
+
+        function esAdminActivo() {
+            return (typeof admin !== 'undefined') && admin === true;
+        }
+
+        // Normaliza un código para comparar (string sin espacios). Evita que un código
+        // guardado como número (12345) y otro como texto ("12345") se traten distinto.
+        function normalizarCodigo(c) {
+            return String(c == null ? '' : c).trim();
+        }
+
+        // Obtiene TODOS los movimientos de un artículo de forma exhaustiva:
+        // lee el nodo completo y filtra localmente con comparación normalizada,
+        // así captura registros guardados con el código como número, texto o con espacios.
+        async function obtenerMovimientosPorCodigo(codigo) {
+            const objetivo = normalizarCodigo(codigo);
+            if (objetivo === '') return [];
+
+            const snap = await conTimeout(
+                movDb.ref('movimientos').once('value'),
+                20000,
+                'Tiempo de espera agotado al leer los movimientos'
+            );
+
+            const lista = [];
+            if (snap.exists()) {
+                snap.forEach(child => {
+                    const val = child.val();
+                    if (val && normalizarCodigo(val.codigo) === objetivo) {
+                        lista.push({ id: child.key, ...val });
+                    }
+                });
+            }
+            return lista;
+        }
+
+        function movShowLoading(texto) {
+            document.getElementById('movLoadingText').textContent = texto || 'Procesando...';
+            document.getElementById('movLoadingOverlay').classList.add('visible');
+        }
+        function movHideLoading() {
+            document.getElementById('movLoadingOverlay').classList.remove('visible');
+        }
+
+        let movFeedbackTimer = null;
+        function movMostrarFeedback(mensaje, tipo) {
+            const fb = document.getElementById('movFeedback');
+            fb.textContent = mensaje;
+            fb.className = 'mov-feedback visible ' + tipo;
+            if (movFeedbackTimer) clearTimeout(movFeedbackTimer);
+            movFeedbackTimer = setTimeout(() => fb.classList.remove('visible'), 8000);
+        }
+
+        function movFormatearFecha(timestamp) {
+            if (!timestamp) return '-';
+            const d = new Date(timestamp);
+            if (isNaN(d.getTime())) return 'Fecha inválida';
+            const pad = n => n.toString().padStart(2, '0');
+            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        // Delegación de clicks: detecta el botón de eliminar en cualquier fila
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.action-btn-delete');
+            if (!btn) return;
+            if (!esAdminActivo()) {
+                movMostrarFeedback('Solo un administrador puede eliminar movimientos.', 'error');
+                return;
+            }
+            iniciarEliminacionMov(btn.dataset.codigo || '', btn.dataset.nombre || '');
+        });
+
+        // Paso 1: buscar los movimientos del artículo y mostrar el modal de confirmación
+        async function iniciarEliminacionMov(codigo, nombre) {
+            if (!esAdminActivo()) return;
+            if (!codigo) {
+                movMostrarFeedback('El artículo no tiene un código válido.', 'error');
+                return;
+            }
+            movDelCodigo = codigo;
+            movDelNombre = nombre || '';
+
+            movShowLoading('Buscando movimientos...');
+            try {
+                const conectado = await verificarConexionFirebase(5000);
+                if (!conectado) {
+                    movHideLoading();
+                    movMostrarFeedback('Sin conexión con la base de datos. No se realizó ninguna búsqueda.', 'error');
+                    return;
+                }
+
+                const lista = await obtenerMovimientosPorCodigo(codigo);
+                lista.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                movHideLoading();
+
+                if (lista.length === 0) {
+                    movMostrarFeedback(`El artículo ${codigo} no tiene movimientos para eliminar.`, 'error');
+                    return;
+                }
+
+                movMostrarModal(lista);
+            } catch (err) {
+                movHideLoading();
+                console.error('Error al buscar movimientos:', err);
+                movMostrarFeedback('Error al buscar movimientos: ' + err.message, 'error');
+            }
+        }
+
+        function movMostrarModal(lista) {
+            const entradas = lista.filter(m => m.tipo === 'ENTRADA').length;
+            const salidas = lista.filter(m => m.tipo === 'SALIDA').length;
+            const retiros = lista.filter(m => m.tipo === 'RETIRO').length;
+
+            document.getElementById('movInfoCodigo').textContent = movDelCodigo;
+            document.getElementById('movInfoNombre').textContent = movDelNombre || '-';
+            document.getElementById('movInfoTotal').textContent = lista.length;
+            document.getElementById('movInfoDesglose').textContent = `${entradas} / ${salidas} / ${retiros}`;
+            document.getElementById('movCodeHint').textContent = movDelCodigo;
+
+            // Vista previa (máx 50 filas)
+            const preview = document.getElementById('movPreview');
+            let html = '<table><thead><tr><th>Fecha</th><th>Cantidad</th><th>Tipo</th></tr></thead><tbody>';
+            lista.slice(0, 50).forEach(mov => {
+                html += `<tr><td>${movFormatearFecha(mov.timestamp)}</td><td>${mov.cantidad != null ? mov.cantidad : 0}</td><td>${mov.tipo || 'DESCONOCIDO'}</td></tr>`;
+            });
+            if (lista.length > 50) {
+                html += `<tr><td colspan="3" style="text-align:center;color:#888;">… y ${lista.length - 50} más</td></tr>`;
+            }
+            html += '</tbody></table>';
+            preview.innerHTML = html;
+
+            const inp = document.getElementById('movConfirmInput');
+            inp.value = '';
+            document.getElementById('movBtnConfirmar').disabled = true;
+
+            document.getElementById('movConfirmModal').classList.add('visible');
+            setTimeout(() => inp.focus(), 100);
+        }
+
+        function cerrarModalMov() {
+            if (movProcesoCritico) return; // no cerrar durante una escritura crítica
+            document.getElementById('movConfirmModal').classList.remove('visible');
+            movDelCodigo = '';
+            movDelNombre = '';
+        }
+
+        // Habilitar el botón solo cuando el código escrito coincide exactamente
+        document.getElementById('movConfirmInput').addEventListener('input', function () {
+            document.getElementById('movBtnConfirmar').disabled = this.value.trim() !== movDelCodigo;
+        });
+
+        // Atajos de teclado del modal
+        document.addEventListener('keydown', function (e) {
+            const modalVisible = document.getElementById('movConfirmModal').classList.contains('visible');
+            if (!modalVisible) return;
+            if (e.key === 'Escape') {
+                cerrarModalMov();
+            } else if (e.key === 'Enter') {
+                if (!document.getElementById('movBtnConfirmar').disabled) {
+                    e.preventDefault();
+                    confirmarEliminacionMov();
+                }
+            }
+        });
+
+        // Paso 2: ejecutar la eliminación con verificación de conexión y de borrado
+        async function confirmarEliminacionMov() {
+            if (!esAdminActivo()) return;
+
+            const codigo = movDelCodigo;
+            const nombre = movDelNombre;
+            const inp = document.getElementById('movConfirmInput');
+
+            // Doble validación: el código escrito debe coincidir exactamente
+            if (!codigo || inp.value.trim() !== codigo) {
+                movMostrarFeedback('El código escrito no coincide. No se eliminó nada.', 'error');
+                return;
+            }
+
+            const btnConfirmar = document.getElementById('movBtnConfirmar');
+            btnConfirmar.disabled = true;
+            movProcesoCritico = true;
+
+            try {
+                movShowLoading('Verificando conexión...');
+                const conectado = await verificarConexionFirebase(5000);
+                if (!conectado) {
+                    movProcesoCritico = false;
+                    movHideLoading();
+                    btnConfirmar.disabled = false;
+                    movMostrarFeedback('Sin conexión con la base de datos. No se eliminó ningún registro.', 'error');
+                    return;
+                }
+
+                // Re-consultar la lista FRESCA justo antes de eliminar (exhaustiva)
+                movShowLoading('Obteniendo movimientos actuales...');
+                const listaFresca = await obtenerMovimientosPorCodigo(codigo);
+
+                if (listaFresca.length === 0) {
+                    movProcesoCritico = false;
+                    movHideLoading();
+                    document.getElementById('movConfirmModal').classList.remove('visible');
+                    movMostrarFeedback('No se encontraron movimientos (quizá ya fueron eliminados).', 'error');
+                    if (window.refrescarStock) window.refrescarStock();
+                    return;
+                }
+
+                // Construir el set de borrado validando CADA registro individualmente.
+                // Si cualquier registro tiene un id inválido o un código que ya no
+                // coincide con el artículo objetivo, se aborta TODO sin borrar nada.
+                const objetivoNorm = normalizarCodigo(codigo);
+                const updates = {};
+                const entradasTs = [];
+                for (const mov of listaFresca) {
+                    // 1) El id debe ser una clave de Firebase válida (no vacía, sin '/')
+                    if (!mov.id || typeof mov.id !== 'string' || mov.id.indexOf('/') !== -1) {
+                        throw new Error('Se detectó un registro con identificador inválido. Eliminación cancelada por seguridad; no se borró nada.');
+                    }
+                    // 2) El código del registro debe seguir coincidiendo EXACTAMENTE con el objetivo
+                    if (normalizarCodigo(mov.codigo) !== objetivoNorm) {
+                        throw new Error('Se detectó un registro que no corresponde al artículo. Eliminación cancelada por seguridad; no se borró nada.');
+                    }
+                    updates[`movimientos/${mov.id}`] = null;
+                    if (mov.tipo === 'ENTRADA' && mov.timestamp) entradasTs.push(mov.timestamp);
+                }
+
+                const totalAEliminar = Object.keys(updates).length;
+
+                // Salvaguarda final: el nº de paths a borrar debe coincidir con los registros encontrados
+                if (totalAEliminar !== listaFresca.length) {
+                    throw new Error('Inconsistencia al preparar la eliminación. Cancelada por seguridad; no se borró nada.');
+                }
+
+                // Eliminación atómica (solo los paths exactos de este artículo)
+                movShowLoading(`Eliminando ${totalAEliminar} movimientos...`);
+                await conTimeout(movDb.ref().update(updates), 15000, 'Tiempo de espera agotado al eliminar');
+
+                // Verificación de borrado: re-leer y confirmar que ya no existen
+                movShowLoading('Verificando eliminación...');
+                const listaVerif = await obtenerMovimientosPorCodigo(codigo);
+                if (listaVerif.length > 0) {
+                    const restantes = listaVerif.length;
+                    movProcesoCritico = false;
+                    movHideLoading();
+                    document.getElementById('movConfirmModal').classList.remove('visible');
+                    movMostrarFeedback(`Atención: quedaron ${restantes} movimientos sin eliminar. Revisa manualmente.`, 'error');
+                    if (window.refrescarStock) window.refrescarStock();
+                    return;
+                }
+
+                // Crear registro RESET (timestamp = fecha máx. de ENTRADA si existe)
+                movShowLoading('Creando registro RESET...');
+                const tsReset = entradasTs.length > 0 ? Math.max(...entradasTs) : null;
+                const nuevoRegistro = {
+                    cantidad: 0,
+                    codigo: codigo,
+                    nombre: nombre || '',
+                    tipo: 'RESET'
+                };
+                if (tsReset !== null) nuevoRegistro.timestamp = tsReset;
+                await conTimeout(movDb.ref('movimientos').push(nuevoRegistro), 15000, 'Tiempo de espera agotado al crear el RESET');
+
+                movProcesoCritico = false;
+                movHideLoading();
+                document.getElementById('movConfirmModal').classList.remove('visible');
+                movDelCodigo = '';
+                movDelNombre = '';
+
+                movMostrarFeedback(`✅ Se eliminaron ${totalAEliminar} movimientos de ${codigo} y se aplicó el RESET correctamente.`, 'success');
+                if (window.refrescarStock) window.refrescarStock();
+
+            } catch (err) {
+                movProcesoCritico = false;
+                movHideLoading();
+                btnConfirmar.disabled = false;
+                console.error('Error al eliminar movimientos:', err);
+                movMostrarFeedback('Error al eliminar movimientos: ' + err.message, 'error');
+            }
+        }
+
+        // ===== Vista previa de imagen al pasar el cursor sobre el nombre =====
+        (function () {
+            const tooltip = document.getElementById('imgTooltip');
+            const tooltipImg = document.getElementById('imgTooltipImg');
+            const IMG_FALLBACK = 'no-disponible.png';
+            const OFFSET = 16; // separación respecto al cursor
+
+            // Si la imagen no carga, usar el placeholder
+            tooltipImg.addEventListener('error', () => {
+                if (tooltipImg.getAttribute('src') !== IMG_FALLBACK) {
+                    tooltipImg.src = IMG_FALLBACK;
+                }
+            });
+
+            function posicionar(e) {
+                // Mostrar primero para poder medir su tamaño
+                const ancho = tooltip.offsetWidth || 212;
+                const alto = tooltip.offsetHeight || 212;
+                let x = e.clientX + OFFSET;
+                let y = e.clientY + OFFSET;
+                // Evitar que se salga de la ventana
+                if (x + ancho > window.innerWidth) x = e.clientX - ancho - OFFSET;
+                if (y + alto > window.innerHeight) y = e.clientY - alto - OFFSET;
+                if (x < 0) x = 0;
+                if (y < 0) y = 0;
+                tooltip.style.left = x + 'px';
+                tooltip.style.top = y + 'px';
+            }
+
+            // Delegación: solo reacciona a los nombres de artículo
+            document.addEventListener('mouseover', function (e) {
+                const span = e.target.closest('.nombre-articulo');
+                if (!span) return;
+                const url = span.dataset.img;
+                tooltipImg.src = (url && url.trim() !== '') ? url : IMG_FALLBACK;
+                posicionar(e);
+                tooltip.style.display = 'block';
+            });
+
+            document.addEventListener('mousemove', function (e) {
+                if (tooltip.style.display !== 'block') return;
+                if (!e.target.closest('.nombre-articulo')) return;
+                posicionar(e);
+            });
+
+            document.addEventListener('mouseout', function (e) {
+                const span = e.target.closest('.nombre-articulo');
+                if (!span) return;
+                // Ocultar solo si realmente salimos del nombre
+                if (span.contains(e.relatedTarget)) return;
+                tooltip.style.display = 'none';
+                tooltipImg.src = '';
+            });
+
+            // Ocultar al hacer scroll para evitar que quede flotando
+            window.addEventListener('scroll', () => {
+                tooltip.style.display = 'none';
+            }, true);
+        })();
+    </script>
+</body>
+</html>
