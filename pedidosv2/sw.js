@@ -1,4 +1,4 @@
-const CACHE = 'despachos-v3';
+const CACHE = 'despachos-v4';
 const SHELL = [
   './pedidosv2.html',
   './config.js',

@@ -371,6 +371,24 @@
       font-size: 14px;
       font-weight: 500;
     }
+    .btn-reintentar {
+      margin-top: 14px;
+      padding: 10px 22px;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--accent);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .18s var(--ease-out), border-color .18s var(--ease-out);
+    }
+    .btn-reintentar:active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
     .pedidos-panel-fecha {
       font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
@@ -2527,6 +2545,20 @@
     .btn-despachar:hover { background: #1e293b; border-color: #1e293b; }
     .btn-despachar:disabled { opacity: .4; cursor: not-allowed; }
 
+    /* Barra de accion visible solo con status DESPACHADO/ENTREGADO */
+    .entregado-actions {
+      display: none;
+      padding: 10px 16px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .entregado-actions.visible { display: block; }
+
+    .btn-cancelar-entregado { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+    .btn-cancelar-entregado:hover { background: var(--danger); color: #fff; }
+    .btn-cancelar-entregado:disabled { opacity: .4; cursor: not-allowed; }
+
     .btn-mensaje { background: #25D366; color: #fff; border-color: #25D366; }
     .btn-mensaje:hover { background: #1da851; border-color: #1da851; }
     .btn-mensaje:disabled { opacity: .4; cursor: not-allowed; }
@@ -2670,6 +2702,13 @@
 
   <!-- STATUS BAR -->
   <div class="status-bar" id="statusBar"></div>
+
+  <!-- ACCION SOBRE PEDIDO ENTREGADO -->
+  <!-- Vive fuera del footer porque el footer queda oculto cuando el pedido esta
+       bloqueado, y esta es la unica accion habilitada en ese estado. -->
+  <div class="entregado-actions" id="entregadoActions">
+    <button class="footer-btn-base btn-cancelar-entregado" id="btnCancelarEntregado">Cancelar Entregado</button>
+  </div>
 
   <!-- CONTENIDO PRINCIPAL -->
   <div class="main-content" id="mainContent">
@@ -2934,6 +2973,74 @@
     // ==========================================
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+
+    // ==========================================
+    // RESILIENCIA DE CONEXION (RTDB)
+    // ==========================================
+    // El SDK de Realtime Database habla por un WebSocket persistente y no
+    // impone timeout a las peticiones. Si el socket muere sin cierre limpio
+    // -- lo habitual en Android tras Doze, pantalla apagada o salto
+    // WiFi<->datos -- el SDK sigue creyendo que esta conectado: once() queda
+    // encolado en un socket zombie y su promesa no resuelve NI rechaza nunca.
+    // El spinner se eterniza y el catch jamas se ejecuta. Las dos piezas de
+    // abajo cortan ese caso: una pone limite a la espera, la otra recicla el
+    // canal para que el reintento encuentre un socket vivo.
+    const RTDB_TIMEOUT_MS = 12000;
+    const RTDB_RECONEXION_MIN_MS = 5000;
+
+    let ultimaReconexion = 0;
+
+    // goOffline/goOnline obliga al SDK a tirar el socket y abrir uno nuevo;
+    // los listeners activos se re-suscriben solos y reenvian su valor actual.
+    // Se limita la frecuencia porque reciclar en medio de una reconexion ya en
+    // curso la aborta y alarga la recuperacion.
+    function reconectarRTDB() {
+      const ahora = Date.now();
+      if (ahora - ultimaReconexion < RTDB_RECONEXION_MIN_MS) return;
+      ultimaReconexion = ahora;
+      try {
+        db.goOffline();
+        db.goOnline();
+      } catch (e) {
+        console.warn('No se pudo reciclar la conexion RTDB:', e);
+      }
+    }
+
+    // El salto WiFi<->datos puede ocurrir con la app en primer plano, sin pasar
+    // por background: ahi no hay visibilitychange que lo detecte, pero el
+    // socket viejo quedo igual de muerto.
+    window.addEventListener('online', reconectarRTDB);
+
+    // Marca de agua sobre cualquier promesa de Firebase. Si expira, recicla la
+    // conexion y rechaza con un error reconocible para diferenciar "sin red"
+    // de un error real del servidor.
+    function conTimeout(promesa, ms = RTDB_TIMEOUT_MS) {
+      let timer;
+      const limite = new Promise((_, rechazar) => {
+        timer = setTimeout(() => {
+          reconectarRTDB();
+          const err = new Error('Sin respuesta del servidor');
+          err.esTimeout = true;
+          rechazar(err);
+        }, ms);
+      });
+      // El finally limpia el timer gane quien gane: sin el, una consulta que ya
+      // respondio dispararia igual el reconectarRTDB() al vencer su plazo.
+      return Promise.race([promesa, limite]).finally(() => clearTimeout(timer));
+    }
+
+    // Bloque de error uniforme con reintento. `accion` es una llamada JS que se
+    // ejecuta en el onclick; siempre sin argumentos para no tener que escapar
+    // valores dentro del atributo.
+    function htmlErrorReintento(err, accion, claseVacio) {
+      const mensaje = (err && err.esTimeout)
+        ? 'Sin conexion con el servidor'
+        : 'Error al cargar';
+      return '<div class="' + (claseVacio || 'pedidos-panel-empty') + '">' +
+        '<div>' + mensaje + '</div>' +
+        '<button type="button" class="btn-reintentar" onclick="' + accion + '">Reintentar</button>' +
+        '</div>';
+    }
 
     // ==========================================
     // PANTALLA COMPLETA AUTOMATICA (solo movil)
@@ -3252,10 +3359,24 @@
     function detenerPollingStock() {
       if (stockPollTimer) { clearInterval(stockPollTimer); stockPollTimer = null; }
     }
+    // Umbral a partir del cual se asume que Android pudo matar el socket. Los
+    // cambios de foco breves (abrir el teclado, una notificacion) no lo tocan,
+    // asi que reciclar ahi solo cortaria una conexion sana.
+    const OCULTO_RECICLA_MS = 20000;
+    let ocultoDesde = 0;
+
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        ocultoDesde = Date.now();
         detenerPollingStock();
       } else {
+        // Antes de pedir nada: si estuvo suspendida un rato, el WebSocket que
+        // el SDK cree vivo probablemente ya no lo esta. Se recicla de entrada
+        // para no gastar la primera consulta contra un socket muerto.
+        if (ocultoDesde && Date.now() - ocultoDesde > OCULTO_RECICLA_MS) {
+          reconectarRTDB();
+        }
+        ocultoDesde = 0;
         actualizarStock();       // refresco inmediato al volver al foco
         iniciarPollingStock();
       }
@@ -3282,6 +3403,7 @@
       document.getElementById('statusBar').className = 'status-bar';
       document.getElementById('statusBar').style.display = 'none';
       document.getElementById('footerControls').style.display = 'none';
+      actualizarBtnCancelarEntregado();
       despachoYaEjecutado = false;
       window.cachedValues = {};
       document.getElementById('mainContent').innerHTML =
@@ -3395,13 +3517,15 @@
       statusBar.className = 'status-bar';
       statusBar.style.display = 'none';
       footer.style.display = 'none';
+      // Ocultado explicito: pedidoActual todavia apunta al pedido anterior.
+      document.getElementById('entregadoActions').classList.remove('visible');
       mainContent.innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Cargando pedido...</p></div>';
 
       // Esperar a que sheets este cargado
       await cargarSheets();
 
       try {
-        const snap = await db.ref('pedidos/' + id).once('value');
+        const snap = await conTimeout(db.ref('pedidos/' + id).once('value'));
         const pedido = snap.val();
 
         if (!pedido) {
@@ -3436,8 +3560,17 @@
         // Activar listener en tiempo real
         activarListenerTiempoReal(id);
       } catch (err) {
-        mainContent.innerHTML = '<div class="error-screen"><div class="error-icon">&#9888;</div><p>Error al cargar: ' + err.message + '</p></div>';
+        console.error('Error cargando pedido:', err);
+        mainContent.innerHTML = '<div class="error-screen"><div class="error-icon">&#9888;</div>' +
+          '<p>' + (err.esTimeout ? 'Sin conexion con el servidor' : 'Error al cargar: ' + escapeHtml(err.message || '')) + '</p>' +
+          '<button type="button" class="btn-reintentar" onclick="reintentarCargarPedido()">Reintentar</button></div>';
       }
+    }
+
+    // El id vive en pedidoId, ya asignado al comienzo de cargarPedido: asi el
+    // onclick del bloque de error no necesita interpolar el valor.
+    function reintentarCargarPedido() {
+      if (pedidoId) cargarPedido(pedidoId);
     }
 
     // ==========================================
@@ -3483,6 +3616,7 @@
             statusBar.style.display = 'none';
             footer.style.display = 'block';
           }
+          actualizarBtnCancelarEntregado();
         }
 
         if (itemsChanged || clienteChanged || statusChanged) {
@@ -4588,22 +4722,23 @@
       if (e.target === pedidosPanel) pedidosPanel.classList.remove('active');
     });
 
+    // Evita que los toques repetidos sobre el boton (el reflejo cuando "no
+    // carga") apilen consultas y reinicien el spinner una y otra vez.
+    let cargandoPedidos = false;
+
     async function cargarPedidosPendientes() {
+      if (cargandoPedidos) return;
+      cargandoPedidos = true;
       pedidosPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando pedidos...</div>';
       pedidosResumen.textContent = '';
 
       try {
-        // Consulta 1: status ABIERTO
-        const snapAbierto = await db.ref('pedidos')
-          .orderByChild('status')
-          .equalTo('ABIERTO')
-          .once('value');
-
-        // Consulta 2: status CERRADO
-        const snapCerrado = await db.ref('pedidos')
-          .orderByChild('status')
-          .equalTo('CERRADO')
-          .once('value');
+        // Las dos consultas son independientes: en paralelo pagan una sola
+        // latencia y comparten un unico plazo de espera.
+        const [snapAbierto, snapCerrado] = await conTimeout(Promise.all([
+          db.ref('pedidos').orderByChild('status').equalTo('ABIERTO').once('value'),
+          db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
+        ]));
 
         pedidosCache = [];
 
@@ -4638,7 +4773,9 @@
       } catch (err) {
         console.error('Error cargando pedidos:', err);
         pedidosResumen.textContent = '';
-        pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">Error al cargar pedidos</div>';
+        pedidosPanelList.innerHTML = htmlErrorReintento(err, 'cargarPedidosPendientes()');
+      } finally {
+        cargandoPedidos = false;
       }
     }
 
@@ -4803,15 +4940,19 @@
       if (e.target === historialPanel) historialPanel.classList.remove('active');
     });
 
+    let cargandoHistorial = false;
+
     async function cargarHistorial() {
+      if (cargandoHistorial) return;
+      cargandoHistorial = true;
       historialPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando historial...</div>';
 
       try {
         // Limite servidor: solo pedidos creados desde la web (un unico orderByChild indexable).
-        const snap = await db.ref('pedidos')
+        const snap = await conTimeout(db.ref('pedidos')
           .orderByChild('createdby')
           .equalTo('web')
-          .once('value');
+          .once('value'));
 
         // Filtros en memoria sobre el conjunto ya reducido: status + ventana 45 dias.
         const CUTOFF_MS = Date.now() - 45 * 24 * 60 * 60 * 1000;
@@ -4835,7 +4976,9 @@
         renderHistorial('');
       } catch (err) {
         console.error('Error cargando historial:', err);
-        historialPanelList.innerHTML = '<div class="pedidos-panel-empty">Error al cargar historial</div>';
+        historialPanelList.innerHTML = htmlErrorReintento(err, 'cargarHistorial()');
+      } finally {
+        cargandoHistorial = false;
       }
     }
 
@@ -5232,12 +5375,20 @@
       await articuloBuscarEnPedidos(codigo);
     }
 
+    // El reintento se expone sin argumentos para que el onclick del bloque de
+    // error no tenga que escapar el codigo dentro del atributo.
+    function articuloReintentarBusqueda() {
+      if (!articuloActual || !articuloActual.codigo) return;
+      articuloPedidosList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Buscando pedidos...</div>';
+      articuloBuscarEnPedidos(articuloActual.codigo);
+    }
+
     async function articuloBuscarEnPedidos(codigo) {
       try {
-        const [snapAbierto, snapCerrado] = await Promise.all([
+        const [snapAbierto, snapCerrado] = await conTimeout(Promise.all([
           db.ref('pedidos').orderByChild('status').equalTo('ABIERTO').once('value'),
           db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
-        ]);
+        ]));
 
         const resultados = [];
         const recolectar = (snap) => {
@@ -5268,7 +5419,7 @@
         articuloRenderPedidos();
       } catch (err) {
         console.error('Error buscando articulo en pedidos:', err);
-        articuloPedidosList.innerHTML = '<div class="articulo-empty">Error al buscar pedidos</div>';
+        articuloPedidosList.innerHTML = htmlErrorReintento(err, 'articuloReintentarBusqueda()', 'articulo-empty');
       }
     }
 
@@ -5344,7 +5495,7 @@
 
       const marcarUno = async (r) => {
         // Releer el pedido: los indices del array pueden haber cambiado por ediciones concurrentes
-        const snap = await db.ref('pedidos/' + r.id).once('value');
+        const snap = await conTimeout(db.ref('pedidos/' + r.id).once('value'));
         const p = snap.val();
         if (!p || (p.status !== 'ABIERTO' && p.status !== 'CERRADO')) {
           throw new Error('Pedido ' + r.id + ' ya no esta pendiente');
@@ -5473,7 +5624,7 @@
       // Obtener datos frescos de Firebase antes de imprimir
       let pedidoFresh;
       try {
-        const snap = await db.ref('pedidos/' + pedidoId).once('value');
+        const snap = await conTimeout(db.ref('pedidos/' + pedidoId).once('value'));
         pedidoFresh = snap.val();
         if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
         // Actualizar estado local con los datos mas recientes
@@ -6152,11 +6303,23 @@
     // PEDIDO VIEW: Footer button state
     // ==========================================
     function configurarPedidoFooterState() {
+      actualizarBtnCancelarEntregado();
       if (!pedidoActual) return;
       const bloqueado = pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO';
       actualizarBtnTerminar();
       document.getElementById('btnCancelarPV').disabled = bloqueado || pedidoActual.locked;
       actualizarEstadoBtnDespachar();
+    }
+
+    // "Cancelar Entregado" es la unica accion disponible sobre un pedido ya
+    // despachado, por eso solo se muestra con ese status exacto.
+    function actualizarBtnCancelarEntregado() {
+      const bar = document.getElementById('entregadoActions');
+      if (!bar) return;
+      const visible = !!pedidoActual && !!pedidoId && pedidoActual.status === 'DESPACHADO/ENTREGADO';
+      bar.classList.toggle('visible', visible);
+      const btn = document.getElementById('btnCancelarEntregado');
+      if (btn && visible) btn.disabled = false;
     }
 
     function actualizarEstadoBtnDespachar() {
@@ -6241,7 +6404,7 @@
           items: pedidoActual.items
         });
         // Eliminar movimientos
-        const movSnap = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+        const movSnap = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         const movs = movSnap.val();
         if (movs) {
           const upd = {};
@@ -6273,7 +6436,7 @@
 
       const user = firebase.auth().currentUser;
       try {
-        const movSnap = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+        const movSnap = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         const movs = movSnap.val();
         if (movs) {
           const upd = {};
@@ -6288,6 +6451,64 @@
         });
         showToast('Pedido cancelado');
       } catch (e) { showToast('Error al cancelar'); }
+    });
+
+    // ==========================================
+    // PEDIDO VIEW: Cancelar Entregado
+    // ==========================================
+    // Revierte un pedido ya despachado: lo pasa a CANCELADO y borra del nodo
+    // 'movimientos' EXCLUSIVAMENTE los registros de este pedido.
+    // Salvaguardas para no tocar ningun otro registro:
+    //   1. La query filtra por pedidoId (mismo indice que usa el despacho).
+    //   2. Se revalida mov.pedidoId === pedidoId antes de marcar cada key,
+    //      asi un indice desactualizado no puede arrastrar movimientos ajenos.
+    //   3. Solo se escriben rutas 'movimientos/<key>' individuales; nunca se
+    //      escribe sobre el nodo 'movimientos' completo.
+    document.getElementById('btnCancelarEntregado').addEventListener('click', async () => {
+      if (!pedidoActual || !pedidoId) return;
+      if (pedidoActual.status !== 'DESPACHADO/ENTREGADO') { showToast('El pedido no esta entregado'); return; }
+      if (!confirm('Cancelar este pedido ENTREGADO?\n\nSe eliminaran los movimientos de stock generados por este pedido. Esta accion es IRREVERSIBLE.')) return;
+
+      const btn = document.getElementById('btnCancelarEntregado');
+      const user = firebase.auth().currentUser;
+      btn.disabled = true;
+      bloquearInterfaz('Cancelando entrega...');
+
+      try {
+        const movSnap = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+
+        const updates = {};
+        let aEliminar = 0;
+        movSnap.forEach(child => {
+          const mov = child.val();
+          if (!mov || mov.pedidoId !== pedidoId) return;  // salvaguarda 2
+          updates['movimientos/' + child.key] = null;
+          aEliminar++;
+        });
+
+        updates['pedidos/' + pedidoId + '/status'] = 'CANCELADO';
+        updates['pedidos/' + pedidoId + '/locked'] = true;
+        updates['pedidos/' + pedidoId + '/movimientosRegistrados'] = false;
+        updates['pedidos/' + pedidoId + '/lastModifiedBy'] = admin && user ? 'admin' : 'usuario';
+        updates['pedidos/' + pedidoId + '/lastModifiedEmail'] = admin && user ? user.email : '';
+
+        // Todo-o-nada: o se cancela el pedido y se borran sus movimientos, o no pasa nada.
+        await db.ref().update(updates);
+
+        // Verificacion defensiva: no debe quedar ningun movimiento de este pedido.
+        // El update de arriba ya es atomico; si la verificacion expira, el
+        // reintento es inocuo porque repite el mismo estado final.
+        const verify = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+        if (verify.exists()) throw new Error('Quedaron movimientos sin eliminar');
+
+        despachoYaEjecutado = false;
+        desbloquearInterfaz();
+        showToast('Entrega cancelada ✓ ' + aEliminar + ' movimientos eliminados');
+      } catch (err) {
+        desbloquearInterfaz();
+        btn.disabled = false;
+        showToast('Error: ' + err.message);
+      }
     });
 
     // ==========================================
@@ -6377,7 +6598,7 @@
         await db.ref().update(rootUpdates);
 
         // Verificacion defensiva: confirmar que los movimientos quedaron registrados.
-        const verify = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+        const verify = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         const verifCount = verify.exists() ? Object.keys(verify.val()).length : 0;
         if (verifCount < movCount) throw new Error('Movimientos incompletos (' + verifCount + '/' + movCount + ')');
 
@@ -6568,7 +6789,7 @@
 
         // Update clientes node
         if (email) {
-          const snap = await db.ref('clientes').orderByChild('email').equalTo(email).once('value');
+          const snap = await conTimeout(db.ref('clientes').orderByChild('email').equalTo(email).once('value'));
           const updates = {};
           if (snap.exists()) {
             Object.keys(snap.val()).forEach(key => {
