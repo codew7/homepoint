@@ -16,45 +16,191 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* =========================================================================
+       DESPACHO DE PEDIDOS — sistema visual
+       -------------------------------------------------------------------------
+       Piedra y grafito como base; el naranja es acento puntual (marca, escaneo,
+       foco, cantidad en edicion) y el verde solo aparece donde significa algo
+       (item empacado, pedido entregado).
+
+       Los dos temas comparten los mismos nombres de token: el modo oscuro es
+       una sustitucion de variables, no un set de reglas paralelo. El orden de
+       los tres bloques importa — sistema, y despues la eleccion manual, que
+       tiene que poder ganarle al sistema en las dos direcciones.
+
+       --success y --text-muted quedan como alias porque el JS los usa inline
+       (renderAddItemList y el feedback de copiado del total).
+       ========================================================================= */
+
     :root {
-      --bg: #f0f0ee;
+      --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+      --bg: #f5f5f2;
       --surface: #ffffff;
-      --surface-warm: #fafaf8;
-      --text: #1a1a1a;
-      --text-secondary: #6b6b6b;
-      --text-muted: #9e9e9e;
-      --border: #e5e5e0;
-      --border-light: #f0f0ec;
+      --surface-2: #fafaf7;
+      --surface-3: #efefea;
+      --line: #e2e2dc;
+      --line-2: #edede7;
 
-      --accent: #e67e22;
-      --accent-soft: #fdf0e2;
-      --accent-glow: rgba(230, 126, 34, .18);
+      --ink: #17181a;
+      --ink-2: #4b4d51;
+      --ink-3: #75777d;
+      --ink-4: #9c9ea4;
 
-      --success: #2d9f6f;
-      --success-soft: #e6f5ee;
-      --success-glow: rgba(45, 159, 111, .15);
+      --accent: #c2620f;
+      --accent-2: #a35009;
+      --accent-soft: #fbf1e6;
+      --accent-ring: rgba(194, 98, 15, .20);
 
-      --danger: #d94f4f;
-      --danger-soft: #fce8e8;
+      --ok: #2e7d5b;
+      --ok-soft: #eaf3ee;
+      --ok-ring: rgba(46, 125, 91, .20);
 
-      --header-from: #0f172a;
-      --header-to: #1e293b;
+      --warn: #a8730c;
+      --warn-soft: #faf2e2;
 
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
-      --radius-xl: 28px;
+      --bad: #b3453f;
+      --bad-soft: #fbeeec;
 
-      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.03);
-      --shadow-md: 0 4px 16px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.02);
-      --shadow-lg: 0 12px 40px rgba(0,0,0,.1);
-      --shadow-glow: 0 0 30px var(--accent-glow);
+      --graphite: #1b1d21;
+      --graphite-2: #26292e;
+      --graphite-line: #34373d;
+      --on-g: #f3f3f1;
+      --on-g-2: #a5a8ae;
+      --on-g-3: #74777d;
 
-      --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      --scrim: rgba(15, 15, 14, .44);
+
+      /* Superficie invertida: la accion primaria y la barra de total tienen que
+         separarse del fondo en los dos temas. En claro son grafito sobre blanco;
+         en oscuro el grafito se confunde con la tarjeta, asi que se invierten. */
+      --inverso-bg: #1b1d21;
+      --inverso-fg: #f3f3f1;
+      --inverso-bg-hover: #2a2d33;
+      --total-bg: #1b1d21;
+      --total-fg: #f3f3f1;
+
+      --sh1: 0 1px 2px rgba(20,20,18,.05), 0 0 0 1px rgba(20,20,18,.05);
+      --sh2: 0 6px 20px rgba(20,20,18,.07), 0 0 0 1px rgba(20,20,18,.045);
+      --sh3: 0 24px 64px rgba(20,20,18,.18), 0 0 0 1px rgba(20,20,18,.06);
+
+      --r1: 8px;
+      --r2: 12px;
+      --r3: 16px;
+      --r4: 22px;
 
       --ease-out: cubic-bezier(.22, 1, .36, 1);
       --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+
+      --topbar-h: 60px;
+      --ctx-h: 54px;
+      --dock-w: 396px;
+
+      /* alias consumidos desde JS */
+      --success: #2e7d5b;
+      --text-muted: #9c9ea4;
+    }
+
+    /* Tema oscuro por preferencia del sistema. Se excluye la eleccion manual
+       "claro" para que el boton pueda forzar el tema claro en un equipo oscuro. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-tema="light"]) {
+        --bg: #111214;
+        --surface: #191b1e;
+        --surface-2: #202327;
+        --surface-3: #292c31;
+        --line: #2d3036;
+        --line-2: #232629;
+
+        --ink: #f0f0ee;
+        --ink-2: #c0c2c7;
+        --ink-3: #8b8e94;
+        --ink-4: #696c72;
+
+        --accent: #dd8438;
+        --accent-2: #c96e26;
+        --accent-soft: rgba(221, 132, 56, .13);
+        --accent-ring: rgba(221, 132, 56, .28);
+
+        --ok: #4aa47c;
+        --ok-soft: rgba(74, 164, 124, .13);
+        --ok-ring: rgba(74, 164, 124, .30);
+
+        --warn: #cc9b3f;
+        --warn-soft: rgba(204, 155, 63, .13);
+
+        --bad: #d1706a;
+        --bad-soft: rgba(209, 112, 106, .13);
+
+        --graphite: #1e2126;
+        --graphite-2: #282c32;
+        --graphite-line: #32363c;
+
+        --scrim: rgba(0, 0, 0, .62);
+
+        --inverso-bg: #f0f0ee;
+        --inverso-fg: #17181a;
+        --inverso-bg-hover: #ffffff;
+        --total-bg: #0b0c0e;
+        --total-fg: #f0f0ee;
+
+        --sh1: 0 1px 2px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.05);
+        --sh2: 0 8px 24px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.055);
+        --sh3: 0 28px 70px rgba(0,0,0,.62), 0 0 0 1px rgba(255,255,255,.08);
+
+        --success: #4aa47c;
+        --text-muted: #696c72;
+      }
+    }
+
+    /* Eleccion manual: gana sobre el sistema en las dos direcciones. */
+    :root[data-tema="dark"] {
+      --bg: #111214;
+      --surface: #191b1e;
+      --surface-2: #202327;
+      --surface-3: #292c31;
+      --line: #2d3036;
+      --line-2: #232629;
+
+      --ink: #f0f0ee;
+      --ink-2: #c0c2c7;
+      --ink-3: #8b8e94;
+      --ink-4: #696c72;
+
+      --accent: #dd8438;
+      --accent-2: #c96e26;
+      --accent-soft: rgba(221, 132, 56, .13);
+      --accent-ring: rgba(221, 132, 56, .28);
+
+      --ok: #4aa47c;
+      --ok-soft: rgba(74, 164, 124, .13);
+      --ok-ring: rgba(74, 164, 124, .30);
+
+      --warn: #cc9b3f;
+      --warn-soft: rgba(204, 155, 63, .13);
+
+      --bad: #d1706a;
+      --bad-soft: rgba(209, 112, 106, .13);
+
+      --graphite: #1e2126;
+      --graphite-2: #282c32;
+      --graphite-line: #32363c;
+
+      --scrim: rgba(0, 0, 0, .62);
+
+      --inverso-bg: #f0f0ee;
+      --inverso-fg: #17181a;
+      --inverso-bg-hover: #ffffff;
+      --total-bg: #0b0c0e;
+      --total-fg: #f0f0ee;
+
+      --sh1: 0 1px 2px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.05);
+      --sh2: 0 8px 24px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.055);
+      --sh3: 0 28px 70px rgba(0,0,0,.62), 0 0 0 1px rgba(255,255,255,.08);
+
+      --success: #4aa47c;
+      --text-muted: #696c72;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -62,878 +208,695 @@
     body {
       font-family: var(--font-ui);
       background: var(--bg);
-      color: var(--text);
+      color: var(--ink);
       height: 100vh;
       height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
     }
 
+    input, select, textarea, button { font-family: inherit; font-size: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; }
+    input::placeholder { color: var(--ink-4); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-2); }
+
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ink-4); background-clip: content-box; }
+
+    /* Iconos: trazo, no relleno. Un unico grid de 24 para que todos alineen. */
+    .ic { width: 20px; height: 20px; flex: none; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .ic-sm { width: 15px; height: 15px; flex: none; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .ic-lg { width: 48px; height: 48px; flex: none; stroke: currentColor; stroke-width: 1.25; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    .lbl { font-size: 10px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; color: var(--ink-4); }
+
     /* =========================================
-       HEADER
+       TOPBAR
        ========================================= */
     .header {
-      background: linear-gradient(160deg, var(--header-from) 0%, var(--header-to) 100%);
-      color: #fff;
-      padding: 12px 14px;
+      height: var(--topbar-h);
+      flex: none;
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-      z-index: 10;
+      gap: 14px;
+      padding: 0 14px;
+      background: var(--graphite);
+      border-bottom: 1px solid var(--graphite-line);
       position: relative;
-      overflow: visible;
-    }
-    .header::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: repeating-linear-gradient(
-        90deg,
-        transparent,
-        transparent 60px,
-        rgba(255,255,255,.015) 60px,
-        rgba(255,255,255,.015) 61px
-      );
-      pointer-events: none;
-    }
-    .header::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      opacity: .5;
+      z-index: 30;
     }
 
     .header-brand {
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
+      gap: 10px;
+      flex: none;
     }
     .header-brand .brand-mark {
       width: 32px;
       height: 32px;
-      border-radius: var(--radius-sm);
+      border-radius: 9px;
+      background: var(--accent);
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      transition: transform .18s var(--ease-spring);
     }
-    .header-brand .brand-mark img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    .header-brand h1 {
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: -.4px;
-      white-space: nowrap;
+    .header-brand:active .brand-mark { transform: scale(.93); }
+    .header-brand .brand-mark img { width: 20px; height: 20px; object-fit: contain; }
+    .brand-name {
+      font-size: 14.5px;
+      font-weight: 800;
+      letter-spacing: -.25px;
+      color: var(--on-g);
     }
 
     .header-search {
       flex: 1;
+      max-width: 440px;
+      min-width: 0;
       position: relative;
       display: flex;
       align-items: center;
+      gap: 10px;
+      height: 40px;
+      padding: 0 13px;
+      border-radius: var(--r2);
+      background: var(--graphite-2);
+      border: 1px solid var(--graphite-line);
+      transition: border-color .16s, box-shadow .16s;
     }
-    .header-search input {
-      width: 100%;
-      height: 36px;
-      box-sizing: border-box;
-      padding: 0 14px 0 36px;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 10px;
-      font-size: 14px;
-      font-family: var(--font-ui);
-      font-weight: 500;
-      outline: none;
-      background: rgba(255,255,255,.08);
-      color: #fff;
-      transition: all .25s var(--ease-out);
-      backdrop-filter: blur(8px);
-    }
-    .header-search input::placeholder { color: rgba(255,255,255,.35); }
-    .header-search input:focus {
-      background: rgba(255,255,255,.14);
+    .header-search:focus-within {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(230,126,34,.15);
+      box-shadow: 0 0 0 3px var(--accent-ring);
     }
     .header-search .search-icon {
+      display: flex;
+      color: var(--on-g-2);
+      flex: none;
+    }
+    .header-search:focus-within .search-icon { color: var(--accent); }
+    .header-search input {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      border: none;
+      background: transparent;
+      outline: none;
+      color: var(--on-g);
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: -.1px;
+    }
+    .header-search input::placeholder { color: var(--on-g-3); font-weight: 500; }
+
+    .search-dropdown {
+      display: none;
       position: absolute;
-      left: 12px;
-      color: rgba(255,255,255,.35);
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      box-shadow: var(--sh3);
+      overflow: hidden;
+      z-index: 40;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .search-dropdown.active { display: block; }
+    .search-dropdown-header {
+      padding: 11px 14px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .search-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 11px 14px;
+      border-top: 1px solid var(--line-2);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .search-dropdown-item:hover { background: var(--surface-2); }
+    .search-dropdown-item:active { background: var(--surface-3); }
+    .search-dropdown-nombre {
+      flex: 1;
+      min-width: 0;
       font-size: 13px;
-      pointer-events: none;
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .search-dropdown-item::before {
+      content: '';
+      width: 15px;
+      height: 15px;
+      flex: none;
+      border-radius: 99px;
+      border: 1.6px solid var(--ink-4);
+      opacity: .55;
     }
 
     .header-actions {
       display: flex;
-      gap: 6px;
-      flex-shrink: 0;
+      align-items: center;
+      gap: 4px;
+      flex: none;
+      margin-left: auto;
     }
     .header-btn {
-      background: rgba(255,255,255,.08);
-      color: rgba(255,255,255,.75);
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 10px;
-      height: 36px;
-      box-sizing: border-box;
-      padding: 0 14px;
-      font-size: 12px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 15px;
+      border: none;
+      border-radius: var(--r2);
+      background: transparent;
+      color: var(--on-g-2);
+      font-size: 13.5px;
       font-weight: 700;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all .2s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      backdrop-filter: blur(8px);
+      letter-spacing: -.1px;
+      transition: background .14s, color .14s, transform .12s;
+      position: relative;
     }
-    .header-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+    .header-btn:hover { background: var(--graphite-2); color: var(--on-g); }
     .header-btn:active { transform: scale(.94); }
+    .header-btn--icon { width: 40px; padding: 0; }
     .header-btn--accent {
       background: var(--accent);
       color: #fff;
-      border-color: transparent;
-      box-shadow: 0 2px 8px rgba(230,126,34,.3);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
+      margin-left: 6px;
+      padding: 0 15px 0 13px;
     }
-    .header-btn--accent:hover { background: #d4711f; }
-    .header-btn--icon {
-      padding: 0 11px;
-      display: inline-flex;
+    .header-btn--accent:hover { background: var(--accent-2); color: #fff; }
+
+    .header-badge {
+      position: absolute;
+      top: 3px;
+      right: 2px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      border-radius: 99px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      display: none;
       align-items: center;
       justify-content: center;
+      border: 2px solid var(--graphite);
     }
-    .header-btn--icon svg {
-      width: 18px;
-      height: 18px;
-      stroke-width: 2;
+    .header-badge.visible { display: flex; }
+
+    .header-sep {
+      width: 1px;
+      height: 22px;
+      background: var(--graphite-line);
+      margin: 0 6px;
+      flex: none;
     }
 
     #btnInstall {
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 10px;
-      padding: 9px 10px;
-      font-size: 15px;
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: transparent;
+      border-radius: var(--r2);
+      color: var(--on-g-2);
+      font-size: 17px;
+      line-height: 1;
     }
-    #btnInstall:active { transform: scale(.9); }
+    #btnInstall:hover { background: var(--graphite-2); }
+
+    /* Conmutador de tema: un solo boton, dos iconos. */
+    .tema-luna { display: none; }
+    html.es-oscuro .tema-sol { display: none; }
+    html.es-oscuro .tema-luna { display: block; }
 
     /* =========================================
-       QR SCANNER
+       FRANJA DE CONTEXTO DEL PEDIDO
+       ========================================= */
+    /* Todo lo que solo existe con un pedido cargado se enciende desde una unica
+       clase en <body>, puesta por renderUnificado() y sacada por resetView(). */
+    .ctx-bar {
+      height: var(--ctx-h);
+      flex: none;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 0 18px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      z-index: 20;
+    }
+    body.con-pedido .ctx-bar { display: flex; }
+
+    .ctx-id {
+      font-family: var(--font-mono);
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -.5px;
+      color: var(--ink);
+      flex: none;
+    }
+    .ctx-dot {
+      width: 3px;
+      height: 3px;
+      border-radius: 99px;
+      background: var(--ink-4);
+      flex: none;
+    }
+    .ctx-fecha {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ctx-link {
+      width: 30px;
+      height: 30px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      border-radius: var(--r1);
+      color: var(--ink-4);
+      transition: background .14s, color .14s;
+    }
+    .ctx-link:hover { background: var(--surface-3); color: var(--ink-2); }
+    .ctx-spacer { flex: 1; min-width: 8px; }
+
+    .status-badge {
+      height: 23px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: var(--surface-3);
+      color: var(--ink-3);
+      border: 1px solid transparent;
+      flex: none;
+    }
+    .status-badge--open      { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-ring); }
+    .status-badge--closed    { background: var(--warn-soft);   color: var(--warn);   border-color: var(--warn-soft); }
+    .status-badge--dispatched{ background: var(--ok-soft);     color: var(--ok);     border-color: var(--ok-ring); }
+    .status-badge--cancelled { background: var(--bad-soft);    color: var(--bad);    border-color: var(--bad-soft); }
+
+    /* Progreso — vive en la franja superior para no perderse al scrollear */
+    .progress-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: none;
+    }
+    .progress-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-2);
+      white-space: nowrap;
+    }
+    .progress-bar-track {
+      width: 132px;
+      height: 6px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      overflow: hidden;
+      flex: none;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--ink-3);
+      transition: width .4s var(--ease-out), background-color .3s;
+    }
+    .progress-bar-fill.complete { background: var(--ok); }
+    .progress-pct {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-3);
+      width: 34px;
+      text-align: right;
+      flex: none;
+    }
+    .progress-pct.complete { color: var(--ok); }
+
+    /* =========================================
+       BARRA DE SOLO LECTURA
+       ========================================= */
+    .status-bar {
+      display: none;
+      padding: 11px 16px;
+      font-size: 11.5px;
+      font-weight: 800;
+      text-align: center;
+      flex-shrink: 0;
+      letter-spacing: .7px;
+      text-transform: uppercase;
+      z-index: 19;
+    }
+    .status-bar.blocked {
+      display: block;
+      background: var(--bad-soft);
+      color: var(--bad);
+      border-bottom: 1px solid var(--line);
+    }
+    .status-bar.blocked.entregado {
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+
+    /* =========================================
+       ESCANER QR
        ========================================= */
     #qr-reader-container {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15,23,42,.92);
-      z-index: 1000;
+      inset: 0;
+      background: #000;
+      z-index: 300;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(12px);
     }
     #qr-reader-container.active { display: flex; }
-    #qr-reader {
-      width: 320px;
-      max-width: 88vw;
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,.5);
-      border: 2px solid rgba(255,255,255,.1);
-    }
-    #qr-reader-container .qr-close {
-      margin-top: 24px;
-      background: rgba(255,255,255,.1);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,.15);
-      border-radius: var(--radius-md);
-      padding: 13px 40px;
-      font-size: 14px;
-      font-weight: 600;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
-      backdrop-filter: blur(8px);
-    }
-    #qr-reader-container .qr-close:hover { background: rgba(255,255,255,.18); }
-    #qr-reader-container .qr-close:active { transform: scale(.95); }
-
-    /* =========================================
-       PEDIDOS PANEL
-       ========================================= */
-    .pedidos-panel {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15,23,42,.45);
-      z-index: 800;
-      align-items: flex-end;
-      justify-content: center;
-      backdrop-filter: blur(6px);
-    }
-    .pedidos-panel.active { display: flex; }
-    .pedidos-panel-box {
-      background: var(--surface);
-      width: 100%;
-      max-width: 600px;
-      max-height: 80vh;
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-      display: flex;
-      flex-direction: column;
-      animation: slideUp .35s var(--ease-out);
-      box-shadow: 0 -12px 40px rgba(0,0,0,.1);
-    }
-    .pedidos-panel-header {
-      padding: 20px 16px 12px;
-      border-bottom: 1px solid var(--border-light);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: relative;
-    }
-    .pedidos-panel-header::before {
-      content: '';
+    #qr-reader { width: 100%; max-width: 560px; }
+    #qr-reader video { border-radius: var(--r3); }
+    .qr-close {
       position: absolute;
-      top: 8px;
+      bottom: 40px;
       left: 50%;
       transform: translateX(-50%);
-      width: 36px;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--border);
-    }
-    .pedidos-panel-header h3 {
+      height: 52px;
+      padding: 0 34px;
+      border: none;
+      border-radius: 99px;
+      background: #fff;
+      color: #111;
       font-size: 15px;
       font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: var(--text);
+      letter-spacing: -.2px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.4);
     }
-    .pedidos-panel-close {
-      background: var(--bg);
-      border: none;
-      font-size: 20px;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 6px 10px;
-      border-radius: var(--radius-sm);
-      transition: all .15s;
-      line-height: 1;
-    }
-    .pedidos-panel-close:hover { background: var(--border); color: var(--text); }
-    .pedidos-panel-list {
+
+    /* =========================================
+       ESPACIO DE TRABAJO (dos columnas)
+       ========================================= */
+    .workspace {
       flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .pedidos-panel-item {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border-light);
-      cursor: pointer;
+      min-height: 0;
       display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px 12px;
-      transition: background .12s;
     }
-    .pedidos-panel-item:active { background: var(--accent-soft); }
-    .pedidos-panel-nombre {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+
+    .col-items {
       flex: 1;
       min-width: 0;
-    }
-    .pedidos-panel-loading {
-      padding: 40px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 13px;
-      font-weight: 500;
-    }
-    .pedidos-panel-empty {
-      padding: 40px 20px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 14px;
-      font-weight: 500;
-    }
-    .btn-reintentar {
-      margin-top: 14px;
-      padding: 10px 22px;
-      min-height: 44px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface);
-      color: var(--accent);
-      font-family: var(--font-ui);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .18s var(--ease-out), border-color .18s var(--ease-out);
-    }
-    .btn-reintentar:active {
-      background: var(--accent-soft);
-      border-color: var(--accent);
-    }
-    .pedidos-panel-fecha {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      margin-left: auto;
-    }
-    .historial-search {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border-light);
-      flex-shrink: 0;
-    }
-    .historial-search input {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 10px 14px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color .15s;
-    }
-    .historial-search input:focus {
-      border-color: var(--accent);
-    }
-    .badge-listo {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 7px;
-      border-radius: 6px;
-      background: rgba(45, 159, 111, 0.1);
-      color: var(--success);
-      letter-spacing: .2px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-
-    /* =========================================
-       RIEL DE 2 TRAMOS (panel de pedidos pendientes)
-
-       Los dos hitos de un pedido no son etiquetas sueltas, son un pipeline:
-       se arma -> se cobra. El riel los apila y se llena
-       de abajo hacia arriba, asi la ALTURA de lo lleno dice cuanto avanzo y la
-       POSICION del hueco dice donde se trabo, sin tener que leer la fila.
-
-       Todo va prefijado .pp- y scopeado a .pp-item--rail: .pedidos-panel-item,
-       .pedidos-panel-nombre y .pedidos-panel-fecha se comparten con
-       #historialPanel, que debe seguir viendose exactamente igual.
-       ========================================= */
-    .pp-item--rail {
-      position: relative;
-      padding-left: 28px;
-    }
-
-    /* El riel va en absoluto, NO como hijo flex: .pedidos-panel-item es
-       flex-wrap y la nota cae a una segunda linea con width:100% + order:10.
-       Un align-self:stretch solo estiraria dentro de su propia linea flex, asi
-       que en las filas con nota el riel quedaria a media altura. */
-    .pp-rail {
-      position: absolute;
-      left: 12px;
-      top: 10px;
-      bottom: 10px;
-      width: 6px;
+      min-height: 0;
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      border-radius: 3px;
-    }
-    /* Radio chico a proposito: con 3px sobre 6px de ancho el segmento se vuelve
-       una pildora y en las filas de una sola linea se lee como un punto suelto
-       en vez de como un tramo de barra. */
-    .pp-seg {
-      flex: 1;
-      border-radius: 1.5px;
-      background: var(--border);
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
-      transition: background .25s var(--ease-out);
-    }
-    /* El lima conserva un inset apenas visible: sobre --surface (#fff) tiene
-       poco contraste y sin el borde el tramo se pierde. Los otros dos se
-       despegan solos del fondo. */
-    .pp-seg--armado.is-on  { background: #C0CA33; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
-    .pp-seg--pago.is-on    { background: #9575CD; box-shadow: none; }
-
-    /* Los dos estados intermedios se distinguen por TEXTURA ademas de color:
-       rayado = el hito arranco pero no termino (en preparacion / esperando
-       pago). Asi no depende de percibir el matiz. La trama es la MISMA en los
-       dos —45deg, 2.5px sobre 5px de paso— porque lo que ya los separa es el
-       color y, sobre todo, la posicion fija de cada tramo en el riel. */
-    .pp-seg--pago.is-wait {
-      background: repeating-linear-gradient(
-        45deg,
-        #9575CD 0 2.5px,
-        #ede7f6 2.5px 5px
-      );
-      box-shadow: inset 0 0 0 1px rgba(149,117,205,.45);
-    }
-    /* Verde y no el lima del tramo lleno: al ser una trama sobre base clara,
-       repetir el lima daria dos estados casi iguales. */
-    .pp-seg--armado.is-wait {
-      background: repeating-linear-gradient(
-        45deg,
-        #66BB6A 0 2.5px,
-        #E8F5E9 2.5px 5px
-      );
-      box-shadow: inset 0 0 0 1px rgba(102,187,106,.45);
     }
 
-    /* Graduacion 3/3: el riel pierde las separaciones y se funde en una barra
-       verde continua. El cambio de FORMA (segmentado -> solido) es lo que hace
-       que la fila salte sin leerla. */
-    .pp-item--rail.is-listo {
-      background: linear-gradient(90deg, var(--success-soft), transparent 55%);
-    }
-    .pp-item--rail.is-listo .pp-rail {
-      gap: 0;
-      overflow: hidden;
-      box-shadow: 0 0 10px var(--success-glow);
-    }
-    .pp-item--rail.is-listo .pp-seg {
-      border-radius: 0;
-      background: var(--success);
-      box-shadow: none;
-    }
-
-    /* Toggle de cobro. Arranca fantasma (borde punteado, sin fondo) para no
-       competir con el nombre; recien se pinta cuando hay algo que decir. */
-    .pp-btn-pago {
-      flex-shrink: 0;
-      width: 32px;
-      height: 28px;
-      padding: 0;
-      border: 1px dashed var(--border);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 700;
-      line-height: 1;
-      cursor: pointer;
-      transition: all .18s var(--ease-out);
-    }
-    .pp-btn-pago:hover { border-color: var(--text-muted); color: var(--text-secondary); }
-    .pp-btn-pago:active { transform: scale(.88); }
-    /* Mismo eje de color que el tramo "pago" del riel: el boton y el segmento
-       que escribe tienen que leerse como lo mismo. */
-    .pp-btn-pago.is-solicitado {
-      border: 1px solid #9575CD;
-      background: #ede7f6;
-      color: #6a4bab;
-    }
-    .pp-btn-pago.is-pago {
-      border: 1px solid #9575CD;
-      background: #9575CD;
-      color: #fff;
-    }
-    .pp-btn-pago:disabled { opacity: .45; cursor: default; transform: none; }
-
-    /* Encabezado de grupo por etapa */
-    .pp-grupo {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      padding: 7px 16px 6px 28px;
-      background: var(--surface-warm);
-      border-bottom: 1px solid var(--border-light);
-      font-size: 9px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .pp-grupo--listo { color: var(--success); background: var(--success-soft); }
-    .pp-grupo-count {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
-
-    /* Antiguedad: pedido trabado hace demasiado */
-    .pedidos-panel-fecha.is-viejo { color: var(--danger); font-weight: 700; }
-
-    /* Resumen bajo el titulo del panel */
-    .pp-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-    .pp-resumen {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: .2px;
-    }
-    .pp-resumen b { color: var(--success); font-weight: 800; }
-
-    /* Leyenda: el riel es compacto pero no autoexplicativo. Se muestra una sola
-       vez, una fila por hito y en el mismo orden vertical que los tramos de las
-       filas (pago arriba, armado abajo).
-
-       Se agrupa por HITO y no por textura: los dos estados de un mismo tramo
-       —lleno y rayado— quedan uno al lado del otro, que es la comparacion que
-       hay que hacer al mirar el riel. Dos filas de dos y no cuatro sueltas para
-       no gastar alto: el panel es una lista y cada linea del encabezado es una
-       fila menos de pedidos. El title de cada tramo no alcanza como explicacion:
-       en tablet no hay hover. */
-    .pp-leyenda {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      padding: 9px 16px;
-      border-bottom: 1px solid var(--border-light);
-      flex-shrink: 0;
-      background: var(--surface-warm);
-    }
-    .pp-leyenda-fila {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    /* Ancho fijo en el primer item para que las dos etiquetas de la derecha
-       arranquen en la misma x y la leyenda se lea como dos columnas. */
-    .pp-leyenda-fila > span:first-child {
-      min-width: 78px;
-    }
-    .pp-leyenda-fila > span {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .8px;
-      color: var(--text-muted);
-      line-height: 1;
-    }
-    /* .pp-seg trae flex:1 para repartir alto dentro del riel; como muestra
-       suelta necesita medida propia. */
-    .pp-leyenda-fila .pp-seg {
-      flex: none;
-      width: 6px;
-      height: 14px;
-    }
-
-    /* =========================================
-       STATUS BAR
-       ========================================= */
-    .status-bar {
-      display: none;
-      padding: 10px 16px;
-      font-size: 12px;
-      font-weight: 700;
-      text-align: center;
-      flex-shrink: 0;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-    }
-    .status-bar.blocked {
-      display: block;
-      background: var(--danger-soft);
-      color: var(--danger);
-      border-bottom: 1px solid rgba(217,79,79,.15);
-    }
-    /* Solo lectura por entrega concretada: no es un error, va en verde */
-    .status-bar.blocked.entregado {
-      background: var(--success-soft);
-      color: var(--success);
-      border-bottom-color: var(--success-glow);
-    }
-
-    /* =========================================
-       MAIN CONTENT
-       ========================================= */
     .main-content {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
-      padding: 16px 14px 24px;
+      overflow-x: hidden;
+      padding: 0 18px 20px;
       -webkit-overflow-scrolling: touch;
       scroll-behavior: smooth;
+      overscroll-behavior: contain;
+    }
+
+    .side-dock {
+      width: var(--dock-w);
+      flex: none;
+      display: none;
+      flex-direction: column;
+      min-height: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--line);
+      z-index: 15;
+    }
+    body.con-pedido .side-dock { display: flex; }
+
+    #sidePanel {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
 
     /* =========================================
-       LOADING / ERROR / WELCOME
+       PANTALLAS DE ESTADO
        ========================================= */
     .loading-screen, .error-screen, .welcome-screen {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 80px 24px;
+      padding: 60px 24px;
       text-align: center;
+      min-height: 100%;
     }
-    .spinner {
-      width: 36px; height: 36px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      margin-bottom: 20px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .error-screen { color: var(--danger); }
-    .error-screen .error-icon { font-size: 44px; margin-bottom: 14px; }
-
-    .welcome-screen { color: var(--text-muted); }
-    .welcome-screen .welcome-icon {
-      width: 72px;
-      height: 72px;
-      border-radius: var(--radius-lg);
-      background: var(--accent-soft);
+    .welcome-icon {
+      width: 104px;
+      height: 104px;
+      border-radius: 30px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--sh2);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
-      margin-bottom: 20px;
+      color: var(--ink-4);
+      margin-bottom: 26px;
     }
     .welcome-screen p {
-      font-size: 15px;
-      line-height: 1.6;
-      max-width: 260px;
-      color: var(--text-secondary);
+      font-size: 25px;
+      font-weight: 800;
+      letter-spacing: -.7px;
+      color: var(--ink);
+      margin-bottom: 9px;
     }
-    .welcome-screen .welcome-hint {
-      margin-top: 12px;
-      font-size: 12px;
-      color: var(--text-muted);
+    .welcome-hint {
+      font-size: 14.5px;
       font-weight: 500;
-      letter-spacing: .3px;
+      color: var(--ink-3);
+      max-width: 380px;
+      line-height: 1.5;
+      text-wrap: pretty;
     }
-
-    /* =========================================
-       PROGRESS BAR
-       ========================================= */
-    .progress-section {
-      margin-bottom: 16px;
-      animation: fadeSlideIn .4s var(--ease-out) both;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .progress-bar-track {
-      flex: 1;
-      height: 3px;
-      background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-      position: relative;
-    }
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), #f0a04b);
-      border-radius: 2px;
-      transition: width .5s var(--ease-out);
-      position: relative;
-    }
-    .progress-bar-fill.complete {
-      background: linear-gradient(90deg, var(--success), #3ec98b);
-    }
-    .progress-bar-fill::after {
-      content: '';
-      position: absolute;
-      top: 0; right: 0; bottom: 0;
-      width: 20px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,.35));
-      border-radius: 2px;
-    }
-    .progress-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .progress-label span {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: var(--text-muted);
-    }
-    .progress-label .progress-pct {
-      font-family: var(--font-mono);
-      font-size: 11px;
+    .error-screen p, .loading-screen p {
+      font-size: 15px;
       font-weight: 600;
-      color: var(--accent);
-      min-width: 28px;
-      text-align: right;
+      color: var(--ink-2);
+      max-width: 380px;
+      line-height: 1.5;
     }
-    .progress-label .progress-pct.complete {
-      color: var(--success);
+    .error-icon {
+      font-size: 34px;
+      margin-bottom: 16px;
+      line-height: 1;
     }
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 2.5px solid var(--line);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-bottom: 18px;
+      flex: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* =========================================
-       CLIENTE SECTION
-       ========================================= */
-    .cliente-section {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 20px;
-      animation: fadeSlideIn .4s .05s var(--ease-out) both;
-    }
-    .cliente-row {
-      display: flex;
-      gap: 8px;
-    }
-    .cliente-card {
-      flex: 1;
+    .btn-reintentar {
+      margin-top: 20px;
+      height: 46px;
+      padding: 0 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
       background: var(--surface);
-      border-radius: var(--radius-md);
-      padding: 12px 14px;
-      box-shadow: var(--shadow-sm);
-      min-width: 0;
-      transition: box-shadow .2s;
-    }
-    .cliente-card:hover { box-shadow: var(--shadow-md); }
-    .cliente-card label {
-      display: block;
-      font-size: 9px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
+      color: var(--ink);
+      font-size: 14px;
       font-weight: 700;
-      margin-bottom: 5px;
+      box-shadow: var(--sh1);
+      transition: background .14s;
     }
-    .cliente-card .value {
-      font-size: 13.5px;
-      font-weight: 700;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .cliente-card a {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 700;
-      transition: color .15s;
-    }
-    .cliente-card a:hover { color: #d4711f; }
-
-    /* Tag-style status badges */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-      letter-spacing: .3px;
-    }
-    .status-badge--open { background: #eff6ff; color: #3b82f6; }
-    .status-badge--closed { background: #fef3c7; color: #d97706; }
-    .status-badge--dispatched { background: var(--success-soft); color: var(--success); }
-    .status-badge--cancelled { background: var(--danger-soft); color: var(--danger); }
+    .btn-reintentar:hover { background: var(--surface-2); }
 
     /* =========================================
-       ITEMS
+       CABECERA DE LA LISTA
        ========================================= */
     .items-header {
-      display: flex;
-      justify-content: space-between;
+      height: 52px;
+      flex: none;
+      display: none;
       align-items: center;
-      margin-bottom: 12px;
-      animation: fadeSlideIn .4s .1s var(--ease-out) both;
+      gap: 10px;
+      padding: 0 18px;
+      background: var(--bg);
     }
+    body.con-pedido .items-header { display: flex; }
     .items-header h2 {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--text);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .9px;
       text-transform: uppercase;
-      letter-spacing: .5px;
+      color: var(--ink-2);
     }
     .items-counter {
       font-family: var(--font-mono);
       font-size: 11px;
       font-weight: 600;
-      color: var(--text-secondary);
+      color: var(--ink-3);
       background: var(--surface);
-      padding: 5px 12px;
-      border-radius: 20px;
-      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--line);
+      padding: 3px 9px;
+      border-radius: 99px;
+      transition: border-color .14s, color .14s;
     }
+    .items-counter:hover { border-color: var(--ink-4); color: var(--ink-2); }
+    .items-header-spacer { flex: 1; }
 
-    .item-card {
-      background: var(--surface);
-      border-radius: var(--radius-md);
-      padding: 12px;
-      margin-bottom: 5px;
-      box-shadow: var(--shadow-sm);
+    .btn-add-item {
+      height: 34px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      transition: all .3s var(--ease-out);
+      gap: 6px;
+      padding: 0 13px 0 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--r1);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      flex: none;
+      transition: background .14s, border-color .14s, color .14s;
+    }
+    .btn-add-item:hover { background: var(--surface-2); border-color: var(--ink-4); color: var(--ink); }
+    .btn-add-item:active { transform: scale(.97); }
+    body.pedido-bloqueado .btn-add-item { display: none; }
+
+    /* =========================================
+       GRUPOS Y TARJETAS DE ARTICULO
+       ========================================= */
+    .item-group { margin-bottom: 4px; }
+
+    /* El texto lo reescribe actualizarContadoresGrupo() como nodo unico
+       ("Pendientes (4)"), asi que la regla divisoria va como pseudoelemento. */
+    .group-header {
+      display: flex;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+      padding: 14px 2px 8px;
+      gap: 10px;
+    }
+    .group-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+    #group-listos-header { color: var(--ok); }
+
+    .item-card {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 10px 12px;
+      margin-bottom: 7px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      box-shadow: var(--sh1);
       position: relative;
-      border-left: 3px solid transparent;
-      animation: fadeSlideIn .35s var(--ease-out) both;
+      transition: background .22s var(--ease-out), box-shadow .22s var(--ease-out), opacity .22s, transform .22s var(--ease-out);
+      animation: cardIn .32s var(--ease-out) both;
     }
-    .item-card:hover { box-shadow: var(--shadow-md); }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(7px); }
+      to { opacity: 1; transform: none; }
+    }
+    .item-card:hover { box-shadow: var(--sh2); }
+
     .item-card.checked {
-      background: var(--success-soft);
-      border-left-color: var(--success);
-      box-shadow: var(--shadow-sm), 0 0 20px var(--success-glow);
+      background: var(--surface-2);
+      border-color: var(--line-2);
+      box-shadow: inset 3px 0 0 var(--ok);
     }
-    .item-card.checked .item-name { color: var(--success); }
-    .item-card.checked .item-code { color: var(--success); opacity: .6; }
+    .item-card.checked .item-name { color: var(--ink-2); font-weight: 600; }
+    .item-card.checked .item-img,
+    .item-card.checked .item-img-placeholder { opacity: .7; }
+    .item-card.checked .pv-total-item { color: var(--ink-2); }
+    .item-card.checked .item-stock { color: var(--ink-4); }
+    .item-card.checked .item-delete { opacity: .45; }
 
-    .item-img {
-      width: 50px;
-      height: 50px;
-      border-radius: 10px;
-      object-fit: cover;
-      cursor: pointer;
-      flex-shrink: 0;
-      background: var(--bg);
-      transition: all .2s var(--ease-out);
-      border: 1px solid var(--border-light);
-    }
-    .item-img:hover { transform: scale(1.06); box-shadow: var(--shadow-md); }
-    .item-img:active { transform: scale(.95); }
+    .item-card.sin-stock { box-shadow: var(--sh1), inset 3px 0 0 var(--bad); }
+    .item-card.checked.sin-stock { box-shadow: inset 3px 0 0 var(--ok); }
 
+    .item-card.moving-out { opacity: 0; transform: translateX(14px) scale(.98); }
+    .item-card.moving-in { animation: cardIn .3s var(--ease-out) both; }
+
+    .item-img,
     .item-img-placeholder {
-      width: 50px;
-      height: 50px;
+      width: 52px;
+      height: 52px;
+      flex: none;
       border-radius: 10px;
-      background: var(--bg);
+      background: var(--surface-3);
+      border: 1px solid var(--line-2);
+      object-fit: cover;
+      transition: transform .18s var(--ease-out);
+    }
+    .item-img { cursor: zoom-in; }
+    .item-img:hover { transform: scale(1.06); }
+    .item-img:active { transform: scale(.95); }
+    .item-img-placeholder {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
-      color: var(--text-muted);
-      flex-shrink: 0;
-      border: 1px solid var(--border-light);
+      font-size: 17px;
+      color: var(--ink-4);
     }
 
     .item-info {
@@ -941,1653 +904,1758 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
     }
     .item-name {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      cursor: pointer;
+      letter-spacing: -.15px;
+      color: var(--ink);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      color: var(--text);
-      transition: color .15s;
+      cursor: help;
+      transition: color .14s;
     }
     .item-name:active { color: var(--accent); }
     .item-code {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
+      font-size: 11px;
       font-weight: 500;
-      letter-spacing: .3px;
+      color: var(--ink-4);
     }
+    .item-stock {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      position: relative;
+      padding-left: 11px;
+    }
+    .item-stock::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 3px;
+      border-radius: 99px;
+      background: var(--ink-4);
+      opacity: .6;
+    }
+    .item-stock.stock-ok   { color: var(--ok); }
+    .item-stock.stock-low  { color: var(--warn); }
+    .item-stock.stock-zero { color: var(--bad); font-weight: 700; }
 
-    /* Quantity controls
-       Arranca colapsado (solo el numero) y se despliega con un tap sobre el, para
-       que un roce al scrollear no cambie cantidades. Los botones se ocultan con
-       opacity + pointer-events, NUNCA con display:none: el control tiene que
-       conservar su ancho al expandirse, si no el checkbox vecino se corre bajo el
-       dedo justo en el momento de abrirlo. */
-    .qty-control {
+    /* Precio unitario y subtotal: columna propia, alineada a la derecha */
+    .pv-item-fin {
+      flex: none;
+      width: 108px;
       display: flex;
-      align-items: center;
-      gap: 0;
-      flex-shrink: 0;
-      background: transparent;
-      border-radius: 10px;
-      border: 1px solid transparent;
-      overflow: hidden;
-      transition: background .18s var(--ease-out), border-color .18s var(--ease-out);
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
     }
-    .qty-control.qty-activo {
-      background: var(--bg);
-      border-color: var(--border);
+    .pv-valor-static {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--ink-4);
     }
-    .qty-btn {
-      background: transparent;
-      border: none;
-      width: 34px;
-      height: 42px;
-      font-size: 9px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-secondary);
-      transition: all .15s var(--ease-out);
-      user-select: none;
-      opacity: 0;
-      pointer-events: none;
-    }
-    .qty-control.qty-activo .qty-btn { opacity: 1; pointer-events: auto; }
-    .qty-btn:hover { background: var(--border); color: var(--text); }
-    .qty-btn:active { background: var(--accent-soft); color: var(--accent); transform: scale(.9); }
-    .qty-value {
+    .pv-total-item {
       font-family: var(--font-mono);
       font-size: 14px;
       font-weight: 700;
-      color: var(--text);
-      min-width: 28px;
-      text-align: center;
-      border-left: 1px solid transparent;
-      border-right: 1px solid transparent;
-      height: 42px;
-      line-height: 42px;
-      cursor: pointer;
-      user-select: none;
-      /* pista de que es tocable mientras esta colapsado */
-      box-shadow: inset 0 -1px 0 var(--border);
-      transition: box-shadow .18s var(--ease-out);
-    }
-    .qty-control.qty-activo .qty-value {
-      border-left-color: var(--border);
-      border-right-color: var(--border);
-      box-shadow: none;
+      color: var(--ink);
+      letter-spacing: -.2px;
     }
 
-    /* Custom checkbox */
+    /* Stepper de cantidad.
+       Arranca colapsado (solo el numero) y se despliega con un tap. Los botones
+       nunca se ocultan con display:none — el control tiene que conservar sus
+       94px al expandirse, si no el check vecino se corre bajo el dedo justo en
+       el momento de abrirlo. */
+    .qty-control {
+      width: 94px;
+      height: 44px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--r1);
+      border: 1px solid transparent;
+      background: transparent;
+      transition: background .18s var(--ease-out), border-color .18s var(--ease-out);
+    }
+    .qty-control.qty-activo {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+    }
+    .qty-btn {
+      width: 24px;
+      height: 44px;
+      flex: none;
+      border: none;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity .16s var(--ease-out);
+    }
+    .qty-control.qty-activo .qty-btn { opacity: 1; pointer-events: auto; }
+    .qty-btn:active { transform: scale(.86); }
+
+    .qty-value {
+      width: 46px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color .18s, background .18s;
+    }
+    .qty-control.qty-activo .qty-value {
+      border-color: transparent;
+      background: transparent;
+    }
+    .qty-value input {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      text-align: center;
+      outline: none;
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      -moz-appearance: textfield;
+    }
+    .qty-value input::-webkit-outer-spin-button,
+    .qty-value input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+    .qty-static {
+      width: 94px;
+      height: 44px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink-3);
+    }
+
+    /* Check de empacado */
     .item-check {
+      width: 26px;
+      height: 26px;
+      flex: none;
+      margin: 9px;
       -webkit-appearance: none;
       appearance: none;
-      width: 24px;
-      height: 24px;
-      border: 2px solid var(--border);
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      flex-shrink: 0;
-      position: relative;
-      transition: all .25s var(--ease-spring);
+      border: 1.8px solid var(--line);
+      border-radius: 8px;
       background: var(--surface);
+      cursor: pointer;
+      position: relative;
+      transition: background .18s var(--ease-out), border-color .18s var(--ease-out), transform .14s var(--ease-spring);
     }
-    .item-check:hover { border-color: var(--success); }
+    .item-check:hover { border-color: var(--ink-4); }
+    .item-check:active { transform: scale(.9); }
     .item-check:checked {
-      background: var(--success);
-      border-color: var(--success);
-      animation: checkBounce .35s var(--ease-spring);
+      background: var(--ok);
+      border-color: var(--ok);
     }
     .item-check:checked::after {
       content: '';
       position: absolute;
-      top: 3px;
-      left: 7px;
-      width: 5px;
+      left: 7.5px;
+      top: 3.5px;
+      width: 6px;
       height: 11px;
       border: solid #fff;
-      border-width: 0 2.5px 2.5px 0;
-      transform: rotate(45deg);
-    }
-    .item-check:active { transform: scale(.85); }
-
-    @keyframes checkBounce {
-      0% { transform: scale(.7); }
-      50% { transform: scale(1.15); }
-      100% { transform: scale(1); }
+      border-width: 0 2.6px 2.6px 0;
+      transform: rotate(43deg);
     }
 
     .item-delete {
-      background: none;
+      width: 32px;
+      height: 32px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       border: none;
-      color: var(--border);
-      font-size: 18px;
-      cursor: pointer;
-      padding: 4px;
-      flex-shrink: 0;
+      background: transparent;
+      border-radius: var(--r1);
+      color: var(--ink-4);
+      font-size: 19px;
       line-height: 1;
-      border-radius: 6px;
-      transition: all .2s var(--ease-out);
+      transition: background .14s, color .14s;
     }
-    .item-delete:hover { color: var(--danger); background: var(--danger-soft); }
-    .item-delete:active { transform: scale(.85); }
+    .item-delete:hover { background: var(--bad-soft); color: var(--bad); }
 
-    /* Pedido view: items wrapper (aísla las cards del gap de pv-content) */
-    .pv-items-list { display: block; }
-    .pv-items-list .item-card { margin-bottom: 5px; }
-    .pv-items-list .item-card:last-child { margin-bottom: 0; }
-
-    /* Pedido view: item card lines 2 & 3 */
-    .pv-item-fin {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .pv-valor-static {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-secondary);
-    }
-    .pv-total-item {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    /* Static qty display (blocked mode) */
-    .qty-static {
-      font-family: var(--font-mono);
-      font-weight: 700;
-      font-size: 14px;
-      padding: 0 8px;
-      color: var(--text);
-    }
-
-    /* =========================================
-       TOOLTIP
-       ========================================= */
-    .tooltip-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      z-index: 500;
-    }
-    .tooltip-overlay.active { display: block; }
-    .tooltip-box {
-      position: absolute;
-      background: var(--header-from);
-      color: #fff;
-      padding: 14px 18px;
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      line-height: 1.6;
-      box-shadow: var(--shadow-lg);
-      max-width: 260px;
-      z-index: 501;
-      animation: tooltipIn .2s var(--ease-out);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-    @keyframes tooltipIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    .tooltip-box span { display: block; }
-    .tooltip-box .tt-label {
-      color: rgba(255,255,255,.4);
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      font-weight: 700;
-    }
-    .tooltip-box .tt-value {
-      font-family: var(--font-mono);
-      font-weight: 600;
-      font-size: 13px;
-      margin-bottom: 2px;
-    }
-
-    /* =========================================
-       LIGHTBOX
-       ========================================= */
-    .lightbox {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15,23,42,.95);
-      z-index: 900;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      backdrop-filter: blur(16px);
-    }
-    .lightbox.active { display: flex; }
-    .lightbox img {
-      max-width: 92vw;
-      max-height: 88vh;
-      border-radius: var(--radius-md);
-      box-shadow: 0 20px 60px rgba(0,0,0,.5);
-      animation: lightboxIn .3s var(--ease-out);
-    }
-    @keyframes lightboxIn { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
-
-    /* =========================================
-       MODALS
-       ========================================= */
-    .modal-backdrop {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15,23,42,.45);
-      z-index: 800;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(6px);
-    }
-    .modal-backdrop.active { display: flex; }
-    .modal-box {
-      background: var(--surface);
-      border-radius: var(--radius-xl);
-      padding: 32px 28px;
-      width: 320px;
-      max-width: 88vw;
+    .empty-items {
+      padding: 44px 20px;
       text-align: center;
-      box-shadow: var(--shadow-lg);
-      animation: modalIn .3s var(--ease-out);
-    }
-    @keyframes modalIn { from { opacity: 0; transform: scale(.92) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-
-    .modal-box p {
-      font-size: 15px;
-      margin-bottom: 24px;
-      color: var(--text);
+      font-size: 14px;
       font-weight: 600;
-      line-height: 1.5;
+      color: var(--ink-4);
     }
-    .modal-btns { display: flex; gap: 10px; justify-content: center; }
-    .modal-btns button {
-      padding: 12px 28px;
-      border: none;
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      font-weight: 700;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: all .15s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .4px;
-    }
-    .modal-btns button:active { transform: scale(.95); }
-    .btn-cancel { background: var(--bg); color: var(--text-secondary); }
-    .btn-cancel:hover { background: var(--border); }
-    .btn-danger { background: var(--danger); color: #fff; box-shadow: 0 3px 12px rgba(217,79,79,.25); }
-    .btn-danger:hover { background: #c74444; }
-    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 12px rgba(230,126,34,.25); }
-    .btn-primary:hover { background: #d4711f; }
 
     /* =========================================
-       FOOTER CONTROLS
+       PANEL DERECHO · CLIENTE
        ========================================= */
-    .footer-controls {
-      flex-shrink: 0;
-      background: rgba(255,255,255,.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-top: 1px solid var(--border-light);
-      padding: 12px 5% 16px;
-      z-index: 10;
-    }
-    .footer-row {
+    .cliente-section {
       display: flex;
+      align-items: stretch;
       gap: 8px;
-      margin-bottom: 8px;
-      position: relative;
+      flex: none;
     }
-    .footer-row:last-child { margin-bottom: 0; }
 
-    /* Grid de 2 columnas perfectamente iguales para los 6 botones de acción */
-    .footer-btn-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .footer-btn-grid > *,
-    .footer-btn-grid > .print-menu-wrap,
-    .footer-btn-grid > .msg-menu-wrap {
+    .cliente-card {
+      flex: 1;
       min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 13px;
+      border-radius: var(--r2);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      cursor: pointer;
+      transition: border-color .14s, background .14s;
     }
-
-    /* Base uniforme para todos los botones del footer */
-    .footer-btn-base {
+    .cliente-card:hover { border-color: var(--ink-4); }
+    .cli-avatar {
+      width: 38px;
+      height: 38px;
+      flex: none;
+      border-radius: 99px;
+      background: var(--graphite);
+      color: var(--on-g);
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 100%;
-      height: 44px;
-      padding: 0 8px;
-      margin: 0;
       font-size: 13px;
       font-weight: 800;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: background .25s var(--ease-out), color .25s var(--ease-out), border-color .25s var(--ease-out), box-shadow .25s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      border-radius: var(--radius-md);
-      text-align: center;
+      letter-spacing: .3px;
+      box-shadow: 0 0 0 1px var(--line);
+    }
+    .cli-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .cli-nombre {
+      font-size: 14.5px;
+      font-weight: 700;
+      letter-spacing: -.2px;
+      color: var(--ink);
       white-space: nowrap;
-      box-sizing: border-box;
-      border: 1.5px solid transparent;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cli-loc {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cli-tel {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--ink-4);
+    }
+    .cli-edit { color: var(--ink-4); flex: none; display: flex; }
+
+    .cli-wa {
+      width: 42px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--r2);
+      color: var(--ok);
+      transition: background .14s, border-color .14s;
+    }
+    .cli-wa:hover { background: var(--ok-soft); border-color: var(--ok-ring); color: var(--ok); }
+    .cli-wa.disabled { color: var(--ink-4); pointer-events: none; opacity: .5; }
+
+    /* =========================================
+       PANEL DERECHO · TOTALES
+       ========================================= */
+    .pv-totals {
+      border-radius: var(--r2);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      overflow: hidden;
+      flex: none;
+    }
+    .pv-total-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 13px;
+      min-height: 32px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-2);
+    }
+    .pv-total-row:first-child { padding-top: 12px; }
+    .pv-total-row + .pv-total-row { margin-top: 9px; }
+    .pv-total-row > span:first-child { flex: 1; }
+    #pvTotal {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -.2px;
     }
 
-    .btn-add-item { background: var(--surface); color: var(--accent); border-color: var(--accent); }
-    .btn-add-item:hover { background: var(--accent-soft); }
+    .pv-input-sm {
+      width: 56px;
+      height: 32px;
+      text-align: right;
+      padding: 0 8px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 600;
+      outline: none;
+      -moz-appearance: textfield;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .pv-input-sm::-webkit-outer-spin-button,
+    .pv-input-sm::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .pv-input-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    .pv-input-sm[readonly] { background: transparent; border-color: transparent; color: var(--ink-3); }
+    .pv-input-money { width: 88px; }
+    .pv-pct { flex: none; width: 10px; font-size: 12px; font-weight: 600; color: var(--ink-4); }
+    /* Reserva el hueco de "% + input de porcentaje" para que la fila de Envio
+       alinee su importe con las de Descuento y Recargo. */
+    .pv-gap { flex: none; width: 73px; }
 
-    .btn-impresion { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .btn-impresion:hover { background: #d4711f; border-color: #d4711f; }
+    /* El margen lo lleva la barra y no la ultima fila: #pvEnvioRow puede estar
+       oculto, y :last-of-type mira el tipo de elemento, no la clase. */
+    .pv-total-final {
+      margin-top: 12px;
+      padding: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      background: var(--total-bg);
+      color: var(--total-fg);
+      font-family: var(--font-mono);
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      cursor: pointer;
+      transition: filter .16s;
+    }
+    .pv-total-final:hover { filter: brightness(1.5); }
+    .pv-total-final:active { transform: scale(.995); }
 
-    .print-menu-wrap,
-    .msg-menu-wrap { position: relative; }
+    /* =========================================
+       PANEL DERECHO · PAGO Y ENTREGA (segmentados)
+       ========================================= */
+    .pv-radio-group { flex: none; }
+    .pv-radio-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+      margin-bottom: 7px;
+    }
+    .pv-radio-row {
+      display: flex;
+      gap: 5px;
+      padding: 4px;
+      border-radius: var(--r2);
+      background: var(--surface-3);
+    }
+    .pv-radio-row label {
+      flex: 1;
+      min-width: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      cursor: pointer;
+      text-align: center;
+      padding: 0 6px;
+      position: relative;
+      transition: background .16s var(--ease-out), color .16s, box-shadow .16s;
+      user-select: none;
+    }
+    .pv-radio-row label:hover { color: var(--ink-2); }
+    .pv-radio-row input[type="radio"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }
+    .pv-radio-row label:has(input:checked) {
+      background: var(--surface);
+      box-shadow: var(--sh1);
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .pv-radio-row label:has(input:disabled) { cursor: not-allowed; opacity: .55; }
+    .pv-radio-row label .ic-sm { color: currentColor; }
+    .pv-radio-row label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    /* Tres opciones no entran en linea: icono arriba, etiqueta abajo */
+    .pv-radio-row--3 label {
+      flex-direction: column;
+      gap: 3px;
+      height: 48px;
+      font-size: 11px;
+      padding: 0 4px;
+    }
+
+    /* Navegadores sin :has() — el estado se ve por el punto del radio nativo */
+    @supports not selector(:has(*)) {
+      .pv-radio-row input[type="radio"] { position: static; opacity: 1; pointer-events: auto; accent-color: var(--accent); }
+    }
+
+    .pv-alias-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 8px;
+    }
+    .pv-alias-row > span:first-child {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+      flex: none;
+    }
+    .pv-alias-input {
+      flex: 1;
+      min-width: 0;
+      height: 36px;
+      padding: 0 11px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .pv-alias-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+
+    /* =========================================
+       DOCK · ACCIONES
+       ========================================= */
+    .footer-controls {
+      flex: none;
+      padding: 12px 16px 14px;
+      border-top: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    /* Barra de agarre: solo tiene sentido cuando el dock es una hoja inferior.
+       El area tocable es de 44px aunque la barra visible mida 4. */
+    .footer-handle {
+      display: none;
+      height: 22px;
+      flex: none;
+      position: relative;
+      cursor: pointer;
+    }
+    .footer-handle::before {
+      content: '';
+      position: absolute;
+      top: 9px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 44px;
+      height: 4px;
+      border-radius: 99px;
+      background: var(--line);
+      transition: background .14s, width .18s var(--ease-out);
+    }
+    .footer-handle:hover::before { background: var(--ink-4); width: 56px; }
+
+    /* El drawer dejo de ser un cajon: Faltantes vive en la fila de utilidades.
+       Los contenedores siguen en el DOM porque toggleDrawer() y el swipe del
+       footer los referencian; display:contents los vuelve transparentes. */
+    .footer-drawer,
+    .footer-drawer-inner { display: contents; }
+
+    .footer-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .footer-row .lbl { flex: none; }
+
+    .nota-select {
+      flex: 1;
+      min-width: 0;
+      height: 38px;
+      padding: 0 34px 0 12px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--ink-4) 50%), linear-gradient(135deg, var(--ink-4) 50%, transparent 50%);
+      background-position: calc(100% - 17px) 17px, calc(100% - 12px) 17px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .nota-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+
+    /* Sin iconos a proposito: el JS reescribe el textContent de #btnFaltantes y
+       #btnToggleEstado, asi que cualquier SVG adentro se perderia al primer
+       cambio de estado. La jerarquia la llevan el color y el peso tipografico. */
+    .footer-btn-base {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--r1);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      transition: background .14s, border-color .14s, color .14s, transform .12s, opacity .14s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .footer-btn-base:hover { background: var(--surface-2); border-color: var(--ink-4); color: var(--ink); }
+    .footer-btn-base:active { transform: scale(.97); }
+    .footer-btn-base:disabled { opacity: .45; }
+    .footer-btn-base:disabled:hover { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
+
+    /* Utilidades: tres columnas iguales */
+    /* #btnFaltantes cuelga de .footer-drawer, que es display:contents: participa
+       del flex de .dock-utils pero sigue sin ser hijo directo en el DOM, asi que
+       se lo selecciona por descendencia y no con ">". */
+    .dock-utils { display: flex; gap: 7px; margin-bottom: 10px; }
+    .dock-utils > .footer-btn-base,
+    .dock-utils > .print-menu-wrap,
+    .dock-utils > .msg-menu-wrap,
+    .dock-utils .btn-faltantes { flex: 1; min-width: 0; }
+    .print-menu-wrap > .footer-btn-base,
+    .msg-menu-wrap > .footer-btn-base { width: 100%; }
+
+    .btn-faltantes {
+      border-color: transparent;
+      background: var(--bad-soft);
+      color: var(--bad);
+    }
+    .btn-faltantes:hover { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+    .btn-faltantes:disabled { background: var(--surface); border-color: var(--line); color: var(--ink-3); }
+
+    /* Acciones finales: la primaria es una sola */
+    .dock-main { display: flex; gap: 9px; }
+    .dock-main > * { flex: 1; }
+
+    .btn-toggle-estado,
+    .btn-despachar {
+      height: 50px;
+      border-radius: var(--r2);
+      font-size: 13.5px;
+    }
+    .btn-toggle-estado {
+      color: var(--ink);
+      font-weight: 700;
+    }
     .btn-toggle-estado.completo {
-      background: #1e60a8;
-      color: #fff;
-      border-color: #1e60a8;
-      box-shadow: 0 2px 8px rgba(30,96,168,.3);
+      background: var(--ok-soft);
+      border-color: var(--ok-ring);
+      color: var(--ok);
     }
-    .btn-toggle-estado.completo:hover { background: #1a5296; border-color: #1a5296; }
+    .btn-despachar {
+      flex: 1.25;
+      border-color: transparent;
+      background: var(--ok);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      box-shadow: 0 1px 2px rgba(20,20,18,.16), inset 0 1px 0 rgba(255,255,255,.18);
+    }
+    .btn-despachar:hover { background: var(--ok); border-color: transparent; color: #fff; filter: brightness(1.06); }
+    .btn-despachar:disabled { filter: none; }
 
-    .print-menu {
+    .btn-cancelar-pedido {
+      width: 100%;
+      height: 28px;
+      margin-top: 10px;
+      border: none;
+      background: transparent;
+      color: var(--ink-3);
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+    .btn-cancelar-pedido:hover { background: transparent; border: none; color: var(--bad); }
+    .btn-cancelar-pedido:disabled { opacity: .4; }
+    .btn-cancelar-pedido:disabled:hover { color: var(--ink-4); }
+
+    /* Menus desplegables de Impresion y Mensaje */
+    .print-menu-wrap, .msg-menu-wrap { position: relative; }
+    .print-menu, .msg-dropdown {
       display: none;
       position: absolute;
       bottom: calc(100% + 8px);
       left: 0;
-      right: 0;
+      min-width: 190px;
       background: var(--surface);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      box-shadow: var(--sh3);
       overflow: hidden;
-      z-index: 100;
-      border: 1px solid var(--border);
-      animation: fadeSlideIn .2s var(--ease-out);
+      z-index: 60;
     }
-    .print-menu.active { display: block; }
-    .print-menu-item {
-      padding: 13px 16px;
+    .print-menu.active, .msg-dropdown.active { display: block; }
+    .print-menu-item, .msg-dropdown-item {
+      padding: 12px 14px;
       font-size: 13px;
       font-weight: 600;
-      font-family: var(--font-ui);
-      color: var(--text);
+      color: var(--ink-2);
       cursor: pointer;
-      transition: background .12s;
-      border-bottom: 1px solid var(--border-light);
-    }
-    .print-menu-item:last-child { border-bottom: none; }
-    .print-menu-item:hover { background: var(--accent-soft); }
-    .print-menu-item:active { background: var(--accent-soft); color: var(--accent); }
-
-    .rotulo-qty-input {
-      width: 80px;
-      padding: 10px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 18px;
-      font-family: var(--font-mono);
-      font-weight: 700;
-      text-align: center;
-      outline: none;
-      background: var(--surface-warm);
-      color: var(--text);
-      margin-bottom: 20px;
-      transition: all .2s var(--ease-out);
-    }
-    .rotulo-qty-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-
-    .nota-select {
-      flex: 1;
-      padding: 10px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 13px;
-      font-family: var(--font-ui);
-      background: var(--surface-warm);
-      color: var(--text);
-      font-weight: 600;
-      transition: all .2s var(--ease-out);
-      cursor: pointer;
-    }
-    .nota-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); outline: none; }
-
-    .footer-handle {
-      width: 36px;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      margin: 0 auto 6px;
-      cursor: pointer;
-      transition: background .2s;
-    }
-    .footer-handle:active { background: var(--accent); }
-    .footer-drawer {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height .35s var(--ease-out);
-    }
-    .footer-drawer.open {
-      max-height: 320px;
-    }
-    .footer-drawer-inner {
-      padding: 0 0 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .footer-nota-label {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      color: var(--text-muted);
-      flex-shrink: 0;
+      transition: background .12s, color .12s;
       white-space: nowrap;
     }
-    .btn-faltantes {
-      flex: 1;
-      padding: 9px 12px;
-      border: 1.5px solid var(--danger);
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      font-family: var(--font-ui);
-      background: var(--danger-soft);
-      color: var(--danger);
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .3px;
+    .print-menu-item + .print-menu-item,
+    .msg-dropdown-item + .msg-dropdown-item { border-top: 1px solid var(--line-2); }
+    .print-menu-item:hover, .msg-dropdown-item:hover { background: var(--surface-2); color: var(--ink); }
+
+    /* Accion sobre pedido ya entregado */
+    .entregado-actions {
+      display: none;
+      flex: none;
+      padding: 12px 16px 14px;
+      border-top: 1px solid var(--line);
+      background: var(--surface-2);
     }
-    .btn-faltantes:not(:disabled):active { transform: scale(.97); }
-    .btn-faltantes-clear {
-      width: 36px;
-      height: 36px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      background: var(--surface-warm);
-      color: var(--text-muted);
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all .15s;
-      flex-shrink: 0;
+    .entregado-actions.visible { display: block; }
+    .btn-cancelar-entregado {
+      width: 100%;
+      height: 50px;
+      border-radius: var(--r2);
+      border-color: transparent;
+      background: var(--bad-soft);
+      color: var(--bad);
+      font-size: 13.5px;
     }
-    .btn-faltantes-clear:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
-    .btn-faltantes-clear:active { transform: scale(.9); }
+    .btn-cancelar-entregado:hover { background: var(--bad); border-color: transparent; color: #fff; }
 
     /* =========================================
-       FALTANTES PANEL
+       MODALES
        ========================================= */
-    .faltantes-panel {
+    .modal-backdrop {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15,23,42,.45);
-      z-index: 800;
-      align-items: flex-end;
-      justify-content: center;
-      backdrop-filter: blur(6px);
-    }
-    .faltantes-panel.active { display: flex; }
-    .faltantes-panel-box {
-      background: var(--surface);
-      width: 100%;
-      max-width: 600px;
-      max-height: 70vh;
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-      display: flex;
-      flex-direction: column;
-      animation: slideUp .35s var(--ease-out);
-      box-shadow: 0 -12px 40px rgba(0,0,0,.1);
-    }
-    .faltantes-panel-header {
-      padding: 20px 16px 12px;
-      border-bottom: 1px solid var(--border-light);
-      display: flex;
+      inset: 0;
+      background: var(--scrim);
+      z-index: 200;
       align-items: center;
-      justify-content: space-between;
-      position: relative;
+      justify-content: center;
+      padding: 24px;
+      animation: fadeIn .16s ease both;
     }
-    .faltantes-panel-header::before {
-      content: '';
-      position: absolute;
-      top: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 36px;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--border);
+    .modal-backdrop.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes sheetIn {
+      from { opacity: 0; transform: translateY(14px) scale(.985); }
+      to { opacity: 1; transform: none; }
     }
-    .faltantes-panel-header h3 {
+
+    .modal-box {
+      width: 100%;
+      max-width: 380px;
+      max-height: 88vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border-radius: var(--r4);
+      box-shadow: var(--sh3);
+      padding: 24px 22px 20px;
+      text-align: center;
+      animation: sheetIn .24s var(--ease-out) both;
+    }
+    .modal-box p {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -.2px;
+      color: var(--ink);
+      line-height: 1.45;
+      text-wrap: pretty;
+    }
+    .modal-btns {
+      display: flex;
+      gap: 9px;
+      margin-top: 20px;
+    }
+    .modal-btns > button { flex: 1; }
+
+    /* Variante formulario: campos alineados a la izquierda y titulo propio */
+    .modal-box--form { max-width: 400px; text-align: left; }
+    .modal-titulo {
       font-size: 15px;
       font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: var(--danger);
+      letter-spacing: -.3px;
+      color: var(--ink);
+      text-align: center;
+      margin-bottom: 18px;
     }
-    .faltantes-panel-close {
-      background: var(--bg);
-      border: none;
-      font-size: 20px;
-      color: var(--text-muted);
+
+    .btn-cancel, .btn-primary, .btn-danger {
+      height: 46px;
+      border-radius: var(--r2);
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      border: 1px solid transparent;
+      transition: background .14s, border-color .14s, color .14s, transform .12s;
+    }
+    .btn-cancel:active, .btn-primary:active, .btn-danger:active { transform: scale(.97); }
+    .btn-cancel {
+      border-color: var(--line);
+      background: var(--surface);
+      color: var(--ink-2);
+    }
+    .btn-cancel:hover { background: var(--surface-2); color: var(--ink); }
+    .btn-primary {
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+    }
+    .btn-primary:hover { background: var(--inverso-bg-hover); }
+    .btn-danger {
+      background: var(--bad);
+      color: #fff;
+    }
+    .btn-danger:hover { filter: brightness(1.07); }
+
+    .edit-client-field {
+      width: 100%;
+      height: 42px;
+      margin-bottom: 9px;
+      padding: 0 13px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: 13.5px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .edit-client-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    .edit-client-field[readonly] {
+      border-style: dashed;
+      background: transparent;
+      color: var(--ink-4);
+      font-weight: 500;
+    }
+    select.edit-client-field {
       cursor: pointer;
-      padding: 6px 10px;
-      border-radius: var(--radius-sm);
-      transition: all .15s;
-      line-height: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      padding-right: 34px;
+      background-image: linear-gradient(45deg, transparent 50%, var(--ink-4) 50%), linear-gradient(135deg, var(--ink-4) 50%, transparent 50%);
+      background-position: calc(100% - 17px) 19px, calc(100% - 12px) 19px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
     }
-    .faltantes-panel-close:hover { background: var(--border); color: var(--text); }
-    .faltantes-panel-list {
-      flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 4px 0;
+
+    .rotulo-qty-input {
+      width: 110px;
+      height: 52px;
+      margin: 18px auto 0;
+      display: block;
+      text-align: center;
+      border-radius: var(--r2);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 700;
+      outline: none;
+      -moz-appearance: textfield;
     }
-    .faltantes-panel-item {
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border-light);
+    .rotulo-qty-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+
+    /* =========================================
+       PANELES (pedidos / historial / faltantes)
+       ========================================= */
+    .pedidos-panel, .faltantes-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--scrim);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: fadeIn .16s ease both;
+    }
+    .pedidos-panel.active, .faltantes-panel.active { display: flex; }
+
+    .pedidos-panel-box, .faltantes-panel-box {
+      width: 100%;
+      max-width: 660px;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-radius: var(--r4);
+      box-shadow: var(--sh3);
+      overflow: hidden;
+      animation: sheetIn .24s var(--ease-out) both;
+    }
+    .faltantes-panel-box { max-width: 460px; }
+
+    .pedidos-panel-header, .faltantes-panel-header {
+      flex: none;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      padding: 18px 20px 14px;
     }
-    .faltantes-panel-item-info {
+    .pp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pedidos-panel-header h3, .faltantes-panel-header h3 {
+      flex: 1;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -.4px;
+      color: var(--ink);
+    }
+    .pp-title h3 { flex: none; }
+    .pp-resumen {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--ink-3);
+    }
+    .pp-resumen b { color: var(--ok); font-weight: 700; }
+
+    .pedidos-panel-close, .faltantes-panel-close {
+      width: 36px;
+      height: 36px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      border-radius: var(--r1);
+      color: var(--ink-3);
+      font-size: 20px;
+      line-height: 1;
+      transition: background .14s, color .14s;
+    }
+    .pedidos-panel-close:hover, .faltantes-panel-close:hover { background: var(--surface-3); color: var(--ink); }
+
+    /* Leyenda del riel */
+    .pp-leyenda {
+      flex: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 22px;
+      padding: 0 20px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .pp-leyenda-fila { display: flex; gap: 22px; }
+    .pp-leyenda-fila > span {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .pp-leyenda-fila .pp-seg { flex: none; width: 5px; height: 15px; }
+
+    /* Riel de dos tramos: pago arriba, armado abajo */
+    .pp-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: none;
+    }
+    .pp-seg {
+      display: block;
+      width: 5px;
+      height: 13px;
+      border-radius: 3px;
+      background: var(--surface-3);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+    /* Rayado horizontal y no diagonal: en 5px de ancho las diagonales se
+       empastan y el tramo "esperando" se confunde con el lleno. */
+    .pp-seg--pago.is-on { background: var(--accent); box-shadow: none; }
+    .pp-seg--pago.is-wait { background: repeating-linear-gradient(0deg, var(--accent) 0 2px, transparent 2px 4px); box-shadow: none; }
+    .pp-seg--armado.is-on { background: var(--ok); box-shadow: none; }
+    .pp-seg--armado.is-wait { background: repeating-linear-gradient(0deg, var(--ok) 0 2px, transparent 2px 4px); box-shadow: none; }
+
+    .pedidos-panel-list, .faltantes-panel-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0 12px 12px;
+    }
+    .faltantes-panel-list { padding: 4px 14px 12px; }
+
+    .pp-grupo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 8px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .pp-grupo::after { content: ''; flex: 1; height: 1px; background: var(--line); order: 3; }
+    .pp-grupo-count {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--ink-3);
+      background: var(--surface-3);
+      padding: 2px 7px;
+      border-radius: 99px;
+      order: 2;
+    }
+    .pp-grupo--listo { color: var(--ok); }
+    .pp-grupo--listo .pp-grupo-count { color: var(--ok); background: var(--ok-soft); }
+
+    .pedidos-panel-item {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-height: 52px;
+      padding: 0 10px;
+      border-radius: var(--r2);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .pedidos-panel-item:hover { background: var(--surface-2); }
+    .pedidos-panel-item.is-listo { background: var(--ok-soft); }
+    .pedidos-panel-item.is-listo:hover { background: var(--ok-soft); filter: brightness(.98); }
+    .pedidos-panel-item.is-listo .pedidos-panel-nombre { font-weight: 700; }
+
+    .pedidos-panel-nombre {
       flex: 1;
       min-width: 0;
-    }
-    .faltantes-panel-item-nombre {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
-      color: var(--text);
+      letter-spacing: -.15px;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pedidos-panel-fecha {
+      flex: none;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-4);
+    }
+    .pedidos-panel-fecha.is-viejo {
+      color: var(--bad);
+      font-weight: 700;
+      background: var(--bad-soft);
+      padding: 3px 8px;
+      border-radius: 99px;
+    }
+
+    .pp-btn-pago {
+      width: 38px;
+      height: 38px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ink-3);
+      font-size: 15px;
+      font-weight: 800;
+      transition: background .14s, color .14s, border-color .14s, transform .12s;
+    }
+    .pp-btn-pago:active { transform: scale(.92); }
+    .pp-btn-pago.is-solicitado {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+    .pp-btn-pago.is-pago {
+      background: var(--accent);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .pedidos-panel-empty, .faltantes-panel-empty {
+      padding: 44px 20px;
+      text-align: center;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink-4);
+    }
+    .pedidos-panel-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 20px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .historial-search {
+      flex: none;
+      padding: 0 20px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .historial-search input {
+      width: 100%;
+      height: 42px;
+      padding: 0 14px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .historial-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+
+    /* Faltantes */
+    .faltantes-panel-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-radius: var(--r2);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      margin-bottom: 7px;
+    }
+    .faltantes-panel-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .faltantes-panel-item-nombre {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--ink);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .faltantes-panel-item-codigo {
-      font-size: 11px;
       font-family: var(--font-mono);
-      color: var(--text-muted);
-      margin-top: 2px;
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--ink-4);
     }
     .faltantes-panel-item-qty {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--danger);
-      background: var(--danger-soft);
-      padding: 3px 8px;
-      border-radius: 6px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .faltantes-panel-empty {
-      padding: 40px 20px;
-      text-align: center;
-      color: var(--text-muted);
+      flex: none;
+      font-family: var(--font-mono);
       font-size: 13px;
+      font-weight: 700;
+      color: var(--bad);
+      background: var(--bad-soft);
+      padding: 4px 10px;
+      border-radius: 99px;
     }
     .faltantes-panel-footer {
-      padding: 12px 16px;
-      border-top: 1px solid var(--border-light);
+      flex: none;
       display: flex;
-      gap: 8px;
+      gap: 9px;
+      padding: 14px 16px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--surface-2);
     }
-    .btn-faltantes-copiar {
+    .btn-faltantes-copiar, .btn-faltantes-limpiar {
       flex: 1;
-      padding: 10px;
-      border: none;
-      border-radius: 10px;
-      font-size: 13px;
+      height: 46px;
+      border-radius: var(--r2);
+      border: 1px solid transparent;
+      font-size: 13.5px;
       font-weight: 700;
-      font-family: var(--font-ui);
-      background: var(--accent);
-      color: #fff;
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .3px;
+      letter-spacing: -.1px;
+      transition: background .14s, color .14s, border-color .14s;
     }
-    .btn-faltantes-copiar:active { transform: scale(.97); opacity: .85; }
-    .btn-faltantes-limpiar {
-      padding: 10px 16px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 700;
-      font-family: var(--font-ui);
-      background: var(--surface-warm);
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all .15s;
-    }
-    .btn-faltantes-limpiar:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
-    .btn-faltantes-limpiar:active { transform: scale(.97); }
+    .btn-faltantes-copiar { background: var(--inverso-bg); color: var(--inverso-fg); }
+    .btn-faltantes-copiar:hover { background: var(--inverso-bg-hover); }
+    .btn-faltantes-limpiar { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
+    .btn-faltantes-limpiar:hover { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
 
     /* =========================================
-       ADD ITEM MODAL
+       BUSCADOR DE ARTICULOS (agregar / busqueda inversa)
        ========================================= */
     .add-item-modal {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15,23,42,.45);
-      z-index: 800;
-      align-items: flex-end;
+      inset: 0;
+      background: var(--scrim);
+      z-index: 210;
+      align-items: center;
       justify-content: center;
-      backdrop-filter: blur(6px);
+      padding: 24px;
+      animation: fadeIn .16s ease both;
     }
     .add-item-modal.active { display: flex; }
+
     .add-item-panel {
-      background: var(--surface);
       width: 100%;
-      max-width: 600px;
-      max-height: 72vh;
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      max-width: 480px;
+      max-height: 86vh;
       display: flex;
       flex-direction: column;
-      animation: slideUp .35s var(--ease-out);
-      box-shadow: 0 -12px 40px rgba(0,0,0,.1);
+      background: var(--surface);
+      border-radius: var(--r4);
+      box-shadow: var(--sh3);
+      overflow: hidden;
+      animation: sheetIn .24s var(--ease-out) both;
     }
-    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
     .add-item-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border-light);
+      flex: none;
       display: flex;
       align-items: center;
       gap: 10px;
-    }
-    .add-item-header::before {
-      content: '';
-      position: absolute;
-      top: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 36px;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--border);
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
     }
     .add-item-header input {
       flex: 1;
-      padding: 11px 14px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 14px;
-      font-family: var(--font-ui);
-      font-weight: 500;
-      outline: none;
-      background: var(--surface-warm);
-      color: var(--text);
-      transition: all .2s var(--ease-out);
-    }
-    .add-item-header input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-    .add-item-header button {
-      background: var(--bg);
+      min-width: 0;
+      height: 34px;
       border: none;
-      font-size: 20px;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 8px 10px;
-      border-radius: var(--radius-sm);
-      transition: all .15s;
+      background: transparent;
+      color: var(--ink);
+      font-size: 14.5px;
+      font-weight: 600;
+      outline: none;
     }
-    .add-item-header button:hover { background: var(--border); color: var(--text); }
-    .add-item-header button:active { transform: scale(.9); }
+    .add-item-header button {
+      width: 34px;
+      height: 34px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: var(--surface-3);
+      border-radius: var(--r1);
+      color: var(--ink-3);
+      font-size: 19px;
+      line-height: 1;
+      transition: background .14s, color .14s;
+    }
+    .add-item-header button:hover { background: var(--line); color: var(--ink); }
+
+    .articulo-paso2-header { gap: 12px; }
+    .articulo-item-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .articulo-item-info img {
+      width: 38px;
+      height: 38px;
+      flex: none;
+      border-radius: 9px;
+      object-fit: cover;
+      border: 1px solid var(--line-2);
+      background: var(--surface-3);
+    }
 
     .add-item-list {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
     }
     .add-item-option {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border-light);
-      cursor: pointer;
       display: flex;
       align-items: center;
       gap: 12px;
-      transition: background .15s;
-    }
-    .add-item-option:active { background: var(--accent-soft); }
-    .add-item-option img {
-      width: 40px; height: 40px;
-      border-radius: var(--radius-sm);
-      object-fit: cover;
-      background: var(--bg);
-      border: 1px solid var(--border-light);
-    }
-    .add-item-img-ph {
-      width: 40px;
-      height: 40px;
-      background: var(--bg);
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-light);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      color: var(--text-muted);
-      flex-shrink: 0;
-    }
-    .add-item-option .opt-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .add-item-option .opt-code {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
-      font-weight: 500;
-      margin-top: 2px;
-      letter-spacing: .3px;
-    }
-
-    /* =========================================
-       BUSCAR ARTICULO EN PEDIDOS
-       ========================================= */
-    /* Modal a pantalla completa: la camara queda arriba (se apunta con el brazo
-       extendido) y las acciones abajo, en la zona del pulgar. Scopeado a
-       #articuloModal para no alterar #addItemModal, que comparte las clases. */
-    #articuloModal { align-items: stretch; }
-    #articuloModal .add-item-panel {
-      height: 100vh;
-      height: 100dvh;
-      max-height: none;
-      border-radius: 0;
-    }
-    /* Ya no es un bottom-sheet: sobra el handle decorativo */
-    #articuloModal .add-item-header::before { content: none; }
-
-    .articulo-scanner-wrap {
-      position: relative;
-      flex-shrink: 0;
-      min-height: 220px;          /* evita el salto de layout mientras arranca la camara */
-      max-height: 42vh;
-      max-height: 42dvh;          /* deja aire para la lista; recorta el video por CSS,
-                                     sin cambiar su tamano real (ver nota de abajo) */
-      background: var(--header-from);
-      overflow: hidden;
-      display: flex;
-      align-items: center;        /* el recorte se reparte arriba/abajo: el centro,
-                                     que es donde se apunta, siempre queda visible */
-      justify-content: center;
-    }
-    #articuloScannerDiv { width: 100%; }
-    /* Deliberadamente NO se fija alto ni object-fit al <video>: html5-qrcode
-       calcula la region a decodificar con videoWidth/clientWidth y
-       videoHeight/clientHeight, asi que redimensionarlo por CSS desalinea lo
-       que se ve de lo que se decodifica. Se deja su alto natural. */
-
-    /* Toggle de camara superpuesto sobre el visor */
-    .articulo-scan-btn {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      padding: 13px 22px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-md);
-      font-size: 14px;
-      font-weight: 700;
-      font-family: var(--font-ui);
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--line-2);
       cursor: pointer;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(230,126,34,.3);
-      z-index: 2;
-    }
-    .articulo-scan-btn:active { transform: translate(-50%, -50%) scale(.94); }
-    /* Con la camara encendida se achica y se corre a la esquina para no tapar el visor */
-    .articulo-scan-btn.scanning {
-      left: auto;
-      top: auto;
-      right: 12px;
-      bottom: 12px;
-      transform: none;
-      padding: 0;
-      width: 44px;
-      height: 44px;
-      font-size: 15px;
-      background: rgba(15,23,42,.72);
-      border: 1px solid rgba(255,255,255,.18);
-      border-radius: 50%;
-      box-shadow: 0 2px 10px rgba(0,0,0,.35);
-      backdrop-filter: blur(8px);
-    }
-    .articulo-scan-btn.scanning:active { transform: scale(.9); }
-    .articulo-paso2-header { position: relative; }
-    .articulo-item-info {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-    }
-    .articulo-item-info img {
-      width: 40px; height: 40px;
-      border-radius: var(--radius-sm);
-      object-fit: cover;
-      background: var(--bg);
-      border: 1px solid var(--border-light);
-      flex-shrink: 0;
-    }
-    .articulo-item-info .opt-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .articulo-item-info .opt-code {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
-      font-weight: 500;
-      margin-top: 2px;
-      letter-spacing: .3px;
-    }
-    .articulo-pedido-row {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border-light);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      cursor: pointer;
-      transition: background .15s;
-    }
-    .articulo-pedido-row:active { background: var(--success-soft); }
-    .articulo-pedido-row input[type="checkbox"] {
-      width: 22px; height: 22px;
-      accent-color: var(--success);
-      flex-shrink: 0;
-      pointer-events: none;
-    }
-    .articulo-pedido-row.ya-listo {
-      opacity: .55;
-      cursor: default;
-    }
-    .articulo-pedido-row.ya-listo:active { background: transparent; }
-    .articulo-pedido-info { flex: 1; min-width: 0; }
-    .articulo-pedido-nombre {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .articulo-pedido-id {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
-      font-weight: 500;
-      margin-top: 2px;
-      letter-spacing: .3px;
-    }
-    .articulo-pedido-cant {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-      background: var(--accent-soft);
-      padding: 3px 8px;
-      border-radius: 6px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-    .articulo-empty {
-      padding: 36px 20px;
-      text-align: center;
-      color: var(--text-muted);
-      font-weight: 500;
-      font-size: 13px;
-    }
-
-    /* Aviso de desambiguacion: un codigo de barras que pertenece a varios articulos.
-       Va scopeado a #articuloModal porque se pinta dentro de .add-item-list, que
-       tambien usa #addItemModal. */
-    #articuloModal .articulo-multi {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 16px;
-      background: var(--accent-soft);
-      border-bottom: 1px solid var(--border-light);
-    }
-    #articuloModal .articulo-multi-tx {
-      flex: 1;
-      min-width: 0;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    #articuloModal .articulo-multi-code {
-      display: block;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      margin-top: 2px;
-      word-break: break-all;
-    }
-    #articuloModal .articulo-multi-cancel {
-      flex-shrink: 0;
-      padding: 7px 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface);
-      color: var(--text-secondary);
-      font-family: var(--font-ui);
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all .15s var(--ease-out);
-    }
-    #articuloModal .articulo-multi-cancel:active { transform: scale(.95); }
-    .articulo-footer {
-      display: flex;
-      gap: 8px;
-      padding: 12px 16px;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-      border-top: 1px solid var(--border-light);
-      flex-shrink: 0;
-    }
-    .articulo-btn-sec {
-      padding: 13px 18px;
-      background: var(--bg);
-      color: var(--text-secondary);
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      font-weight: 700;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
-    }
-    .articulo-btn-sec:active { transform: scale(.96); }
-    .articulo-btn-confirmar {
-      flex: 1;
-      padding: 13px;
-      min-height: 52px;
-      background: var(--success);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-md);
-      font-size: 15px;
-      font-weight: 700;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
-      box-shadow: 0 2px 8px var(--success-glow);
-    }
-    .articulo-btn-confirmar:disabled { opacity: .5; cursor: default; }
-    .articulo-btn-confirmar:not(:disabled):active { transform: scale(.97); }
-
-    /* =========================================
-       TOAST
-       ========================================= */
-    .toast {
-      position: fixed;
-      bottom: 90px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--header-from);
-      color: #fff;
-      padding: 12px 28px;
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      font-weight: 700;
-      z-index: 2000;
-      animation: toastIn .35s var(--ease-out);
-      pointer-events: none;
-      box-shadow: 0 8px 28px rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.06);
-    }
-    @keyframes toastIn {
-      from { opacity: 0; transform: translateX(-50%) translateY(12px) scale(.95); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-    }
-
-    /* =========================================
-       ANIMATIONS
-       ========================================= */
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    /* Item move transitions */
-    .item-card.moving-out {
-      opacity: 0;
-      transform: translateX(30px);
-      transition: opacity .25s var(--ease-out), transform .25s var(--ease-out);
-    }
-    .item-card.moving-in {
-      animation: moveIn .3s var(--ease-out) both;
-    }
-    @keyframes moveIn {
-      from { opacity: 0; transform: translateX(-20px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-
-    /* Sin stock highlight */
-    .item-card.sin-stock {
-      background: #fffbeb;
-    }
-    .item-card.sin-stock.checked {
-      background: var(--success-soft);
-    }
-    .item-stock {
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-left: 6px;
-      letter-spacing: .2px;
-    }
-    .item-stock.stock-zero { color: var(--danger); }
-    .item-stock.stock-low  { color: #b8860b; }
-    .item-stock.stock-ok   { color: var(--success); }
-
-    /* Empty state */
-    .empty-items {
-      text-align: center;
-      padding: 48px 20px;
-      color: var(--text-muted);
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    /* =========================================
-       RESPONSIVE
-       ========================================= */
-    @media (max-width: 480px) {
-      .header-brand h1 { display: none; }
-      .header { padding: 10px 10px; gap: 6px; }
-      .header-search input { padding: 9px 12px 9px 32px; font-size: 13px; }
-      .main-content { padding: 12px 10px 20px; }
-      .footer-controls { padding: 10px 5% 14px; }
-    }
-    @media (min-width: 768px) {
-      .main-content { padding: 20px 24px 28px; max-width: 720px; margin: 0 auto; }
-    }
-
-    /* =========================================
-       SEARCH DROPDOWN (HISTORIAL)
-       ========================================= */
-    .search-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      right: 0;
-      background: var(--header-from);
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 10px;
-      overflow: hidden;
-      z-index: 200;
-      box-shadow: 0 8px 28px rgba(0,0,0,.35);
-      display: none;
-    }
-    .search-dropdown.active { display: block; }
-    .search-dropdown-header {
-      padding: 7px 14px 5px;
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,.28);
-      border-bottom: 1px solid rgba(255,255,255,.06);
-    }
-    .search-dropdown-item {
-      padding: 9px 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      border-bottom: 1px solid rgba(255,255,255,.05);
       transition: background .12s;
     }
-    .search-dropdown-item:last-child { border-bottom: none; }
-    .search-dropdown-item:hover { background: rgba(255,255,255,.08); }
-    .search-dropdown-item:active { background: rgba(255,255,255,.14); }
-    .search-dropdown-id {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--accent);
-      white-space: nowrap;
-      flex-shrink: 0;
-      min-width: 90px;
+    .add-item-option:hover { background: var(--surface-2); }
+    .add-item-option:active { background: var(--surface-3); }
+    .add-item-option img,
+    .add-item-img-ph {
+      width: 42px;
+      height: 42px;
+      flex: none;
+      border-radius: 9px;
+      object-fit: cover;
+      background: var(--surface-3);
+      border: 1px solid var(--line-2);
     }
-    .search-dropdown-nombre {
-      font-size: 12px;
-      color: rgba(255,255,255,.65);
+    .add-item-img-ph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      color: var(--ink-4);
+    }
+    .add-item-option > div:last-child { flex: 1; min-width: 0; }
+    .opt-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--ink);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .opt-code {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
       font-weight: 500;
+      color: var(--ink-4);
     }
 
-    /* Login screen */
-    .login-screen {
-      position: fixed;
-      inset: 0;
-      z-index: 99999;
-      background: var(--bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      transition: opacity .4s var(--ease-out), transform .4s var(--ease-out);
-    }
-    .login-screen.hidden {
-      opacity: 0;
-      transform: scale(1.02);
-      pointer-events: none;
-    }
-    .login-box {
-      width: 100%;
-      max-width: 340px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-    }
-    .login-logo {
-      width: 56px;
-      height: 56px;
-      border-radius: var(--radius-md);
-      background: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 24px var(--accent-glow);
-      overflow: hidden;
-    }
-    .login-logo img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    .login-title {
-      font-size: 17px;
-      font-weight: 800;
-      letter-spacing: -.4px;
+    .articulo-empty {
+      padding: 44px 20px;
       text-align: center;
-      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink-4);
+      line-height: 1.5;
     }
-    .login-subtitle {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: -8px;
-      text-align: center;
-      font-weight: 500;
+
+    /* Visor de camara del buscador inverso */
+    .articulo-scanner-wrap {
+      flex: none;
+      position: relative;
+      background: var(--graphite);
+      border-bottom: 1px solid var(--line);
     }
-    .login-field {
+    .articulo-scanner-wrap #articuloScannerDiv:not(:empty) { min-height: 190px; }
+    .articulo-scan-btn {
       width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    .login-field label {
-      font-size: 10px;
-      color: var(--text-muted);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .8px;
-      padding-left: 2px;
-    }
-    .login-field input {
-      width: 100%;
-      padding: 12px 14px;
-      background: var(--surface);
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      font-size: 14px;
-      font-family: var(--font-ui);
-      outline: none;
-      transition: border-color .2s var(--ease-out), box-shadow .2s var(--ease-out);
-    }
-    .login-field input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-    .login-field input::placeholder { color: var(--text-muted); }
-    .login-btn {
-      width: 100%;
-      padding: 13px 0;
+      height: 46px;
       border: none;
-      border-radius: 10px;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 800;
-      font-size: 14px;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: all .2s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      box-shadow: 0 3px 12px rgba(230,126,34,.25);
-    }
-    .login-btn:hover { background: #d4711f; }
-    .login-btn:active { transform: scale(.97); }
-    .login-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-    .login-error {
-      font-size: 12px;
-      color: var(--danger);
-      text-align: center;
-      min-height: 1.2em;
-      font-weight: 600;
-    }
-
-    /* =========================================
-       VIEW TOGGLE (Despacho / Pedido)
-       ========================================= */
-
-    /* =========================================
-       PEDIDO VIEW STYLES
-       ========================================= */
-    .pv-section {
-      margin-bottom: 16px;
-      animation: fadeSlideIn .4s var(--ease-out) both;
-    }
-    .pv-section-title {
-      font-size: 12px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-      padding: 0 4px;
-    }
-
-    /* Pedido view: items table */
-    .pv-table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      background: var(--surface);
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      box-shadow: var(--shadow-sm);
-      font-size: 13px;
-    }
-    .pv-table th {
-      background: var(--header-from);
-      color: #fff;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      padding: 10px 8px;
-      text-align: left;
-      white-space: nowrap;
-    }
-    .pv-table th.pv-right { text-align: right; }
-    .pv-table th.pv-center { text-align: center; }
-    .pv-table td {
-      padding: 8px;
-      border-bottom: 1px solid var(--border-light);
-      vertical-align: middle;
-    }
-    .pv-table tr:last-child td { border-bottom: none; }
-    .pv-table .pv-nombre {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--text);
-      transition: color .15s;
-    }
-    .pv-table .pv-nombre:hover { color: var(--accent); }
-    .pv-table .pv-codigo {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-    .pv-table .pv-right { text-align: right; }
-    .pv-table .pv-center { text-align: center; }
-    .pv-table input[type="number"] {
-      width: 60px;
-      padding: 4px 6px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 600;
-      text-align: right;
-      background: var(--surface-warm);
-      color: var(--text);
-      outline: none;
-      transition: all .2s var(--ease-out);
-    }
-    .pv-table input[type="number"]:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-    .pv-stock-ok { color: var(--success); font-weight: 700; }
-    .pv-stock-low { color: #b8860b; font-weight: 700; }
-    .pv-stock-sin { color: var(--danger); font-weight: 700; }
-    .pv-del-btn {
-      background: none;
-      border: none;
-      color: var(--border);
-      font-size: 16px;
-      cursor: pointer;
-      padding: 2px 6px;
-      border-radius: 6px;
-      transition: all .15s;
-      line-height: 1;
-    }
-    .pv-del-btn:hover { color: var(--danger); background: var(--danger-soft); }
-
-    /* Totals / Financial */
-    .pv-totals {
-      background: var(--surface);
-      border-radius: var(--radius-md);
-      padding: 14px;
-      box-shadow: var(--shadow-sm);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .pv-total-row {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-    .pv-total-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      white-space: nowrap;
-    }
-    .pv-total-value {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text);
-      min-width: 80px;
-      text-align: right;
-    }
-    .pv-total-final {
-      font-size: 16px;
-      font-weight: 800;
-      color: var(--accent);
-      cursor: pointer;
-      padding: 6px 12px;
-      background: var(--accent-soft);
-      border-radius: 8px;
-      text-align: right;
-      transition: all .15s;
-    }
-    .pv-total-final:hover { background: var(--accent); color: #fff; }
-    .pv-input-sm {
-      width: 50px;
-      padding: 4px 6px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 600;
-      text-align: right;
-      background: var(--surface-warm);
-      color: var(--text);
-      outline: none;
-      transition: all .2s var(--ease-out);
-    }
-    .pv-input-sm:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-    .pv-input-sm[readonly] {
-      background: var(--bg);
-      color: var(--text-muted);
-      cursor: not-allowed;
-    }
-    .pv-input-md { width: 80px; }
-    .pv-separator {
-      border: none;
-      border-top: 1px solid var(--border-light);
-      margin: 4px 0;
-    }
-
-    /* Pedido View wrapper — gap entre tarjetas */
-    .pv-content {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    /* Quitar margin extra que ya pone items-header y cliente-section por defecto */
-    .pv-content .cliente-section { margin-bottom: 0; }
-    .pv-content .items-header { margin-bottom: 0; }
-
-    /* Radio groups */
-    .pv-radio-group {
-      background: var(--surface);
-      border-radius: var(--radius-md);
-      padding: 12px 14px;
-      box-shadow: var(--shadow-sm);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .pv-radio-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .pv-radio-row label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-      cursor: pointer;
-      padding: 6px 10px;
-      border-radius: 8px;
-      transition: background .15s;
-    }
-    .pv-radio-row label:hover { background: var(--accent-soft); }
-    .pv-radio-row label img { height: 24px; object-fit: contain; }
-    .pv-radio-title {
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      color: var(--text-muted);
-      min-width: 70px;
-      flex-shrink: 0;
-    }
-    .pv-alias-row {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      margin-top: 4px;
-    }
-    .pv-alias-row.visible { display: flex; }
-    .pv-alias-input {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      font-family: var(--font-mono);
+      background: var(--graphite);
+      color: var(--on-g-2);
       font-size: 13px;
       font-weight: 700;
-      text-transform: uppercase;
-      background: var(--surface-warm);
-      color: var(--text);
-      outline: none;
-      transition: all .2s var(--ease-out);
+      letter-spacing: -.1px;
+      transition: color .14s, background .14s;
     }
-    .pv-alias-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
+    .articulo-scan-btn:hover { background: var(--graphite-2); color: var(--on-g); }
 
-    /* Pedido footer (unified into .footer-controls) */
-    .btn-guardar {
-      flex: 1;
-      background: #d4a017;
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-md);
-      padding: 12px;
-      font-size: 13px;
-      font-weight: 800;
-      font-family: var(--font-ui);
-      cursor: pointer;
-      transition: all .25s var(--ease-out);
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      box-shadow: 0 2px 8px rgba(212,160,23,.25);
-    }
-    .btn-guardar:hover { background: #b8860b; }
-    .btn-guardar:active { transform: scale(.96); }
-    .btn-guardar:disabled { opacity: .4; cursor: not-allowed; }
-
-    .btn-toggle-estado { background: var(--surface); color: #1e60a8; border-color: #1e60a8; }
-    .btn-toggle-estado:hover { background: rgba(30,96,168,.08); }
-    .btn-toggle-estado:disabled { opacity: .4; cursor: not-allowed; }
-
-    .btn-cancelar-pedido { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
-    .btn-cancelar-pedido:hover { background: var(--danger); color: #fff; }
-    .btn-cancelar-pedido:disabled { opacity: .4; cursor: not-allowed; }
-
-    .btn-despachar { background: var(--header-from); color: #fff; border-color: var(--header-from); }
-    .btn-despachar:hover { background: #1e293b; border-color: #1e293b; }
-    .btn-despachar:disabled { opacity: .4; cursor: not-allowed; }
-
-    /* Barra de accion visible solo con status DESPACHADO/ENTREGADO */
-    .entregado-actions {
-      display: none;
-      padding: 10px 16px;
-      flex-shrink: 0;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-    }
-    .entregado-actions.visible { display: block; }
-
-    .btn-cancelar-entregado { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
-    .btn-cancelar-entregado:hover { background: var(--danger); color: #fff; }
-    .btn-cancelar-entregado:disabled { opacity: .4; cursor: not-allowed; }
-
-    .btn-mensaje { background: #25D366; color: #fff; border-color: #25D366; }
-    .btn-mensaje:hover { background: #1da851; border-color: #1da851; }
-    .btn-mensaje:disabled { opacity: .4; cursor: not-allowed; }
-
-    .msg-dropdown {
-      display: none;
-      position: absolute;
-      bottom: calc(100% + 8px);
-      left: 0;
-      right: 0;
-      background: var(--surface);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
-      overflow: hidden;
-      z-index: 100;
-      border: 1px solid var(--border);
-      animation: fadeSlideIn .2s var(--ease-out);
-    }
-    .msg-dropdown.active { display: block; }
-    .msg-dropdown-item {
-      padding: 12px 16px;
-      font-size: 13px;
-      font-weight: 600;
-      font-family: var(--font-ui);
-      color: var(--text);
+    .articulo-pedido-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--line-2);
       cursor: pointer;
       transition: background .12s;
-      border-bottom: 1px solid var(--border-light);
     }
-    .msg-dropdown-item:last-child { border-bottom: none; }
-    .msg-dropdown-item:hover { background: var(--accent-soft); }
+    .articulo-pedido-row:hover { background: var(--surface-2); }
+    .articulo-pedido-row.ya-listo { opacity: .55; cursor: default; }
+    .articulo-pedido-row.ya-listo:hover { background: transparent; }
+    .articulo-pedido-row input[type="checkbox"] {
+      width: 24px;
+      height: 24px;
+      flex: none;
+      -webkit-appearance: none;
+      appearance: none;
+      border: 1.8px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      cursor: pointer;
+      position: relative;
+      transition: background .16s, border-color .16s;
+    }
+    .articulo-pedido-row input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .articulo-pedido-row input[type="checkbox"]:checked::after {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 3px;
+      width: 5px;
+      height: 10px;
+      border: solid #fff;
+      border-width: 0 2.4px 2.4px 0;
+      transform: rotate(43deg);
+    }
+    .articulo-pedido-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .articulo-pedido-nombre {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .articulo-pedido-id {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--ink-4);
+    }
+    .articulo-pedido-cant {
+      flex: none;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink-2);
+    }
+    .badge-listo {
+      flex: none;
+      height: 23px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 99px;
+      background: var(--ok-soft);
+      color: var(--ok);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
 
-    /* Blocking overlay */
+    .articulo-multi {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--accent-soft);
+      border-bottom: 1px solid var(--accent-ring);
+    }
+    .articulo-multi-tx {
+      flex: 1;
+      min-width: 0;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .articulo-multi-code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+    .articulo-multi-cancel {
+      flex: none;
+      height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--accent-ring);
+      border-radius: var(--r1);
+      background: var(--surface);
+      color: var(--accent);
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    .articulo-footer {
+      flex: none;
+      display: flex;
+      gap: 9px;
+      padding: 14px 16px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+    .articulo-btn-sec, .articulo-btn-confirmar {
+      height: 48px;
+      border-radius: var(--r2);
+      border: 1px solid transparent;
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      transition: background .14s, color .14s, border-color .14s, opacity .14s;
+    }
+    .articulo-btn-sec {
+      flex: none;
+      padding: 0 20px;
+      background: var(--surface);
+      border-color: var(--line);
+      color: var(--ink-2);
+    }
+    .articulo-btn-sec:hover { background: var(--surface-3); color: var(--ink); }
+    .articulo-btn-confirmar {
+      flex: 1;
+      background: var(--ok);
+      color: #fff;
+      font-weight: 800;
+      box-shadow: 0 1px 2px rgba(20,20,18,.16), inset 0 1px 0 rgba(255,255,255,.18);
+    }
+    .articulo-btn-confirmar:disabled { opacity: .45; box-shadow: none; }
+
+    /* =========================================
+       CAPA DE BLOQUEO
+       ========================================= */
     .blocking-overlay {
+      display: none;
       position: fixed;
       inset: 0;
-      background: rgba(15,23,42,.8);
-      z-index: 99998;
-      display: none;
+      background: var(--scrim);
+      z-index: 400;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
-      backdrop-filter: blur(8px);
+      padding: 24px;
     }
     .blocking-overlay.active { display: flex; }
     .blocking-overlay-box {
-      background: var(--surface);
-      border-radius: var(--radius-xl);
-      padding: 32px 40px;
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 30px 22px;
+      background: var(--graphite);
+      border-radius: var(--r4);
+      box-shadow: var(--sh3);
       text-align: center;
-      box-shadow: var(--shadow-lg);
-      animation: modalIn .3s var(--ease-out);
     }
-    .blocking-overlay-box .spinner { margin: 0 auto 16px; }
+    .blocking-overlay-box .spinner {
+      margin: 0;
+      border-color: var(--graphite-line);
+      border-top-color: var(--accent);
+    }
     .blocking-overlay-text {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
-      color: var(--text);
-      margin-bottom: 8px;
+      letter-spacing: -.2px;
+      color: var(--on-g);
     }
     .blocking-overlay-warn {
       font-size: 11px;
-      color: var(--danger);
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      color: var(--on-g-3);
     }
 
-    /* Edit client modal (styled for despachos) */
-    .edit-client-field {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 13px;
-      font-family: var(--font-ui);
-      font-weight: 500;
-      background: var(--surface-warm);
-      color: var(--text);
-      outline: none;
-      margin-bottom: 8px;
-      transition: all .2s var(--ease-out);
-      box-sizing: border-box;
+    /* =========================================
+       LIGHTBOX · TOOLTIP · TOAST
+       ========================================= */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.88);
+      z-index: 350;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      cursor: zoom-out;
+      animation: fadeIn .16s ease both;
     }
-    .edit-client-field:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
+    .lightbox.active { display: flex; }
+    .lightbox img {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: var(--r3);
+      object-fit: contain;
+      box-shadow: 0 30px 80px rgba(0,0,0,.6);
     }
-    .pv-fecha {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 500;
+
+    .tooltip-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 340;
+    }
+    .tooltip-overlay.active { display: block; }
+    .tooltip-box {
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 200px;
+      max-width: 260px;
+      padding: 12px 14px;
+      background: var(--graphite);
+      border-radius: var(--r2);
+      box-shadow: var(--sh3);
+      animation: sheetIn .18s var(--ease-out) both;
+    }
+    .tt-label {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--on-g-3);
+    }
+    .tt-value {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--on-g);
+      word-break: break-all;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 32px;
+      transform: translateX(-50%);
+      z-index: 500;
+      max-width: min(88vw, 420px);
+      padding: 13px 20px;
+      background: var(--graphite);
+      color: var(--on-g);
+      border-radius: 99px;
+      box-shadow: var(--sh3);
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: -.1px;
       text-align: center;
-      margin-bottom: 12px;
+      animation: toastIn .28s var(--ease-spring) both;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translate(-50%, 14px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    /* =========================================
+       LOGIN
+       ========================================= */
+    .login-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--graphite);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-screen.active { display: flex; }
+    .login-box {
+      width: 100%;
+      max-width: 380px;
+      padding: 34px 30px 30px;
+      background: var(--graphite-2);
+      border: 1px solid var(--graphite-line);
+      border-radius: var(--r4);
+      box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      animation: sheetIn .3s var(--ease-out) both;
+    }
+    .login-logo {
+      width: 54px;
+      height: 54px;
+      margin: 0 auto 20px;
+      border-radius: 16px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-logo img { width: 30px; height: 30px; object-fit: contain; }
+    .login-title {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      color: var(--on-g);
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .login-subtitle {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--on-g-3);
+      text-align: center;
+      margin-bottom: 26px;
+    }
+    .login-field { margin-bottom: 13px; }
+    .login-field label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--on-g-3);
+      margin-bottom: 7px;
+    }
+    .login-field input {
+      width: 100%;
+      height: 46px;
+      padding: 0 14px;
+      border-radius: var(--r2);
+      border: 1px solid var(--graphite-line);
+      background: var(--graphite);
+      color: var(--on-g);
+      font-size: 14.5px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .login-field input::placeholder { color: var(--on-g-3); font-weight: 500; }
+    .login-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    .login-error {
+      min-height: 18px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e08b85;
+      text-align: center;
+      margin: 4px 0 10px;
+    }
+    .login-btn {
+      width: 100%;
+      height: 50px;
+      border: none;
+      border-radius: var(--r2);
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -.2px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
+      transition: background .14s, transform .12s;
+    }
+    .login-btn:hover { background: var(--accent-2); }
+    .login-btn:active { transform: scale(.98); }
+    .login-btn:disabled { opacity: .55; }
+
+    /* =========================================
+       ADAPTACION A PANTALLAS ANGOSTAS
+       Por debajo de 1024px el panel derecho colapsa en una hoja inferior
+       anclada: mismo contenido, no una pantalla aparte.
+       ========================================= */
+    @media (max-width: 1023px) {
+      .workspace { flex-direction: column; }
+
+      .side-dock {
+        width: auto;
+        flex: none;
+        border-left: none;
+        border-top: 1px solid var(--line);
+        border-radius: var(--r4) var(--r4) 0 0;
+        box-shadow: 0 -14px 40px rgba(20,20,18,.10);
+      }
+
+      /* El degradado del borde inferior avisa que el panel sigue: sin el, un
+         segmentado cortado al medio se lee como un error de maquetado. */
+      #sidePanel {
+        max-height: 34vh;
+        padding: 4px 14px 4px;
+        gap: 12px;
+        transition: max-height .28s var(--ease-out);
+        -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+        mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+      }
+
+      /* Tocar la barra de agarre (o hacer swipe sobre las acciones) abre
+         #footerDrawer; se aprovecha esa misma clase para ampliar la hoja y
+         alcanzar Entrega y la nota sin scrollear dentro de un area chica. */
+      .side-dock:has(#footerDrawer.open) #sidePanel { max-height: 62vh; }
+
+      .footer-handle { display: block; }
+      .footer-controls { border-top: none; background: transparent; padding: 10px 14px 14px; }
+      .entregado-actions { border-top: none; background: transparent; }
+    }
+
+    @media (max-width: 720px) {
+      :root { --topbar-h: 56px; --ctx-h: 48px; }
+
+      .brand-name { display: none; }
+      .header { gap: 10px; padding: 0 10px; }
+      .header-search { max-width: none; }
+      .header-btn--accent { padding: 0; width: 44px; }
+      .header-btn--accent .header-btn-label { display: none; }
+
+      .main-content { padding: 0 12px 16px; }
+      .items-header { height: 48px; }
+
+      .item-card { gap: 11px; padding: 9px 10px; }
+      .item-img, .item-img-placeholder { width: 46px; height: 46px; }
+      .pv-item-fin { width: auto; }
+      .pv-valor-static { display: none; }
+      .item-delete { display: none; }
+
+      .ctx-fecha, .ctx-link { display: none; }
+      .progress-bar-track { width: 84px; }
+
+      #sidePanel { max-height: 40vh; }
+      .modal-backdrop, .pedidos-panel, .faltantes-panel, .add-item-modal { padding: 14px; }
+    }
+
+    @media (max-width: 420px) {
+      .progress-bar-track { display: none; }
+      .cli-tel { display: none; }
+    }
+
+    /* Respetar la preferencia de movimiento reducido del sistema */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
     }
   </style>
 </head>
@@ -2612,24 +2680,35 @@
     </div>
   </div>
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="header-brand" id="headerBrand" style="cursor:pointer">
+  <!-- TOPBAR -->
+  <header class="header">
+    <div class="header-brand" id="headerBrand" style="cursor:pointer" title="Volver al inicio">
       <div class="brand-mark"><img src="faviconblanco.png" alt="Logo"></div>
+      <span class="brand-name">Despacho</span>
     </div>
+
     <div class="header-search">
-      <span class="search-icon">&#128270;</span>
-      <input type="text" id="pedidoInput" placeholder="ID del pedido..." autocomplete="off" inputmode="none">
+      <span class="search-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="16.6" y1="16.6" x2="21" y2="21"></line></svg></span>
+      <input type="text" id="pedidoInput" placeholder="Escanea o escribi un ID de pedido" autocomplete="off" inputmode="none">
       <div class="search-dropdown" id="searchDropdown"></div>
     </div>
+
     <div class="header-actions">
-      <button class="header-btn header-btn--icon" id="btnBuscarArticulo" title="Buscar art&iacute;culo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></button>
-      <button class="header-btn header-btn--icon" id="btnHistorial" title="Historial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></button>
-      <button class="header-btn header-btn--icon" id="btnPedidos" title="Examinar pedidos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
-      <button class="header-btn header-btn--accent header-btn--icon" id="btnQR" title="Escanear QR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"></rect><rect width="5" height="5" x="16" y="3" rx="1"></rect><rect width="5" height="5" x="3" y="16" rx="1"></rect><path d="M21 16h-3a2 2 0 0 0-2 2v3"></path><path d="M21 21v.01"></path><path d="M12 7v3a2 2 0 0 1-2 2H7"></path><path d="M3 12h.01"></path><path d="M12 3h.01"></path><path d="M12 16v.01"></path><path d="M16 12h1"></path><path d="M21 12v.01"></path><path d="M12 21v-1"></path></svg></button>
+      <button class="header-btn header-btn--icon" id="btnBuscarArticulo" title="Buscar art&iacute;culo"><svg class="ic" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></button>
+
+      <button class="header-btn header-btn--icon" id="btnHistorial" title="Historial de despachos"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg></button>
+
+      <button class="header-btn header-btn--icon" id="btnPedidos" title="Pedidos pendientes"><svg class="ic" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><line x1="4.2" y1="6" x2="4.21" y2="6"></line><line x1="4.2" y1="12" x2="4.21" y2="12"></line><line x1="4.2" y1="18" x2="4.21" y2="18"></line></svg><span class="header-badge" id="pedidosBadge"></span></button>
+
+      <span class="header-sep"></span>
+
+      <button class="header-btn header-btn--icon" id="btnTema" title="Cambiar entre tema claro y oscuro" aria-label="Cambiar tema"><svg class="ic tema-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="ic tema-luna" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5z"></path></svg></button>
+
       <button id="btnInstall" style="display:none" title="Instalar app">&#128242;</button>
+
+      <button class="header-btn header-btn--accent" id="btnQR" title="Escanear QR"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1.2"></rect><rect x="15" y="3" width="6" height="6" rx="1.2"></rect><rect x="3" y="15" width="6" height="6" rx="1.2"></rect><path d="M15 15h2v2h-2z"></path><path d="M19.5 15H21"></path><path d="M15 19.5V21"></path><path d="M19 19h2v2"></path></svg><span class="header-btn-label">Escanear</span></button>
     </div>
-  </div>
+  </header>
 
   <!-- QR SCANNER -->
   <div id="qr-reader-container">
@@ -2637,61 +2716,115 @@
     <button class="qr-close" id="btnQRClose">Cerrar</button>
   </div>
 
+  <!-- FRANJA DE CONTEXTO DEL PEDIDO
+       Reemplaza a las viejas tarjetas de Estado/Pago/Entrega: aca vive la
+       identidad del pedido (id, estado, antiguedad) y el progreso, que asi
+       queda siempre visible aunque la lista de articulos scrollee. -->
+  <div class="ctx-bar" id="contextBar">
+    <span class="ctx-id" id="ctxId"></span>
+    <span class="status-badge" id="ctxEstado"></span>
+    <span class="ctx-dot"></span>
+    <span class="ctx-fecha" id="ctxFecha"></span>
+    <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
+    <span class="ctx-spacer"></span>
+    <div class="progress-section">
+      <span class="progress-label" id="ctxProgresoTexto">0 de 0 empacados</span>
+      <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
+      <span class="progress-pct">0%</span>
+    </div>
+  </div>
+
   <!-- STATUS BAR -->
   <div class="status-bar" id="statusBar"></div>
 
-  <!-- ACCION SOBRE PEDIDO ENTREGADO -->
-  <!-- Vive fuera del footer porque el footer queda oculto cuando el pedido esta
-       bloqueado, y esta es la unica accion habilitada en ese estado. -->
-  <div class="entregado-actions" id="entregadoActions">
-    <button class="footer-btn-base btn-cancelar-entregado" id="btnCancelarEntregado">Cancelar Entregado</button>
-  </div>
+  <!-- ESPACIO DE TRABAJO
+       Dos columnas desde 1024px: articulos con scroll propio a la izquierda y
+       el panel de trabajo fijo a la derecha. Por debajo de ese ancho el panel
+       colapsa en una hoja inferior anclada (ver el @media del CSS). -->
+  <div class="workspace">
 
-  <!-- CONTENIDO PRINCIPAL -->
-  <div class="main-content" id="mainContent">
-    <div class="welcome-screen" id="welcomeScreen">
-      <div class="welcome-icon">&#128230;</div>
-      <p>Ingresa o escanea un ID de pedido para comenzar</p>
-      <span class="welcome-hint">Usa el boton QR para escanear</span>
-    </div>
-  </div>
+    <main class="col-items">
+      <!-- Cabecera estatica: #btnAddItem conserva su listener entre renders -->
+      <div class="items-header">
+        <h2>Art&iacute;culos</h2>
+        <span class="items-counter" style="cursor:pointer" onclick="copiarLinkPedido()">0 items</span>
+        <span class="items-header-spacer"></span>
+        <button class="btn-add-item" id="btnAddItem" type="button"><svg class="ic-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Agregar art&iacute;culo</button>
+      </div>
 
-  <!-- FOOTER UNIFICADO -->
-  <div class="footer-controls" id="footerControls" style="display:none">
-    <div class="footer-handle" id="footerHandle"></div>
-    <div class="footer-drawer" id="footerDrawer">
-      <div class="footer-drawer-inner">
+      <div class="main-content" id="mainContent">
+        <div class="welcome-screen" id="welcomeScreen">
+          <div class="welcome-icon"><svg class="ic-lg" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1.2"></rect><rect x="15" y="3" width="6" height="6" rx="1.2"></rect><rect x="3" y="15" width="6" height="6" rx="1.2"></rect><path d="M15 15h2v2h-2z"></path><path d="M19.5 15H21"></path><path d="M15 19.5V21"></path><path d="M19 19h2v2"></path></svg></div>
+          <p>Listo para despachar</p>
+          <span class="welcome-hint">Escane&aacute; el QR del pedido o escrib&iacute; su ID en el buscador para empezar a armarlo.</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- PANEL DE TRABAJO -->
+    <aside class="side-dock" id="sideDock">
+
+      <!-- Barra de agarre de la hoja inferior (solo visible por debajo de
+           1024px). Reusa el toggle y el swipe que ya existian: abre y cierra
+           #footerDrawer, y el CSS lee esa clase para agrandar el panel. -->
+      <div class="footer-handle" id="footerHandle" title="Ampliar o contraer el panel"></div>
+
+      <!-- Lo pinta renderUnificado(): cliente, totales, pago y entrega -->
+      <div id="sidePanel"></div>
+
+      <!-- Accion sobre pedido entregado. Vive fuera del footer porque el footer
+           queda oculto cuando el pedido esta bloqueado, y esta es la unica
+           accion habilitada en ese estado. -->
+      <div class="entregado-actions" id="entregadoActions">
+        <button class="footer-btn-base btn-cancelar-entregado" id="btnCancelarEntregado">Cancelar Entregado</button>
+      </div>
+
+      <!-- ACCIONES -->
+      <div class="footer-controls" id="footerControls" style="display:none">
         <div class="footer-row">
-          <button class="btn-faltantes" id="btnFaltantes" disabled>Sin faltantes</button>
+          <span class="lbl">Nota</span>
+          <select class="nota-select" id="notaSelect">
+            <option value="">---</option>
+          </select>
         </div>
-      </div>
-    </div>
-    <div class="footer-row" style="margin: 5px 0 15px 0;">
-      <select class="nota-select" id="notaSelect">
-        <option value="">---</option>
-      </select>
-    </div>
-    <div class="footer-btn-grid">
-      <button class="footer-btn-base btn-add-item" id="btnAddItem">+ Agregar</button>
-      <div class="print-menu-wrap">
-        <button class="footer-btn-base btn-impresion" id="btnImpresion">Impresion</button>
-        <div class="print-menu" id="printMenu">
-          <div class="print-menu-item" id="printRotulo">&#127991;&#65039; Rotulo</div>
-          <div class="print-menu-item" id="printFactura">&#129534; Factura</div>
+
+        <div class="dock-utils">
+          <div class="print-menu-wrap">
+            <button class="footer-btn-base btn-impresion" id="btnImpresion">Imprimir</button>
+            <div class="print-menu" id="printMenu">
+              <div class="print-menu-item" id="printRotulo">R&oacute;tulo de env&iacute;o</div>
+              <div class="print-menu-item" id="printFactura">Orden de pedido</div>
+            </div>
+          </div>
+
+          <div class="msg-menu-wrap">
+            <button class="footer-btn-base btn-mensaje" id="btnMensajePV">Mensaje</button>
+            <div class="msg-dropdown" id="msgDropdown">
+              <div class="msg-dropdown-item" data-msg="1">Saludo inicial</div>
+              <div class="msg-dropdown-item" data-msg="2">Cotizaci&oacute;n</div>
+              <div class="msg-dropdown-item" data-msg="3">Convertir a retiro</div>
+            </div>
+          </div>
+
+          <!-- El cajon dejo de serlo: Faltantes vive en esta misma fila. Los
+               contenedores siguen porque toggleDrawer() y el swipe del footer
+               los referencian; el CSS los vuelve transparentes. -->
+          <div class="footer-drawer" id="footerDrawer">
+            <div class="footer-drawer-inner">
+              <button class="footer-btn-base btn-faltantes" id="btnFaltantes" disabled>Sin faltantes</button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="msg-menu-wrap">
-        <button class="footer-btn-base btn-mensaje" id="btnMensajePV">Mensaje &#9660;</button>
-        <div class="msg-dropdown" id="msgDropdown">
-          <div class="msg-dropdown-item" data-msg="1">&#128172; Saludo Inicial</div>
-          <div class="msg-dropdown-item" data-msg="2">&#128172; Cotización</div>
-          <div class="msg-dropdown-item" data-msg="3">&#128172; Convertir a Retiro</div>
+
+        <div class="dock-main">
+          <button class="footer-btn-base btn-toggle-estado" id="btnToggleEstado">Cerrar Pedido</button>
+          <button class="footer-btn-base btn-despachar" id="btnDespachar">Entregado</button>
         </div>
+
+        <button class="footer-btn-base btn-cancelar-pedido" id="btnCancelarPV">Cancelar pedido</button>
       </div>
-      <button class="footer-btn-base btn-toggle-estado" id="btnToggleEstado">Cerrar Pedido</button>
-      <button class="footer-btn-base btn-cancelar-pedido" id="btnCancelarPV">Cancelar</button>
-      <button class="footer-btn-base btn-despachar" id="btnDespachar">Entregado</button>
-    </div>
+
+    </aside>
   </div>
 
   <!-- BLOCKING OVERLAY -->
@@ -2705,8 +2838,8 @@
 
   <!-- EDIT CLIENT MODAL -->
   <div class="modal-backdrop" id="editClientModal">
-    <div class="modal-box" style="text-align:left;width:360px">
-      <p style="font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;text-align:center">Editar datos del cliente</p>
+    <div class="modal-box modal-box--form">
+      <p class="modal-titulo">Editar datos del cliente</p>
       <input class="edit-client-field" id="editNombre" type="text" placeholder="Nombre y Apellido">
       <input class="edit-client-field" id="editDireccion" type="text" placeholder="Direccion Completa">
       <input class="edit-client-field" id="editLocalidad" type="text" placeholder="Localidad">
@@ -2741,7 +2874,7 @@
       <input class="edit-client-field" id="editDni" type="text" placeholder="DNI">
       <input class="edit-client-field" id="editTelefono" type="text" placeholder="Telefono">
       <input class="edit-client-field" id="editEmail" type="email" placeholder="Email" readonly>
-      <div class="modal-btns" style="margin-top:12px">
+      <div class="modal-btns">
         <button class="btn-cancel" id="editClientCancel">Cancelar</button>
         <button class="btn-primary" id="editClientSave">Guardar</button>
       </div>
@@ -2972,6 +3105,49 @@
     // ==========================================
     // La Fullscreen API exige un gesto del usuario: no se puede invocar al
     // cargar. Por eso se solicita en la primera interaccion (toque/click).
+    // ==========================================
+    // TEMA CLARO / OSCURO
+    // Arranca siguiendo al sistema operativo. El boton fuerza un tema y lo
+    // recuerda por dispositivo; mientras no haya eleccion guardada la app
+    // sigue al sistema en vivo. El atributo data-tema en <html> es lo que
+    // consumen los tres bloques de tokens del CSS.
+    // ==========================================
+    (function setupTema() {
+      const CLAVE = 'despachos_tema';
+      const btn = document.getElementById('btnTema');
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      let eleccion = null;
+      try { eleccion = localStorage.getItem(CLAVE); } catch (e) { /* modo privado */ }
+      if (eleccion !== 'dark' && eleccion !== 'light') eleccion = null;
+
+      function aplicar() {
+        if (eleccion) document.documentElement.setAttribute('data-tema', eleccion);
+        else document.documentElement.removeAttribute('data-tema');
+        const oscuro = eleccion ? eleccion === 'dark' : mq.matches;
+        // La clase solo maneja el icono del boton; los colores salen de los tokens.
+        document.documentElement.classList.toggle('es-oscuro', oscuro);
+        if (btn) btn.title = oscuro ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro';
+        if (meta) meta.setAttribute('content', oscuro ? '#111214' : '#1b1d21');
+      }
+
+      aplicar();
+
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const oscuroAhora = document.documentElement.classList.contains('es-oscuro');
+          eleccion = oscuroAhora ? 'light' : 'dark';
+          try { localStorage.setItem(CLAVE, eleccion); } catch (e) { /* modo privado */ }
+          aplicar();
+        });
+      }
+
+      // Sin eleccion guardada, seguir al sistema si cambia con la app abierta.
+      const alCambiarSistema = () => { if (!eleccion) aplicar(); };
+      if (mq.addEventListener) mq.addEventListener('change', alCambiarSistema);
+      else if (mq.addListener) mq.addListener(alCambiarSistema);
+    })();
+
     (function setupAutoFullscreen() {
       // Detectar movil/tablet (touch). En desktop no hacemos nada.
       const esMovil = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -3329,6 +3505,20 @@
     const pedidoInput = document.getElementById('pedidoInput');
     const btnQR = document.getElementById('btnQR');
 
+    // Misma pantalla de inicio que trae el markup: resetView() la vuelve a poner.
+    const HTML_BIENVENIDA =
+      '<div class="welcome-screen" id="welcomeScreen">' +
+        '<div class="welcome-icon"><svg class="ic-lg" viewBox="0 0 24 24" aria-hidden="true">' +
+          '<rect x="3" y="3" width="6" height="6" rx="1.2"></rect>' +
+          '<rect x="15" y="3" width="6" height="6" rx="1.2"></rect>' +
+          '<rect x="3" y="15" width="6" height="6" rx="1.2"></rect>' +
+          '<path d="M15 15h2v2h-2z"></path><path d="M19.5 15H21"></path>' +
+          '<path d="M15 19.5V21"></path><path d="M19 19h2v2"></path>' +
+        '</svg></div>' +
+        '<p>Listo para despachar</p>' +
+        '<span class="welcome-hint">Escane&aacute; el QR del pedido o escrib&iacute; su ID en el buscador para empezar a armarlo.</span>' +
+      '</div>';
+
     function resetView() {
       if (realtimeListener && pedidoId) {
         db.ref('pedidos/' + pedidoId).off('value', realtimeListener);
@@ -3346,12 +3536,11 @@
       actualizarBtnCancelarEntregado();
       despachoYaEjecutado = false;
       window.cachedValues = {};
-      document.getElementById('mainContent').innerHTML =
-        '<div class="welcome-screen" id="welcomeScreen">' +
-        '<div class="welcome-icon">&#128230;</div>' +
-        '<p>Ingresa o escanea un ID de pedido para comenzar</p>' +
-        '<span class="welcome-hint">Usa el boton QR para escanear</span>' +
-        '</div>';
+      // Apaga de una sola vez la franja de contexto, la cabecera de articulos
+      // y el panel derecho (ver la regla body.con-pedido del CSS).
+      document.body.classList.remove('con-pedido', 'pedido-bloqueado');
+      document.getElementById('sidePanel').innerHTML = '';
+      document.getElementById('mainContent').innerHTML = HTML_BIENVENIDA;
     }
 
     document.getElementById('headerBrand').addEventListener('click', resetView);
@@ -3459,6 +3648,10 @@
       footer.style.display = 'none';
       // Ocultado explicito: pedidoActual todavia apunta al pedido anterior.
       document.getElementById('entregadoActions').classList.remove('visible');
+      // Mientras carga no hay pedido que mostrar: se apagan contexto y panel
+      // para que un error de red no deje datos del pedido anterior a la vista.
+      document.body.classList.remove('con-pedido', 'pedido-bloqueado');
+      document.getElementById('sidePanel').innerHTML = '';
       mainContent.innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Cargando pedido...</p></div>';
 
       // Esperar a que sheets este cargado
@@ -3732,10 +3925,38 @@
     }
 
     // ==========================================
+    // ICONOS INLINE
+    // Se declaran una sola vez y se interpolan en el HTML que arma
+    // renderUnificado(). Son decorativos: la etiqueta la da el texto vecino.
+    // ==========================================
+    const IC_CAJA = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
+    const IC_MENOS = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9.5 12 15.5 18 9.5"></polyline></svg>';
+    const IC_MAS = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 14.5 12 8.5 18 14.5"></polyline></svg>';
+    const IC_LAPIZ = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>';
+    const IC_CHAT = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg>';
+    const IC_EFECTIVO = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.6"></circle></svg>';
+    const IC_TARJETA = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>';
+    const IC_MOTO = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17.5" r="3"></circle><circle cx="18.5" cy="17.5" r="3"></circle><path d="M8.5 17.5h6.8l-3.1-9.2H10"></path><path d="M15.6 8.3h3l2.2 9.2"></path></svg>';
+    const IC_SOBRE = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><polyline points="3.5 7 12 13 20.5 7"></polyline></svg>';
+    const IC_CAMION = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="6.5" width="12" height="9.5" rx="1.5"></rect><path d="M13.5 9.5h4l3 3.5V16h-7z"></path><circle cx="6" cy="18.5" r="1.9"></circle><circle cx="17" cy="18.5" r="1.9"></circle></svg>';
+
+    // Iniciales para el avatar del cliente: como mucho dos.
+    function inicialesCliente(nombre) {
+      const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+      const ini = partes.map(p => p.charAt(0).toUpperCase()).join('');
+      return ini || '?';
+    }
+
+    // ==========================================
     // RENDER UNIFICADO (Despacho + Pedido)
+    // Escribe en tres destinos: la franja de contexto (estatica, solo se
+    // rellena), la columna de articulos (#mainContent) y el panel de trabajo
+    // (#sidePanel). Los articulos cuelgan directo de #mainContent, sin envoltorio,
+    // porque toggleCheck() inserta y mueve grupos sobre ese mismo nivel.
     // ==========================================
     function renderUnificado() {
       const mainContent = document.getElementById('mainContent');
+      const sidePanel = document.getElementById('sidePanel');
       if (!pedidoActual) return;
 
       const cliente = pedidoActual.cliente || {};
@@ -3758,67 +3979,34 @@
         fechaIngreso = new Date(pedidoActual.timestamp).toLocaleString('es-AR');
       }
 
-      // Calculate progress
-      const checkedCount = items.filter(it => isItemChecked(it.codigo)).length;
-      const progressPct = items.length > 0 ? Math.round((checkedCount / items.length) * 100) : 0;
-      const isComplete = progressPct === 100 && items.length > 0;
+      // ---------- FRANJA DE CONTEXTO ----------
+      // El estado del pedido vive aca: ya no hay tarjetas de Estado, Pago ni
+      // Entrega en el cuerpo (los dos ultimos son ahora los segmentados del panel).
+      document.body.classList.add('con-pedido');
+      // "Agregar articulo" vivia en el footer, que se oculta con el pedido
+      // bloqueado; ahora vive en la cabecera de la lista y necesita su propia
+      // condicion para no ofrecer una accion que el pedido ya no admite.
+      document.body.classList.toggle('pedido-bloqueado', isBlocked);
+      document.getElementById('ctxId').textContent = '#' + (pedidoId || '');
+      const ctxEstado = document.getElementById('ctxEstado');
+      ctxEstado.className = 'status-badge ' + getStatusClass(pedidoActual.status);
+      ctxEstado.textContent = pedidoActual.status || 'N/A';
+      document.getElementById('ctxFecha').textContent = fechaIngreso ? 'Ingresado ' + fechaIngreso : '';
 
-      let html = '';
-
-      // FECHA
-      if (fechaIngreso) {
-        html += '<div class="pv-fecha">' + escapeHtml(fechaIngreso) + '</div>';
-      }
-
-      // PROGRESS BAR
-      html += '<div class="progress-section">';
-      html += '<div class="progress-label"><span>Progreso</span></div>';
-      html += '<div class="progress-bar-track"><div class="progress-bar-fill' + (isComplete ? ' complete' : '') + '" style="width:' + progressPct + '%"></div></div>';
-      html += '<div class="progress-label"><span class="progress-pct' + (isComplete ? ' complete' : '') + '">' + progressPct + '%</span></div>';
-      html += '</div>';
-
-      // DATOS CLIENTE (clickeable para editar)
-      html += '<div class="cliente-section">';
-      html += '<div class="cliente-row">';
-      html += '<div class="cliente-card" style="cursor:pointer" onclick="abrirEditClientModal()"><label>Cliente</label><div class="value">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div></div>';
-      html += '<div class="cliente-card"><label>Localidad</label><div class="value">' + escapeHtml(cliente.localidad || 'N/A') + '</div></div>';
-      html += '<div class="cliente-card"><label>Telefono</label><div class="value">' +
-        (cliente.telefono
-          ? '<a href="' + whatsappLink + '" target="_blank">' + escapeHtml(cliente.telefono) + ' \u{1F4AC}</a>'
-          : 'N/A') +
-        '</div></div>';
-      html += '</div>';
-
-      // Fila 2: Pago + Entrega + Estado
-      html += '<div class="cliente-row">';
-      html += '<div class="cliente-card"><label>Pago</label><div class="value tipoPagoDisplay">' + emojiPago(pedidoActual.tipoPago) + escapeHtml(pedidoActual.tipoPago || 'N/A') + '</div></div>';
-      html += '<div class="cliente-card"><label>Entrega</label><div class="value tipoEntregaDisplay">' + emojiEntrega(pedidoActual.tipoEntrega) + escapeHtml(pedidoActual.tipoEntrega || 'N/A') + '</div></div>';
-      html += '<div class="cliente-card"><label>Estado</label><div class="value"><span class="status-badge ' + getStatusClass(pedidoActual.status) + '">' + emojiStatus(pedidoActual.status) + escapeHtml(pedidoActual.status || 'N/A') + '</span></div></div>';
-      html += '</div>';
-      html += '</div>';
-
-      // HEADER ITEMS
-      const totalItems = items.reduce((s, it) => s + (it.cantidad || 0), 0);
-      html += '<div class="items-header"><h2>Articulos</h2><span class="items-counter" style="cursor:pointer" onclick="copiarLinkPedido()">' + items.length + ' items \u00B7 ' + totalItems + ' u.</span></div>';
-
-      // Separar items en pendientes y listos
+      // ---------- COLUMNA IZQUIERDA: ARTICULOS ----------
       const pendientes = [];
       const listos = [];
       items.forEach((it, idx) => {
-        if (it.listo === 'y') {
-          listos.push({ item: it, idx });
-        } else {
-          pendientes.push({ item: it, idx });
-        }
+        if (it.listo === 'y') listos.push({ item: it, idx });
+        else pendientes.push({ item: it, idx });
       });
 
-      // Función auxiliar para renderizar grupo de items
       function renderItemGroup(group, groupName, groupId) {
         if (group.length === 0) return '';
-        let groupHtml = '<div id="group-' + groupId + '" style="margin-bottom: 16px;">';
-        groupHtml += '<div id="group-' + groupId + '-header" style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px;">' + groupName + ' (' + group.length + ')</div>';
+        let groupHtml = '<div class="item-group" id="group-' + groupId + '">';
+        groupHtml += '<div class="group-header" id="group-' + groupId + '-header">' + groupName + ' (' + group.length + ')</div>';
 
-        group.forEach((entry, groupIdx) => {
+        group.forEach(entry => {
           const it = entry.item;
           const idx = entry.idx;
           const sheetInfo = sheetsData[it.codigo] || {};
@@ -3827,12 +4015,11 @@
           const checkedClass = isItemChecked(it.codigo) ? ' checked' : '';
           const sinStock = sheetInfo.stock !== null && sheetInfo.stock !== undefined && Number.isFinite(sheetInfo.stock) && sheetInfo.stock <= 0;
           const sinStockClass = sinStock ? ' sin-stock' : '';
-          const delay = Math.min((pendientes.length + groupIdx) * 0.03, 0.3);
 
           const unitPesos = Math.round(it.valorU || 0);
           const sub = Math.round((it.cantidad || 0) * unitPesos);
 
-          groupHtml += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '" style="animation-delay:' + delay + 's">';
+          groupHtml += '<div class="item-card' + checkedClass + sinStockClass + '" data-idx="' + idx + '">';
 
           // Imagen
           if (imgUrl || imgUrlAlt) {
@@ -3842,45 +4029,45 @@
               + ' onclick="openLightbox(this.src)"'
               + ' onerror="imgFallback(this, \'' + escapeHtml(imgAlt) + '\')" loading="lazy">';
           } else {
-            groupHtml += '<div class="item-img-placeholder">&#128247;</div>';
+            groupHtml += '<div class="item-img-placeholder">' + IC_CAJA + '</div>';
           }
 
-          // Info
+          // Nombre y codigo
           groupHtml += '<div class="item-info">';
           groupHtml += '<div class="item-name" onclick="showTooltip(event, \'' + escapeHtml(it.codigo || '') + '\')">' + escapeHtml(it.nombre || 'Sin nombre') + '</div>';
           const stockVal = sheetInfo.stock;
           const stockClass = Number.isFinite(stockVal)
             ? (stockVal <= 0 ? ' stock-zero' : stockVal <= 10 ? ' stock-low' : ' stock-ok') : '';
           const stockDisplay = Number.isFinite(stockVal)
-            ? '<span class="item-stock' + stockClass + '">stk: ' + stockVal + '</span>' : '';
+            ? '<span class="item-stock' + stockClass + '">stk ' + stockVal + '</span>' : '';
           groupHtml += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
-
-          // Precio + total del item (valorU no editable: siempre proviene de Google Sheets)
-          groupHtml += '<div class="pv-item-fin">';
-          groupHtml += '<span class="pv-valor-static">$' + unitPesos.toLocaleString('es-AR') + '</span>';
-          groupHtml += '<span class="pv-total-item" id="pv-total-' + idx + '">= $' + sub.toLocaleString('es-AR') + '</span>';
           groupHtml += '</div>';
 
+          // Precio unitario y subtotal, en columna propia alineada a la derecha.
+          // valorU no es editable: siempre proviene de Google Sheets.
+          groupHtml += '<div class="pv-item-fin">';
+          groupHtml += '<span class="pv-valor-static">$ ' + unitPesos.toLocaleString('es-AR') + '</span>';
+          groupHtml += '<span class="pv-total-item" id="pv-total-' + idx + '">$ ' + sub.toLocaleString('es-AR') + '</span>';
           groupHtml += '</div>';
 
           // Cantidad
           if (!isBlocked) {
             groupHtml += '<div class="qty-control" data-qty-idx="' + idx + '">' +
-              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)" tabindex="-1">\u25BC</button>' +
+              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', -1)" tabindex="-1" aria-label="Restar uno">' + IC_MENOS + '</button>' +
               '<span class="qty-value" id="pv-qty-' + idx + '" role="button" title="Tocar para editar"' +
               ' onclick="activarQty(' + idx + ')">' + (it.cantidad || 1) + '</span>' +
-              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)" tabindex="-1">\u25B2</button>' +
+              '<button class="qty-btn" onclick="cambiarQty(' + idx + ', 1)" tabindex="-1" aria-label="Sumar uno">' + IC_MAS + '</button>' +
               '</div>';
           } else {
             groupHtml += '<span class="qty-static">' + (it.cantidad || 1) + '</span>';
           }
 
-          // Checkbox
-          groupHtml += '<input type="checkbox" class="item-check"' + (isItemChecked(it.codigo) ? ' checked' : '') + ' onchange="toggleCheck(' + idx + ', this.checked)">';
+          // Check de empacado
+          groupHtml += '<input type="checkbox" class="item-check"' + (isItemChecked(it.codigo) ? ' checked' : '') + ' onchange="toggleCheck(' + idx + ', this.checked)" aria-label="Marcar como empacado">';
 
-          // Eliminar
+          // Quitar
           if (!isBlocked) {
-            groupHtml += '<button class="item-delete" onclick="confirmDelete(' + idx + ')">&times;</button>';
+            groupHtml += '<button class="item-delete" onclick="confirmDelete(' + idx + ')" aria-label="Quitar del pedido">&times;</button>';
           }
 
           groupHtml += '</div>';
@@ -3890,22 +4077,39 @@
         return groupHtml;
       }
 
-      // Renderizar primero pendientes, luego listos
-      html += renderItemGroup(pendientes, 'Pendientes', 'pendientes');
+      let html = renderItemGroup(pendientes, 'Pendientes', 'pendientes');
       html += renderItemGroup(listos, 'Listos', 'listos');
-
       if (items.length === 0) {
-        html += '<div class="empty-items">No hay articulos en este pedido</div>';
+        html += '<div class="empty-items">Este pedido no tiene art&iacute;culos</div>';
       }
+      mainContent.innerHTML = html;
 
-      // SECCION FINANCIERA
+      // ---------- COLUMNA DERECHA: PANEL DE TRABAJO ----------
+      let panel = '';
+
+      // Cliente. La tarjeta entera abre la edicion, asi que el enlace de
+      // WhatsApp va afuera: anidado, el click burbujearia al modal.
+      const locParts = [cliente.localidad, cliente.provincia].filter(Boolean);
+      panel += '<div class="cliente-section">';
+      panel += '<div class="cliente-card" onclick="abrirEditClientModal()" title="Editar datos del cliente">';
+      panel += '<div class="cli-avatar">' + escapeHtml(inicialesCliente(cliente.nombre)) + '</div>';
+      panel += '<div class="cli-info">';
+      panel += '<div class="cli-nombre">' + escapeHtml(cliente.nombre || 'Sin nombre') + '</div>';
+      panel += '<div class="cli-loc">' + escapeHtml(locParts.length ? locParts.join(', ') : 'Sin localidad') + '</div>';
+      panel += '<div class="cli-tel">' + escapeHtml(cliente.telefono || 'Sin teléfono') + '</div>';
+      panel += '</div>';
+      panel += '<span class="cli-edit">' + IC_LAPIZ + '</span>';
+      panel += '</div>';
+      panel += whatsappLink
+        ? '<a class="cli-wa" href="' + whatsappLink + '" target="_blank" rel="noopener" title="Abrir WhatsApp">' + IC_CHAT + '</a>'
+        : '<span class="cli-wa disabled" title="Sin teléfono">' + IC_CHAT + '</span>';
+      panel += '</div>';
+
+      // Totales
       let totalSubtotal = 0;
       items.forEach(it => {
         totalSubtotal += Math.round((it.cantidad || 0) * Math.round(it.valorU || 0));
       });
-
-      html += '<div class="pv-totals">';
-      html += '<div class="pv-total-row"><span id="pvTotal">Subtotal $ ' + totalSubtotal.toLocaleString('es-AR') + '</span></div>';
 
       let descuento = window.cachedValues.descuento !== undefined ? window.cachedValues.descuento : (pagos.descuento || 0);
       let porcentaje = window.cachedValues.porcentaje !== undefined ? window.cachedValues.porcentaje : (pagos.porcentajeDescuento || 0);
@@ -3914,48 +4118,65 @@
       let envio = window.cachedValues.envio !== undefined ? window.cachedValues.envio : (pagos.envio || 0);
 
       const ro = admin ? '' : ' readonly';
-      html += '<div class="pv-total-row">Descuento % <input type="number" class="pv-input-sm" id="pvPorcentajeInput" min="0" max="100" value="' + porcentaje + '"' + ro + '>';
-      html += ' $ <input type="number" class="pv-input-sm" id="pvDescuentoInput" min="0" value="' + descuento + '"' + ro + ' style="width:80px"></div>';
-
-      html += '<div class="pv-total-row">Recargo % <input type="number" class="pv-input-sm" id="pvPorcentajeRecargoInput" min="0" max="100" value="' + porcentajeRecargo + '"' + ro + '>';
-      html += ' $ <input type="number" class="pv-input-sm" id="pvRecargoInput" min="0" value="' + recargo + '"' + ro + ' style="width:80px"></div>';
-
       const showEnvio = (pedidoActual.tipoEntrega === 'Correo Argentino' || pedidoActual.tipoEntrega === 'Motomensajeria');
-      html += '<div class="pv-total-row" id="pvEnvioRow" style="display:' + (showEnvio ? 'flex' : 'none') + '">Envio $ <input type="number" class="pv-input-sm" id="pvEnvioInput" min="0" value="' + envio + '"' + ro + ' style="width:80px"></div>';
 
       let totalFinal = totalSubtotal - descuento + recargo + (showEnvio ? envio : 0);
       if (totalFinal < 0) totalFinal = 0;
-      html += '<div class="pv-total-final" id="pvTotalFinal">TOTAL FINAL $ ' + totalFinal.toLocaleString('es-AR') + '</div>';
-      html += '</div>';
 
-      // RADIO PAGO
-      html += '<div class="pv-radio-group">';
-      html += '<div class="pv-radio-title">Pago</div>';
-      html += '<div class="pv-radio-row">';
-      html += '<label><input type="radio" name="pvTipoPago" value="Efectivo"' + (pedidoActual.tipoPago === 'Efectivo' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Efectivo</label>';
-      html += '<label><input type="radio" name="pvTipoPago" value="Transferencia"' + (pedidoActual.tipoPago === 'Transferencia' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> Transferencia</label>';
-      html += '</div>';
+      panel += '<div class="pv-totals">';
+      panel += '<div class="pv-total-row"><span id="pvTotal">Subtotal $ ' + totalSubtotal.toLocaleString('es-AR') + '</span></div>';
+
+      panel += '<div class="pv-total-row"><span>Descuento</span>' +
+        '<input type="number" class="pv-input-sm" id="pvPorcentajeInput" min="0" max="100" value="' + porcentaje + '"' + ro + ' aria-label="Descuento en porcentaje">' +
+        '<span class="pv-pct">%</span>' +
+        '<input type="number" class="pv-input-sm pv-input-money" id="pvDescuentoInput" min="0" value="' + descuento + '"' + ro + ' aria-label="Descuento en pesos"></div>';
+
+      panel += '<div class="pv-total-row"><span>Recargo</span>' +
+        '<input type="number" class="pv-input-sm" id="pvPorcentajeRecargoInput" min="0" max="100" value="' + porcentajeRecargo + '"' + ro + ' aria-label="Recargo en porcentaje">' +
+        '<span class="pv-pct">%</span>' +
+        '<input type="number" class="pv-input-sm pv-input-money" id="pvRecargoInput" min="0" value="' + recargo + '"' + ro + ' aria-label="Recargo en pesos"></div>';
+
+      panel += '<div class="pv-total-row" id="pvEnvioRow" style="display:' + (showEnvio ? 'flex' : 'none') + '"><span>Env&iacute;o</span>' +
+        '<span class="pv-gap"></span>' +
+        '<input type="number" class="pv-input-sm pv-input-money" id="pvEnvioInput" min="0" value="' + envio + '"' + ro + ' aria-label="Costo de env&iacute;o"></div>';
+
+      panel += '<div class="pv-total-final" id="pvTotalFinal" title="Tocar para cerrar la cotizaci&oacute;n y copiarla">TOTAL FINAL $ ' + totalFinal.toLocaleString('es-AR') + '</div>';
+      panel += '</div>';
+
+      // Pago
+      panel += '<div class="pv-radio-group">';
+      panel += '<div class="pv-radio-title">Pago</div>';
+      panel += '<div class="pv-radio-row">';
+      panel += '<label><input type="radio" name="pvTipoPago" value="Efectivo"' + (pedidoActual.tipoPago === 'Efectivo' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '>' + IC_EFECTIVO + '<span>Efectivo</span></label>';
+      panel += '<label><input type="radio" name="pvTipoPago" value="Transferencia"' + (pedidoActual.tipoPago === 'Transferencia' ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '>' + IC_TARJETA + '<span>Transferencia</span></label>';
+      panel += '</div>';
 
       const showAlias = admin && pedidoActual.tipoPago === 'Transferencia';
-      html += '<div class="pv-alias-row" id="pvAliasRow" style="display:' + (showAlias ? 'flex' : 'none') + '">';
-      html += '<span style="font-weight:700;min-width:60px">ALIAS</span>';
-      html += '<input type="text" class="pv-alias-input" id="pvAlias" maxlength="50" value="' + escapeHtml((pagos.alias) || '') + '" list="pvAliasDatalist">';
-      html += '<datalist id="pvAliasDatalist"></datalist>';
-      html += '</div>';
-      html += '</div>';
+      panel += '<div class="pv-alias-row" id="pvAliasRow" style="display:' + (showAlias ? 'flex' : 'none') + '">';
+      panel += '<span>Alias</span>';
+      panel += '<input type="text" class="pv-alias-input" id="pvAlias" maxlength="50" value="' + escapeHtml((pagos.alias) || '') + '" list="pvAliasDatalist" placeholder="Alias de la cuenta">';
+      panel += '<datalist id="pvAliasDatalist"></datalist>';
+      panel += '</div>';
+      panel += '</div>';
 
-      // RADIO ENTREGA
-      html += '<div class="pv-radio-group">';
-      html += '<div class="pv-radio-title">Entrega</div>';
-      html += '<div class="pv-radio-row">';
-      const entregaOpts = ['Motomensajeria', 'Correo Argentino', 'Via Cargo'];
+      // Entrega. Los value son los que compara el resto del codigo: no tocar.
+      panel += '<div class="pv-radio-group">';
+      panel += '<div class="pv-radio-title">Entrega</div>';
+      panel += '<div class="pv-radio-row pv-radio-row--3">';
+      const entregaOpts = [
+        { valor: 'Motomensajeria', texto: 'Moto', icono: IC_MOTO },
+        { valor: 'Correo Argentino', texto: 'Correo', icono: IC_SOBRE },
+        { valor: 'Via Cargo', texto: 'Vía Cargo', icono: IC_CAMION }
+      ];
       entregaOpts.forEach(opt => {
-        html += '<label><input type="radio" name="pvTipoEntrega" value="' + opt + '"' + (pedidoActual.tipoEntrega === opt ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '> ' + opt + '</label>';
+        panel += '<label><input type="radio" name="pvTipoEntrega" value="' + opt.valor + '"' + (pedidoActual.tipoEntrega === opt.valor ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '>' + opt.icono + '<span>' + opt.texto + '</span></label>';
       });
-      html += '</div>';
-      html += '</div>';
+      panel += '</div>';
+      panel += '</div>';
 
-      mainContent.innerHTML = '<div class="pv-content">' + html + '</div>';
+      sidePanel.innerHTML = panel;
+
+      actualizarContador();
       colapsarQty();  // el DOM anterior se descarta: resetear indice y timer
       actualizarProgreso();
 
@@ -4048,6 +4269,7 @@
 
       const fill = document.querySelector('.progress-bar-fill');
       const label = document.querySelector('.progress-pct');
+      const texto = document.getElementById('ctxProgresoTexto');
       if (fill) {
         fill.style.width = pct + '%';
         fill.classList.toggle('complete', isComplete);
@@ -4055,6 +4277,9 @@
       if (label) {
         label.textContent = pct + '%';
         label.classList.toggle('complete', isComplete);
+      }
+      if (texto) {
+        texto.textContent = checkedCount + ' de ' + items.length + ' empacados';
       }
       const btnToggle = document.getElementById('btnToggleEstado');
       if (btnToggle) {
@@ -4078,7 +4303,7 @@
       const totalEl = document.getElementById('pv-total-' + idx);
       if (totalEl) {
         const unitPesos = Math.round(pedidoActual.items[idx].valorU || 0);
-        totalEl.textContent = '= $' + Math.round(qty * unitPesos).toLocaleString('es-AR');
+        totalEl.textContent = '$ ' + Math.round(qty * unitPesos).toLocaleString('es-AR');
       }
       actualizarContador();
       actualizarCalculosPV();
@@ -4137,11 +4362,11 @@
         if (!targetGroup) {
           const groupDiv = document.createElement('div');
           groupDiv.id = 'group-' + targetGroupId;
-          groupDiv.style.marginBottom = '16px';
+          groupDiv.className = 'item-group';
 
           const headerDiv = document.createElement('div');
           headerDiv.id = 'group-' + targetGroupId + '-header';
-          headerDiv.style.cssText = 'font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px;';
+          headerDiv.className = 'group-header';
           groupDiv.appendChild(headerDiv);
 
           // Pendientes va antes de Listos
@@ -4738,6 +4963,14 @@
     }
 
     function renderPedidosPendientes() {
+      // Contador sobre el boton de la barra: se llena en cuanto el panel se
+      // abre por primera vez y se refresca en cada carga posterior.
+      const badge = document.getElementById('pedidosBadge');
+      if (badge) {
+        badge.textContent = pedidosCache.length;
+        badge.classList.toggle('visible', pedidosCache.length > 0);
+      }
+
       if (pedidosCache.length === 0) {
         pedidosResumen.textContent = '';
         pedidosPanelList.innerHTML = '<div class="pedidos-panel-empty">No hay pedidos abiertos o cerrados</div>';
