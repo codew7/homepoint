@@ -677,7 +677,12 @@
       padding: 14px 16px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
+    }
+    #sidePanelCards {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
 
     /* =========================================
@@ -1295,7 +1300,7 @@
       letter-spacing: .9px;
       text-transform: uppercase;
       color: var(--ink-4);
-      margin-bottom: 7px;
+      margin-bottom: 8px;
     }
     .pv-radio-row {
       display: flex;
@@ -1353,7 +1358,7 @@
       display: flex;
       align-items: center;
       gap: 9px;
-      margin-top: 8px;
+      margin-top: 4px;
     }
     .pv-alias-row > span:first-child {
       font-size: 10px;
@@ -1390,19 +1395,28 @@
       background: var(--surface-2);
     }
 
-    /* Barra de agarre: solo tiene sentido cuando el dock es una hoja inferior.
-       El area tocable es de 44px aunque la barra visible mida 4. */
-    .footer-handle {
+    /* Barra de resumen de la hoja inferior: solo existe por debajo de 1024px.
+       Con la tarjeta minimizada es lo unico que queda de ella, asi que carga el
+       dato que se consulta de reojo (cliente y total) y hace de zona tocable
+       para volver a desplegarla. */
+    .dock-peek {
       display: none;
-      height: 22px;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      height: 50px;
       flex: none;
-      position: relative;
+      padding: 6px 14px 0;
+      border: none;
+      background: transparent;
+      text-align: left;
       cursor: pointer;
+      position: relative;
     }
-    .footer-handle::before {
+    .dock-peek::before {
       content: '';
       position: absolute;
-      top: 9px;
+      top: 7px;
       left: 50%;
       transform: translateX(-50%);
       width: 44px;
@@ -1411,7 +1425,38 @@
       background: var(--line);
       transition: background .14s, width .18s var(--ease-out);
     }
-    .footer-handle:hover::before { background: var(--ink-4); width: 56px; }
+    .dock-peek:hover::before { background: var(--ink-4); width: 56px; }
+    .dock-peek:active { transform: scale(.995); }
+    .dock-peek-nombre {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -.15px;
+      color: var(--ink);
+    }
+    .dock-peek-total {
+      flex: none;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--ink-2);
+      font-variant-numeric: tabular-nums;
+    }
+    .dock-peek-chevron {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: var(--ink-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: transform .28s var(--ease-out);
+    }
+    .side-dock.abierto .dock-peek-chevron { transform: rotate(180deg); }
 
     /* El drawer dejo de ser un cajon: Faltantes vive en la fila de utilidades.
        Los contenedores siguen en el DOM porque toggleDrawer() y el swipe del
@@ -1419,11 +1464,22 @@
     .footer-drawer,
     .footer-drawer-inner { display: contents; }
 
+    /* Nota y "Cancelar pedido" viven al final de la tarjeta, no en el pie: asi
+       scrollean con ella y le devuelven dos filas fijas de alto a la lista de
+       articulos. Siguen siendo markup estatico -- renderUnificado() solo
+       reescribe #sidePanelCards -- porque #notaSelect carga sus opciones y su
+       listener una sola vez, al iniciar. */
+    .dock-extras {
+      margin-top: 2px;
+      padding-top: 13px;
+      border-top: 1px solid var(--line);
+    }
+    body.pedido-bloqueado .dock-extras { display: none; }
+
     .footer-row {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 10px;
     }
     .footer-row .lbl { flex: none; }
 
@@ -2598,24 +2654,29 @@
         box-shadow: 0 -14px 40px rgba(20,20,18,.10);
       }
 
-      /* El degradado del borde inferior avisa que el panel sigue: sin el, un
-         segmentado cortado al medio se lee como un error de maquetado. */
+      /* La tarjeta arranca minimizada por completo. En tablet el trabajo es
+         empacar articulos: el cliente, los totales y las formas de pago se
+         consultan a demanda y no tienen por que robarle media pantalla a la
+         lista. .dock-peek queda como unico rastro y como forma de volver. */
       #sidePanel {
-        max-height: 34vh;
-        padding: 4px 14px 4px;
-        gap: 12px;
-        transition: max-height .28s var(--ease-out);
-        -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
-        mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+        flex: none;
+        max-height: 0;
+        padding: 0 14px;
+        gap: 14px;
+        overflow: hidden;
+        transition: max-height .3s var(--ease-out), padding .3s var(--ease-out);
       }
 
-      /* Tocar la barra de agarre (o hacer swipe sobre las acciones) abre
-         #footerDrawer; se aprovecha esa misma clase para ampliar la hoja y
-         alcanzar Entrega y la nota sin scrollear dentro de un area chica. */
-      .side-dock:has(#footerDrawer.open) #sidePanel { max-height: 62vh; }
+      /* El degradado del borde inferior avisa que el panel sigue: sin el, un
+         segmentado cortado al medio se lee como un error de maquetado. */
+      .side-dock.abierto #sidePanel {
+        max-height: 62vh;
+        padding: 2px 14px 10px;
+        overflow-y: auto;
+      }
 
-      .footer-handle { display: block; }
-      .footer-controls { border-top: none; background: transparent; padding: 10px 14px 14px; }
+      .dock-peek { display: flex; }
+      .footer-controls { border-top: 1px solid var(--line); background: transparent; padding: 12px 14px 14px; }
       .entregado-actions { border-top: none; background: transparent; }
     }
 
@@ -2640,7 +2701,6 @@
       .ctx-fecha, .ctx-link { display: none; }
       .progress-bar-track { width: 84px; }
 
-      #sidePanel { max-height: 40vh; }
       .modal-backdrop, .pedidos-panel, .faltantes-panel, .add-item-modal { padding: 14px; }
     }
 
@@ -2764,13 +2824,32 @@
     <!-- PANEL DE TRABAJO -->
     <aside class="side-dock" id="sideDock">
 
-      <!-- Barra de agarre de la hoja inferior (solo visible por debajo de
-           1024px). Reusa el toggle y el swipe que ya existian: abre y cierra
-           #footerDrawer, y el CSS lee esa clase para agrandar el panel. -->
-      <div class="footer-handle" id="footerHandle" title="Ampliar o contraer el panel"></div>
+      <!-- Barra de resumen de la hoja inferior (solo visible por debajo de
+           1024px). Reusa el toggle y el swipe que ya existian, y agrega la
+           clase .abierto sobre #sideDock, que es la que lee el CSS. -->
+      <button class="dock-peek" id="footerHandle" type="button" aria-expanded="false" title="Mostrar u ocultar los datos del pedido">
+        <span class="dock-peek-nombre" id="dockPeekNombre">Datos del pedido</span>
+        <span class="dock-peek-total" id="dockPeekTotal"></span>
+        <svg class="dock-peek-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg>
+      </button>
 
-      <!-- Lo pinta renderUnificado(): cliente, totales, pago y entrega -->
-      <div id="sidePanel"></div>
+      <div id="sidePanel">
+        <!-- Lo pinta renderUnificado(): cliente, totales, pago y entrega -->
+        <div id="sidePanelCards"></div>
+
+        <!-- Cierre de la tarjeta. Es markup estatico dentro de un contenedor
+             que se reescribe entero, por eso vive fuera de #sidePanelCards:
+             #notaSelect pierde opciones y listener si se lo re-renderiza. -->
+        <div class="dock-extras" id="dockExtras">
+          <div class="footer-row">
+            <span class="lbl">Nota</span>
+            <select class="nota-select" id="notaSelect">
+              <option value="">---</option>
+            </select>
+          </div>
+          <button class="footer-btn-base btn-cancelar-pedido" id="btnCancelarPV">Cancelar pedido</button>
+        </div>
+      </div>
 
       <!-- Accion sobre pedido entregado. Vive fuera del footer porque el footer
            queda oculto cuando el pedido esta bloqueado, y esta es la unica
@@ -2781,13 +2860,6 @@
 
       <!-- ACCIONES -->
       <div class="footer-controls" id="footerControls" style="display:none">
-        <div class="footer-row">
-          <span class="lbl">Nota</span>
-          <select class="nota-select" id="notaSelect">
-            <option value="">---</option>
-          </select>
-        </div>
-
         <div class="dock-utils">
           <div class="print-menu-wrap">
             <button class="footer-btn-base btn-impresion" id="btnImpresion">Imprimir</button>
@@ -2820,8 +2892,6 @@
           <button class="footer-btn-base btn-toggle-estado" id="btnToggleEstado">Cerrar Pedido</button>
           <button class="footer-btn-base btn-despachar" id="btnDespachar">Entregado</button>
         </div>
-
-        <button class="footer-btn-base btn-cancelar-pedido" id="btnCancelarPV">Cancelar pedido</button>
       </div>
 
     </aside>
@@ -3539,7 +3609,10 @@
       // Apaga de una sola vez la franja de contexto, la cabecera de articulos
       // y el panel derecho (ver la regla body.con-pedido del CSS).
       document.body.classList.remove('con-pedido', 'pedido-bloqueado');
-      document.getElementById('sidePanel').innerHTML = '';
+      document.getElementById('sidePanelCards').innerHTML = '';
+      document.getElementById('dockPeekNombre').textContent = 'Datos del pedido';
+      document.getElementById('dockPeekTotal').textContent = '';
+      document.getElementById('sideDock').classList.remove('abierto');
       document.getElementById('mainContent').innerHTML = HTML_BIENVENIDA;
     }
 
@@ -3651,7 +3724,8 @@
       // Mientras carga no hay pedido que mostrar: se apagan contexto y panel
       // para que un error de red no deje datos del pedido anterior a la vista.
       document.body.classList.remove('con-pedido', 'pedido-bloqueado');
-      document.getElementById('sidePanel').innerHTML = '';
+      document.getElementById('sidePanelCards').innerHTML = '';
+      document.getElementById('dockPeekTotal').textContent = '';
       mainContent.innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Cargando pedido...</p></div>';
 
       // Esperar a que sheets este cargado
@@ -3956,7 +4030,7 @@
     // ==========================================
     function renderUnificado() {
       const mainContent = document.getElementById('mainContent');
-      const sidePanel = document.getElementById('sidePanel');
+      const sidePanel = document.getElementById('sidePanelCards');
       if (!pedidoActual) return;
 
       const cliente = pedidoActual.cliente || {};
@@ -4175,6 +4249,10 @@
       panel += '</div>';
 
       sidePanel.innerHTML = panel;
+
+      // Resumen de la barra plegada: lo unico que queda a la vista de la
+      // tarjeta cuando la hoja esta minimizada en tablet.
+      document.getElementById('dockPeekNombre').textContent = cliente.nombre || 'Sin nombre';
 
       actualizarContador();
       colapsarQty();  // el DOM anterior se descarta: resetear indice y timer
@@ -4814,9 +4892,17 @@
     const footerDrawer = document.getElementById('footerDrawer');
     const footerHandle = document.getElementById('footerHandle');
 
-    function toggleDrawer() { footerDrawer.classList.toggle('open'); }
-    function openDrawer() { footerDrawer.classList.add('open'); }
-    function closeDrawer() { footerDrawer.classList.remove('open'); }
+    // .open sobre #footerDrawer se conserva por compatibilidad; el alto de la
+    // hoja lo gobierna .abierto sobre #sideDock, que evita depender de :has().
+    const sideDock = document.getElementById('sideDock');
+    function sincronizarHoja() {
+      const abierta = footerDrawer.classList.contains('open');
+      sideDock.classList.toggle('abierto', abierta);
+      footerHandle.setAttribute('aria-expanded', String(abierta));
+    }
+    function toggleDrawer() { footerDrawer.classList.toggle('open'); sincronizarHoja(); }
+    function openDrawer() { footerDrawer.classList.add('open'); sincronizarHoja(); }
+    function closeDrawer() { footerDrawer.classList.remove('open'); sincronizarHoja(); }
 
     footerHandle.addEventListener('click', toggleDrawer);
 
@@ -6190,6 +6276,11 @@
       let totalFinal = subtotal - descuentoCalc + recargoCalc + envio;
       if (totalFinal < 0) totalFinal = 0;
       totalFinalDiv.textContent = 'TOTAL FINAL $ ' + totalFinal.toLocaleString('es-AR');
+
+      // Se toma el valor, no el textContent: el onclick de abajo lo pisa con
+      // "Copiado!" por un segundo y medio.
+      const peekTotal = document.getElementById('dockPeekTotal');
+      if (peekTotal) peekTotal.textContent = '$ ' + totalFinal.toLocaleString('es-AR');
 
       // Guardar valores actuales para que pvBuildCotizacionTexto() los lea
       window._pvCotizacion = { subtotal, descuentoCalc, recargoCalc, envio, totalFinal };
