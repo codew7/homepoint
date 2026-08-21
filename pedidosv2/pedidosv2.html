@@ -433,10 +433,10 @@
     }
 
     /* =========================================
-       RIEL DE 3 TRAMOS (panel de pedidos pendientes)
+       RIEL DE 2 TRAMOS (panel de pedidos pendientes)
 
-       Los tres hitos de un pedido no son etiquetas sueltas, son un pipeline:
-       se arma -> se cierra el precio -> se cobra. El riel los apila y se llena
+       Los dos hitos de un pedido no son etiquetas sueltas, son un pipeline:
+       se arma -> se cobra. El riel los apila y se llena
        de abajo hacia arriba, asi la ALTURA de lo lleno dice cuanto avanzo y la
        POSICION del hueco dice donde se trabo, sin tener que leer la fila.
 
@@ -478,7 +478,6 @@
        poco contraste y sin el borde el tramo se pierde. Los otros dos se
        despegan solos del fondo. */
     .pp-seg--armado.is-on  { background: #C0CA33; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
-    .pp-seg--cerrado.is-on { background: #FFA726; box-shadow: none; }
     .pp-seg--pago.is-on    { background: #9575CD; box-shadow: none; }
 
     /* Los dos estados intermedios se distinguen por TEXTURA ademas de color:
@@ -596,61 +595,35 @@
     .pp-resumen b { color: var(--success); font-weight: 800; }
 
     /* Leyenda: el riel es compacto pero no autoexplicativo. Se muestra una sola
-       vez, con el mismo orden vertical que tienen los tramos en las filas. */
+       vez, una fila por hito y en el mismo orden vertical que los tramos de las
+       filas (pago arriba, armado abajo).
+
+       Se agrupa por HITO y no por textura: los dos estados de un mismo tramo
+       —lleno y rayado— quedan uno al lado del otro, que es la comparacion que
+       hay que hacer al mirar el riel. Dos filas de dos y no cuatro sueltas para
+       no gastar alto: el panel es una lista y cada linea del encabezado es una
+       fila menos de pedidos. El title de cada tramo no alcanza como explicacion:
+       en tablet no hay hover. */
     .pp-leyenda {
       display: flex;
-      align-items: stretch;
-      gap: 9px;
+      flex-direction: column;
+      gap: 5px;
       padding: 9px 16px;
       border-bottom: 1px solid var(--border-light);
       flex-shrink: 0;
       background: var(--surface-warm);
     }
-    .pp-leyenda-rail {
-      width: 6px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      flex-shrink: 0;
-    }
-    /* Sin flex:1 a proposito: si esta columna se estira, empuja la de texturas
-       contra el borde derecho y las dos mitades de la leyenda se leen como dos
-       bloques distintos. Sin crecer, quedan juntas y el aire sobra a la derecha. */
-    .pp-leyenda-labels {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-    /* min-height para que el mini-riel de al lado tenga alto suficiente y se lea
-       como una barra segmentada, no como tres puntos apilados. */
-    .pp-leyenda-labels span {
-      flex: 1;
-      min-height: 14px;
+    .pp-leyenda-fila {
       display: flex;
       align-items: center;
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .8px;
-      color: var(--text-muted);
-      line-height: 1;
+      gap: 10px;
     }
-
-    /* Que significa cada trama. Segunda columna de la MISMA leyenda —sin borde
-       ni separador que la parta en dos— pegada a la anterior: son cinco estados
-       del mismo riel. Va al lado y no abajo para no gastar alto: el panel es una
-       lista y cada linea del encabezado es una fila menos de pedidos. El title
-       de cada tramo no alcanza como explicacion: en tablet no hay hover. */
-    .pp-leyenda-tex {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 4px;
-      flex-shrink: 0;
-      margin-left: 100px;
+    /* Ancho fijo en el primer item para que las dos etiquetas de la derecha
+       arranquen en la misma x y la leyenda se lea como dos columnas. */
+    .pp-leyenda-fila > span:first-child {
+      min-width: 78px;
     }
-    .pp-leyenda-tex > span {
+    .pp-leyenda-fila > span {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -664,7 +637,7 @@
     }
     /* .pp-seg trae flex:1 para repartir alto dentro del riel; como muestra
        suelta necesita medida propia. */
-    .pp-leyenda-tex .pp-seg {
+    .pp-leyenda-fila .pp-seg {
       flex: none;
       width: 6px;
       height: 14px;
@@ -1394,25 +1367,6 @@
     }
     .nota-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); outline: none; }
 
-    .comentario-area {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 13px;
-      font-family: var(--font-ui);
-      resize: none;
-      height: 44px;
-      background: var(--surface-warm);
-      color: var(--text);
-      transition: all .2s var(--ease-out);
-    }
-    .comentario-area:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-      outline: none;
-    }
-
     .footer-handle {
       width: 36px;
       height: 4px;
@@ -1445,23 +1399,6 @@
       color: var(--text-muted);
       flex-shrink: 0;
       white-space: nowrap;
-    }
-    .footer-input {
-      flex: 1;
-      padding: 10px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 13px;
-      font-family: var(--font-ui);
-      font-weight: 600;
-      background: var(--surface-warm);
-      color: var(--text);
-      transition: all .2s var(--ease-out);
-      outline: none;
-    }
-    .footer-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
     }
     .btn-faltantes {
       flex: 1;
@@ -2725,13 +2662,6 @@
     <div class="footer-drawer" id="footerDrawer">
       <div class="footer-drawer-inner">
         <div class="footer-row">
-          <textarea class="comentario-area" id="comentarioArea" placeholder="Comentarios del despacho..."></textarea>
-        </div>
-        <div class="footer-row">
-          <input type="text" class="footer-input" id="tamanoInput" placeholder="Tamano...">
-          <input type="text" class="footer-input" id="pesoInput" placeholder="Peso...">
-        </div>
-        <div class="footer-row">
           <button class="btn-faltantes" id="btnFaltantes" disabled>Sin faltantes</button>
         </div>
       </div>
@@ -2828,21 +2758,16 @@
         </div>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
       </div>
-      <!-- Leyenda del riel: mismo orden vertical que los tramos de cada fila -->
+      <!-- Leyenda del riel: una fila por hito con sus dos estados (lleno y
+           rayado), en el mismo orden vertical que los tramos de cada fila -->
       <div class="pp-leyenda">
-        <span class="pp-leyenda-rail" aria-hidden="true">
-          <i class="pp-seg pp-seg--pago is-on"></i>
-          <i class="pp-seg pp-seg--cerrado is-on"></i>
-          <i class="pp-seg pp-seg--armado is-on"></i>
-        </span>
-        <span class="pp-leyenda-labels">
-          <span>Pago</span>
-          <span>Cerrado</span>
-          <span>Completo</span>
-        </span>
-        <span class="pp-leyenda-tex">
-          <span><i class="pp-seg pp-seg--armado is-wait" aria-hidden="true"></i>En preparación</span>
+        <span class="pp-leyenda-fila">
+          <span><i class="pp-seg pp-seg--pago is-on" aria-hidden="true"></i>Pago</span>
           <span><i class="pp-seg pp-seg--pago is-wait" aria-hidden="true"></i>Esperando pago</span>
+        </span>
+        <span class="pp-leyenda-fila">
+          <span><i class="pp-seg pp-seg--armado is-on" aria-hidden="true"></i>Completo</span>
+          <span><i class="pp-seg pp-seg--armado is-wait" aria-hidden="true"></i>En preparación</span>
         </span>
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
@@ -3132,6 +3057,11 @@
       } else {
         showLogin();
       }
+      // El footer puede estar renderizado de una sesion anterior: revalidar quien
+      // puede usar Cancelar/Entregado con el usuario nuevo.
+      if (typeof configurarPedidoFooterState === 'function' && pedidoActual) {
+        configurarPedidoFooterState();
+      }
     });
 
     // Estado global
@@ -3153,6 +3083,16 @@
 
     // Estado Pedido View
     const admin = true;
+
+    // Cancelar, Entregado y Cancelar Entregado son las acciones irreversibles del
+    // footer (generan o borran movimientos de stock), reservadas a esta cuenta.
+    // Se consulta contra firebase.auth().currentUser en cada refresco en vez de
+    // guardarse una vez: el usuario puede cambiar sin recargar la pagina.
+    const EMAIL_ACCIONES_CRITICAS = 'alejandro@homepoint.com';
+    function puedeEjecutarAccionesCriticas() {
+      const user = firebase.auth().currentUser;
+      return !!user && (user.email || '').trim().toLowerCase() === EMAIL_ACCIONES_CRITICAS;
+    }
     let sheetValorMap = {};
     window.sheetStockMap = window.sheetStockMap || {};
     let mapImg = {};
@@ -3696,7 +3636,7 @@
 
     // ==========================================
     // ETAPAS DE UN PEDIDO (riel del panel de pendientes)
-    // Armado -> Cerrado -> Pago. El unico dato ambiguo es el pago, que sale del
+    // Armado -> Pago. El unico dato ambiguo es el pago, que sale del
     // campo `nota` (texto libre alimentado por la hoja notas!A:A del Sheet).
     // ==========================================
 
@@ -3751,11 +3691,14 @@
       return NOTA_PAGO_SOLICITADO;
     }
 
+    // El hito "cerrado" no se mide: cerrar el pedido dejo de ser un paso propio
+    // porque solicitar el pago ya lo cierra y lo bloquea (ver marcarPagoSolicitado
+    // y sellarYCerrarCotizacion), asi que el tramo solo repetia lo que dice el de
+    // pago. Quedan dos hitos y el score va de 0 a 2.
     function pedidoEtapas(p) {
       const armado = p.todosListos === true;
-      const cerrado = p.status === 'CERRADO' || p.locked === true;
       const pago = estadoPago(p.nota);
-      const score = (armado ? 1 : 0) + (cerrado ? 1 : 0) + (pago === 'pagado' ? 1 : 0);
+      const score = (armado ? 1 : 0) + (pago === 'pagado' ? 1 : 0);
       return {
         armado: armado,
         // Algun item tildado pero no todos: el pedido se esta armando. Se
@@ -3763,16 +3706,15 @@
         // derivan las etapas; ppToggleNotaPago() reusa la funcion sobre el mismo
         // objeto de pedidosCache, que conserva algunoListo.
         enPreparacion: !armado && p.algunoListo === true,
-        cerrado: cerrado,
         pago: pago,
         score: score,
-        // Los dos grupos altos miran el pipeline completo; los dos bajos miran
-        // el avance de armado: alcanza con un item en 'y' para estar En curso,
-        // y lo mismo si el pedido ya esta cerrado o el pago fue solicitado/pagado
-        // aunque ningun item este tildado (cerrado/pago no dependen de items).
-        rank: score === 3 ? 3
-            : score === 2 ? 2
-            : (p.algunoListo || cerrado || pago !== 'sin-dato') ? 1 : 0
+        // Se mantienen los cuatro grupos aunque los hitos ahora sean dos: los dos
+        // altos miran hitos CUMPLIDOS (los dos, o uno solo), y los dos bajos el
+        // avance parcial —alcanza con un item en 'y', o con el pago solicitado
+        // aunque ningun item este tildado, para salir de Nuevos.
+        rank: score === 2 ? 3
+            : score === 1 ? 2
+            : (p.algunoListo || pago !== 'sin-dato') ? 1 : 0
       };
     }
 
@@ -4578,10 +4520,9 @@
     });
 
     // ==========================================
-    // NOTA, COMENTARIOS, TIPO PAGO Y ENTREGA (Firebase)
+    // NOTA, TIPO PAGO Y ENTREGA (Firebase)
     // ==========================================
     const notaSelect = document.getElementById('notaSelect');
-    const comentarioArea = document.getElementById('comentarioArea');
 
     // Cargar opciones de nota desde Google Sheets (notas!A:A)
     (async function cargarOpcionesNota() {
@@ -4622,19 +4563,8 @@
       }
     });
 
-    comentarioArea.addEventListener('input', () => {
-      saveComentarioToLocal(comentarioArea.value);
-    });
-
     function getLocalKey() {
       return 'despachos_' + pedidoId;
-    }
-
-    function saveComentarioToLocal(value) {
-      if (!pedidoId) return;
-      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      existing.comentario = value;
-      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
     }
 
     function isItemChecked(codigo) {
@@ -4648,14 +4578,6 @@
 
       // Nota desde Firebase (campo pedidos.nota)
       notaSelect.value = pedidoActual.nota || '';
-
-      // Comentarios desde localStorage (no se guardan en Firebase)
-      const localData = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      comentarioArea.value = localData.comentario || '';
-
-      // Tamano y peso desde localStorage
-      tamanoInput.value = localData.tamano || '';
-      pesoInput.value = localData.peso || '';
 
       // Actualizar boton faltantes
       actualizarBtnFaltantes();
@@ -4683,23 +4605,6 @@
       if (diff > 40) openDrawer();
       if (diff < -40) closeDrawer();
     }, { passive: true });
-
-    // ==========================================
-    // CAMPOS TAMANO Y PESO (localStorage)
-    // ==========================================
-    const tamanoInput = document.getElementById('tamanoInput');
-    const pesoInput = document.getElementById('pesoInput');
-
-    function saveTamanoYPesoToLocal() {
-      if (!pedidoId) return;
-      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      existing.tamano = tamanoInput.value;
-      existing.peso = pesoInput.value;
-      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
-    }
-
-    tamanoInput.addEventListener('input', saveTamanoYPesoToLocal);
-    pesoInput.addEventListener('input', saveTamanoYPesoToLocal);
 
     // ==========================================
     // PANEL DE PEDIDOS (ABIERTO / CERRADO)
@@ -4790,8 +4695,8 @@
       return '<i class="pp-seg pp-seg--' + hito + ' ' + clase + '" title="' + escapeHtml(titulo) + '" aria-hidden="true"></i>';
     }
 
-    // El riel se lee de abajo hacia arriba (armado -> cerrado -> pago), asi que
-    // el orden en el DOM es el inverso: el primer hijo queda arriba.
+    // El riel se lee de abajo hacia arriba (armado -> pago), asi que el orden en
+    // el DOM es el inverso: el primer hijo queda arriba.
     function ppRailHtml(p) {
       const pagoClase = p.pago === 'pagado' ? 'is-on' : p.pago === 'espera' ? 'is-wait' : 'is-off';
       const pagoTitulo = p.pago === 'pagado' ? 'Pago registrado'
@@ -4802,12 +4707,9 @@
                          : p.enPreparacion ? 'En preparacion'
                          : 'Sin preparar';
       // El aria-label prefija el hito: suelto, "Completo." no dice de que.
-      const etiqueta = 'Items: ' + armadoTitulo.toLowerCase() +
-                       '. Cerrado: ' + (p.cerrado ? 'si' : 'no') +
-                       '. ' + pagoTitulo + '.';
+      const etiqueta = 'Items: ' + armadoTitulo.toLowerCase() + '. ' + pagoTitulo + '.';
       return '<span class="pp-rail" role="img" aria-label="' + escapeHtml(etiqueta) + '">' +
         ppSeg('pago', pagoClase, pagoTitulo) +
-        ppSeg('cerrado', p.cerrado ? 'is-on' : 'is-off', p.cerrado ? 'Pedido cerrado' : 'Falta cerrar') +
         ppSeg('armado', armadoClase, armadoTitulo) +
         '</span>';
     }
@@ -4826,7 +4728,7 @@
 
     function ppFilaHtml(p) {
       const ant = textoAntiguedad(p.timestamp);
-      const listo = p.score === 3;
+      const listo = p.score === 2;
       return '<div class="pedidos-panel-item pp-item--rail' + (listo ? ' is-listo' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
         ppRailHtml(p) +
         '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
@@ -6307,19 +6209,21 @@
       if (!pedidoActual) return;
       const bloqueado = pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO';
       actualizarBtnTerminar();
-      document.getElementById('btnCancelarPV').disabled = bloqueado || pedidoActual.locked;
+      document.getElementById('btnCancelarPV').disabled = bloqueado || pedidoActual.locked || !puedeEjecutarAccionesCriticas();
       actualizarEstadoBtnDespachar();
     }
 
     // "Cancelar Entregado" es la unica accion disponible sobre un pedido ya
-    // despachado, por eso solo se muestra con ese status exacto.
+    // despachado, por eso solo se muestra con ese status exacto. Visible no implica
+    // habilitado: borra movimientos de stock, asi que lo usa solo la cuenta de
+    // EMAIL_ACCIONES_CRITICAS.
     function actualizarBtnCancelarEntregado() {
       const bar = document.getElementById('entregadoActions');
       if (!bar) return;
       const visible = !!pedidoActual && !!pedidoId && pedidoActual.status === 'DESPACHADO/ENTREGADO';
       bar.classList.toggle('visible', visible);
       const btn = document.getElementById('btnCancelarEntregado');
-      if (btn && visible) btn.disabled = false;
+      if (btn && visible) btn.disabled = !puedeEjecutarAccionesCriticas();
     }
 
     function actualizarEstadoBtnDespachar() {
@@ -6327,7 +6231,7 @@
       if (!btn) return;
       const entrega = pedidoActual ? pedidoActual.tipoEntrega : '';
       const bloqueado = pedidoActual && (pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO');
-      const disabled = bloqueado || !entrega;
+      const disabled = bloqueado || !entrega || !puedeEjecutarAccionesCriticas();
       btn.disabled = disabled;
       btn.style.opacity = disabled ? '.5' : '1';
     }
@@ -6432,6 +6336,7 @@
     // ==========================================
     document.getElementById('btnCancelarPV').addEventListener('click', async () => {
       if (!pedidoActual || pedidoActual.locked || pedidoActual.status === 'CANCELADO') return;
+      if (!puedeEjecutarAccionesCriticas()) { showToast('Accion no permitida para este usuario'); return; }
       if (!confirm('Cancelar el pedido? Esta accion es IRREVERSIBLE.')) return;
 
       const user = firebase.auth().currentUser;
@@ -6467,6 +6372,7 @@
     document.getElementById('btnCancelarEntregado').addEventListener('click', async () => {
       if (!pedidoActual || !pedidoId) return;
       if (pedidoActual.status !== 'DESPACHADO/ENTREGADO') { showToast('El pedido no esta entregado'); return; }
+      if (!puedeEjecutarAccionesCriticas()) { showToast('Accion no permitida para este usuario'); return; }
       if (!confirm('Cancelar este pedido ENTREGADO?\n\nSe eliminaran los movimientos de stock generados por este pedido. Esta accion es IRREVERSIBLE.')) return;
 
       const btn = document.getElementById('btnCancelarEntregado');
@@ -6516,6 +6422,7 @@
     // ==========================================
     document.getElementById('btnDespachar').addEventListener('click', async () => {
       if (!pedidoActual || pedidoActual.status === 'CANCELADO') return;
+      if (!puedeEjecutarAccionesCriticas()) { showToast('Accion no permitida para este usuario'); return; }
       if (despachoYaEjecutado) { showToast('Ya fue procesado'); return; }
       despachoYaEjecutado = true;
 
@@ -6738,8 +6645,13 @@
         // Saludo Inicial
         msg = 'Hola, ' + nombreCliente + ':\n\nNos comunicamos de Distribuidora HomePoint en relacion a tu pedido.\n\nAdjuntamos el enlace a tu pedido:\n' + link;
       } else if (tipo === '2') {
-        // Cotización — exactamente igual que clic en TOTAL FINAL
+        // Cotización — exactamente igual que clic en TOTAL FINAL: sella y cierra
+        // el pedido y ademas deja la nota de cobro pendiente, porque enviar la
+        // cotizacion es el mismo acto de pasarle el precio al cliente. Sin await
+        // por lo mismo que la rama de retiro: el window.open de abajo tiene que
+        // salir en el mismo tick del click o el navegador lo bloquea.
         sellarYCerrarCotizacion();
+        marcarPagoSolicitado();
         msg = pvBuildCotizacionTexto();
       }
       window.open('https://api.whatsapp.com/send/?phone=' + tel + '&text=' + encodeURIComponent(msg), '_blank');
