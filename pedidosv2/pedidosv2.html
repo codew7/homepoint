@@ -2018,6 +2018,35 @@
       color: var(--ink-3);
     }
 
+    /* Franja sobre la lista ya pintada mientras llega el refresco (o cuando
+       este falla y lo que se ve quedo viejo). No desplaza la lista: es una
+       linea baja que se lee de reojo sin tapar los pedidos. */
+    .pp-aviso {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-3);
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--line);
+    }
+    .pp-aviso--error { color: var(--bad); }
+    .pp-aviso .btn-reintentar {
+      margin: 0 0 0 auto;
+      height: 28px;
+      padding: 0 12px;
+      font-size: 12px;
+      box-shadow: none;
+    }
+    .spinner--mini {
+      width: 13px;
+      height: 13px;
+      border-width: 2px;
+      margin-bottom: 0;
+    }
+
     .historial-search {
       flex: none;
       padding: 0 20px 14px;
@@ -3110,52 +3139,160 @@
     // -- lo habitual en Android tras Doze, pantalla apagada o salto
     // WiFi<->datos -- el SDK sigue creyendo que esta conectado: once() queda
     // encolado en un socket zombie y su promesa no resuelve NI rechaza nunca.
-    // El spinner se eterniza y el catch jamas se ejecuta. Las dos piezas de
-    // abajo cortan ese caso: una pone limite a la espera, la otra recicla el
-    // canal para que el reintento encuentre un socket vivo.
-    const RTDB_TIMEOUT_MS = 12000;
+    //
+    // Estrategia: PROBAR PRIMERO, RECICLAR SOLO SI HACE FALTA.
+    //   1. Al volver del background NO se toca el socket. Se lo marca como
+    //      "sospechoso" y se le manda una sonda vacia en segundo plano. Si
+    //      contesta, la conexion estaba sana y no se pago ningun handshake.
+    //   2. Toda consulta hecha con el socket sospechoso arranca con un plazo
+    //      corto. Si vence, el socket era zombie: recien ahi se recicla, se
+    //      espera a que .info/connected vuelva a true y se repite la consulta
+    //      sola, con plazo largo. El usuario no ve error ni toca "Reintentar".
+    //   3. El bloque de error visible queda para cuando falla el reintento.
+    //
+    // Reciclar a ciegas en cada regreso (lo que se hacia antes) destruia
+    // conexiones sanas y forzaba handshake + reautenticacion cada vez: esa era
+    // la causa de la lentitud y del "error de conexion" en el primer toque.
+    const RTDB_SONDA_MS = 4000;      // plazo del primer intento con socket dudoso
+    const RTDB_TIMEOUT_MS = 12000;   // plazo normal / del reintento ya reconectado
+    const RTDB_CONEXION_MS = 8000;   // espera maxima a que suba el socket nuevo
     const RTDB_RECONEXION_MIN_MS = 5000;
 
     let ultimaReconexion = 0;
+    // true = hay motivos para dudar del socket (vuelta del background, cambio
+    // de red). Cualquier respuesta real del servidor lo devuelve a false.
+    let socketSospechoso = false;
 
-    // goOffline/goOnline obliga al SDK a tirar el socket y abrir uno nuevo;
-    // los listeners activos se re-suscriben solos y reenvian su valor actual.
-    // Se limita la frecuencia porque reciclar en medio de una reconexion ya en
+    // .info/connected es la unica fuente de verdad del SDK sobre su socket y se
+    // resuelve en local: leerlo no cuesta red.
+    let rtdbConectado = false;
+    const esperandoConexion = new Set();
+    db.ref('.info/connected').on('value', snap => {
+      rtdbConectado = snap.val() === true;
+      if (rtdbConectado && esperandoConexion.size) {
+        const pendientes = Array.from(esperandoConexion);
+        esperandoConexion.clear();
+        pendientes.forEach(avisar => avisar());
+      }
+    });
+
+    // Resuelve true cuando el SDK reporta socket arriba, o false al vencer el
+    // plazo. Nunca rechaza: quien llama decide que hacer con el resultado.
+    function esperarConexion(ms = RTDB_CONEXION_MS) {
+      if (rtdbConectado) return Promise.resolve(true);
+      return new Promise(resolver => {
+        const avisar = () => { clearTimeout(timer); resolver(true); };
+        const timer = setTimeout(() => {
+          esperandoConexion.delete(avisar);
+          resolver(false);
+        }, ms);
+        esperandoConexion.add(avisar);
+      });
+    }
+
+    // goOffline/goOnline obliga al SDK a tirar el socket y abrir uno nuevo; los
+    // listeners activos se re-suscriben solos y reenvian su valor actual. Se
+    // limita la frecuencia porque reciclar en medio de una reconexion ya en
     // curso la aborta y alarga la recuperacion.
     function reconectarRTDB() {
       const ahora = Date.now();
-      if (ahora - ultimaReconexion < RTDB_RECONEXION_MIN_MS) return;
+      if (ahora - ultimaReconexion < RTDB_RECONEXION_MIN_MS) return false;
       ultimaReconexion = ahora;
+      rtdbConectado = false;
       try {
         db.goOffline();
         db.goOnline();
+        return true;
       } catch (e) {
         console.warn('No se pudo reciclar la conexion RTDB:', e);
+        return false;
       }
     }
 
-    // El salto WiFi<->datos puede ocurrir con la app en primer plano, sin pasar
-    // por background: ahi no hay visibilitychange que lo detecte, pero el
-    // socket viejo quedo igual de muerto.
-    window.addEventListener('online', reconectarRTDB);
-
-    // Marca de agua sobre cualquier promesa de Firebase. Si expira, recicla la
-    // conexion y rechaza con un error reconocible para diferenciar "sin red"
-    // de un error real del servidor.
-    function conTimeout(promesa, ms = RTDB_TIMEOUT_MS) {
+    // Marca de agua sobre una promesa ya lanzada. Rechaza con un error
+    // reconocible al vencer, para diferenciar "sin red" de un error del server.
+    function conPlazo(promesa, ms) {
       let timer;
       const limite = new Promise((_, rechazar) => {
         timer = setTimeout(() => {
-          reconectarRTDB();
           const err = new Error('Sin respuesta del servidor');
           err.esTimeout = true;
           rechazar(err);
         }, ms);
       });
       // El finally limpia el timer gane quien gane: sin el, una consulta que ya
-      // respondio dispararia igual el reconectarRTDB() al vencer su plazo.
+      // respondio dejaria un setTimeout vivo hasta vencer.
       return Promise.race([promesa, limite]).finally(() => clearTimeout(timer));
     }
+
+    // Envoltorio de toda consulta a RTDB. Recibe una FUNCION que lanza la
+    // consulta (no la promesa ya lanzada): eso es lo que permite repetirla
+    // sobre el socket nuevo sin que el llamador se entere. Sigue aceptando una
+    // promesa suelta por compatibilidad, pero en ese caso no puede reintentar.
+    async function conTimeout(tarea, ms = RTDB_TIMEOUT_MS) {
+      const esFabrica = typeof tarea === 'function';
+      const lanzar = esFabrica ? tarea : () => tarea;
+      // Plazo corto solo con socket sospechoso. Con socket probadamente vivo se
+      // usa el plazo normal: una consulta lenta pero sana no debe tirar nada.
+      const plazoInicial = socketSospechoso ? RTDB_SONDA_MS : ms;
+      try {
+        const r = await conPlazo(lanzar(), plazoInicial);
+        socketSospechoso = false;
+        return r;
+      } catch (err) {
+        // Error real del servidor: llego una respuesta, asi que el socket vive.
+        // Se levanta la sospecha y se propaga sin reintentar: repetir no cambia
+        // un rechazo por permisos ni un dato mal formado.
+        if (!err || !err.esTimeout) { socketSospechoso = false; throw err; }
+        if (!esFabrica) throw err;
+        // Vencio el plazo: el socket estaba muerto. Esto es exactamente lo que
+        // hacia el usuario a mano al tocar "Reintentar", pero automatico.
+        reconectarRTDB();
+        // Si el socket nuevo no sube, no tiene sentido quemar otro plazo largo
+        // consultando al vacio: se corta aca y el error sale antes.
+        if (!await esperarConexion()) throw err;
+        const r = await conPlazo(lanzar(), ms);
+        socketSospechoso = false;
+        return r;
+      }
+    }
+
+    // Sonda de vida: consulta que por construccion no devuelve ningun hijo
+    // (ninguna clave empieza por \uffff, el ultimo caracter del orden), asi que
+    // hace ida y vuelta real con el servidor sin transferir datos. Se dispara al
+    // volver del background para que la conexion ya este sana cuando el usuario
+    // toque "Pedidos".
+    let sondaEnCurso = false;
+    async function sanearConexion() {
+      if (sondaEnCurso) return;
+      sondaEnCurso = true;
+      try {
+        await conPlazo(
+          db.ref('pedidos').orderByKey().startAt('\uffff').limitToFirst(1).once('value'),
+          RTDB_SONDA_MS
+        );
+        socketSospechoso = false;   // contesto: el socket seguia vivo
+      } catch (err) {
+        // Un rechazo que llega antes del plazo (reglas, permisos) tambien es
+        // prueba de vida: hubo ida y vuelta real. Solo el vencimiento del plazo
+        // significa socket muerto.
+        if (err && !err.esTimeout) { socketSospechoso = false; return; }
+        // No contesto: reciclar y dejar el socket nuevo listo antes del toque.
+        reconectarRTDB();
+        if (await esperarConexion()) socketSospechoso = false;
+      } finally {
+        sondaEnCurso = false;
+      }
+    }
+
+    // El salto WiFi<->datos puede ocurrir con la app en primer plano, sin pasar
+    // por background: ahi no hay visibilitychange que lo detecte, pero el socket
+    // viejo quedo igual de muerto. `online` es senal dura de cambio de interfaz,
+    // asi que aca reciclar de entrada si es lo correcto.
+    window.addEventListener('online', () => {
+      socketSospechoso = true;
+      reconectarRTDB();
+    });
 
     // Bloque de error uniforme con reintento. `accion` es una llamada JS que se
     // ejecuta en el onclick; siempre sin argumentos para no tener que escapar
@@ -3545,9 +3682,9 @@
     function detenerPollingStock() {
       if (stockPollTimer) { clearInterval(stockPollTimer); stockPollTimer = null; }
     }
-    // Umbral a partir del cual se asume que Android pudo matar el socket. Los
-    // cambios de foco breves (abrir el teclado, una notificacion) no lo tocan,
-    // asi que reciclar ahi solo cortaria una conexion sana.
+    // Umbral a partir del cual el socket pasa a ser sospechoso. Los cambios de
+    // foco breves (abrir el teclado, una notificacion) no lo tocan: ahi la
+    // conexion sigue sana y no hay nada que revisar.
     const OCULTO_RECICLA_MS = 20000;
     let ocultoDesde = 0;
 
@@ -3556,11 +3693,15 @@
         ocultoDesde = Date.now();
         detenerPollingStock();
       } else {
-        // Antes de pedir nada: si estuvo suspendida un rato, el WebSocket que
-        // el SDK cree vivo probablemente ya no lo esta. Se recicla de entrada
-        // para no gastar la primera consulta contra un socket muerto.
+        // Si estuvo suspendida un rato, el WebSocket que el SDK cree vivo puede
+        // ser un zombie. NO se recicla a ciegas -- eso obligaba a rehacer
+        // handshake y autenticacion en cada regreso, aunque la conexion
+        // estuviera perfecta, y era lo que volvia lenta la primera consulta.
+        // Se marca la duda y se manda una sonda vacia en segundo plano: para
+        // cuando el usuario toque "Pedidos" ya se sabe si hay que reconectar.
         if (ocultoDesde && Date.now() - ocultoDesde > OCULTO_RECICLA_MS) {
-          reconectarRTDB();
+          socketSospechoso = true;
+          sanearConexion();
         }
         ocultoDesde = 0;
         actualizarStock();       // refresco inmediato al volver al foco
@@ -3732,7 +3873,7 @@
       await cargarSheets();
 
       try {
-        const snap = await conTimeout(db.ref('pedidos/' + id).once('value'));
+        const snap = await conTimeout(() => db.ref('pedidos/' + id).once('value'));
         const pedido = snap.val();
 
         if (!pedido) {
@@ -4941,17 +5082,40 @@
     // Evita que los toques repetidos sobre el boton (el reflejo cuando "no
     // carga") apilen consultas y reinicien el spinner una y otra vez.
     let cargandoPedidos = false;
+    // Momento de la ultima carga exitosa: distingue "todavia no abri nunca el
+    // panel" de "tengo datos, quiza viejos" para decidir que pintar mientras
+    // llega la respuesta.
+    let pedidosCacheAt = 0;
+
+    function ppTextoDesfase(ms) {
+      const seg = Math.round((Date.now() - ms) / 1000);
+      if (seg < 60) return 'hace ' + seg + 's';
+      const min = Math.round(seg / 60);
+      if (min < 60) return 'hace ' + min + ' min';
+      return 'hace ' + Math.round(min / 60) + ' h';
+    }
 
     async function cargarPedidosPendientes() {
       if (cargandoPedidos) return;
       cargandoPedidos = true;
-      pedidosPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando pedidos...</div>';
-      pedidosResumen.textContent = '';
+
+      // Con datos de una apertura anterior el panel se pinta en el acto y el
+      // refresco corre por detras: nunca vuelve a arrancar en blanco ni obliga
+      // a mirar un spinner mientras el socket se reacomoda.
+      const habiaDatos = pedidosCache.length > 0;
+      if (habiaDatos) {
+        renderPedidosPendientes();
+        pedidosPanelList.insertAdjacentHTML('afterbegin',
+          '<div class="pp-aviso" id="ppAviso"><div class="spinner spinner--mini"></div>Actualizando...</div>');
+      } else {
+        pedidosPanelList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando pedidos...</div>';
+        pedidosResumen.textContent = '';
+      }
 
       try {
         // Las dos consultas son independientes: en paralelo pagan una sola
         // latencia y comparten un unico plazo de espera.
-        const [snapAbierto, snapCerrado] = await conTimeout(Promise.all([
+        const [snapAbierto, snapCerrado] = await conTimeout(() => Promise.all([
           db.ref('pedidos').orderByChild('status').equalTo('ABIERTO').once('value'),
           db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
         ]));
@@ -4985,11 +5149,22 @@
         // mas viejos arriba: son los que llevan mas tiempo trabados en ese paso.
         pedidosCache.sort((a, b) => (b.rank - a.rank) || (a.timestamp - b.timestamp));
 
+        pedidosCacheAt = Date.now();
         renderPedidosPendientes();
       } catch (err) {
         console.error('Error cargando pedidos:', err);
-        pedidosResumen.textContent = '';
-        pedidosPanelList.innerHTML = htmlErrorReintento(err, 'cargarPedidosPendientes()');
+        if (habiaDatos) {
+          // Hay lista vieja en pantalla: no se la borra, pero tampoco se la deja
+          // pasar por actual. El aviso dice de cuando es y ofrece el reintento.
+          renderPedidosPendientes();
+          pedidosPanelList.insertAdjacentHTML('afterbegin',
+            '<div class="pp-aviso pp-aviso--error">Sin conexion &middot; datos de ' +
+            ppTextoDesfase(pedidosCacheAt) +
+            '<button type="button" class="btn-reintentar" onclick="cargarPedidosPendientes()">Reintentar</button></div>');
+        } else {
+          pedidosResumen.textContent = '';
+          pedidosPanelList.innerHTML = htmlErrorReintento(err, 'cargarPedidosPendientes()');
+        }
       } finally {
         cargandoPedidos = false;
       }
@@ -5170,7 +5345,7 @@
 
       try {
         // Limite servidor: solo pedidos creados desde la web (un unico orderByChild indexable).
-        const snap = await conTimeout(db.ref('pedidos')
+        const snap = await conTimeout(() => db.ref('pedidos')
           .orderByChild('createdby')
           .equalTo('web')
           .once('value'));
@@ -5606,7 +5781,7 @@
 
     async function articuloBuscarEnPedidos(codigo) {
       try {
-        const [snapAbierto, snapCerrado] = await conTimeout(Promise.all([
+        const [snapAbierto, snapCerrado] = await conTimeout(() => Promise.all([
           db.ref('pedidos').orderByChild('status').equalTo('ABIERTO').once('value'),
           db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
         ]));
@@ -5716,7 +5891,7 @@
 
       const marcarUno = async (r) => {
         // Releer el pedido: los indices del array pueden haber cambiado por ediciones concurrentes
-        const snap = await conTimeout(db.ref('pedidos/' + r.id).once('value'));
+        const snap = await conTimeout(() => db.ref('pedidos/' + r.id).once('value'));
         const p = snap.val();
         if (!p || (p.status !== 'ABIERTO' && p.status !== 'CERRADO')) {
           throw new Error('Pedido ' + r.id + ' ya no esta pendiente');
@@ -5845,7 +6020,7 @@
       // Obtener datos frescos de Firebase antes de imprimir
       let pedidoFresh;
       try {
-        const snap = await conTimeout(db.ref('pedidos/' + pedidoId).once('value'));
+        const snap = await conTimeout(() => db.ref('pedidos/' + pedidoId).once('value'));
         pedidoFresh = snap.val();
         if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
         // Actualizar estado local con los datos mas recientes
@@ -6632,7 +6807,7 @@
           items: pedidoActual.items
         });
         // Eliminar movimientos
-        const movSnap = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+        const movSnap = await conTimeout(() => db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         const movs = movSnap.val();
         if (movs) {
           const upd = {};
@@ -6665,7 +6840,7 @@
 
       const user = firebase.auth().currentUser;
       try {
-        const movSnap = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+        const movSnap = await conTimeout(() => db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         const movs = movSnap.val();
         if (movs) {
           const upd = {};
@@ -6705,7 +6880,7 @@
       bloquearInterfaz('Cancelando entrega...');
 
       try {
-        const movSnap = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+        const movSnap = await conTimeout(() => db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
 
         const updates = {};
         let aEliminar = 0;
@@ -6728,7 +6903,7 @@
         // Verificacion defensiva: no debe quedar ningun movimiento de este pedido.
         // El update de arriba ya es atomico; si la verificacion expira, el
         // reintento es inocuo porque repite el mismo estado final.
-        const verify = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+        const verify = await conTimeout(() => db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         if (verify.exists()) throw new Error('Quedaron movimientos sin eliminar');
 
         despachoYaEjecutado = false;
@@ -6829,7 +7004,7 @@
         await db.ref().update(rootUpdates);
 
         // Verificacion defensiva: confirmar que los movimientos quedaron registrados.
-        const verify = await conTimeout(db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
+        const verify = await conTimeout(() => db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value'));
         const verifCount = verify.exists() ? Object.keys(verify.val()).length : 0;
         if (verifCount < movCount) throw new Error('Movimientos incompletos (' + verifCount + '/' + movCount + ')');
 
@@ -7025,7 +7200,7 @@
 
         // Update clientes node
         if (email) {
-          const snap = await conTimeout(db.ref('clientes').orderByChild('email').equalTo(email).once('value'));
+          const snap = await conTimeout(() => db.ref('clientes').orderByChild('email').equalTo(email).once('value'));
           const updates = {};
           if (snap.exists()) {
             Object.keys(snap.val()).forEach(key => {
