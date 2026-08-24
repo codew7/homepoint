@@ -6210,6 +6210,52 @@
       return out + texto + '\n';
     }
 
+    // ====================================================================
+    // A DONDE VA LA IMPRESION SEGUN EL EQUIPO
+    // ====================================================================
+    // En Android no existe QZ Tray. Esos equipos tienen instalado ESC Print
+    // Service, el servicio que recomienda el fabricante de la 3nStar: se
+    // registra como impresora del sistema y toma el trabajo desde el dialogo
+    // de impresion de Chrome, hablando Bluetooth con la POS-80C por su cuenta.
+    // Detectando la plataforma evitamos intentar QZ, fallar y tener que
+    // mostrar un cartel de error que en Android no aporta nada.
+    const ES_ANDROID = /android/i.test(navigator.userAgent || '');
+
+    // Imprime un documento HTML sin abrir ventanas. window.open() no sirve
+    // aca: para cuando llega la impresion ya se perdio el gesto del usuario
+    // (hubo await a Firebase, y en el rotulo tambien al QR), asi que Android
+    // lo bloquea como popup. Un iframe oculto no depende del gesto.
+    function imprimirDocumentoHTML(html) {
+      const previo = document.getElementById('marcoImpresion');
+      if (previo) previo.remove();
+
+      const marco = document.createElement('iframe');
+      marco.id = 'marcoImpresion';
+      marco.setAttribute('aria-hidden', 'true');
+      // Sin visibility:hidden ni display:none: un iframe que el navegador
+      // no pinta puede imprimirse en blanco. Con 0x0 en un rincon alcanza.
+      marco.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      document.body.appendChild(marco);
+
+      // El HTML que se escribe ya trae su propio window.onload -> print().
+      const doc = marco.contentWindow.document;
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      // El iframe se descarta cuando termina el dialogo. En Android el
+      // afterprint puede no llegar nunca, por eso ademas hay un plazo: sin el,
+      // el marco quedaria colgado del DOM hasta la proxima impresion.
+      let limpio = false;
+      const limpiar = () => {
+        if (limpio) return;
+        limpio = true;
+        if (marco.parentNode) marco.remove();
+      };
+      try { marco.contentWindow.addEventListener('afterprint', () => setTimeout(limpiar, 500)); } catch (e) { /* nada */ }
+      setTimeout(limpiar, 60000);
+    }
+
     // Comandos ESC-POS como bytes hex / texto plano (formato que entiende QZ).
     // Ojo con la forma: desde QZ 2.1 'hex' y 'plain' son FLAVORS, no formats.
     // Mandarlos como format hace que QZ Tray rechace el trabajo entero con
@@ -6485,12 +6531,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         </html>
       `;
       // Una única pasada por posPlain() normaliza TODO el ticket a ASCII/PC437.
-      const w = window.open('', '_blank', 'width=600,height=800');
-      w.document.write(posPlain(reciboHtml));
-      w.document.close();
+      imprimirDocumentoHTML(posPlain(reciboHtml));
     }
 
     async function imprimirComprobante(d) {
+      // Android: no hay QZ Tray que intentar. Va directo al servicio de
+      // impresion del sistema, sin intento fallido y sin cartel de error.
+      if (ES_ANDROID) { imprimirReciboHTML(d); return; }
+
       try {
         // Camino principal: modo texto ESC-POS con la fuente nativa FONTA
         await imprimirReciboESCPOS(d);
@@ -6752,22 +6800,24 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return canvas.toDataURL('image/png');
     }
 
-    // Respaldo si QZ Tray no esta disponible: la misma imagen por el dialogo
-    // de impresion del navegador, con la pagina fijada al ancho de la tira.
+    // Salida por el dialogo de impresion del navegador, con la pagina fijada
+    // al ancho de la tira. Es el camino normal en Android (lo toma ESC Print
+    // Service) y el respaldo en escritorio cuando QZ Tray no esta disponible.
     function rotRespaldoHTML(dataUrl, cantidad) {
       let imgs = '';
       for (let i = 0; i < cantidad; i++) imgs += '<img src="' + dataUrl + '">';
       const html = '<!DOCTYPE html><html><head><title>Rotulo</title><style>' +
         '@page { size: 80mm auto; margin: 0; }' +
         'html, body { margin: 0; padding: 0; background: #fff; }' +
-        'img { display: block; width: 72mm; margin: 0 auto; page-break-after: always; }' +
+        'img { display: block; width: 72mm; margin: 0 auto; }' +
+        // Salto ENTRE rotulos, no despues del ultimo: page-break-after dejaba
+        // una pagina en blanco al final, que en papel continuo es papel tirado.
+        'img + img { page-break-before: always; }' +
         '@media print { button { display: none !important; } }' +
         '</style></head><body>' + imgs +
         '<script>window.onload = function(){ window.print(); }<\/script>' +
         '</body></html>';
-      const w = window.open('', '_blank', 'width=420,height=800');
-      w.document.write(html);
-      w.document.close();
+      imprimirDocumentoHTML(html);
     }
 
     async function imprimirRotuloPOS(cantidad) {
@@ -6809,6 +6859,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         showToast('No se pudo generar el rotulo');
         return;
       }
+      // Android: la tira sale por ESC Print Service, sin armar ESC-POS.
+      if (ES_ANDROID) { rotRespaldoHTML(dataUrl, cantidad); return; }
+
       const base64 = dataUrl.split(',')[1];
 
       const data = [];
