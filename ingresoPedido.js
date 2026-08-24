@@ -364,6 +364,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Inicializar buscador de artículos después de cargar
       initializeSearchArticulos();
+      // Protección: rescatar escaneos que caigan en un campo distinto al buscador
+      initializeScanRescue();
     })
     .catch(() => {
       // Si falla la carga, mantener controles deshabilitados
@@ -994,7 +996,122 @@ function getTipoCliente() {
     // Al abrir/cargar la página, posicionar el cursor en la búsqueda de artículos.
     setTimeout(() => searchInput.focus(), 100);
   }
-  
+
+  // === RESCATE DE ESCANEOS QUE CAEN EN UN CAMPO EQUIVOCADO ===
+  // El auto-focus y el atajo de Tab (arriba) cubren el caso normal, pero si el
+  // usuario deja el cursor en otro campo (Nombre, Nota, Cantidad, un modal, etc.)
+  // y dispara igual el lector de código de barras, esas pulsaciones se escriben
+  // en ese campo en vez de llegar al buscador. Un lector emula un teclado que
+  // envía los caracteres muchísimo más rápido de lo que cualquier persona puede
+  // teclear (habitualmente <15ms entre teclas, contra >60-80ms de tecleo humano).
+  // Este listener global detecta esa cadencia, revierte lo que ya se filtró al
+  // campo incorrecto y traslada el código completo a #searchInput, dejando que
+  // su lógica ya existente (búsqueda en vivo + Enter) tome el control del resto.
+  function initializeScanRescue() {
+    if (!searchInput) return;
+
+    const SCAN_GAP_MS = 35;        // Intervalo máx. entre teclas para tratarlas como parte de un escaneo
+    const SCAN_CONFIRM_CHARS = 3;  // Caracteres rápidos seguidos necesarios para confirmar que es un escaneo
+    // Overlays/modales donde un escaneo no debe interferir (contraseñas, login, cobro)
+    const OVERLAYS_BLOQUEANTES = ['loginOverlay', 'adminPassOverlay', 'manualPassOverlay', 'calcCobroOverlay', 'modalPassword'];
+
+    let burstBuffer = '';
+    let burstField = null;
+    let burstValueBefore = null;
+    let burstSelStartBefore = null;
+    let rescueDone = false;
+    let lastKeyTime = 0;
+
+    function esCampoTexto(el) {
+      if (!el) return false;
+      if (el.tagName === 'TEXTAREA') return true;
+      if (el.tagName === 'INPUT') {
+        const tipo = (el.type || 'text').toLowerCase();
+        return tipo === 'text' || tipo === 'search' || tipo === 'tel' || tipo === 'number' || tipo === 'email' || tipo === 'url' || tipo === 'password';
+      }
+      return false;
+    }
+
+    function hayOverlayBloqueante() {
+      return OVERLAYS_BLOQUEANTES.some(id => {
+        const el = document.getElementById(id);
+        return el && el.style.display === 'flex';
+      });
+    }
+
+    function resetBurst() {
+      burstBuffer = '';
+      burstField = null;
+      burstValueBefore = null;
+      burstSelStartBefore = null;
+      rescueDone = false;
+    }
+
+    // Captura en fase de "capture" para poder prevenir la inserción antes de que
+    // el navegador la aplique al campo enfocado.
+    document.addEventListener('keydown', function(e) {
+      // Las repeticiones por tecla mantenida (auto-repeat) no son un escaneo
+      if (e.repeat) return;
+
+      // Teclas de control/modificadoras o combinaciones: no son parte de un código escaneado
+      if (e.ctrlKey || e.altKey || e.metaKey || (e.key.length > 1 && e.key !== 'Enter')) {
+        resetBurst();
+        return;
+      }
+
+      const activo = document.activeElement;
+      const ahora = performance.now();
+      const delta = ahora - lastKeyTime;
+      lastKeyTime = ahora;
+
+      // Si el foco ya está en el buscador correcto, si el rescate ya se hizo para
+      // esta racha, si hay un modal bloqueante abierto, o si el campo activo no
+      // admite texto (select, checkbox, botón), no hay nada que hacer.
+      if (activo === searchInput || rescueDone || hayOverlayBloqueante() || !esCampoTexto(activo)) {
+        resetBurst();
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        // Un Enter aislado no aporta al contenido del código; si llegamos hasta
+        // acá es que el escaneo aún no se confirmó, así que no hay nada que rescatar.
+        resetBurst();
+        return;
+      }
+
+      if (delta > SCAN_GAP_MS || burstField !== activo) {
+        // Posible inicio de una nueva racha: todavía no sabemos si es un escaneo
+        // o tecleo manual, así que dejamos que este carácter se escriba normal.
+        burstBuffer = e.key;
+        burstField = activo;
+        burstValueBefore = activo.value;
+        try { burstSelStartBefore = activo.selectionStart; } catch (_) { burstSelStartBefore = null; }
+        return;
+      }
+
+      // Otro carácter llegó muy rápido sobre el mismo campo: sospecha de escaneo.
+      burstBuffer += e.key;
+
+      if (burstBuffer.length >= SCAN_CONFIRM_CHARS) {
+        // Confirmado: es un escaneo cayendo en un campo equivocado. Rescatarlo.
+        e.preventDefault();
+
+        // Restaurar el campo original al estado previo al primer carácter filtrado.
+        burstField.value = burstValueBefore;
+        if (typeof burstSelStartBefore === 'number') {
+          try { burstField.setSelectionRange(burstSelStartBefore, burstSelStartBefore); } catch (_) {}
+        }
+
+        // Migrar el código acumulado al buscador y disparar su búsqueda en vivo.
+        searchInput.focus();
+        searchInput.value = burstBuffer;
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+        rescueDone = true;
+      }
+    }, true);
+  }
+
   function selectArticuloAndFocusQuantity(resultItem) {
     const nombreArticulo = resultItem.getAttribute('data-nombre');
     selectedArticuloNombre = nombreArticulo;
