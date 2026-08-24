@@ -2915,6 +2915,8 @@
             <div class="print-menu" id="printMenu">
               <div class="print-menu-item" id="printRotulo">R&oacute;tulo de env&iacute;o</div>
               <div class="print-menu-item" id="printFactura">Orden de pedido</div>
+              <div class="print-menu-item" id="printTicket">Ticket</div>
+              <div class="print-menu-item" id="printRotuloPOS">R&oacute;tulo</div>
             </div>
           </div>
 
@@ -3142,6 +3144,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- QZ Tray: puente local para impresion ESC-POS (fuente nativa de la 3nStar RPT008) -->
+  <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script src="config.js"></script>
 
   <script>
@@ -6013,9 +6017,28 @@
       imprimirFactura();
     });
 
-    // Imprimir Rotulo
+    // Imprimir Ticket (POS 80mm, ESC-POS via QZ Tray)
+    document.getElementById('printTicket').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      imprimirTicket();
+    });
+
+    // El modal de cantidad lo comparten los dos rotulos: esto recuerda
+    // cual de los dos lo abrio para saber a donde mandar la impresion.
+    let rotuloDestino = 'a4';
+
+    // Imprimir Rotulo (A4)
     document.getElementById('printRotulo').addEventListener('click', () => {
       printMenu.classList.remove('active');
+      rotuloDestino = 'a4';
+      document.getElementById('rotuloModal').classList.add('active');
+      document.getElementById('rotuloCantidad').value = 1;
+    });
+
+    // Imprimir Rotulo (tira 80mm, ESC-POS via QZ Tray)
+    document.getElementById('printRotuloPOS').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      rotuloDestino = 'pos';
       document.getElementById('rotuloModal').classList.add('active');
       document.getElementById('rotuloCantidad').value = 1;
     });
@@ -6027,7 +6050,8 @@
     document.getElementById('rotuloConfirm').addEventListener('click', () => {
       const cant = Math.max(1, Math.min(20, parseInt(document.getElementById('rotuloCantidad').value) || 1));
       document.getElementById('rotuloModal').classList.remove('active');
-      imprimirRotulo(cant);
+      if (rotuloDestino === 'pos') imprimirRotuloPOS(cant);
+      else imprimirRotulo(cant);
     });
 
     // ==========================================
@@ -6110,6 +6134,713 @@
       const w = window.open('', '_blank', 'width=600,height=800');
       w.document.write(reciboHtml);
       w.document.close();
+    }
+
+    // ====================================================================
+    // IMPRESIÓN ESC-POS (fuente nativa FONTA de la 3nStar RPT008 vía QZ Tray)
+    // ====================================================================
+    // El navegador no puede mandar bytes ESC-POS por window.print() (siempre
+    // rasteriza). QZ Tray es una app local que recibe la orden desde la web y
+    // envía texto crudo a la impresora, que lo dibuja con su generador interno
+    // FONTA: nítido y definido, no un mapa de bits.
+
+    // Nombre exacto de la impresora como figura en Windows.
+    // null = usar la impresora por defecto del sistema.
+    const POS_PRINTER_NAME = 'POS-80C';
+
+    // Ancho de línea de FONTA a 72 mm según el selftest: 48 caracteres.
+    const POS_COLS = 48;
+
+    // Helper: convierte cualquier valor a entero formateado es-AR (sin decimales)
+    function soloEntero(val) {
+      if (val === null || val === undefined || val === '') return '';
+      let n;
+      if (typeof val === 'number') {
+        n = val;
+      } else {
+        const clean = String(val).replace(/[^\d,.-]/g, '');
+        // Formato es-AR: '.' separador de miles, ',' decimal
+        n = parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+      }
+      if (isNaN(n)) return String(val);
+      return Math.round(n).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    }
+
+    // Helper: últimos 5 dígitos de cada código de barras asignado
+    function ultimos5BC(cb) {
+      if (!cb) return '';
+      return String(cb)
+        .split(',')
+        .map(s => s.replace(/\D/g, '').slice(-5))
+        .filter(Boolean)
+        .join(' ');
+    }
+
+    // Normaliza a ASCII/PC437 (Page0, code page por defecto de la impresora):
+    // sin esto, acentos y ñ saldrían como basura en modo texto.
+    function posPlain(val) {
+      if (val === null || val === undefined) return '';
+      return String(val)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[¿¡]/g, '')
+        .replace(/[^\x00-\x7F]/g, '');
+    }
+
+    // Helpers de formato a 48 columnas
+    function posSep() { return '-'.repeat(POS_COLS) + '\n'; }
+
+    function posFila(izq, der) {
+      izq = posPlain(izq); der = posPlain(der);
+      const espacio = POS_COLS - izq.length - der.length;
+      if (espacio < 1) {
+        izq = izq.slice(0, Math.max(0, POS_COLS - der.length - 1));
+        return izq + ' ' + der + '\n';
+      }
+      return izq + ' '.repeat(espacio) + der + '\n';
+    }
+
+    function posWrap(texto) {
+      texto = posPlain(texto);
+      let out = '';
+      while (texto.length > POS_COLS) {
+        out += texto.slice(0, POS_COLS) + '\n';
+        texto = texto.slice(POS_COLS);
+      }
+      return out + texto + '\n';
+    }
+
+    // Comandos ESC-POS como bytes hex / texto plano (formato que entiende QZ).
+    // Ojo con la forma: desde QZ 2.1 'hex' y 'plain' son FLAVORS, no formats.
+    // Mandarlos como format hace que QZ Tray rechace el trabajo entero con
+    // 'No enum constant qz.utils.PrintingUtilities.Format.PLAIN'.
+    const escCmd = (hex) => ({ type: 'raw', format: 'command', flavor: 'hex', data: hex });
+    const escTxt = (s) => ({ type: 'raw', format: 'command', flavor: 'plain', data: s });
+
+    // Construye el documento ESC-POS completo del recibo.
+    // conLogo=false omite la imagen (el logo es lo único raster; si la
+    // impresora/QZ no lo puede procesar, igual sale todo el texto nativo).
+    function construirESCPOS(d, conLogo) {
+      const data = [];
+      data.push(escCmd('1B40'));   // ESC @  -> reset
+      data.push(escCmd('1B7400')); // ESC t 0 -> code page PC437 (Page0)
+      data.push(escCmd('1B5200')); // ESC R 0 -> juego de caracteres USA
+
+      // Encabezado centrado
+      data.push(escCmd('1B6101')); // centrar
+      if (conLogo) {
+        try {
+          const logoUrl = new URL('../logo.png', window.location.href).href;
+          data.push({ type: 'raw', format: 'image', flavor: 'file', data: logoUrl,
+                      options: { language: 'ESCPOS', dotDensity: 'double' } });
+          data.push(escTxt('\n'));
+        } catch (e) { /* sin logo, el ticket igual sale */ }
+      } else {
+        data.push(escCmd('1D2111')); // GS ! 0x11 -> doble alto y ancho
+        data.push(escTxt('HOMEPOINT\n'));
+        data.push(escCmd('1D2100')); // GS ! 0x00 -> tamaño normal
+      }
+      data.push(escTxt('\n'));
+      data.push(escTxt('Velez Sarsfield 4127, Munro\n'));
+      data.push(escTxt('Tel. 11 2189-1006\n'));
+      data.push(escTxt('\n')); // línea en blanco antes del título
+      data.push(escCmd('1B4501')); // negrita on
+      data.push(escTxt('PRESUPUESTO\n'));
+      data.push(escCmd('1B4500')); // negrita off
+      data.push(escTxt(posPlain(d.fecha) + '\n'));
+
+      // Cuerpo alineado a la izquierda
+      data.push(escCmd('1B6100'));
+      data.push(escTxt(posSep()));
+      data.push(escTxt(posWrap('Nombre: ' + d.nombre)));
+      data.push(escTxt(posWrap('Telefono: ' + d.telefono)));
+      data.push(escTxt(posSep()));
+
+      d.items.forEach(it => {
+        const cant = it.cantidad || 0;
+        const vU = it.valorU || 0;
+        const vTotal = cant * vU;
+        const bc = ultimos5BC(it.codigoBarras);
+        data.push(escCmd('1B4501'));
+        data.push(escTxt(posWrap((it.nombre || '').toUpperCase())));
+        data.push(escCmd('1B4500'));
+        data.push(escTxt(posFila(cant + ' x ' + soloEntero(vU), soloEntero(vTotal))));
+        data.push(escTxt(posWrap('COD.' + (it.codigo || '') + (bc ? ' - ' + bc : ''))));
+      });
+
+      data.push(escTxt(posSep()));
+      data.push(escTxt(posFila('Subtotal', soloEntero(d.subtotal))));
+      data.push(escTxt(posFila('Medio de Pago', d.medioPago)));
+      if (parseFloat(d.recargo)) data.push(escTxt(posFila('Recargo', soloEntero(d.recargo))));
+      if (parseFloat(d.descuento)) data.push(escTxt(posFila('Descuento', soloEntero(d.descuento))));
+      if (parseFloat(d.envio)) data.push(escTxt(posFila('Costo de Envio', soloEntero(d.envio))));
+      data.push(escCmd('1B4501'));
+      data.push(escTxt(posFila('TOTAL', '$ ' + soloEntero(d.totalFinal))));
+      data.push(escCmd('1B4500'));
+
+      data.push(escTxt(posSep()));
+      data.push(escCmd('1B6101')); // centrar leyenda
+      data.push(escCmd('1B4501'));
+      data.push(escTxt(posWrap('- DOCUMENTO NO VALIDO COMO FACTURA -')));
+      data.push(escCmd('1B4500'));
+
+      // ID de pedido (últimos 8 caracteres en mayúscula), discreto y centrado al pie del ticket
+      if (d.pedidoId) {
+        data.push(escTxt('\n'));
+        data.push(escTxt(posWrap(String(d.pedidoId).slice(-8).toUpperCase())));
+      }
+
+      data.push(escTxt('\n\n\n'));
+      data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
+      return data;
+    }
+
+    // QZ Tray — certificado propio (importar C:\Users\alero\.claude\qz-cert.pem en Site Manager para eliminar el diálogo).
+    let qzConfigurado = false;
+    function configurarQZ() {
+      if (qzConfigurado || typeof qz === 'undefined') return;
+      const QZ_CERT = `-----BEGIN CERTIFICATE-----
+MIIDXTCCAkWgAwIBAgIUPMCoqhpYQ4z55zCYiyngpH47VAwwDQYJKoZIhvcNAQEL
+BQAwPjELMAkGA1UEBhMCQVIxEjAQBgNVBAoMCUhvbWVQb2ludDEbMBkGA1UEAwwS
+SG9tZVBvaW50IEFkbWluIFFaMB4XDTI2MDUxOTE2NTAxOFoXDTM2MDUxNjE2NTAx
+OFowPjELMAkGA1UEBhMCQVIxEjAQBgNVBAoMCUhvbWVQb2ludDEbMBkGA1UEAwwS
+SG9tZVBvaW50IEFkbWluIFFaMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+AQEA0G3Pek2EDxsUuyRoqYttHqkmudOhJ56FrUqqdks01dB52+kfoElM995N4Xqm
+GkBTkPLV30lUkEF1W5xKdCe3DcTp0qcZpIDf2468SKlvyi4WI9ji8rIBB4b/jN6l
+ECKUooi4iEeihKQ2WY2o7d7vhD52ITvJ9rKXJ1TWe9yyaW2sz3b7DfGKqZv+VwWY
+bQfZwLtymkGOi0IIplHwWmRoQdrl3rXE8tOIeB7Br15vKbIoXGwkV6W4rVmg+ngA
+M0BYqmcg08hRXZqUZ1nmyNsRrXijTv6D8qLvefO7D3eqIKXs0okmacGWZzfGLGnD
+YlEXTAVnMNmolKaRSVNVbF230wIDAQABo1MwUTAdBgNVHQ4EFgQUJbmYNOzALjUF
+zMY93JIwa2M6bi8wHwYDVR0jBBgwFoAUJbmYNOzALjUFzMY93JIwa2M6bi8wDwYD
+VR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAYO72+pxaqZifKkimB0tw
+mvKuqEfOOiXBawh7xBlLaTvHDaVH6v6ABqj7S73vSRBiD00oFKf5FQ42I+O1bUoN
+QYdIsxA2Q8ka7HaxMTB5v4ZBvbyXWLrRIavwY5XI2JWzArvZ8oTKB/gHF5lo9yDI
+nfvKQ9SL9y+GfwHOGkmUaw2ViScT17KdMJzSWoE37Qasp50Du+boRdmOgL0fN4nL
+zRY73MMEek1ny+DkbJ2OR7vmF2FSHaPqJzZb+UCINC3Pbf5KxqUPn+K2CEfT53hW
+3ALNhGIFw9E7pN6IE5LEdNkZCwpZRDksRo3UeBVcowsdmKzZ7Uwbe1dzxygzaLxX
+tw==
+-----END CERTIFICATE-----`;
+      const QZ_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDQbc96TYQPGxS7
+JGipi20eqSa506EnnoWtSqp2SzTV0Hnb6R+gSUz33k3heqYaQFOQ8tXfSVSQQXVb
+nEp0J7cNxOnSpxmkgN/bjrxIqW/KLhYj2OLysgEHhv+M3qUQIpSiiLiIR6KEpDZZ
+jajt3u+EPnYhO8n2spcnVNZ73LJpbazPdvsN8Yqpm/5XBZhtB9nAu3KaQY6LQgim
+UfBaZGhB2uXetcTy04h4HsGvXm8psihcbCRXpbitWaD6eAAzQFiqZyDTyFFdmpRn
+WebI2xGteKNO/oPyou9587sPd6ogpezSiSZpwZZnN8YsacNiURdMBWcw2aiUppFJ
+U1VsXbfTAgMBAAECggEACsutQ+3w6aFi9QCBRUrZ940WWuipv7YXwW6NHrxte6el
+MC1GfJRfXrVOfl/Oa6yqR2c0ibCwJxqk2/5f4t1Nv3JUFBugmeMs9R/TA8Z26ldx
+wSCSPLTYlc25vc+oaAoKfdKsEC75rXod8IyEU/HIoSZlEvqYTuVYK+ragybevNQf
+69UNrSovGjHuwDj3+tyZh0V7/Tp9Ch3iDRxFEZeqXtH0C8g4SxR0pTafyAIasyhV
+q6Y2ETEJWMVNUIIyrqtvWIQsewV6ykwUns09Qi6mFbBtz8uCLPsSyV7FccpOuWEk
+evL37yDL6HwdzA/xDnBST+eZeaRqBkB9rZs4W0kjpQKBgQD7fBZdudKO1/63AND4
+0DeVW/g3XZ6JiqBNFTtY1Q3pZRKbJhS+fSrZdReI7/7SZg9Tpgp9L6ih0aGe/Xqm
+Utz2SHQEk9D5nr8aTmn6E/YK956XuW1h6OGAdvxYfnnJibMIzT6yVVDYlFY1olj/
+VzXsmT0NM1JO/T4MCCfAKicEfwKBgQDUK9LU5NE/SaLwXslUK+jccTSP6cGUn+D0
+2IVTsccrh1lnD1ZlMoUR+5RTXAV5cyBzDL3ogvhpHTTaS8LGrJsw6c9wUvlbAVis
+hZ9WhXcC/U62ww5wZXFb+ShrYqrOLIv1Ul62Ixdoi2wofUOzT13tyGVgfuAtdeJ5
+QY4US/FSrQKBgQCKNi5MoH26B7dzeD1hIX4K1hrawtcInGlxM8QEFEOrC+Nn5Uvt
+TPkpvhKLLesMUw8FV/HXz0OMe5upt4Gau1u49yTcBykIp1g76vCPgjzs1h4RINWe
+w9B7O+l/8TKZstX0dmiIth7SiOPAYlMrMhDu0WEeSiBoTQG2txyxnfkHnQKBgHP9
+kUD55rrmksE90GrHpoH9EXMro7yQuvaf+CONKQlO8T06UUz5lW4DT09TG1sN6Ut8
+R8X487zjTqWYjV73tc/DwrfxZIiv775BPp6aUDm+KW4YrKgdjR9u0v4B7sbP66Ot
+6EFCZeWtcu+fq4c3eG4qA+IA+qVfsPQBNp859S/xAoGBALKK0Wx/OHaWPrAaThP0
+swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
+0YPZcP39H64LvTr+s65TtMrhCs5eNKd5hiGAB0T5Ctardy4f5liqQ8EqNa7YzcR/
+8xJFkCasp5SwyHnKysUl8ViY
+-----END PRIVATE KEY-----`;
+      qz.security.setCertificatePromise((resolve) => resolve(QZ_CERT));
+      qz.security.setSignatureAlgorithm('SHA512');
+      qz.security.setSignaturePromise(function(toSign) {
+        return function(resolve, reject) {
+          const pem = QZ_KEY.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+          const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+          crypto.subtle.importKey('pkcs8', der.buffer,
+            { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['sign'])
+            .then(function(key) {
+              return crypto.subtle.sign('RSASSA-PKCS1-v1_5', key,
+                new TextEncoder().encode(toSign));
+            })
+            .then(function(sig) {
+              const bytes = new Uint8Array(sig);
+              let str = '';
+              for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+              resolve(btoa(str));
+            })
+            .catch(reject);
+        };
+      });
+      qzConfigurado = true;
+    }
+
+    async function conectarQZ() {
+      if (typeof qz === 'undefined') throw new Error('La librería de QZ Tray no se cargó');
+      configurarQZ();
+      if (qz.websocket.isActive()) return;
+      await qz.websocket.connect();
+    }
+
+    async function seleccionarImpresoraPOS() {
+      if (POS_PRINTER_NAME) return POS_PRINTER_NAME;
+      let lista = await qz.printers.find();
+      if (!Array.isArray(lista)) lista = [lista];
+      const m = lista.find(n => /3n[\s-]?star|rpt[\s-]?008|pos[\s-]?80|thermal|ticket/i.test(n));
+      if (m) return m;
+      return await qz.printers.getDefault();
+    }
+
+    async function imprimirReciboESCPOS(d) {
+      await conectarQZ();
+      const printerName = await seleccionarImpresoraPOS();
+      if (!printerName) throw new Error('No se encontró ninguna impresora');
+      const config = qz.configs.create(printerName, { encoding: 'CP437' });
+      try {
+        // Intento 1: con logo (imagen raster)
+        await qz.print(config, construirESCPOS(d, true));
+      } catch (eLogo) {
+        // Intento 2: sin logo (solo texto nativo). Si esto también falla,
+        // se propaga el error y el llamador ofrece el respaldo HTML.
+        console.warn('Print con logo falló, reintentando sin logo:', eLogo);
+        await qz.print(config, construirESCPOS(d, false));
+      }
+    }
+
+    // Respaldo: impresión HTML clásica (rasterizada por el navegador).
+    function imprimirReciboHTML(d) {
+      let itemsHtml = '';
+      d.items.forEach(it => {
+        const cant = it.cantidad || 0;
+        const vU = it.valorU || 0;
+        const vTotal = cant * vU;
+        const bc = ultimos5BC(it.codigoBarras);
+        itemsHtml += `
+          <div class="item">
+            <div class="item-nombre">${(it.nombre || '').toUpperCase()}</div>
+            <div class="item-linea">
+              <span>${cant} x ${soloEntero(vU)}</span>
+              <span>${soloEntero(vTotal)}</span>
+            </div>
+            <div class="item-cod">COD.${it.codigo || ''}${bc ? ' - ' + bc : ''}</div>
+          </div>`;
+      });
+      const reciboHtml = `
+        <html>
+        <head>
+          <title>Orden de Pedido</title>
+          <style>
+            /* 3nStar RPT008: ancho de papel 80mm, área imprimible 72mm (ver selftest).
+               El cuadro se limita a 72mm para que nada se recorte ni se reescale. */
+            @page { size: 80mm auto; margin: 0; }
+            html, body { margin: 0; padding: 0; }
+            /* Tamaño de fuente único para todo el ticket: la variación de
+               tamaños se elimina; solo se conserva negrita para jerarquía. */
+            body { font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .recibo-box { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 6px 4px; background: #fff; box-sizing: border-box; }
+            .logo { display: block; margin: 0 auto 6px auto; max-width: 60mm; max-height: 22mm; object-fit: contain; }
+            .local { text-align: center; }
+            .titulo { text-align: center; font-weight: bold; margin: 1.4em 0 4px 0; }
+            .fecha { text-align: center; margin-bottom: 6px; }
+            .datos { }
+            .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+            .item { margin-bottom: 6px; }
+            .item-nombre { font-weight: bold; word-break: break-word; }
+            .item-linea { display: flex; justify-content: space-between; }
+            .item-cod { color: #000; }
+            .tot { padding: 2px 2px; }
+            .tot-fila { display: flex; justify-content: space-between; padding: 1px 0; }
+            .tot-final { font-weight: bold; }
+            .legend { text-align: center; font-weight: bold; margin-top: 12px; }
+            .pedido-id { text-align: center; margin-top: 10px; font-size: 9px; color: #555; }
+            @media print { button { display: none !important; } }
+          </style>
+        </head>
+        <body>
+          <div class='recibo-box'>
+            <img src="${new URL('../logo.png', window.location.href).href}" alt="Logo" class="logo">
+            <div class="local">Vélez Sársfield 4127, Munro</div>
+            <div class="local">Tel. 11 2189-1006</div>
+            <div class="titulo">ORDEN DE PEDIDO</div>
+            <div class="fecha">${d.fecha}</div>
+            <hr class="sep">
+            <div class="datos">
+              <div>Nombre: ${d.nombre}</div>
+              <div>Telefono: ${d.telefono}</div>
+            </div>
+            <hr class="sep">
+            ${itemsHtml}
+            <hr class="sep">
+            <div class="tot">
+              <div class="tot-fila"><span>Subtotal</span><span>${soloEntero(d.subtotal)}</span></div>
+              <div class="tot-fila"><span>Medio de Pago</span><span>${d.medioPago}</span></div>
+              ${parseFloat(d.recargo) ? `<div class="tot-fila"><span>Recargo</span><span>${soloEntero(d.recargo)}</span></div>` : ''}
+              ${parseFloat(d.descuento) ? `<div class="tot-fila"><span>Descuento</span><span>${soloEntero(d.descuento)}</span></div>` : ''}
+              ${parseFloat(d.envio) ? `<div class="tot-fila"><span>Costo de Envio</span><span>${soloEntero(d.envio)}</span></div>` : ''}
+              <div class="tot-fila tot-final"><span>TOTAL</span><span>$ ${soloEntero(d.totalFinal)}</span></div>
+            </div>
+            <hr class="sep">
+            <div class="legend">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
+            ${d.pedidoId ? `<div class="pedido-id">${String(d.pedidoId).slice(-8).toUpperCase()}</div>` : ''}
+          </div>
+          <script>window.onload = function(){ window.print(); }<\/script>
+        </body>
+        </html>
+      `;
+      // Una única pasada por posPlain() normaliza TODO el ticket a ASCII/PC437.
+      const w = window.open('', '_blank', 'width=600,height=800');
+      w.document.write(posPlain(reciboHtml));
+      w.document.close();
+    }
+
+    async function imprimirComprobante(d) {
+      try {
+        // Camino principal: modo texto ESC-POS con la fuente nativa FONTA
+        await imprimirReciboESCPOS(d);
+      } catch (e) {
+        // El fallback NO es silencioso: mostramos el motivo real para poder
+        // diagnosticar por qué no entró el modo ESC-POS.
+        console.error('Fallo impresión ESC-POS:', e);
+        let motivo = (e && e.message) ? e.message : String(e);
+        if (typeof qz === 'undefined') {
+          motivo = 'La librería de QZ Tray no se cargó (¿sin internet o CDN bloqueado?).';
+        } else if (!qz.websocket.isActive()) {
+          motivo = 'No se pudo conectar con QZ Tray. Verificá que QZ Tray esté instalado y CORRIENDO (ícono en la bandeja del sistema).\n\nDetalle técnico: ' + motivo;
+        }
+        const usarHTML = confirm(
+          'No se pudo imprimir en modo ESC-POS (fuente nativa).\n\n' +
+          motivo + '\n\n' +
+          '¿Querés imprimir con el método HTML de respaldo (menos nítido)?'
+        );
+        if (usarHTML) imprimirReciboHTML(d);
+      }
+    }
+
+    // ==========================================
+    // FUNCION IMPRIMIR TICKET (POS 80mm)
+    // Arma el snapshot con los datos del pedido y lo manda por la misma via
+    // que ingresoPedido.js: ESC-POS via QZ Tray, con respaldo HTML.
+    // ==========================================
+    async function imprimirTicket() {
+      if (!pedidoActual || !pedidoId) return;
+
+      // Datos frescos de Firebase antes de imprimir (igual que la orden de pedido)
+      let pedidoFresh;
+      try {
+        const snap = await conTimeout(() => db.ref('pedidos/' + pedidoId).once('value'));
+        pedidoFresh = snap.val();
+        if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
+        pedidoActual = pedidoFresh;
+        pedidoActual.id = pedidoId;
+      } catch (err) {
+        showToast('Error al cargar datos para imprimir');
+        console.error(err);
+        return;
+      }
+
+      const cliente = pedidoFresh.cliente || {};
+      const pagos = pedidoFresh.pagos || {};
+      const itemsPedido = pedidoFresh.items || [];
+      // En ingresoPedido el subtotal viene del formulario; aca se recalcula
+      // desde los items, que es lo unico que queda guardado del pedido.
+      const subtotal = itemsPedido.reduce((s, it) => s + (it.cantidad || 0) * (it.valorU || 0), 0);
+
+      const d = {
+        nombre: cliente.nombre || '',
+        telefono: cliente.telefono || '',
+        medioPago: pedidoFresh.tipoPago || '',
+        subtotal: subtotal,
+        recargo: pagos.recargo || '',
+        descuento: pagos.descuento || '',
+        envio: pagos.envio || '',
+        totalFinal: pagos.totalFinal || '',
+        pedidoId: pedidoId,
+        fecha: new Date().toLocaleString('es-AR', { hour12: false }),
+        items: itemsPedido.map(it => ({
+          nombre: it.nombre, codigo: it.codigo, codigoBarras: it.codigoBarras,
+          cantidad: it.cantidad, valorU: it.valorU
+        }))
+      };
+
+      imprimirComprobante(d);
+    }
+
+    // ==========================================
+    // FUNCION IMPRIMIR ROTULO EN LA POS (tira de 80mm)
+    // ==========================================
+    // El rotulo de envio es apaisado y no entra a lo ancho de una tira termica.
+    // Se dibuja en un canvas girado 90 grados horario: el papel corre a lo LARGO
+    // del rotulo, la cabecera sale primero y la tira se lee girandola hacia la
+    // izquierda. Sale como imagen raster ESC-POS, el mismo camino que ya usa el
+    // logo del ticket, asi que no depende del driver de Windows.
+
+    const ROT_ANCHO = 576;    // 72 mm de area imprimible a 203 dpi (8 dots/mm)
+    const ROT_LARGO = 1240;   // 155 mm a lo largo de la tira
+    const ROT_PAD = 18;
+    const ROT_COL_REM = 300;  // columna derecha: QR + remitente
+    const ROT_GAP = 24;
+    const ROT_QR = 240;
+    const ROT_UMBRAL = 150;   // corte blanco/negro antes de mandar a la termica
+
+    // El QR se pide a la misma API que el rotulo A4. Responde con
+    // Access-Control-Allow-Origin: *, por eso se puede volcar al canvas sin
+    // contaminarlo y seguir pudiendo exportarlo con toDataURL().
+    function rotCargarQR(texto) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);   // sin QR el rotulo igual sale
+        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + ROT_QR + 'x' + ROT_QR +
+                  '&margin=0&data=' + encodeURIComponent(texto);
+      });
+    }
+
+    // Parte un texto en lineas que entren en 'ancho' con la fuente ya seteada.
+    function rotWrap(ctx, texto, ancho) {
+      const palabras = String(texto == null ? '' : texto).split(/\s+/).filter(Boolean);
+      if (!palabras.length) return [''];
+      const lineas = [];
+      let linea = palabras[0];
+      for (let i = 1; i < palabras.length; i++) {
+        const prueba = linea + ' ' + palabras[i];
+        if (ctx.measureText(prueba).width <= ancho) linea = prueba;
+        else { lineas.push(linea); linea = palabras[i]; }
+      }
+      lineas.push(linea);
+      return lineas;
+    }
+
+    // Dibuja la columna del destinatario y devuelve el alto que ocupo.
+    // 'k' escala tipografia y espaciado: se mide con k=1 y, si no entra en los
+    // 72 mm de la tira, se vuelve a dibujar con el k que si entra.
+    function rotDibujarDestinatario(ctx, d, k) {
+      const x0 = ROT_PAD + 14;
+      const ancho = ROT_LARGO - ROT_PAD - ROT_COL_REM - ROT_GAP - x0;
+      const anchoValor = ancho - 168 * k;
+      const regla = Math.max(2, Math.round(3 * k));
+      let y = ROT_PAD + 14;
+
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#000';
+
+      ctx.font = 'bold ' + (22 * k) + 'px Arial, Helvetica, sans-serif';
+      ctx.fillText('DESTINATARIO', x0, y);
+      y += 28 * k;
+      ctx.fillRect(x0, y, ancho, regla);
+      y += regla + 14 * k;
+
+      const campos = [
+        ['NOMBRE', d.nombre], ['DIRECCION', d.direccion], ['LOCALIDAD', d.localidad],
+        ['PROVINCIA', d.provincia], ['TELEFONO', d.telefono], ['DNI', d.dni]
+      ];
+      campos.forEach(function (campo) {
+        const etiqueta = campo[0], valor = campo[1];
+        ctx.font = 'bold ' + (20 * k) + 'px Arial, Helvetica, sans-serif';
+        ctx.fillText(etiqueta, x0, y + 6 * k);
+        ctx.font = '600 ' + (30 * k) + 'px Arial, Helvetica, sans-serif';
+        const lineas = rotWrap(ctx, valor, anchoValor);
+        lineas.forEach((ln, i) => ctx.fillText(ln, x0 + 168 * k, y + i * 34 * k));
+        y += Math.max(38 * k, lineas.length * 34 * k + 4 * k);
+      });
+
+      // Banda de entrega, entre reglas, igual que en el rotulo A4
+      const reglaFina = Math.max(2, Math.round(2 * k));
+      y += 8 * k;
+      ctx.fillRect(x0, y, ancho, reglaFina);
+      y += reglaFina + 10 * k;
+      ctx.font = 'bold ' + (20 * k) + 'px Arial, Helvetica, sans-serif';
+      ctx.fillText('ENTREGA', x0, y + 6 * k);
+      ctx.font = 'bold ' + (30 * k) + 'px Arial, Helvetica, sans-serif';
+      const lineasEnt = rotWrap(ctx, d.entrega, anchoValor);
+      lineasEnt.forEach((ln, i) => ctx.fillText(ln, x0 + 168 * k, y + i * 34 * k));
+      y += Math.max(36 * k, lineasEnt.length * 34 * k) + 10 * k;
+      ctx.fillRect(x0, y, ancho, reglaFina);
+      y += reglaFina;
+
+      // Casilleros para tildar a mano
+      y += 20 * k;
+      const caja = 26 * k;
+      ctx.lineWidth = reglaFina;
+      let cx = x0;
+      ['PS', 'PAGO', 'LISTO'].forEach(function (txt) {
+        ctx.strokeRect(cx + reglaFina / 2, y + reglaFina / 2, caja, caja);
+        ctx.font = 'bold ' + (22 * k) + 'px Arial, Helvetica, sans-serif';
+        ctx.fillText(txt, cx + caja + 10 * k, y + 3 * k);
+        cx += caja + 10 * k + ctx.measureText(txt).width + 30 * k;
+      });
+      y += caja;
+
+      return y - ROT_PAD;
+    }
+
+    // Columna derecha: QR arriba y caja del remitente debajo, como en el A4.
+    function rotDibujarRemitente(ctx, qrImg) {
+      const xr = ROT_LARGO - ROT_PAD - ROT_COL_REM;
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#000';
+
+      if (qrImg) {
+        ctx.imageSmoothingEnabled = false;   // el QR tiene que salir con el borde duro
+        ctx.drawImage(qrImg, xr + (ROT_COL_REM - ROT_QR) / 2, ROT_PAD + 14, ROT_QR, ROT_QR);
+      }
+
+      const boxY = ROT_PAD + 14 + ROT_QR + 24;
+      const boxH = ROT_ANCHO - ROT_PAD - 14 - boxY;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(xr + 1, boxY + 1, ROT_COL_REM - 2, boxH - 2);
+
+      const ix = xr + 18;
+      ctx.font = 'bold 20px Arial, Helvetica, sans-serif';
+      ctx.fillText('REMITENTE', ix, boxY + 16);
+      ctx.fillRect(ix, boxY + 44, ROT_COL_REM - 36, 2);
+      ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+      ctx.fillText('NOMBRE', ix, boxY + 60);
+      ctx.font = '600 26px Arial, Helvetica, sans-serif';
+      ctx.fillText('Javier Romero', ix, boxY + 82);
+      ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+      ctx.fillText('TELEFONO', ix, boxY + 120);
+      ctx.font = '600 26px Arial, Helvetica, sans-serif';
+      ctx.fillText('11-3130-8444', ix, boxY + 142);
+    }
+
+    // Lleva el canvas a blanco y negro puro. La termica es de 1 bit: si le
+    // mandamos los grises del antialias, QZ los tramaria y el texto chico
+    // saldria sucio.
+    function rotBinarizar(ctx, w, h) {
+      const img = ctx.getImageData(0, 0, w, h);
+      const p = img.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const gris = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000;
+        const v = gris < ROT_UMBRAL ? 0 : 255;
+        p[i] = p[i + 1] = p[i + 2] = v;
+        p[i + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+
+    // Devuelve el data URL del rotulo ya girado y listo para la tira.
+    function rotConstruirCanvas(d, qrImg) {
+      // Primera pasada al aire para medir: si el destinatario no entra en los
+      // 72 mm de ancho de papel, se achica la tipografia hasta que entre.
+      const medidor = document.createElement('canvas').getContext('2d');
+      const disponible = ROT_ANCHO - (ROT_PAD + 14) * 2;
+      const alto = rotDibujarDestinatario(medidor, d, 1);
+      const k = alto > disponible ? disponible / alto : 1;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = ROT_ANCHO;    // a lo ancho del papel
+      canvas.height = ROT_LARGO;   // a lo largo de la tira
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Giro de 90 grados horario: el punto (lx, ly) del rotulo cae en
+      // (576 - ly, lx) del papel. Asi lx=0 (la cabecera) sale primero y la
+      // tira se lee girandola hacia la izquierda.
+      ctx.translate(ROT_ANCHO, 0);
+      ctx.rotate(Math.PI / 2);
+
+      // Marco punteado: ademas de replicar el borde del A4, marca donde cortar.
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 8]);
+      ctx.strokeRect(8, 8, ROT_LARGO - 16, ROT_ANCHO - 16);
+      ctx.setLineDash([]);
+
+      rotDibujarDestinatario(ctx, d, k);
+      rotDibujarRemitente(ctx, qrImg);
+
+      rotBinarizar(ctx, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    }
+
+    // Respaldo si QZ Tray no esta disponible: la misma imagen por el dialogo
+    // de impresion del navegador, con la pagina fijada al ancho de la tira.
+    function rotRespaldoHTML(dataUrl, cantidad) {
+      let imgs = '';
+      for (let i = 0; i < cantidad; i++) imgs += '<img src="' + dataUrl + '">';
+      const html = '<!DOCTYPE html><html><head><title>Rotulo</title><style>' +
+        '@page { size: 80mm auto; margin: 0; }' +
+        'html, body { margin: 0; padding: 0; background: #fff; }' +
+        'img { display: block; width: 72mm; margin: 0 auto; page-break-after: always; }' +
+        '@media print { button { display: none !important; } }' +
+        '</style></head><body>' + imgs +
+        '<script>window.onload = function(){ window.print(); }<\/script>' +
+        '</body></html>';
+      const w = window.open('', '_blank', 'width=420,height=800');
+      w.document.write(html);
+      w.document.close();
+    }
+
+    async function imprimirRotuloPOS(cantidad) {
+      if (!pedidoActual || !pedidoId) return;
+
+      // Datos frescos de Firebase antes de imprimir, igual que las demas
+      let pedidoFresh;
+      try {
+        const snap = await conTimeout(() => db.ref('pedidos/' + pedidoId).once('value'));
+        pedidoFresh = snap.val();
+        if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
+        pedidoActual = pedidoFresh;
+        pedidoActual.id = pedidoId;
+      } catch (err) {
+        showToast('Error al cargar datos para imprimir');
+        console.error(err);
+        return;
+      }
+
+      const cliente = pedidoFresh.cliente || {};
+      const d = {
+        nombre: cliente.nombre || '',
+        direccion: cliente.direccion || '',
+        localidad: cliente.localidad || '',
+        provincia: cliente.provincia || '',
+        telefono: cliente.telefono || '',
+        dni: cliente.dni || '',
+        entrega: pedidoFresh.tipoEntrega || ''
+      };
+
+      const qrImg = await rotCargarQR(pedidoId);
+      if (!qrImg) console.warn('No se pudo cargar el QR; el rotulo sale sin el.');
+
+      let dataUrl;
+      try {
+        dataUrl = rotConstruirCanvas(d, qrImg);
+      } catch (e) {
+        console.error('No se pudo generar el rotulo:', e);
+        showToast('No se pudo generar el rotulo');
+        return;
+      }
+      const base64 = dataUrl.split(',')[1];
+
+      const data = [];
+      data.push(escCmd('1B40'));   // ESC @ -> reset
+      for (let i = 0; i < cantidad; i++) {
+        data.push({ type: 'raw', format: 'image', flavor: 'base64', data: base64,
+                    options: { language: 'ESCPOS', dotDensity: 'double' } });
+        data.push(escTxt('\n'));
+        data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
+      }
+
+      try {
+        await conectarQZ();
+        const printerName = await seleccionarImpresoraPOS();
+        if (!printerName) throw new Error('No se encontró ninguna impresora');
+        const config = qz.configs.create(printerName, { encoding: 'CP437' });
+        await qz.print(config, data);
+      } catch (e) {
+        console.error('Fallo impresión del rótulo en la POS:', e);
+        let motivo = (e && e.message) ? e.message : String(e);
+        if (typeof qz === 'undefined') {
+          motivo = 'La librería de QZ Tray no se cargó (¿sin internet o CDN bloqueado?).';
+        } else if (!qz.websocket.isActive()) {
+          motivo = 'No se pudo conectar con QZ Tray. Verificá que QZ Tray esté instalado y CORRIENDO (ícono en la bandeja del sistema).\n\nDetalle técnico: ' + motivo;
+        }
+        const usarHTML = confirm(
+          'No se pudo imprimir el rótulo en la impresora POS.\n\n' +
+          motivo + '\n\n' +
+          '¿Querés imprimirlo con el método HTML de respaldo?'
+        );
+        if (usarHTML) rotRespaldoHTML(dataUrl, cantidad);
+      }
     }
 
     // ==========================================
