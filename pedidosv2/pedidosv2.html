@@ -57,6 +57,9 @@
       --ok-soft: #eaf3ee;
       --ok-ring: rgba(46, 125, 91, .20);
 
+      --violeta: #6741bd;
+      --violeta-soft: #f0ecfa;
+
       --warn: #a8730c;
       --warn-soft: #faf2e2;
 
@@ -127,6 +130,9 @@
         --ok-soft: rgba(74, 164, 124, .13);
         --ok-ring: rgba(74, 164, 124, .30);
 
+        --violeta: #a58ce6;
+        --violeta-soft: rgba(165, 140, 230, .15);
+
         --warn: #cc9b3f;
         --warn-soft: rgba(204, 155, 63, .13);
 
@@ -176,6 +182,9 @@
       --ok: #4aa47c;
       --ok-soft: rgba(74, 164, 124, .13);
       --ok-ring: rgba(74, 164, 124, .30);
+
+      --violeta: #a58ce6;
+      --violeta-soft: rgba(165, 140, 230, .15);
 
       --warn: #cc9b3f;
       --warn-soft: rgba(204, 155, 63, .13);
@@ -473,12 +482,16 @@
     body.con-pedido .ctx-bar { display: flex; }
 
     .ctx-id {
-      font-family: var(--font-mono);
       font-size: 19px;
       font-weight: 700;
-      letter-spacing: -.5px;
+      letter-spacing: -.3px;
       color: var(--ink);
       flex: none;
+      min-width: 0;
+      max-width: 32ch;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .ctx-dot {
       width: 3px;
@@ -1398,9 +1411,11 @@
     }
 
     /* Barra de resumen de la hoja inferior: solo existe por debajo de 1024px.
-       Con la tarjeta minimizada es lo unico que queda de ella, asi que carga el
-       dato que se consulta de reojo (cliente y total) y hace de zona tocable
-       para volver a desplegarla. */
+       Con la tarjeta minimizada es lo unico que queda de ella, asi que carga la
+       accion que mas se usa (escribirle al cliente), el estado de cobro y el
+       agarre para arrastrar la hoja.
+       touch-action:none porque el arrastre vertical lo maneja el JS: sin esto
+       el navegador se queda con el gesto y los pointermove dejan de llegar. */
     .dock-peek {
       display: none;
       align-items: center;
@@ -1412,9 +1427,13 @@
       border: none;
       background: transparent;
       text-align: left;
-      cursor: pointer;
+      cursor: grab;
       position: relative;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
+    .dock-peek:active { cursor: grabbing; }
     .dock-peek::before {
       content: '';
       position: absolute;
@@ -1428,25 +1447,44 @@
       transition: background .14s, width .18s var(--ease-out);
     }
     .dock-peek:hover::before { background: var(--ink-4); width: 56px; }
-    .dock-peek:active { transform: scale(.995); }
-    .dock-peek-nombre {
-      flex: 1;
-      min-width: 0;
+
+    /* touch-action:manipulation propio: el <a> vuelve a aceptar su tap dentro
+       de una barra que por lo demas se lleva todos los gestos. */
+    .dock-peek-wa {
+      width: 38px;
+      height: 34px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--r2);
+      color: var(--ok);
+      touch-action: manipulation;
+      transition: background .14s, border-color .14s, opacity .14s;
+    }
+    .dock-peek-wa:hover { background: var(--ok-soft); border-color: var(--ok-ring); }
+    .dock-peek-wa.disabled { color: var(--ink-4); pointer-events: none; opacity: .45; }
+    .dock-peek-spacer { flex: 1; min-width: 0; }
+
+    /* Solo aparece con el pedido en un estado de cobro: sin nota util no hay
+       texto y la barra queda con el boton y el chevron. */
+    .dock-peek-nota {
+      flex: none;
+      max-width: 46vw;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
-      letter-spacing: -.15px;
-      color: var(--ink);
+      letter-spacing: -.1px;
+      padding: 4px 10px;
+      border-radius: 99px;
     }
-    .dock-peek-total {
-      flex: none;
-      font-size: 13px;
-      font-weight: 800;
-      color: var(--ink-2);
-      font-variant-numeric: tabular-nums;
-    }
+    .dock-peek-nota:empty { display: none; }
+    .dock-peek-nota--espera { color: var(--violeta); background: var(--violeta-soft); }
+    .dock-peek-nota--pagado { color: var(--ok); background: var(--ok-soft); }
     .dock-peek-chevron {
       flex: none;
       width: 16px;
@@ -2278,7 +2316,29 @@
       background: var(--graphite);
       border-bottom: 1px solid var(--line);
     }
-    .articulo-scanner-wrap #articuloScannerDiv:not(:empty) { min-height: 190px; }
+    /* Visor cuadrado: html5-qrcode inyecta el <video> con el alto nativo del
+       stream (vertical en el celular), que se comia casi toda la pantalla. Se
+       lo recorta a un cuadrado centrado para que el resto del panel quede para
+       los articulos/pedidos que van apareciendo. El recorte es solo visual: el
+       decoder sigue leyendo el frame completo a resolucion nativa. */
+    .articulo-scanner-wrap #articuloScannerDiv:not(:empty) {
+      position: relative;
+      width: min(100%, 240px);
+      aspect-ratio: 1 / 1;
+      margin: 10px auto;
+      overflow: hidden;
+      border-radius: var(--r2);
+      background: #000;
+    }
+    /* !important: la libreria fija el width del video por estilo inline. */
+    .articulo-scanner-wrap #articuloScannerDiv video {
+      position: absolute;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      display: block;
+    }
     .articulo-scan-btn {
       width: 100%;
       height: 46px;
@@ -2876,11 +2936,15 @@
       <!-- Barra de resumen de la hoja inferior (solo visible por debajo de
            1024px). Reusa el toggle y el swipe que ya existian, y agrega la
            clase .abierto sobre #sideDock, que es la que lee el CSS. -->
-      <button class="dock-peek" id="footerHandle" type="button" aria-expanded="false" title="Mostrar u ocultar los datos del pedido">
-        <span class="dock-peek-nombre" id="dockPeekNombre">Datos del pedido</span>
-        <span class="dock-peek-total" id="dockPeekTotal"></span>
+      <!-- Deja de ser <button> porque ahora contiene el enlace de WhatsApp, y un
+           <a> dentro de un <button> es markup invalido: el rol y el manejo de
+           teclado se replican a mano. -->
+      <div class="dock-peek" id="footerHandle" role="button" tabindex="0" aria-expanded="false" aria-controls="sidePanel" title="Desliz&aacute; para mostrar u ocultar los datos del pedido">
+        <a class="dock-peek-wa disabled" id="dockPeekWa" target="_blank" rel="noopener" title="Sin tel&eacute;fono" aria-label="Enviar WhatsApp al cliente"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg></a>
+        <span class="dock-peek-spacer"></span>
+        <span class="dock-peek-nota" id="dockPeekNota"></span>
         <svg class="dock-peek-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg>
-      </button>
+      </div>
 
       <div id="sidePanel">
         <!-- Lo pinta renderUnificado(): cliente, totales, pago y entrega -->
@@ -2913,10 +2977,10 @@
           <div class="print-menu-wrap">
             <button class="footer-btn-base btn-impresion" id="btnImpresion">Imprimir</button>
             <div class="print-menu" id="printMenu">
-              <div class="print-menu-item" id="printRotulo">R&oacute;tulo de env&iacute;o</div>
-              <div class="print-menu-item" id="printFactura">Orden de pedido</div>
-              <div class="print-menu-item" id="printTicket">Ticket</div>
               <div class="print-menu-item" id="printRotuloPOS">R&oacute;tulo</div>
+              <div class="print-menu-item" id="printTicket">Ticket</div>
+              <div class="print-menu-item" id="printRotulo">Generar R&oacute;tulo PDF</div>
+              <div class="print-menu-item" id="printFactura">Generar Pedido PDF</div>
             </div>
           </div>
 
@@ -3092,6 +3156,18 @@
       <div class="modal-btns">
         <button class="btn-cancel" id="rotuloCancel">Cancelar</button>
         <button class="btn-primary" id="rotuloConfirm">Imprimir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PDF LISTO -->
+  <div class="modal-backdrop" id="pdfModal">
+    <div class="modal-box">
+      <p id="pdfModalTitulo">PDF generado</p>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="pdfCerrar">Cerrar</button>
+        <button class="btn-cancel" id="pdfDescargar">Descargar</button>
+        <button class="btn-primary" id="pdfCompartir">Compartir</button>
       </div>
     </div>
   </div>
@@ -3775,8 +3851,7 @@
       // y el panel derecho (ver la regla body.con-pedido del CSS).
       document.body.classList.remove('con-pedido', 'pedido-bloqueado');
       document.getElementById('sidePanelCards').innerHTML = '';
-      document.getElementById('dockPeekNombre').textContent = 'Datos del pedido';
-      document.getElementById('dockPeekTotal').textContent = '';
+      dockPeekActualizar(null);
       document.getElementById('sideDock').classList.remove('abierto');
       document.getElementById('mainContent').innerHTML = HTML_BIENVENIDA;
     }
@@ -3890,7 +3965,7 @@
       // para que un error de red no deje datos del pedido anterior a la vista.
       document.body.classList.remove('con-pedido', 'pedido-bloqueado');
       document.getElementById('sidePanelCards').innerHTML = '';
-      document.getElementById('dockPeekTotal').textContent = '';
+      dockPeekActualizar(null);
       mainContent.innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Cargando pedido...</p></div>';
 
       // Esperar a que sheets este cargado
@@ -3998,6 +4073,7 @@
 
         if (notaChanged) {
           notaSelect.value = nuevoPedido.nota || '';
+          dockPeekActualizar(nuevoPedido);
         }
 
         if (enPreparacionChanged) {
@@ -4180,6 +4256,44 @@
     const IC_CAMION = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="6.5" width="12" height="9.5" rx="1.5"></rect><path d="M13.5 9.5h4l3 3.5V16h-7z"></path><circle cx="6" cy="18.5" r="1.9"></circle><circle cx="17" cy="18.5" r="1.9"></circle></svg>';
 
     // Iniciales para el avatar del cliente: como mucho dos.
+    // Unico armador del link de WhatsApp: lo usan la tarjeta del cliente y el
+    // boton de la barra plegada. Devuelve '' si no hay telefono utilizable.
+    function linkWhatsapp(telefono) {
+      let tel = String(telefono || '').replace(/[^\d]/g, '');
+      if (!tel) return '';
+      if (tel.startsWith('0')) tel = tel.substring(1);
+      if (!tel.startsWith('54')) tel = '54' + tel;
+      return 'https://api.whatsapp.com/send/?phone=' + tel;
+    }
+
+    // Barra plegada de la hoja inferior. Se le pasa el pedido (o null para
+    // apagarla) en vez de leer pedidoActual: al resetear o al cargar otro, la
+    // variable global todavia apunta al pedido viejo.
+    function dockPeekActualizar(pedido) {
+      const wa = document.getElementById('dockPeekWa');
+      const nota = document.getElementById('dockPeekNota');
+      if (!wa || !nota) return;
+
+      const link = pedido ? linkWhatsapp((pedido.cliente || {}).telefono) : '';
+      if (link) {
+        wa.href = link;
+        wa.classList.remove('disabled');
+        wa.title = 'Enviar WhatsApp al cliente';
+      } else {
+        wa.removeAttribute('href');
+        wa.classList.add('disabled');
+        wa.title = 'Sin telefono';
+      }
+
+      // Solo los dos estados de cobro tienen color propio; el resto de las notas
+      // del Sheet no se muestran aca.
+      const estado = pedido ? estadoPago(pedido.nota) : 'sin-dato';
+      nota.className = 'dock-peek-nota'
+        + (estado === 'espera' ? ' dock-peek-nota--espera'
+        : estado === 'pagado' ? ' dock-peek-nota--pagado' : '');
+      nota.textContent = (estado === 'espera' || estado === 'pagado') ? (pedido.nota || '') : '';
+    }
+
     function inicialesCliente(nombre) {
       const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
       const ini = partes.map(p => p.charAt(0).toUpperCase()).join('');
@@ -4203,14 +4317,7 @@
       const pagos = pedidoActual.pagos || {};
       const bloqueado = pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO';
 
-      // Formatear telefono para WhatsApp
-      let whatsappLink = '';
-      if (cliente.telefono) {
-        let tel = cliente.telefono.replace(/[^\d]/g, '');
-        if (tel.startsWith('0')) tel = tel.substring(1);
-        if (!tel.startsWith('54')) tel = '54' + tel;
-        whatsappLink = 'https://api.whatsapp.com/send/?phone=' + tel;
-      }
+      const whatsappLink = linkWhatsapp(cliente.telefono);
 
       // Fecha ingreso
       let fechaIngreso = '';
@@ -4226,7 +4333,9 @@
       // bloqueado; ahora vive en la cabecera de la lista y necesita su propia
       // condicion para no ofrecer una accion que el pedido ya no admite.
       document.body.classList.toggle('pedido-bloqueado', isBlocked);
-      document.getElementById('ctxId').textContent = '#' + (pedidoId || '');
+      const ctxIdEl = document.getElementById('ctxId');
+      ctxIdEl.textContent = cliente.nombre || ('#' + (pedidoId || ''));
+      ctxIdEl.title = '#' + (pedidoId || '');
       const ctxEstado = document.getElementById('ctxEstado');
       ctxEstado.className = 'status-badge ' + getStatusClass(pedidoActual.status);
       ctxEstado.textContent = pedidoActual.status || 'N/A';
@@ -4415,9 +4524,9 @@
 
       sidePanel.innerHTML = panel;
 
-      // Resumen de la barra plegada: lo unico que queda a la vista de la
-      // tarjeta cuando la hoja esta minimizada en tablet.
-      document.getElementById('dockPeekNombre').textContent = cliente.nombre || 'Sin nombre';
+      // Barra plegada: lo unico que queda a la vista de la tarjeta cuando la
+      // hoja esta minimizada en tablet.
+      dockPeekActualizar(pedidoActual);
 
       actualizarContador();
       colapsarQty();  // el DOM anterior se descarta: resetear indice y timer
@@ -5026,6 +5135,10 @@
           notaFecha: ahora,
           lastUpdated: ahora
         });
+        if (pedidoActual) {
+          pedidoActual.nota = notaSelect.value;
+          dockPeekActualizar(pedidoActual);
+        }
       } catch (err) {
         console.error('Error guardando nota:', err);
       }
@@ -5069,8 +5182,103 @@
     function openDrawer() { footerDrawer.classList.add('open'); sincronizarHoja(); }
     function closeDrawer() { footerDrawer.classList.remove('open'); sincronizarHoja(); }
 
-    footerHandle.addEventListener('click', toggleDrawer);
+    // --- Arrastre de la hoja -------------------------------------------
+    // La hoja la abre y la cierra el max-height del CSS. Mientras el dedo esta
+    // apoyado ese max-height se fija en px para que la hoja siga al dedo en vez
+    // de saltar de un estado al otro; al soltar se devuelve el control al CSS y
+    // su transicion remata el movimiento hacia el estado que gano.
+    const sidePanelEl = document.getElementById('sidePanel');
+    const DOCK_UMBRAL = 46;     // px de recorrido que valen como intencion
+    const DOCK_TAP = 8;         // por debajo de esto el gesto todavia es un tap
+    const DOCK_FLICK = 0.5;     // px/ms: un tiron corto pero rapido tambien cuenta
+    const DOCK_ALTO_MAX = .62;  // debe coincidir con el max-height del @media
+    let dockDrag = null;
+    let dockHuboArrastre = false;  // corta el click sintetico que sigue al gesto
 
+    // El alto real de la hoja abierta: el contenido si entra, el tope del CSS si
+    // no. Se mide con el max-height suspendido y se restaura en la misma vuelta,
+    // antes de que el navegador pinte.
+    function dockAlturaMax() {
+      const previo = sidePanelEl.style.maxHeight;
+      sidePanelEl.style.maxHeight = 'none';
+      const alto = sidePanelEl.scrollHeight;
+      sidePanelEl.style.maxHeight = previo;
+      return Math.min(alto, window.innerHeight * DOCK_ALTO_MAX);
+    }
+
+    function dockTerminarArrastre(abrir) {
+      // Se limpian transicion y padding y recien despues el max-height: el
+      // reflow del medio fija el punto de partida de la animacion en el alto
+      // que quedo bajo el dedo, si no la hoja saltaria.
+      sidePanelEl.style.transition = '';
+      sidePanelEl.style.padding = '';
+      void sidePanelEl.offsetHeight;
+      sidePanelEl.style.maxHeight = '';
+      if (abrir) openDrawer(); else closeDrawer();
+    }
+
+    footerHandle.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;                 // con mouse alcanza el click
+      if (window.innerWidth >= 1024) return;                 // en desktop la hoja no se pliega
+      if (e.target.closest('.dock-peek-wa')) return;         // el boton de WhatsApp es suyo
+      dockHuboArrastre = false;                              // por si el click del gesto previo nunca llego
+      dockDrag = {
+        id: e.pointerId,
+        y0: e.clientY,
+        ts: Date.now(),
+        abierta: sideDock.classList.contains('abierto'),
+        max: dockAlturaMax(),
+        movido: false
+      };
+      footerHandle.setPointerCapture(e.pointerId);
+    });
+
+    footerHandle.addEventListener('pointermove', (e) => {
+      if (!dockDrag || e.pointerId !== dockDrag.id) return;
+      const dy = dockDrag.y0 - e.clientY;                    // hacia arriba = abrir
+      if (!dockDrag.movido) {
+        if (Math.abs(dy) < DOCK_TAP) return;                 // todavia puede ser un tap
+        dockDrag.movido = true;
+        sidePanelEl.style.transition = 'none';
+        sidePanelEl.style.padding = '2px 14px 10px';
+      }
+      const base = dockDrag.abierta ? dockDrag.max : 0;
+      sidePanelEl.style.maxHeight = Math.max(0, Math.min(dockDrag.max, base + dy)) + 'px';
+    });
+
+    function dockSoltar(e) {
+      if (!dockDrag || e.pointerId !== dockDrag.id) return;
+      const gesto = dockDrag;
+      dockDrag = null;
+      if (!gesto.movido) return;                             // fue un tap: lo resuelve el click
+
+      dockHuboArrastre = true;
+      const dy = gesto.y0 - e.clientY;
+      const rapido = Math.abs(dy) / Math.max(1, Date.now() - gesto.ts) > DOCK_FLICK;
+      // Sin recorrido ni velocidad suficientes la hoja vuelve a donde estaba.
+      const decide = Math.abs(dy) > DOCK_UMBRAL || rapido;
+      dockTerminarArrastre(decide ? dy > 0 : gesto.abierta);
+    }
+
+    footerHandle.addEventListener('pointerup', dockSoltar);
+    footerHandle.addEventListener('pointercancel', dockSoltar);
+
+    footerHandle.addEventListener('click', (e) => {
+      if (e.target.closest('.dock-peek-wa')) return;
+      if (dockHuboArrastre) { dockHuboArrastre = false; return; }
+      toggleDrawer();
+    });
+
+    // #footerHandle dejo de ser un <button> (contiene el enlace de WhatsApp):
+    // el teclado necesita el atajo a mano.
+    footerHandle.addEventListener('keydown', (e) => {
+      if (e.target.closest('.dock-peek-wa')) return;
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      toggleDrawer();
+    });
+
+    // Swipe sobre la fila de utilidades: se conserva como atajo secundario.
     let touchStartY = 0;
     document.getElementById('footerControls').addEventListener('touchstart', (e) => {
       touchStartY = e.changedTouches[0].screenY;
@@ -6011,10 +6219,10 @@
       }
     });
 
-    // Imprimir Factura
+    // Generar Pedido PDF
     document.getElementById('printFactura').addEventListener('click', () => {
       printMenu.classList.remove('active');
-      imprimirFactura();
+      generarPedidoPDF();
     });
 
     // Imprimir Ticket (POS 80mm, ESC-POS via QZ Tray)
@@ -6024,13 +6232,13 @@
     });
 
     // El modal de cantidad lo comparten los dos rotulos: esto recuerda
-    // cual de los dos lo abrio para saber a donde mandar la impresion.
-    let rotuloDestino = 'a4';
+    // cual de los dos lo abrio para saber a donde mandar la salida.
+    let rotuloDestino = 'pdf';
 
-    // Imprimir Rotulo (A4)
+    // Generar Rotulo PDF (A4)
     document.getElementById('printRotulo').addEventListener('click', () => {
       printMenu.classList.remove('active');
-      rotuloDestino = 'a4';
+      rotuloDestino = 'pdf';
       document.getElementById('rotuloModal').classList.add('active');
       document.getElementById('rotuloCantidad').value = 1;
     });
@@ -6051,14 +6259,458 @@
       const cant = Math.max(1, Math.min(20, parseInt(document.getElementById('rotuloCantidad').value) || 1));
       document.getElementById('rotuloModal').classList.remove('active');
       if (rotuloDestino === 'pos') imprimirRotuloPOS(cant);
-      else imprimirRotulo(cant);
+      else generarRotuloPDF(cant);
+    });
+
+
+    // ==========================================
+    // GENERACION Y COMPARTIDO DE PDF
+    // ==========================================
+    // Solo jsPDF (~350 KB) y recien cuando alguien pide un PDF. html2canvas
+    // ya no hace falta: rasterizaba el HTML y por eso un pedido de texto
+    // terminaba pesando megabytes. Ahora el PDF se dibuja vectorial.
+    const PDF_LIBS = [
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'
+    ];
+    let pdfLibs = null;
+    function cargarLibsPDF() {
+      if (pdfLibs) return pdfLibs;
+      pdfLibs = Promise.all(PDF_LIBS.map(src => new Promise((listo, fallo) => {
+        const et = document.createElement('script');
+        et.src = src;
+        et.onload = listo;
+        et.onerror = () => fallo(new Error('No se pudo cargar ' + src));
+        document.head.appendChild(et);
+      // Si falla la red no dejamos la promesa rechazada cacheada: el proximo
+      // intento tiene que poder volver a pedir los scripts.
+      }))).catch(err => { pdfLibs = null; throw err; });
+      return pdfLibs;
+    }
+
+    // ==========================================
+    // IMAGENES QUE VAN DENTRO DE LOS PDF
+    // ==========================================
+    // Son las unicas dos cosas del documento que no pueden ser vectores. Las
+    // dos se achican antes de incrustarse: el PDF entero tiene que seguir
+    // pesando decenas de KB.
+
+    // El logo se reescala y se pasa a JPEG. Incrustar logo.png crudo serian
+    // 30 KB para algo que en la hoja mide 40 mm de ancho.
+    function cargarLogoPDF() {
+      return new Promise((listo) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const alto = 110;   // px, alcanza de sobra para 13 mm impresos
+            const ancho = Math.max(1, Math.round(alto * (img.width / img.height)));
+            const c = document.createElement('canvas');
+            c.width = ancho; c.height = alto;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fff';           // el JPEG no tiene transparencia
+            ctx.fillRect(0, 0, ancho, alto);
+            ctx.drawImage(img, 0, 0, ancho, alto);
+            listo({ url: c.toDataURL('image/jpeg', 0.85), prop: img.width / img.height });
+          } catch (e) { listo(null); }
+        };
+        img.onerror = () => listo(null);      // sin logo el PDF igual sale
+        img.src = new URL('../logo.png', window.location.href).href;
+      });
+    }
+
+    // El QR como PNG chico: son unos cientos de bytes, y al incrustarlo con
+    // alias se guarda una sola vez aunque el pedido lleve 20 rotulos.
+    async function qrParaPDF(texto, px) {
+      const img = await rotCargarQR(texto, px);
+      if (!img) return null;
+      try {
+        const c = document.createElement('canvas');
+        c.width = px; c.height = px;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, px, px);
+        ctx.imageSmoothingEnabled = false;    // el QR tiene que salir con borde duro
+        ctx.drawImage(img, 0, 0, px, px);
+        return c.toDataURL('image/png');
+      } catch (e) { return null; }
+    }
+
+    // ==========================================
+    // CONSTRUCCION DE LOS PDF (texto vectorial)
+    // ==========================================
+    // Nada de rasterizar: el PDF se dibuja con las primitivas de jsPDF, asi
+    // que el texto queda como texto (seleccionable, buscable, nitido a
+    // cualquier zoom) y el archivo pesa decenas de KB en vez de megabytes.
+    // Las fuentes base de jsPDF usan WinAnsi, que cubre acentos y enie sin
+    // tener que incrustar una tipografia.
+
+    const PDF_MARGEN = 14;      // mm
+    const PDF_A4 = { ancho: 210, alto: 297 };
+
+    function pdfNuevo() {
+      const jsPDF = window.jspdf.jsPDF;
+      // compress activa Flate sobre los streams: son unos KB menos y no
+      // cambia nada de lo que se ve.
+      return new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    }
+
+    // Etiqueta chica en gris sobre el valor, el par que se repite en todo el
+    // documento.
+    // 'compacto' aprieta el interlineado para que entren tres rotulos por hoja.
+    function pdfCampo(doc, etiqueta, valor, x, y, anchoValor, compacto) {
+      const tamEtiq = compacto ? 5.8 : 6.5;
+      const tamVal = compacto ? 9 : 10;
+      const salto = compacto ? 3.6 : 4.2;
+      const bajada = compacto ? 3.2 : 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(tamEtiq);
+      doc.setTextColor(110);
+      doc.text(String(etiqueta).toUpperCase(), x, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(tamVal);
+      doc.setTextColor(20);
+      const lineas = doc.splitTextToSize(String(valor == null || valor === '' ? '-' : valor), anchoValor);
+      doc.text(lineas, x, y + bajada);
+      return bajada + lineas.length * salto;
+    }
+
+    // ==========================================
+    // PDF DEL PEDIDO
+    // ==========================================
+    function construirPedidoPDF(d, logo) {
+      const doc = pdfNuevo();
+      const M = PDF_MARGEN;
+      const util = PDF_A4.ancho - M * 2;
+      let y = M;
+
+      if (logo && logo.url) {
+        // Se respeta la proporcion real del archivo: clavar un alto fijo
+        // deformaria el logo si cambia la imagen.
+        const maxA = 40, maxH = 13;
+        let la = maxA, lh = maxA / logo.prop;
+        if (lh > maxH) { lh = maxH; la = maxH * logo.prop; }
+        // Si el logo no se pudo cargar seguimos sin el: no vale la pena
+        // perder el PDF entero por una imagen.
+        try { doc.addImage(logo.url, 'JPEG', PDF_A4.ancho - M - la, y, la, lh, 'logo', 'FAST'); } catch (e) { /* sin logo */ }
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(17);
+      doc.setTextColor(20);
+      doc.text('Orden de Pedido', M, y + 7);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(110);
+      doc.text(d.fecha, M, y + 12.5);
+      y += 17;
+
+      doc.setDrawColor(40);
+      doc.setLineWidth(0.4);
+      doc.line(M, y, M + util, y);
+      y += 6;
+
+      // --- Datos del cliente, en dos columnas ---
+      const colA = M, colB = M + util / 2;
+      const anchoCampo = util / 2 - 6;
+      const izq = [['Nombre', d.nombre], ['Telefono', d.telefono], ['Direccion', d.direccion]];
+      const der = [['DNI', d.dni], ['Email', d.email], ['Medio de pago', d.medioPago]];
+      let yIzq = y, yDer = y;
+      izq.forEach(c => { yIzq += pdfCampo(doc, c[0], c[1], colA, yIzq, anchoCampo) + 2.5; });
+      der.forEach(c => { yDer += pdfCampo(doc, c[0], c[1], colB, yDer, anchoCampo) + 2.5; });
+      y = Math.max(yIzq, yDer) + 3;
+
+      // --- Tabla de articulos ---
+      const cols = [
+        { t: 'Cod',      w: 24, a: 'left'  },
+        { t: 'Articulo', w: util - 24 - 16 - 26 - 28, a: 'left' },
+        { t: 'Cant',     w: 16, a: 'right' },
+        { t: 'Valor',    w: 26, a: 'right' },
+        { t: 'Total',    w: 28, a: 'right' }
+      ];
+
+      const cabecera = (yy) => {
+        doc.setFillColor(238);
+        doc.rect(M, yy, util, 7, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(60);
+        let x = M;
+        cols.forEach(c => {
+          doc.text(c.t, c.a === 'right' ? x + c.w - 2 : x + 2, yy + 4.8, { align: c.a });
+          x += c.w;
+        });
+        return yy + 7;
+      };
+
+      y = cabecera(y);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+
+      const limite = PDF_A4.alto - M - 34;   // deja lugar para totales y pie
+      d.items.forEach(it => {
+        const total = (it.cantidad || 0) * (it.valorU || 0);
+        const celdas = [
+          String(it.codigo || ''), String(it.nombre || ''),
+          String(it.cantidad || ''), d.fmt(it.valorU), d.fmt(total)
+        ];
+        doc.setFontSize(9);
+        const envuelto = doc.splitTextToSize(celdas[1], cols[1].w - 4);
+        const alto = Math.max(6.5, envuelto.length * 4.3 + 2.5);
+
+        if (y + alto > limite) {
+          doc.addPage();
+          y = M;
+          y = cabecera(y);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+        }
+
+        let x = M;
+        doc.setTextColor(20);
+        cols.forEach((c, i) => {
+          const txt = i === 1 ? envuelto : celdas[i];
+          doc.text(txt, c.a === 'right' ? x + c.w - 2 : x + 2, y + 4.6, { align: c.a });
+          x += c.w;
+        });
+        y += alto;
+        doc.setDrawColor(215);
+        doc.setLineWidth(0.1);
+        doc.line(M, y, M + util, y);
+      });
+
+      // --- Totales, alineados a la derecha ---
+      y += 5;
+      if (y > PDF_A4.alto - M - 30) { doc.addPage(); y = M; }
+      const anchoTot = 74;
+      const xTot = M + util - anchoTot;
+      const fila = (etiqueta, valor, fuerte) => {
+        doc.setFont('helvetica', fuerte ? 'bold' : 'normal');
+        doc.setFontSize(fuerte ? 11 : 9.5);
+        doc.setTextColor(fuerte ? 20 : 80);
+        doc.text(etiqueta, xTot, y);
+        doc.text(valor, M + util, y, { align: 'right' });
+        y += fuerte ? 6 : 5;
+      };
+      fila('Subtotal', d.fmt(d.subtotal));
+      if (parseFloat(d.recargo))   fila('Recargo', d.fmt(d.recargo));
+      if (parseFloat(d.descuento)) fila('Descuento', d.fmt(d.descuento));
+      if (parseFloat(d.envio))     fila('Costo de envio', d.fmt(d.envio));
+      doc.setDrawColor(40);
+      doc.setLineWidth(0.4);
+      doc.line(xTot, y - 2.5, M + util, y - 2.5);
+      y += 1.5;
+      fila('TOTAL', '$ ' + d.fmt(d.totalFinal), true);
+
+      // --- Pie con identificador y numero de pagina ---
+      const paginas = doc.getNumberOfPages();
+      for (let p = 1; p <= paginas; p++) {
+        doc.setPage(p);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(140);
+        doc.text(String(d.pedidoId || '').slice(-8).toUpperCase(), M, PDF_A4.alto - 8);
+        doc.text(p + ' / ' + paginas, M + util, PDF_A4.alto - 8, { align: 'right' });
+      }
+
+      return doc.output('blob');
+    }
+
+    // ==========================================
+    // PDF DE LOS ROTULOS
+    // ==========================================
+    const ROT_PDF = { pad: 6, colRem: 52, gap: 6, qr: 24 };
+
+    // Alto que necesita un rotulo con estos datos. Se calcula antes de dibujar
+    // para poder acomodar los que entren por hoja sin cortar ninguno.
+    function rotuloPDFAlto(doc, d, anchoDest) {
+      let h = ROT_PDF.pad + 7.5;                     // padding + titulo con regla
+      doc.setFontSize(9);
+      ROTULO_CAMPOS.forEach(c => {
+        const lineas = doc.splitTextToSize(String(d[c[1]] || '-'), anchoDest);
+        h += 3.2 + lineas.length * 3.6 + 1.2;
+      });
+      doc.setFontSize(10.5);
+      const ent = doc.splitTextToSize(String(d.entrega || '-'), anchoDest);
+      h += 2.5 + 4 + ent.length * 4.2 + 2.5;         // banda de entrega
+      h += 5.5;                                      // casilleros
+      h += ROT_PDF.pad;
+      // La columna derecha (QR + caja del remitente) marca un piso.
+      const minDer = ROT_PDF.pad + ROT_PDF.qr + 2.5 + 20 + ROT_PDF.pad;
+      return Math.max(h, minDer);
+    }
+
+    const ROTULO_CAMPOS = [
+      ['Nombre', 'nombre'], ['Direccion', 'direccion'], ['Localidad', 'localidad'],
+      ['Provincia', 'provincia'], ['Telefono', 'telefono'], ['DNI', 'dni']
+    ];
+
+    function dibujarRotuloPDF(doc, d, x, y, ancho, alto, qrDataUrl) {
+      // Marco punteado, igual que el rotulo de siempre
+      doc.setDrawColor(60);
+      doc.setLineWidth(0.4);
+      doc.setLineDashPattern([1.2, 1], 0);
+      doc.roundedRect(x, y, ancho, alto, 2, 2, 'S');
+      doc.setLineDashPattern([], 0);
+
+      const px = x + ROT_PDF.pad;
+      const py = y + ROT_PDF.pad;
+      const xRem = x + ancho - ROT_PDF.pad - ROT_PDF.colRem;
+      const anchoDest = xRem - ROT_PDF.gap - px;
+
+      // --- Destinatario ---
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(90);
+      doc.text('DESTINATARIO', px, py + 2.5);
+      doc.setDrawColor(40);
+      doc.setLineWidth(0.5);
+      doc.line(px, py + 4, px + anchoDest, py + 4);
+
+      let cy = py + 7.5 + 3.2;
+      ROTULO_CAMPOS.forEach(c => {
+        cy += pdfCampo(doc, c[0], d[c[1]], px, cy, anchoDest, true) + 1.2;
+      });
+
+      // --- Banda de entrega, entre reglas ---
+      cy += 0.5;
+      doc.setDrawColor(170);
+      doc.setLineWidth(0.3);
+      doc.line(px, cy, px + anchoDest, cy);
+      cy += 3.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.setTextColor(110);
+      doc.text('ENTREGA', px, cy);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(20);
+      const ent = doc.splitTextToSize(String(d.entrega || '-'), anchoDest);
+      doc.text(ent, px, cy + 4);
+      cy += 4 + ent.length * 4.2 + 1.5;
+      doc.setDrawColor(170);
+      doc.setLineWidth(0.3);
+      doc.line(px, cy, px + anchoDest, cy);
+
+      // --- Casilleros para tildar a mano ---
+      cy += 5;
+      doc.setDrawColor(60);
+      doc.setLineWidth(0.35);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(50);
+      let cx = px;
+      ['PS', 'PAGO', 'LISTO'].forEach(t => {
+        doc.rect(cx, cy - 3, 3.5, 3.5, 'S');
+        doc.text(t, cx + 5, cy);
+        cx += 5 + doc.getTextWidth(t) + 9;
+      });
+
+      // --- Columna derecha: QR y remitente ---
+      if (qrDataUrl) {
+        // El alias hace que el QR se incruste una sola vez aunque se repita en
+        // los 20 rotulos: sin el, cada copia sumaria su propia imagen.
+        try {
+          doc.addImage(qrDataUrl, 'PNG', xRem + (ROT_PDF.colRem - ROT_PDF.qr) / 2, py,
+                       ROT_PDF.qr, ROT_PDF.qr, 'qrPedido', 'NONE');
+        } catch (e) { /* sin QR */ }
+      }
+
+      const yRem = py + ROT_PDF.qr + 2.5;
+      const altoRem = y + alto - ROT_PDF.pad - yRem;
+      doc.setDrawColor(200);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(xRem, yRem, ROT_PDF.colRem, Math.max(20, altoRem), 1.5, 1.5, 'S');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(90);
+      doc.text('REMITENTE', xRem + 3, yRem + 4.5);
+      doc.setDrawColor(40);
+      doc.setLineWidth(0.4);
+      doc.line(xRem + 3, yRem + 6, xRem + ROT_PDF.colRem - 3, yRem + 6);
+      let ry = yRem + 9.5;
+      ry += pdfCampo(doc, 'Nombre', d.remNombre, xRem + 3, ry, ROT_PDF.colRem - 6, true) + 1.5;
+      pdfCampo(doc, 'Telefono', d.remTelefono, xRem + 3, ry, ROT_PDF.colRem - 6, true);
+    }
+
+    function construirRotuloPDF(d, cantidad, qrDataUrl) {
+      const doc = pdfNuevo();
+      const M = PDF_MARGEN;
+      const util = PDF_A4.ancho - M * 2;
+      const anchoDest = util - ROT_PDF.pad * 2 - ROT_PDF.colRem - ROT_PDF.gap;
+      const alto = rotuloPDFAlto(doc, d, anchoDest);
+      const sep = 4;
+
+      let y = M;
+      for (let i = 0; i < cantidad; i++) {
+        if (i > 0 && y + alto > PDF_A4.alto - M) { doc.addPage(); y = M; }
+        dibujarRotuloPDF(doc, d, M, y, util, alto, qrDataUrl);
+        y += alto + sep;
+      }
+      return doc.output('blob');
+    }
+    // El PDF recien generado, esperando que el usuario decida que hacer.
+    let pdfPendiente = null;
+
+    // navigator.share() exige un gesto del usuario reciente y generar el PDF
+    // (Firebase + librerias + rasterizado) se come esa ventana de tiempo. Por
+    // eso no se comparte solo: se ofrece en un modal, y el click de ese boton
+    // es el gesto valido que el navegador pide.
+    function ofrecerPDF(blob, nombre) {
+      pdfPendiente = { blob: blob, nombre: nombre };
+      document.getElementById('pdfModalTitulo').textContent =
+        nombre + '  (' + Math.max(1, Math.round(blob.size / 1024)) + ' KB)';
+      let puedeCompartir = false;
+      try {
+        puedeCompartir = !!(navigator.canShare && navigator.canShare({
+          files: [new File([blob], nombre, { type: 'application/pdf' })]
+        }));
+      } catch (e) { puedeCompartir = false; }
+      document.getElementById('pdfCompartir').style.display = puedeCompartir ? '' : 'none';
+      document.getElementById('pdfModal').classList.add('active');
+    }
+
+    function descargarPDF() {
+      if (!pdfPendiente) return;
+      const url = URL.createObjectURL(pdfPendiente.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = pdfPendiente.nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+
+    async function compartirPDF() {
+      if (!pdfPendiente) return;
+      const archivo = new File([pdfPendiente.blob], pdfPendiente.nombre, { type: 'application/pdf' });
+      try {
+        await navigator.share({ files: [archivo], title: pdfPendiente.nombre });
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;   // cerro la hoja de compartir
+        console.error('No se pudo compartir el PDF:', e);
+        showToast('No se pudo compartir, se descarga');
+        descargarPDF();
+      }
+    }
+
+    document.getElementById('pdfCerrar').addEventListener('click', () => {
+      document.getElementById('pdfModal').classList.remove('active');
+      pdfPendiente = null;
+    });
+    document.getElementById('pdfDescargar').addEventListener('click', () => {
+      descargarPDF();
+      document.getElementById('pdfModal').classList.remove('active');
+    });
+    document.getElementById('pdfCompartir').addEventListener('click', async () => {
+      await compartirPDF();
+      document.getElementById('pdfModal').classList.remove('active');
     });
 
     // ==========================================
-    // FUNCION IMPRIMIR FACTURA
-    // (Replica exacta de ingresoPedido.js)
+    // GENERAR PEDIDO PDF
     // ==========================================
-    async function imprimirFactura() {
+    async function generarPedidoPDF() {
       if (!pedidoActual || !pedidoId) return;
 
       // Obtener datos frescos de Firebase antes de imprimir
@@ -6086,54 +6738,28 @@
         return isNaN(n) ? '' : Math.round(n).toLocaleString('es-AR');
       };
 
-      let itemsHtml = '';
-      items.forEach(it => {
-        itemsHtml += '<tr><td>' + escapeHtml(it.codigo || '') + '</td><td>' + escapeHtml(it.nombre || '') + '</td><td style="text-align:right;">' + (it.cantidad || '') + '</td><td style="text-align:right;">' + formatNum(it.valorU) + '</td><td style="text-align:right;">' + formatNum((it.cantidad || 0) * (it.valorU || 0)) + '</td></tr>';
-      });
-      const subtotal = items.reduce((s, it) => s + (it.cantidad || 0) * (it.valorU || 0), 0);
+      const d = {
+        nombre: cliente.nombre || '', telefono: cliente.telefono || '',
+        direccion: cliente.direccion || '', dni: cliente.dni || '',
+        email: cliente.email || '', medioPago: pedidoFresh.tipoPago || '',
+        subtotal: items.reduce((t, it) => t + (it.cantidad || 0) * (it.valorU || 0), 0),
+        recargo: pagos.recargo || 0, descuento: pagos.descuento || 0,
+        envio: pagos.envio || 0, totalFinal: pagos.totalFinal || 0,
+        pedidoId: pedidoId,
+        fecha: new Date().toLocaleString('es-AR', { hour12: false }),
+        items: items, fmt: formatNum
+      };
 
-      const reciboHtml = '<!DOCTYPE html><html><head><title>Orden de Pedido</title>' +
-        '<style>' +
-        '@page { margin: 0; }' +
-        'body { font-family: "Courier New", Courier, monospace; color: #111; background: #fff; margin: 0; padding: 4px; }' +
-        '.recibo-box { margin: 0 auto; border: 1px dashed #333; padding: 8px 6px; background: #fff; }' +
-        'h2 { text-align: left; font-size: 1.3em; margin: 0 0 12px 0; }' +
-        'table { width: 100%; border-collapse: collapse; margin: 12px 0; }' +
-        'th, td { border-bottom: 1px dotted #aaa; padding: 4px 2px; font-size: 0.90em; }' +
-        'th { background: #eee; font-weight: bold; text-align: left; }' +
-        '.totales td { border: none; font-weight: bold; }' +
-        '.label { width: 110px; display: inline-block; }' +
-        '@media print { button { display: none !important; } }' +
-        '</style></head><body>' +
-        '<div class="recibo-box">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-        '<h2 style="margin:0;">Orden de Pedido</h2>' +
-        '<img src="logo.png" alt="Logo" style="height:48px;max-width:180px;object-fit:contain;" onerror="this.style.display=\'none\'">' +
-        '</div>' +
-        '<div style="font-size:0.90em; margin-bottom: 5px;">' + new Date().toLocaleString('es-AR', { hour12: false }) + '</div>' +
-        '<div><span class="label">Nombre:</span> ' + escapeHtml(cliente.nombre || '') + '</div>' +
-        '<div><span class="label">Telefono:</span> ' + escapeHtml(cliente.telefono || '') + '</div>' +
-        '<div><span class="label">Direccion:</span> ' + escapeHtml(cliente.direccion || '') + '</div>' +
-        '<div><span class="label">DNI:</span> ' + escapeHtml(cliente.dni || '') + '</div>' +
-        '<div><span class="label">Email:</span> ' + escapeHtml(cliente.email || '') + '</div>' +
-        '<hr style="margin:10px 0;">' +
-        '<table><thead><tr><th>Cod</th><th>Articulo</th><th>Cant</th><th>Valor</th><th>Total</th></tr></thead><tbody>' +
-        itemsHtml +
-        '</tbody></table>' +
-        '<table>' +
-        '<tr class="totales"><td>Subtotal</td><td style="text-align:right;">' + formatNum(subtotal) + '</td></tr>' +
-        '<tr class="totales"><td>Medio de Pago</td><td style="text-align:right;">' + escapeHtml(pedidoFresh.tipoPago || '') + '</td></tr>' +
-        (pagos.recargo ? '<tr class="totales"><td>Recargo</td><td style="text-align:right;">' + formatNum(pagos.recargo) + '</td></tr>' : '') +
-        (pagos.descuento ? '<tr class="totales"><td>Descuento</td><td style="text-align:right;">' + formatNum(pagos.descuento) + '</td></tr>' : '') +
-        (pagos.envio ? '<tr class="totales"><td>Costo de Envio</td><td style="text-align:right;">' + formatNum(pagos.envio) + '</td></tr>' : '') +
-        '<tr class="totales"><td>Total</td><td style="text-align:right;font-size:1.1em;">' + formatNum(pagos.totalFinal) + '</td></tr>' +
-        '</table></div>' +
-        '<script>window.onload = function(){ window.print(); }<\/script>' +
-        '</body></html>';
-
-      const w = window.open('', '_blank', 'width=600,height=800');
-      w.document.write(reciboHtml);
-      w.document.close();
+      try {
+        showToast('Generando PDF...');
+        await cargarLibsPDF();
+        const logo = await cargarLogoPDF();
+        const nombre = 'Pedido-' + String(pedidoId).slice(-8).toUpperCase() + '.pdf';
+        ofrecerPDF(construirPedidoPDF(d, logo), nombre);
+      } catch (e) {
+        console.error('No se pudo generar el PDF del pedido:', e);
+        showToast('No se pudo generar el PDF');
+      }
     }
 
     // ====================================================================
@@ -6630,13 +7256,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // El QR se pide a la misma API que el rotulo A4. Responde con
     // Access-Control-Allow-Origin: *, por eso se puede volcar al canvas sin
     // contaminarlo y seguir pudiendo exportarlo con toDataURL().
-    function rotCargarQR(texto) {
+    function rotCargarQR(texto, px) {
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
         img.onerror = () => resolve(null);   // sin QR el rotulo igual sale
-        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + ROT_QR + 'x' + ROT_QR +
+        const lado = px || ROT_QR;
+        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + lado + 'x' + lado +
                   '&margin=0&data=' + encodeURIComponent(texto);
       });
     }
@@ -6897,74 +7524,30 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     // ==========================================
-    // FUNCION IMPRIMIR ROTULO
+    // GENERAR ROTULO PDF
     // ==========================================
-    function imprimirRotulo(cantidad) {
+    async function generarRotuloPDF(cantidad) {
       if (!pedidoActual) return;
       const cliente = pedidoActual.cliente || {};
-      const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(pedidoId);
 
-      let rotuloHtml = '';
-      for (let i = 0; i < cantidad; i++) {
-        rotuloHtml += '<div class="rotulo">' +
-          '<div class="rotulo-qr"><img src="' + qrUrl + '" alt="QR" class="rotulo-qr-img"></div>' +
-          '<div class="rotulo-inner">' +
-          '<div class="rotulo-dest">' +
-          '<div class="rotulo-title">Destinatario</div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Nombre</span><span class="rotulo-value">' + escapeHtml(cliente.nombre || '') + '</span></div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Direccion</span><span class="rotulo-value">' + escapeHtml(cliente.direccion || '') + '</span></div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Localidad</span><span class="rotulo-value">' + escapeHtml(cliente.localidad || '') + '</span></div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Provincia</span><span class="rotulo-value">' + escapeHtml(cliente.provincia || '') + '</span></div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Telefono</span><span class="rotulo-value">' + escapeHtml(cliente.telefono || '') + '</span></div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">DNI</span><span class="rotulo-value">' + escapeHtml(cliente.dni || '') + '</span></div>' +
-          '<div class="rotulo-entrega"><span class="rotulo-label">Entrega</span><span class="rotulo-value">' + escapeHtml(pedidoActual.tipoEntrega || '') + '</span></div>' +
-          '</div>' +
-          '<div class="rotulo-rem">' +
-          '<div class="rotulo-title">Remitente</div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Nombre</span><span class="rotulo-value rotulo-nowrap">Javier Romero</span></div>' +
-          '<div class="rotulo-field"><span class="rotulo-label">Telefono</span><span class="rotulo-value">11-3130-8444</span></div>' +
-          '</div>' +
-          '</div>' +
-          '<div class="rotulo-checks">' +
-          '<label class="rotulo-check-item"><input type="checkbox"> PS</label>' +
-          '<label class="rotulo-check-item"><input type="checkbox"> PAGO</label>' +
-          '<label class="rotulo-check-item"><input type="checkbox"> LISTO</label>' +
-          '</div>' +
-          '</div>';
+      const d = {
+        nombre: cliente.nombre || '', direccion: cliente.direccion || '',
+        localidad: cliente.localidad || '', provincia: cliente.provincia || '',
+        telefono: cliente.telefono || '', dni: cliente.dni || '',
+        entrega: pedidoActual.tipoEntrega || '',
+        remNombre: 'Javier Romero', remTelefono: '11-3130-8444'
+      };
+
+      try {
+        showToast('Generando PDF...');
+        await cargarLibsPDF();
+        const qr = await qrParaPDF(pedidoId, 240);
+        const nombre = 'Rotulo-' + String(pedidoId).slice(-8).toUpperCase() + '.pdf';
+        ofrecerPDF(construirRotuloPDF(d, cantidad, qr), nombre);
+      } catch (e) {
+        console.error('No se pudo generar el PDF del rotulo:', e);
+        showToast('No se pudo generar el PDF');
       }
-
-      const html = '<!DOCTYPE html><html><head><title>Rotulos de Envio</title>' +
-        '<style>' +
-        '@page { size: A4; margin: 0; }' +
-        'body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }' +
-        '.rotulos-grid { display: flex; flex-direction: column; gap: 2mm; padding: 2mm; }' +
-        '.rotulo { border: 2px dashed #333; border-radius: 6px; padding: 20px 28px; break-inside: avoid; page-break-inside: avoid; position: relative; }' +
-        '.rotulo-qr { position: absolute; top: 29px; right: 35px; }' +
-        '.rotulo-qr-img { width: 100px; height: 100px; }' +
-        '.rotulo-inner { display: flex; gap: 24px; align-items: stretch; }' +
-        '.rotulo-dest { flex: 1; padding-right: 110px; }' +
-        '.rotulo-rem { width: 220px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: flex-end; }' +
-        '.rotulo-section { margin-bottom: 12px; }' +
-        '.rotulo-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #555; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 12px; }' +
-        '.rotulo-field { font-size: 17px; margin-bottom: 6px; line-height: 1.4; white-space: normal; overflow: visible; }' +
-        '.rotulo-label { font-weight: bold; display: inline-block; min-width: 100px; font-size: 11px; text-transform: uppercase; color: #555; vertical-align: top; }' +
-        '.rotulo-value { font-size: 17px; font-weight: 600; vertical-align: top; white-space: normal; overflow: visible; display: inline-block; max-width: calc(100% - 110px); word-break: break-word; }' +
-        '.rotulo-nowrap { white-space: nowrap; }' +
-        '.rotulo-entrega { font-size: 15px; font-weight: bold; margin: 14px 0; padding: 8px 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; white-space: normal; overflow: visible; }' +
-        '.rotulo-entrega .rotulo-label { font-size: 11px; vertical-align: top; }' +
-        '.rotulo-entrega .rotulo-value { font-size: 16px; white-space: normal; overflow: visible; display: inline-block; max-width: calc(100% - 110px); word-break: break-word; }' +
-        '.rotulo-checks { display: flex; gap: 24px; margin-top: 1px; padding-top: 0; }' +
-        '.rotulo-check-item { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #333; cursor: pointer; }' +
-        '.rotulo-check-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #333; }' +
-        '@media print { button { display: none !important; } }' +
-        '</style></head><body>' +
-        '<div class="rotulos-grid">' + rotuloHtml + '</div>' +
-        '<script>window.onload = function(){ window.print(); }<\/script>' +
-        '</body></html>';
-
-      const w = window.open('', '_blank', 'width=800,height=900');
-      w.document.write(html);
-      w.document.close();
     }
 
     // ==========================================
@@ -7190,6 +7773,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           lastUpdated: ahora
         });
         pedidoActual.nota = valor;
+        dockPeekActualizar(pedidoActual);
 
         if (notaSelect) {
           const existe = Array.prototype.some.call(notaSelect.options, o => o.value === valor);
@@ -7255,11 +7839,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let totalFinal = subtotal - descuentoCalc + recargoCalc + envio;
       if (totalFinal < 0) totalFinal = 0;
       totalFinalDiv.textContent = 'TOTAL FINAL $ ' + totalFinal.toLocaleString('es-AR');
-
-      // Se toma el valor, no el textContent: el onclick de abajo lo pisa con
-      // "Copiado!" por un segundo y medio.
-      const peekTotal = document.getElementById('dockPeekTotal');
-      if (peekTotal) peekTotal.textContent = '$ ' + totalFinal.toLocaleString('es-AR');
 
       // Guardar valores actuales para que pvBuildCotizacionTexto() los lea
       window._pvCotizacion = { subtotal, descuentoCalc, recargoCalc, envio, totalFinal };
