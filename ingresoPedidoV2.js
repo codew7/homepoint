@@ -39,6 +39,24 @@ function parseImporte(str) {
   return negativo ? -n : n;
 }
 
+// === PRECIO REALMENTE PAGADO EN EL PEDIDO ORIGINAL ===
+// Un pedido guarda el descuento como MONTO global (nunca como %), así que para saber
+// cuánto pagó el cliente por cada unidad hay que prorratearlo sobre sus líneas de venta.
+// Devuelve 1 cuando el pedido no tuvo descuento: la devolución sale al valor de lista.
+function factorDescuentoOrigen(pedido) {
+  if (!pedido) return 1;
+  const descuento = parseImporte(pedido.pagos && pedido.pagos.descuento);
+  if (descuento <= 0) return 1;
+  // La base es la suma de las líneas de VENTA, no pagos.subtotal: calcularTotalFinal
+  // aplica el % sobre esa base, y en un pedido que a su vez fue un cambio el subtotal
+  // guardado ya viene neteado por las devoluciones.
+  const base = (pedido.items || []).reduce(
+    (acc, it) => acc + (signoLinea(it) > 0 ? totalLinea(it) : 0), 0);
+  // Un descuento que se coma toda la base sería un dato corrupto: no se ajusta nada.
+  if (base <= 0 || descuento >= base) return 1;
+  return (base - descuento) / base;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   // === BLOQUEO DE CONTROLES HASTA CARGA DE ARTÍCULOS ===
   // Elementos a bloquear: inputs, selects, botones, tabla de artículos
@@ -1612,7 +1630,7 @@ function getTipoCliente() {
   // cliente pagó realmente, no contra el precio de lista de hoy.
   function agregarLineaCambio(datos) {
     const { tipoLinea, nombre, codigo, codigoBarras, cantidad, valorU, valorC,
-            categoria, seleccionado, pedidoOrigenId, motivo } = datos;
+            categoria, seleccionado, pedidoOrigenId, motivo, valorULista } = datos;
 
     const cant = Math.max(1, parseInt(cantidad, 10) || 1);
 
@@ -1653,6 +1671,10 @@ function getTipoCliente() {
         pedidoOrigenId: pedidoOrigenId || '',
         motivo: motivo || (tipoLinea === 'GARANTIA' ? 'Falla' : 'Devolución')
       };
+      // Cuando el importe se neteó por el descuento del pedido original se guarda también
+      // el precio de lista de aquella venta: sin él la devolución no sería auditable.
+      const lista = Math.abs(parseInt(valorULista, 10) || 0);
+      if (lista && lista !== nuevo.valorU) nuevo.valorULista = lista;
       nuevo.valorG = signoLinea(nuevo) * (nuevo.valorU - nuevo.valorC) * nuevo.cantidad;
 
       items.push(nuevo);
@@ -2323,7 +2345,8 @@ function getTipoCliente() {
             ...(esLineaCambio(it) ? {
               tipoLinea: it.tipoLinea,
               pedidoOrigenId: it.pedidoOrigenId || '',
-              motivo: it.motivo || ''
+              motivo: it.motivo || '',
+              ...(it.valorULista ? { valorULista: it.valorULista } : {})
             } : {})
           })),
           pagos: {
@@ -2618,7 +2641,8 @@ function getTipoCliente() {
         // Los pedidos anteriores a los cambios no traen tipoLinea: se leen como VENTA
         tipoLinea: it.tipoLinea || 'VENTA',
         pedidoOrigenId: it.pedidoOrigenId || '',
-        motivo: it.motivo || ''
+        motivo: it.motivo || '',
+        valorULista: it.valorULista || 0
       }));
       renderItems();
       // Rellenar pagos
@@ -2785,7 +2809,8 @@ function getTipoCliente() {
               ...(esLineaCambio(it) ? {
                 tipoLinea: it.tipoLinea,
                 pedidoOrigenId: it.pedidoOrigenId || '',
-                motivo: it.motivo || ''
+                motivo: it.motivo || '',
+                ...(it.valorULista ? { valorULista: it.valorULista } : {})
               } : {})
             })),
             pagos: {
@@ -4723,6 +4748,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     function renderOrigen(id, pedido) {
       const yaDevueltas = devueltasPorCodigo(pedido);
       const total = parseImporte(pedido.pagos && pedido.pagos.totalFinal);
+      // El descuento del pedido original se prorratea sobre sus líneas: lo que se devuelve
+      // es lo que el cliente pagó, no el precio de lista con el que se cargó la venta.
+      const factor = factorDescuentoOrigen(pedido);
+      const huboDescuento = factor < 1;
+      // Un descuento por monto fijo rara vez cae en un porcentaje redondo: se muestra con
+      // un decimal cuando lo tiene, para que el número no contradiga al ticket.
+      const pct = (1 - factor) * 100;
+      const pctDescuento = (Math.round(pct * 10) / 10).toLocaleString('es-AR');
 
       const filas = (pedido.items || []).map((it, i) => {
         const imgs = obtenerImagenesArticulo(it.nombre);
@@ -4745,7 +4778,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             </div>
             <div class="cambios-origen-precio">
               <span class="cambios-origen-precio-label">Pagó</span>
-              <span class="cambios-origen-precio-valor">${formatoPesos(parseImporte(it.valorU))}</span>
+              <span class="cambios-origen-precio-valor">${formatoPesos(Math.round(parseImporte(it.valorU) * factor))}</span>
+              ${huboDescuento ? `<span class="cambios-origen-precio-lista"><s>${formatoPesos(parseImporte(it.valorU))}</s> · −${pctDescuento}%</span>` : ''}
             </div>
             <div class="cambios-origen-acciones">
               <input type="number" class="cambios-cant-input" value="1" min="1" max="${Math.max(1, disponibles)}"
@@ -4766,6 +4800,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           </div>
           <span class="cambios-origen-total">${formatoPesos(total)}</span>
         </div>
+        ${huboDescuento ? `<div class="cambios-origen-descuento-aviso">
+          <span aria-hidden="true">ⓘ</span> Este pedido se cobró con un descuento de
+          ${formatoPesos(parseImporte(pedido.pagos && pedido.pagos.descuento))} (−${pctDescuento}%):
+          las devoluciones se calculan sobre lo que el cliente pagó, no sobre el precio de lista.
+        </div>` : ''}
         ${filas || '<div class="cambios-vacio">Este pedido no tiene artículos cargados.</div>'}
       `;
       contOrigen.hidden = false;
@@ -4784,13 +4823,22 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const it = (pedidoOrigenSeleccionado.items || [])[idxItem];
       if (!it) return;
 
+      // Lo que se devuelve es lo que el cliente pagó: el descuento del pedido original,
+      // guardado como monto global, se prorratea sobre el precio de lista de la línea.
+      // La garantía queda al valor de lista: es una reposición sin cargo y su valorU no
+      // mueve importes, sólo deja registrado a cuánto se había vendido la unidad.
+      const valorLista = parseImporte(it.valorU);
+      const factor = factorDescuentoOrigen(pedidoOrigenSeleccionado);
+      const valorPagado = accion === 'DEVOLUCION' ? Math.round(valorLista * factor) : valorLista;
+
       agregarLineaCambio({
         tipoLinea: accion,
         nombre: it.nombre,
         codigo: it.codigo,
         codigoBarras: it.codigoBarras,
         cantidad: cantidad,
-        valorU: parseImporte(it.valorU),
+        valorU: valorPagado,
+        valorULista: valorLista,
         valorC: parseImporte(it.valorC),
         categoria: it.categoria,
         seleccionado: it.seleccionado,
