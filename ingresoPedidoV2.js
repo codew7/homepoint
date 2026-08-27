@@ -1,5 +1,50 @@
 // Script para ingresoPedidoV2.html: manejo de formulario, artículos dinámicos y registro en Firebase
 
+// === CACHÉ LOCAL DE LAS FOTOS DE ARTÍCULOS (sw-imagenes.js) ===
+// Las fotos viven en un host externo y su política de caché la decide ese host:
+// si dice "no guardar", la caja las vuelve a bajar todos los días. El Service
+// Worker se queda con una copia en el disco de la PC y la sirve por 7 días,
+// así la tabla se pinta al instante y sigue mostrando las fotos aunque la
+// conexión se corte. Pasados los 7 días cada foto se re-descarga entera, sin
+// necesidad de tocar CACHE_VERSION_IMG.
+//
+// El registro es opcional a propósito: si el navegador no soporta Service
+// Workers, o la página se abre por file:// o sin HTTPS, no pasa nada — las
+// imágenes se cargan como siempre.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    // Ruta relativa a propósito: el scope queda en la carpeta del script, así
+    // funciona igual si algún día el sitio se sirve bajo un subdirectorio.
+    navigator.serviceWorker.register('sw-imagenes.js')
+      .catch(function (err) {
+        console.warn('Caché de imágenes no disponible:', err && err.message);
+      });
+  });
+}
+
+// Purga manual desde la consola: homepointPurgarImagenes()
+// Útil si se cambió una foto y hay que verla ya, sin esperar los 7 días.
+window.homepointPurgarImagenes = function () {
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ tipo: 'purgar-imagenes' });
+    console.log('Caché de imágenes purgado. Recargá la página.');
+  } else {
+    console.warn('No hay Service Worker activo todavía.');
+  }
+};
+
+// Válvula de escape: homepointDesactivarCache() apaga el caché de imágenes por
+// completo en esa PC. Es el botón de pánico si alguna vez el Service Worker da
+// problemas en el mostrador; se vuelve a activar solo al recargar la página.
+window.homepointDesactivarCache = function () {
+  if (!navigator.serviceWorker) return;
+  navigator.serviceWorker.getRegistrations().then(function (regs) {
+    regs.filter(function (r) { return /sw-imagenes\.js$/.test(r.active && r.active.scriptURL || ''); })
+        .forEach(function (r) { r.unregister(); });
+    console.log('Caché de imágenes desactivado. Recargá la página.');
+  });
+};
+
 // === TIPOS DE LÍNEA: VENTA / DEVOLUCION / GARANTIA ===
 // Una orden puede mezclar venta con la devolución de un artículo de un pedido anterior.
 // El signo económico y el tipo de movimiento de inventario se derivan del tipo de línea:
@@ -467,6 +512,9 @@ function getTipoCliente() {
   }
 
   // === IMÁGENES: misma lógica que mayorista.js (1er link → 4to link → fallback) ===
+  // Subir esta versión invalida TODAS las imágenes cacheadas (cambia la URL, así
+  // que cambia también la clave del caché del navegador y la del Service Worker).
+  // Es la palanca manual; la automática son los 7 días de sw-imagenes.js.
   const CACHE_VERSION_IMG = "2.2";
   function getCacheBustedURL(url) {
     if (!url || url === 'no-disponible.png') return url;
@@ -493,8 +541,10 @@ function getTipoCliente() {
 
   // onerror autocontenido para usar en HTML inline: cae al 4to link (data-alt)
   // y, si tampoco carga, aplica el fallback pasado (por defecto ocultar la img).
+  // `loading="lazy"` evita pedir las fotos de las filas que quedaron abajo del
+  // scroll y que muchas ventas nunca llegan a mostrar.
   function imgFallbackAttrs(alt, fallbackJs = "this.style.display='none';") {
-    return `referrerpolicy="no-referrer" data-alt="${alt || ''}" onerror="if(this.dataset.alt && this.dataset.fell!=='1'){this.dataset.fell='1';this.src=this.dataset.alt;}else{${fallbackJs}}"`;
+    return `referrerpolicy="no-referrer" loading="lazy" decoding="async" data-alt="${alt || ''}" onerror="if(this.dataset.alt && this.dataset.fell!=='1'){this.dataset.fell='1';this.src=this.dataset.alt;}else{${fallbackJs}}"`;
   }
 
   // === FUNCIÓN PARA CREAR EFECTO HOVER DE IMAGEN (OPTIMIZADA) ===
@@ -522,6 +572,7 @@ function getTipoCliente() {
         
         const hoverImg = document.createElement('img');
         hoverImg.referrerPolicy = 'no-referrer';
+        hoverImg.decoding = 'async';
         hoverImg.src = imagenUrl;
         hoverImg.style.width = '300px';
         hoverImg.style.height = '300px';
@@ -717,7 +768,7 @@ function getTipoCliente() {
       </td>
       <td><input type="text" value="${item.codigo || ''}" class="codigo" maxlength="20" style="width:80px" readonly></td>
       <td><div class="nombre-display" style="padding:8px;min-width:220px;">${badge}${item.nombre || ''}${origen}</div></td>
-      <td><input type="number" value="${item.cantidad}" class="cantidad" min="1" style="width:60px"></td>
+      <td><input type="number" value="${item.cantidad}" class="cantidad" min="1"${item.cupoMaximo ? ' max="' + item.cupoMaximo + '"' : ''} style="width:60px"></td>
         <td><div class="valorU-wrap"><input type="number" value="${item.valorU}" class="valorU" min="0" step="1" style="width:80px" ${valorUAttrs}>${lapiz}</div></td>
       <td class="valorTotal">${textoTotalLinea(item)}</td>
       <td><button type="button" class="remove-btn" data-idx="${idx}" style="background:#d32f2f;color:#fff;border:none;border-radius:4px;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Eliminar"><span style="font-weight:bold;font-size:20px;line-height:1;">&times;</span></button></td>
@@ -787,6 +838,8 @@ function getTipoCliente() {
     
     // Recalcular totales después de eliminar
     debouncedCalculations();
+    // Borrar una devolucion devuelve sus unidades al cupo del pedido original.
+    if (typeof refrescarCuposCambio === 'function') refrescarCuposCambio();
   }
 
   // === DEBOUNCE PARA CÁLCULOS ===
@@ -830,7 +883,10 @@ function getTipoCliente() {
     
     items.forEach((item, idx) => {
       const row = createRowElement(item, idx);
-      fragment.appendChild(row);
+      // Orden inverso en pantalla: el agregado mas reciente queda arriba de todo.
+      // Solo cambia la POSICION en el DOM; items[] y los data-idx no se tocan, y
+      // todo el resto del codigo ubica las filas por data-idx, nunca por posicion.
+      fragment.insertBefore(row, fragment.firstChild);
       
       // Guardar tarea de configuración para ejecutar después
       setupTasks.push({
@@ -980,6 +1036,10 @@ function getTipoCliente() {
   // Pedido original elegido en el panel y término que se tipeó para encontrarlo; ambos se
   // guardan en el pedido nuevo para poder auditar la operación después.
   let pedidoOrigenSeleccionado = null;   // { id, ...datosDelPedido }
+  // Lo asigna el IIFE del panel de cambios. Se llama cada vez que cambian las
+  // lineas cargadas (alta, edicion de cantidad o borrado) para que el cupo que
+  // muestra el pedido original quede siempre en sincronia con la operacion.
+  let refrescarCuposCambio = null;
   let ultimoTerminoBuscado = '';
   // Referencias asignadas por el IIFE del panel de cambios.
   let abrirPanelCambios = null;
@@ -1562,8 +1622,9 @@ function getTipoCliente() {
         traerFilaALaVista(existingRow);
       }
 
-      // Mostrar notificación
-      showItemNotification(nombreArticulo, items[existingItemIndex].cantidad, true);
+      // Sin toast: la confirmación ya la dan el destello verde de la fila y el
+      // estado "✓ <articulo>" del panel de escaneo, sin crear nodos ni descargar
+      // la imagen del articulo en cada lectura.
     } else {
       // Agregar nuevo artículo
       const newItem = {
@@ -1590,7 +1651,8 @@ function getTipoCliente() {
       items.push(newItem);
       const newIdx = items.length - 1;
       const row = createRowElement(newItem, newIdx);
-      itemsBody.appendChild(row);
+      // Arriba de todo: lo recien escaneado es lo que el operador necesita ver.
+      itemsBody.insertBefore(row, itemsBody.firstChild);
       
       // Configurar event listeners para la nueva fila
       setupRowEventListeners(row, newIdx);
@@ -1602,8 +1664,6 @@ function getTipoCliente() {
       }, 1500);
       traerFilaALaVista(row);
 
-      // Mostrar notificación
-      showItemNotification(nombreArticulo, cantidadEspecificada, false);
     }
 
     // Recalcular totales
@@ -1630,9 +1690,14 @@ function getTipoCliente() {
   // cliente pagó realmente, no contra el precio de lista de hoy.
   function agregarLineaCambio(datos) {
     const { tipoLinea, nombre, codigo, codigoBarras, cantidad, valorU, valorC,
-            categoria, seleccionado, pedidoOrigenId, motivo, valorULista } = datos;
+            categoria, seleccionado, pedidoOrigenId, motivo, valorULista, cupoMaximo } = datos;
 
-    const cant = Math.max(1, parseInt(cantidad, 10) || 1);
+    // Tope duro de la linea: unidades del pedido original todavia disponibles
+    // (lo comprado menos lo ya procesado en cambios anteriores). Sin el no se
+    // aplica limite, para no romper la edicion de pedidos de cambio antiguos.
+    const tope = parseInt(cupoMaximo, 10) || 0;
+    let cant = Math.max(1, parseInt(cantidad, 10) || 1);
+    if (tope > 0 && cant > tope) cant = tope;
 
     // Fusionar solo con una línea equivalente: mismo artículo, mismo tipo y mismo pedido origen.
     const idxExistente = items.findIndex(it =>
@@ -1642,7 +1707,11 @@ function getTipoCliente() {
     );
 
     if (idxExistente !== -1) {
-      items[idxExistente].cantidad += cant;
+      // Nunca por encima del tope: varios clicks seguidos en "Devolucion" suman
+      // sobre la misma linea y ahi es donde se descontaba de mas por error.
+      const topeLinea = parseInt(items[idxExistente].cupoMaximo, 10) || 0;
+      const sumada = items[idxExistente].cantidad + cant;
+      items[idxExistente].cantidad = topeLinea > 0 ? Math.min(topeLinea, sumada) : sumada;
       items[idxExistente].valorG = signoLinea(items[idxExistente]) *
         (items[idxExistente].valorU - items[idxExistente].valorC) * items[idxExistente].cantidad;
 
@@ -1675,38 +1744,21 @@ function getTipoCliente() {
       // el precio de lista de aquella venta: sin él la devolución no sería auditable.
       const lista = Math.abs(parseInt(valorULista, 10) || 0);
       if (lista && lista !== nuevo.valorU) nuevo.valorULista = lista;
+      // Campo interno: acompania a la linea para poder topear la cantidad tambien
+      // cuando se edita a mano en la tabla. No se serializa a Firebase ni al ticket.
+      if (tope > 0) nuevo.cupoMaximo = tope;
       nuevo.valorG = signoLinea(nuevo) * (nuevo.valorU - nuevo.valorC) * nuevo.cantidad;
 
       items.push(nuevo);
       const idx = items.length - 1;
       const fila = createRowElement(nuevo, idx);
-      itemsBody.appendChild(fila);
+      itemsBody.insertBefore(fila, itemsBody.firstChild);
       setupRowEventListeners(fila, idx);
       traerFilaALaVista(fila);
     }
 
     debouncedCalculations();
-    showCambioNotification(tipoLinea, nombre, cant);
-  }
-
-  // Toast con el color de la operación, reutilizando la pila de notificaciones del escáner.
-  function showCambioNotification(tipoLinea, nombre, cantidad) {
-    const esGarantia = tipoLinea === 'GARANTIA';
-    const imgs = obtenerImagenesArticulo(nombre);
-    const toast = document.createElement('div');
-    toast.className = 'scan-toast ' + (esGarantia ? 'garantia' : 'devolucion');
-    const imageHtml = imgs.principal
-      ? `<img src="${imgs.principal}" class="scan-toast-img" alt="${nombre}" ${imgFallbackAttrs(imgs.alt)}>`
-      : '<div class="scan-toast-img"></div>';
-    toast.innerHTML = `
-      ${imageHtml}
-      <div class="scan-toast-body">
-        <div class="scan-toast-accion">${esGarantia ? '⚠ Garantía sin cargo' : '↩ Devolución al stock'}</div>
-        <div class="scan-toast-nombre">${nombre}</div>
-      </div>
-      <div class="scan-toast-cant">×${cantidad}</div>
-    `;
-    pushToast(toast);
+    if (typeof refrescarCuposCambio === 'function') refrescarCuposCambio();
   }
 
   // Marca del pedido como operación de cambio. Devuelve {} en una venta normal para que el
@@ -1885,8 +1937,13 @@ function getTipoCliente() {
     return stack;
   }
 
+  // El remove() real se difiere hasta que termina la animación de salida, así que
+  // el toast sigue en el DOM ~220 ms despues de cerrarlo. La marca `cerrando`
+  // evita re-cerrarlo y, sobre todo, deja contarlo aparte en pushToast.
   function cerrarToast(toast) {
-    if (!toast.parentNode) return;
+    if (!toast || !toast.parentNode || toast.dataset.cerrando === '1') return;
+    toast.dataset.cerrando = '1';
+    if (toast._timerCierre) { clearTimeout(toast._timerCierre); toast._timerCierre = null; }
     toast.style.animation = 'slideOut .22s ease-in';
     setTimeout(() => toast.remove(), 220);
   }
@@ -1895,34 +1952,18 @@ function getTipoCliente() {
     const stack = getToastStack();
     stack.appendChild(toast);
 
-    // Retirar los más viejos si se acumulan
-    while (stack.children.length > TOAST_MAX) cerrarToast(stack.firstElementChild);
+    // Retirar los más viejos si se acumulan. Solo cuentan los que NO están
+    // saliendo: cerrarToast no borra el nodo en el acto (espera la animación),
+    // así que un `while` sobre stack.children nunca ve bajar el contador y
+    // cuelga la pestaña al escanear varios códigos seguidos.
+    const vivos = [];
+    for (const el of stack.children) {
+      if (el.dataset.cerrando !== '1') vivos.push(el);
+    }
+    for (let i = 0; i < vivos.length - TOAST_MAX; i++) cerrarToast(vivos[i]);
 
     toast.addEventListener('click', () => cerrarToast(toast));
-    setTimeout(() => cerrarToast(toast), TOAST_MS);
-  }
-
-  function showItemNotification(nombreArticulo, cantidad, isIncrement = false) {
-    const imgs = obtenerImagenesArticulo(nombreArticulo);
-    const imagenUrl = imgs.principal;
-
-    const toast = document.createElement('div');
-    toast.className = 'scan-toast';
-
-    const imageHtml = imagenUrl
-      ? `<img src="${imagenUrl}" class="scan-toast-img" alt="${nombreArticulo}" ${imgFallbackAttrs(imgs.alt)}>`
-      : '<div class="scan-toast-img"></div>';
-
-    toast.innerHTML = `
-      ${imageHtml}
-      <div class="scan-toast-body">
-        <div class="scan-toast-accion">${isIncrement ? 'Cantidad actualizada' : 'Artículo agregado'}</div>
-        <div class="scan-toast-nombre">${nombreArticulo}</div>
-      </div>
-      <div class="scan-toast-cant">×${cantidad}</div>
-    `;
-
-    pushToast(toast);
+    toast._timerCierre = setTimeout(() => cerrarToast(toast), TOAST_MS);
   }
 
   function showScanError(codigo) {
@@ -1964,6 +2005,19 @@ function getTipoCliente() {
     }
   });
 
+  // Unidades del mismo articulo y pedido origen ya comprometidas en OTRAS lineas
+  // de cambio (devolucion y garantia comparten el cupo del pedido original).
+  function unidadesCambioEnOtrasLineas(idxActual) {
+    const ref = items[idxActual];
+    if (!ref) return 0;
+    return items.reduce((acc, ln, i) => {
+      if (i === idxActual || !esLineaCambio(ln)) return acc;
+      if ((ln.pedidoOrigenId || '') !== (ref.pedidoOrigenId || '')) return acc;
+      const mismo = ref.codigo ? ln.codigo === ref.codigo : ln.nombre === ref.nombre;
+      return mismo ? acc + (parseInt(ln.cantidad, 10) || 0) : acc;
+    }, 0);
+  }
+
   // === OPTIMIZACIÓN: EVENT DELEGATION PARA INPUTS ===
   itemsBody.addEventListener('input', function(e) {
     const row = e.target.closest('tr');
@@ -1982,7 +2036,16 @@ function getTipoCliente() {
       // Sanitizar: permitir sólo dígitos
       target.value = (target.value + '').replace(/\D/g, '');
       if (target.value === '') target.value = '1';
-      const newCantidad = Math.max(1, parseInt(target.value, 10) || 1);
+      let newCantidad = Math.max(1, parseInt(target.value, 10) || 1);
+      // Una devolucion o garantia no puede superar lo que el cliente compro en el
+      // pedido original: el tope viaja en la propia linea (cupoMaximo). Devolucion
+      // y garantia del mismo articulo son lineas separadas pero comparten cupo,
+      // asi que se descuenta lo comprometido en las otras.
+      const topeLinea = parseInt(items[idx].cupoMaximo, 10) || 0;
+      if (topeLinea > 0) {
+        const disponible = Math.max(1, topeLinea - unidadesCambioEnOtrasLineas(idx));
+        if (newCantidad > disponible) newCantidad = disponible;
+      }
       // Reflejar valor normalizado en el input
       if (String(newCantidad) !== target.value) target.value = String(newCantidad);
       if (items[idx].cantidad !== newCantidad) {
@@ -1996,6 +2059,7 @@ function getTipoCliente() {
 
         // Actualizar valor total de la fila
         row.querySelector('.valorTotal').textContent = textoTotalLinea(items[idx]);
+        if (esLineaCambio(items[idx]) && typeof refrescarCuposCambio === 'function') refrescarCuposCambio();
       }
     } else if (target.classList.contains('valorU')) {
       // Sanitizar: permitir sólo dígitos (sin separadores ni símbolos)
@@ -4738,6 +4802,70 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return acumulado;
     }
 
+    // === CUPO DISPONIBLE POR LINEA DEL PEDIDO ORIGINAL ===
+    // No se puede devolver ni reemplazar mas unidades de las que el cliente
+    // compro. El cupo es: comprado - ya procesado en cambios anteriores (nodo
+    // devoluciones/) - lo que ya esta cargado en ESTA operacion.
+    function mismaLinea(itOrigen, linea) {
+      return itOrigen.codigo ? linea.codigo === itOrigen.codigo : linea.nombre === itOrigen.nombre;
+    }
+
+    function unidadesEnOperacion(pedidoId, itOrigen) {
+      return items.reduce((acc, ln) => {
+        if (!esLineaCambio(ln) || ln.pedidoOrigenId !== pedidoId) return acc;
+        return mismaLinea(itOrigen, ln) ? acc + (parseInt(ln.cantidad, 10) || 0) : acc;
+      }, 0);
+    }
+
+    // Devolucion y garantia comparten cupo: una unidad comprada se procesa una sola vez.
+    function cupoLinea(idxItem) {
+      const pedido = pedidoOrigenSeleccionado;
+      const it = pedido && (pedido.items || [])[idxItem];
+      if (!it) return null;
+      const comprado = parseInt(it.cantidad, 10) || 0;
+      const previas  = devueltasPorCodigo(pedido)[it.codigo] || 0;
+      const enCurso  = unidadesEnOperacion(pedido.id, it);
+      return {
+        it, comprado, previas, enCurso,
+        // Techo total admisible para esta linea dentro de la operacion actual.
+        maximo: Math.max(0, comprado - previas),
+        restante: Math.max(0, comprado - previas - enCurso)
+      };
+    }
+
+    // Mantiene el panel del pedido original en sincronia con lo ya cargado:
+    // ajusta el max de cada input, apaga los botones sin cupo y explica por que.
+    function refrescarCupos() {
+      if (!pedidoOrigenSeleccionado || contOrigen.hidden) return;
+      contOrigen.querySelectorAll('.cambios-origen-item').forEach(fila => {
+        const cupo = cupoLinea(parseInt(fila.getAttribute('data-item'), 10));
+        if (!cupo) return;
+        const agotada = cupo.restante <= 0;
+
+        fila.classList.toggle('cambios-origen-agotada', agotada);
+        fila.querySelectorAll('[data-accion]').forEach(b => { b.disabled = agotada; });
+
+        const input = fila.querySelector('.cambios-cant-input');
+        if (input) {
+          input.max = Math.max(1, cupo.restante);
+          input.disabled = agotada;
+          const val = parseInt(input.value, 10) || 1;
+          input.value = agotada ? '0' : String(Math.min(Math.max(1, val), cupo.restante));
+        }
+
+        const aviso = fila.querySelector('.cambios-origen-aviso');
+        if (!aviso) return;
+        const usadas = cupo.previas + cupo.enCurso;
+        if (usadas <= 0) { aviso.hidden = true; aviso.textContent = ''; return; }
+        aviso.hidden = false;
+        aviso.textContent = agotada
+          ? 'Sin unidades disponibles: ' + cupo.comprado + ' de ' + cupo.comprado + ' ya procesadas'
+          : usadas + ' de ' + cupo.comprado + ' ya procesadas \u00b7 quedan ' + cupo.restante;
+      });
+    }
+    // Lo usan agregarLineaCambio, la edicion de cantidad y removeItem.
+    refrescarCuposCambio = refrescarCupos;
+
     function seleccionarPedido(id, pedido) {
       pedidoOrigenSeleccionado = { id, ...pedido };
       ocultarResultados();
@@ -4761,9 +4889,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const imgs = obtenerImagenesArticulo(it.nombre);
         const devueltas = yaDevueltas[it.codigo] || 0;
         const disponibles = Math.max(0, (parseInt(it.cantidad, 10) || 0) - devueltas);
-        const aviso = devueltas > 0
-          ? `<div class="cambios-origen-aviso">${devueltas} de ${it.cantidad} ya ${devueltas === 1 ? 'devuelta' : 'devueltas'}</div>`
-          : '';
+        // El texto lo escribe refrescarCupos(): el nodo se renderiza siempre para
+        // poder actualizarlo sin rehacer el HTML del panel entero.
+        const aviso = '<div class="cambios-origen-aviso" hidden></div>';
         const img = imgs.principal
           ? `<img src="${imgs.principal}" class="cambios-origen-img" alt="" ${imgFallbackAttrs(imgs.alt)}>`
           : '<div class="cambios-origen-img"></div>';
@@ -4808,6 +4936,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         ${filas || '<div class="cambios-vacio">Este pedido no tiene artículos cargados.</div>'}
       `;
       contOrigen.hidden = false;
+      // Estado inicial de cupos: contempla tanto los cambios previos como las
+      // lineas que ya esten cargadas de este mismo pedido en la operacion actual.
+      refrescarCupos();
 
       // Traer los datos del cliente del pedido original evita retipearlos y mantiene la
       // trazabilidad entre la venta y su cambio.
@@ -4818,10 +4949,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
     }
 
-    function procesarAccion(accion, idxItem, cantidad) {
+    function procesarAccion(accion, idxItem, cantidad, cupo) {
       if (!pedidoOrigenSeleccionado) return;
       const it = (pedidoOrigenSeleccionado.items || [])[idxItem];
       if (!it) return;
+      // Recalcular el cupo si no vino dado (Enter en el input, llamadas internas).
+      const cupoLin = cupo || cupoLinea(idxItem);
+      if (!cupoLin || cupoLin.restante <= 0) { refrescarCupos(); return; }
+      const cant = Math.min(Math.max(1, parseInt(cantidad, 10) || 1), cupoLin.restante);
 
       // Lo que se devuelve es lo que el cliente pagó: el descuento del pedido original,
       // guardado como monto global, se prorratea sobre el precio de lista de la línea.
@@ -4836,7 +4971,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         nombre: it.nombre,
         codigo: it.codigo,
         codigoBarras: it.codigoBarras,
-        cantidad: cantidad,
+        cantidad: cant,
+        cupoMaximo: cupoLin.maximo,
         valorU: valorPagado,
         valorULista: valorLista,
         valorC: parseImporte(it.valorC),
@@ -4845,6 +4981,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         pedidoOrigenId: pedidoOrigenSeleccionado.id,
         motivo: accion === 'GARANTIA' ? 'Falla' : 'Devolución'
       });
+
+      // agregarLineaCambio ya dispara refrescarCupos(); esto solo cubre el caso
+      // en que la linea no se haya podido crear.
+      refrescarCupos();
 
       // Tras registrar la devolución, el foco vuelve al escáner para cargar el reemplazo.
       if (searchInput) searchInput.focus();
@@ -4938,11 +5078,24 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     contOrigen.addEventListener('click', function(e) {
       const btn = e.target.closest('[data-accion]');
-      if (!btn) return;
+      if (!btn || btn.disabled) return;
+      const idxItem = parseInt(btn.getAttribute('data-item'), 10);
+      const cupo = cupoLinea(idxItem);
+      if (!cupo) return;
+
+      // Sin unidades disponibles no se procesa nada: solo se repinta el estado.
+      if (cupo.restante <= 0) { refrescarCupos(); return; }
+
       const fila = btn.closest('.cambios-origen-item');
       const inputCant = fila && fila.querySelector('.cambios-cant-input');
-      const cantidad = Math.max(1, parseInt(inputCant && inputCant.value, 10) || 1);
-      procesarAccion(btn.getAttribute('data-accion'), parseInt(btn.getAttribute('data-item'), 10), cantidad);
+      let cantidad = Math.max(1, parseInt(inputCant && inputCant.value, 10) || 1);
+      // El atributo max del input es solo una ayuda del navegador: un valor
+      // tecleado o pegado igual llega mas alto, asi que el recorte se hace aca.
+      if (cantidad > cupo.restante) {
+        cantidad = cupo.restante;
+        if (inputCant) inputCant.value = String(cantidad);
+      }
+      procesarAccion(btn.getAttribute('data-accion'), idxItem, cantidad, cupo);
     });
 
     // El panel vive dentro del <form>: sin esto, un Enter en el campo de cantidad enviaría
