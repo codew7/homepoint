@@ -1,0 +1,3500 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Reportes · HomePoint</title>
+<link rel="icon" href="faviconnegro.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (misma versión y compat que el resto del panel) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="config.js"></script>
+<!-- sql.js: motor SQLite compilado a WASM. Sólo se descarga al exportar .sqlite -->
+
+<style>
+/* ============================================================================
+   Reportes.html — "Sala de máquinas"
+   ----------------------------------------------------------------------------
+   Hoja autónoma. NO carga styles.css ni ingresoPedidoV2.css: reusa sus tokens
+   (Instrument Sans, violeta #6c4eb6, grafito #17181c) para no romper la
+   continuidad visual del panel, pero vive por su cuenta.
+
+   Dirección: riel de mando en grafito a la izquierda (donde se ARMA la
+   consulta) contra un lienzo hueso a la derecha (donde se LEE el resultado).
+   Serif editorial para los títulos, mono tabular para todo número.
+   ========================================================================== */
+
+:root{
+  /* lienzo — hueso, no blanco puro: el papel del reporte */
+  --paper:      #f2f1ed;
+  --paper-2:    #e9e8e2;
+  --card:       #ffffff;
+  --card-2:     #fbfbf9;
+  --rule:       #dedcd4;
+  --rule-2:     #e9e7e0;
+  --rule-3:     #f1efe9;
+
+  /* tinta */
+  --ink:   #16171b;
+  --ink-2: #3f424a;
+  --ink-3: #6b6e77;
+  --ink-4: #90939c;
+  --ink-5: #b0b3bb;
+
+  /* riel de mando — grafito */
+  --rail:      #16171c;
+  --rail-2:    #1d1f25;
+  --rail-3:    #24262d;
+  --rail-4:    #2c2f37;
+  --rail-line: #2e3038;
+  --rail-line-2:#262830;
+  --rail-ink:  #ffffff;
+  --rail-ink-2:#e4e5ea;
+  --rail-ink-3:#b9bcc5;
+  --rail-ink-4:#8b8f99;
+  --rail-ink-5:#6a6e78;
+
+  /* acentos */
+  --violeta:      #6c4eb6;
+  --violeta-2:    #5a3da0;
+  --violeta-claro:#9b81e0;
+  --violeta-soft: rgba(108,78,182,.12);
+  --violeta-ring: rgba(108,78,182,.30);
+  --ocre:         #b26a00;
+  --ocre-soft:    rgba(178,106,0,.12);
+  --verde:        #157a4a;
+  --verde-soft:   rgba(21,122,74,.12);
+  --rojo:         #b3261e;
+  --rojo-soft:    rgba(179,38,30,.10);
+
+  /* datos: una sola serie, un solo acento */
+  --serie:      #6c4eb6;
+  --serie-soft: #d9d0f0;
+  --serie-neg:  #b3261e;
+
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px;
+  --s5:20px; --s6:24px; --s7:32px; --s8:44px;
+
+  --r1:6px; --r2:9px; --r3:13px; --r4:18px;
+
+  --font:  'Instrument Sans', ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --mono:  'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
+
+  --sh-1: 0 1px 2px rgba(20,22,28,.05);
+  --sh-2: 0 1px 2px rgba(20,22,28,.05), 0 3px 8px rgba(20,22,28,.05);
+  --sh-3: 0 18px 44px rgba(20,22,28,.18);
+  --sh-modal: 0 32px 80px rgba(16,18,24,.32);
+
+  /* SVG inline usados como background: viven acá para no repetir el data-uri */
+  --chev-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238b8f99' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --chev-svg-claro: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b6e77' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --lupa-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%238b8f99' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+
+  --t-fast: 110ms cubic-bezier(.2,0,.2,1);
+  --t-base: 180ms cubic-bezier(.2,0,.2,1);
+
+  --rail-w: 384px;
+  --top-h:  72px;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--font); font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+button,input,select,textarea{ font:inherit; color:inherit; }
+button{ cursor:pointer; border:0; background:none; }
+a{ color:inherit; }
+::selection{ background:var(--violeta-ring); }
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+.num{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1; }
+
+/* ---------------------------------------------------------------- scroll -- */
+.scroll-fino{ scrollbar-width:thin; }
+.scroll-fino::-webkit-scrollbar{ width:9px; height:9px; }
+.scroll-fino::-webkit-scrollbar-track{ background:transparent; }
+.scroll-fino::-webkit-scrollbar-thumb{
+  background:var(--rule); border-radius:99px; border:2px solid transparent;
+  background-clip:content-box;
+}
+.scroll-fino::-webkit-scrollbar-thumb:hover{ background:var(--ink-5); background-clip:content-box; }
+.rail .scroll-fino::-webkit-scrollbar-thumb,
+.rail-body::-webkit-scrollbar-thumb{ background:var(--rail-4); background-clip:content-box; }
+
+/* ================================================================= login == */
+.login-overlay{
+  position:fixed; inset:0; z-index:9000; display:none;
+  align-items:center; justify-content:center; padding:var(--s5);
+  background:
+    radial-gradient(120% 90% at 12% 0%, #23252d 0%, #16171c 55%, #101116 100%);
+}
+.login-overlay::after{
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(80% 70% at 30% 20%, #000 0%, transparent 100%);
+}
+.login-card{
+  position:relative; z-index:1; width:100%; max-width:392px;
+  background:var(--card); border-radius:var(--r4); padding:var(--s8) var(--s7) var(--s7);
+  box-shadow:var(--sh-modal); text-align:center;
+  animation:subir .5s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes subir{ from{ opacity:0; transform:translateY(14px) scale(.985);} to{ opacity:1; transform:none;} }
+.login-logo{ height:44px; width:auto; margin-bottom:var(--s5); }
+.login-title{
+  font-family:var(--serif); font-size:33px; font-weight:400; letter-spacing:-.01em;
+  margin:0 0 var(--s1);
+}
+.login-sub{ margin:0 0 var(--s6); color:var(--ink-3); font-size:13.5px; }
+.login-error{
+  display:none; margin-bottom:var(--s4); padding:10px 13px; border-radius:var(--r1);
+  background:var(--rojo-soft); color:var(--rojo); font-size:13px; font-weight:500;
+  text-align:left; border-left:3px solid var(--rojo);
+}
+.login-input{
+  width:100%; height:46px; margin-bottom:var(--s3); padding:0 var(--s4);
+  border:1.5px solid var(--rule); border-radius:var(--r2); background:var(--card-2);
+  outline:none; transition:border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+}
+.login-input:focus{ border-color:var(--violeta); background:#fff; box-shadow:0 0 0 3.5px var(--violeta-ring); }
+.login-btn{
+  width:100%; height:46px; margin-top:var(--s2); border-radius:var(--r2);
+  background:var(--ink); color:#fff; font-weight:600; letter-spacing:.01em;
+  transition:background var(--t-fast), transform var(--t-fast);
+}
+.login-btn:hover:not(:disabled){ background:var(--violeta-2); }
+.login-btn:active:not(:disabled){ transform:translateY(1px); }
+.login-btn:disabled{ opacity:.55; cursor:progress; }
+
+/* ================================================================= shell == */
+.app{ display:none; min-height:100vh; }
+.app.listo{ display:grid; grid-template-columns:var(--rail-w) minmax(0,1fr); }
+
+/* El velo solo existe cuando el riel es un cajon (ver media query). Fuera de ahi
+   TIENE que estar fuera del flujo: si participa del grid roba la primera columna
+   y descoloca riel y lienzo. */
+.rail-velo{ display:none; }
+
+/* ============================================================ riel mando == */
+.rail{
+  position:sticky; top:0; height:100vh; z-index:60;
+  display:flex; flex-direction:column; overflow:hidden;
+  background:linear-gradient(178deg, #1a1c22 0%, var(--rail) 42%, #131419 100%);
+  border-right:1px solid #0c0d11;
+  color:var(--rail-ink-3);
+}
+.rail::before{
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:.55;
+  background-image:
+    linear-gradient(rgba(255,255,255,.017) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.017) 1px, transparent 1px);
+  background-size:34px 34px;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%, transparent 46%);
+  mask-image:linear-gradient(180deg,#000 0%, transparent 46%);
+}
+.rail-head{
+  position:relative; flex:0 0 auto; padding:var(--s5) var(--s5) var(--s4);
+  border-bottom:1px solid var(--rail-line-2);
+}
+.rail-marca{ display:flex; align-items:center; gap:11px; }
+.rail-marca img{ height:26px; width:auto; opacity:.94; }
+.rail-marca-txt{ display:flex; flex-direction:column; line-height:1.1; }
+.rail-marca-txt b{
+  font-family:var(--serif); font-weight:400; font-size:22px; color:var(--rail-ink);
+  letter-spacing:.005em;
+}
+.rail-marca-txt span{
+  font-size:9.5px; text-transform:uppercase; letter-spacing:.19em;
+  color:var(--rail-ink-5); font-weight:600; margin-top:3px;
+}
+.rail-estado{
+  display:flex; align-items:center; gap:7px; margin-top:var(--s4);
+  font-size:11.5px; color:var(--rail-ink-4); min-height:16px;
+}
+.rail-estado-punto{
+  width:6px; height:6px; border-radius:99px; background:var(--rail-ink-5); flex:0 0 auto;
+  transition:background var(--t-base), box-shadow var(--t-base);
+}
+.rail-estado[data-estado="ok"] .rail-estado-punto{ background:#3fbf7f; box-shadow:0 0 0 3px rgba(63,191,127,.16); }
+.rail-estado[data-estado="carga"] .rail-estado-punto{ background:var(--violeta-claro); animation:latir 1.05s ease-in-out infinite; }
+.rail-estado[data-estado="error"] .rail-estado-punto{ background:#e06055; box-shadow:0 0 0 3px rgba(224,96,85,.16); }
+@keyframes latir{ 0%,100%{opacity:1; transform:scale(1);} 50%{opacity:.3; transform:scale(.65);} }
+
+.rail-body{
+  position:relative; flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain;
+  padding:var(--s3) 0 var(--s6); scrollbar-width:thin;
+}
+.rail-body::-webkit-scrollbar{ width:9px; }
+.rail-body::-webkit-scrollbar-track{ background:transparent; }
+.rail-body::-webkit-scrollbar-thumb{ background:var(--rail-4); border-radius:99px; border:2px solid transparent; background-clip:content-box; }
+
+.rail-pie{
+  position:relative; flex:0 0 auto; padding:var(--s3) var(--s5) var(--s4);
+  border-top:1px solid var(--rail-line-2); background:rgba(10,11,14,.5);
+}
+
+/* --- bloque plegable --- */
+.blq{ border-bottom:1px solid var(--rail-line-2); }
+.blq:last-of-type{ border-bottom:0; }
+.blq-cab{
+  display:flex; align-items:center; gap:var(--s2); width:100%;
+  padding:13px var(--s5); text-align:left;
+  color:var(--rail-ink-4); font-size:10px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.16em;
+  transition:color var(--t-fast);
+}
+.blq-cab:hover{ color:var(--rail-ink-2); }
+.blq-cab .chev{ margin-left:auto; flex:0 0 auto; transition:transform var(--t-base); opacity:.65; }
+.blq[data-abierto="no"] .chev{ transform:rotate(-90deg); }
+.blq-cnt{ padding:0 var(--s5) var(--s5); animation:desplegar var(--t-base) both; }
+.blq[data-abierto="no"] .blq-cnt{ display:none; }
+@keyframes desplegar{ from{ opacity:0; transform:translateY(-4px);} to{ opacity:1; transform:none;} }
+.blq-badge{
+  margin-left:var(--s1); padding:1px 6px; border-radius:99px;
+  background:var(--violeta); color:#fff; font-size:9.5px; letter-spacing:.04em;
+  font-family:var(--mono); font-weight:700;
+}
+.blq-badge:empty{ display:none; }
+
+/* --- pills de periodo --- */
+.pills{ display:flex; flex-wrap:wrap; gap:5px; }
+.pill{
+  padding:6px 10px; border-radius:99px; font-size:11.5px; font-weight:500;
+  background:var(--rail-3); color:var(--rail-ink-3); border:1px solid transparent;
+  transition:background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.pill:hover{ background:var(--rail-4); color:var(--rail-ink); }
+.pill[aria-pressed="true"]{
+  background:var(--violeta); color:#fff; border-color:var(--violeta-claro);
+  box-shadow:0 1px 0 rgba(255,255,255,.12) inset;
+}
+.rango-fechas{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s2); margin-top:var(--s3); }
+.rango-fechas label{
+  display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.13em;
+  color:var(--rail-ink-5); font-weight:700; margin-bottom:5px;
+}
+.ctrl{
+  width:100%; height:36px; padding:0 10px;
+  background:var(--rail-2); border:1px solid var(--rail-line); border-radius:var(--r1);
+  color:var(--rail-ink-2); font-size:12.5px; outline:none;
+  transition:border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+}
+.ctrl:focus{ border-color:var(--violeta-claro); box-shadow:0 0 0 3px rgba(155,129,224,.20); background:var(--rail-3); }
+.ctrl::-webkit-calendar-picker-indicator{ filter:invert(.75); cursor:pointer; }
+select.ctrl{
+  appearance:none; -webkit-appearance:none; cursor:pointer;
+  background-image:var(--chev-svg);
+  background-repeat:no-repeat; background-position:right 9px center; padding-right:26px;
+}
+.rango-nota{ margin:var(--s3) 0 0; font-size:11px; color:var(--rail-ink-5); line-height:1.45; }
+.rango-nota b{ color:var(--rail-ink-3); font-weight:600; font-family:var(--mono); font-size:10.5px; }
+
+/* --- segmented (conjunto de datos) --- */
+.seg{ display:grid; gap:5px; }
+.seg-op{
+  display:flex; align-items:flex-start; gap:10px; width:100%; padding:10px 11px;
+  text-align:left; border-radius:var(--r2); border:1px solid var(--rail-line-2);
+  background:var(--rail-2); color:var(--rail-ink-3);
+  transition:background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.seg-op:hover{ background:var(--rail-3); color:var(--rail-ink-2); }
+.seg-op[aria-pressed="true"]{
+  background:linear-gradient(180deg, rgba(108,78,182,.26), rgba(108,78,182,.13));
+  border-color:var(--violeta); color:var(--rail-ink);
+}
+.seg-op svg{ flex:0 0 auto; margin-top:2px; opacity:.85; }
+.seg-op b{ display:block; font-size:12.5px; font-weight:600; }
+.seg-op small{ display:block; font-size:10.5px; color:var(--rail-ink-5); margin-top:1px; line-height:1.35; }
+.seg-op[aria-pressed="true"] small{ color:var(--rail-ink-4); }
+
+/* --- chips de agrupacion --- */
+.chips{ display:flex; flex-wrap:wrap; gap:5px; }
+.chip{
+  display:inline-flex; align-items:center; gap:6px; padding:5px 7px 5px 9px;
+  border-radius:var(--r1); background:var(--violeta); color:#fff;
+  font-size:11.5px; font-weight:600; animation:aparecer var(--t-base) both;
+}
+@keyframes aparecer{ from{ opacity:0; transform:scale(.92);} to{ opacity:1; transform:none;} }
+.chip .ord{ font-family:var(--mono); font-size:9px; opacity:.68; }
+.chip button{
+  display:grid; place-items:center; width:15px; height:15px; border-radius:4px;
+  color:#fff; opacity:.6; transition:opacity var(--t-fast), background var(--t-fast);
+}
+.chip button:hover{ opacity:1; background:rgba(0,0,0,.28); }
+.chip-vacio{
+  padding:9px 11px; border:1px dashed var(--rail-line); border-radius:var(--r1);
+  font-size:11.5px; color:var(--rail-ink-5); width:100%; text-align:center;
+}
+.opts-aviso{
+  padding:11px 12px; border:1px dashed var(--rail-line); border-radius:var(--r1);
+  font-size:11.5px; line-height:1.5; color:var(--rail-ink-5); text-align:center;
+}
+.opts-aviso strong{ color:var(--rail-ink-3); font-weight:600; }
+.btn-fantasma:disabled{ opacity:.4; cursor:not-allowed; }
+.btn-fantasma:disabled:hover{ border-color:var(--rail-line); color:var(--rail-ink-4); background:none; }
+
+/* --- listas de opciones (metricas / columnas / dimensiones) --- */
+.opts{ display:grid; gap:1px; max-height:300px; overflow-y:auto; margin-top:var(--s2); scrollbar-width:thin; }
+.opts::-webkit-scrollbar{ width:9px; }
+.opts::-webkit-scrollbar-thumb{ background:var(--rail-4); border-radius:99px; border:2px solid transparent; background-clip:content-box; }
+.opt{
+  display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:var(--r1);
+  cursor:pointer; transition:background var(--t-fast); position:relative;
+  font-size:12.5px; color:var(--rail-ink-3); user-select:none;
+}
+.opt:hover{ background:var(--rail-3); color:var(--rail-ink-2); }
+.opt input{ position:absolute; opacity:0; pointer-events:none; }
+.opt .box{
+  flex:0 0 auto; width:16px; height:16px; border-radius:5px;
+  border:1.5px solid var(--rail-line); background:var(--rail-2);
+  display:grid; place-items:center;
+  transition:background var(--t-fast), border-color var(--t-fast);
+}
+.opt .box svg{ opacity:0; transform:scale(.5); transition:opacity var(--t-fast), transform var(--t-fast); }
+.opt input:checked ~ .box{ background:var(--violeta); border-color:var(--violeta); }
+.opt input:checked ~ .box svg{ opacity:1; transform:none; }
+.opt input:focus-visible ~ .box{ box-shadow:0 0 0 3px rgba(155,129,224,.30); }
+.opt input:checked ~ .txt{ color:var(--rail-ink); font-weight:500; }
+.opt .txt{ min-width:0; }
+.opt .txt small{ display:block; font-size:10px; color:var(--rail-ink-5); line-height:1.3; font-weight:400; }
+.opt-grupo{
+  padding:11px 9px 4px; font-size:9.5px; font-weight:700; letter-spacing:.15em;
+  text-transform:uppercase; color:var(--rail-ink-5);
+}
+.opts-acciones{ display:flex; gap:var(--s2); margin-top:var(--s2); }
+.opts-acciones button{
+  font-size:10.5px; color:var(--rail-ink-5); text-decoration:underline;
+  text-underline-offset:2px; transition:color var(--t-fast);
+}
+.opts-acciones button:hover{ color:var(--violeta-claro); }
+.busca-campo{
+  width:100%; height:34px; padding:0 10px 0 30px; margin-bottom:var(--s1);
+  background:var(--rail-2); border:1px solid var(--rail-line); border-radius:var(--r1);
+  color:var(--rail-ink-2); font-size:12.5px; outline:none;
+  background-image:var(--lupa-svg);
+  background-repeat:no-repeat; background-position:10px center;
+}
+.busca-campo:focus{ border-color:var(--violeta-claro); box-shadow:0 0 0 3px rgba(155,129,224,.18); }
+
+/* --- filtros --- */
+.filtro{
+  display:grid; grid-template-columns:1fr auto; gap:5px; align-items:center;
+  padding:9px; margin-bottom:6px; border-radius:var(--r2);
+  background:var(--rail-2); border:1px solid var(--rail-line-2);
+  animation:aparecer var(--t-base) both;
+}
+.filtro-fila{ display:grid; gap:5px; min-width:0; }
+.filtro-fila-2{ display:grid; grid-template-columns:1.1fr 1fr; gap:5px; }
+.filtro .quitar{
+  width:26px; height:26px; border-radius:var(--r1); display:grid; place-items:center;
+  color:var(--rail-ink-5); transition:background var(--t-fast), color var(--t-fast);
+}
+.filtro .quitar:hover{ background:var(--rojo); color:#fff; }
+.btn-fantasma{
+  width:100%; height:34px; border-radius:var(--r1); border:1px dashed var(--rail-line);
+  color:var(--rail-ink-4); font-size:12px; font-weight:500;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  transition:border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.btn-fantasma:hover{ border-color:var(--violeta-claro); color:var(--rail-ink); background:var(--rail-3); }
+
+/* --- boton ejecutar --- */
+.btn-ejecutar{
+  width:100%; height:46px; border-radius:var(--r2);
+  background:linear-gradient(180deg,#7d5cc9,var(--violeta-2));
+  color:#fff; font-weight:600; font-size:14px;
+  display:inline-flex; align-items:center; justify-content:center; gap:9px;
+  box-shadow:0 1px 0 rgba(255,255,255,.16) inset, 0 6px 18px rgba(108,78,182,.32);
+  transition:transform var(--t-fast), box-shadow var(--t-fast), filter var(--t-fast);
+}
+.btn-ejecutar:hover:not(:disabled){ filter:brightness(1.08); box-shadow:0 1px 0 rgba(255,255,255,.2) inset, 0 8px 24px rgba(108,78,182,.42); }
+.btn-ejecutar:active:not(:disabled){ transform:translateY(1px); }
+.btn-ejecutar:disabled{ filter:grayscale(.55) brightness(.78); cursor:progress; }
+.btn-ejecutar kbd{
+  font-family:var(--mono); font-size:9.5px; padding:2px 5px; border-radius:4px;
+  background:rgba(0,0,0,.28);
+}
+.rail-pie-links{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s2);
+  margin-top:11px; font-size:11px;
+}
+.rail-pie-links a, .rail-pie-links button{ color:var(--rail-ink-5); text-decoration:none; transition:color var(--t-fast); }
+.rail-pie-links a:hover, .rail-pie-links button:hover{ color:var(--violeta-claro); }
+
+/* ================================================================ lienzo == */
+.lienzo{ min-width:0; display:flex; flex-direction:column; }
+
+.topbar{
+  position:sticky; top:0; z-index:50; min-height:var(--top-h);
+  display:flex; align-items:center; gap:var(--s4); flex-wrap:wrap;
+  padding:var(--s3) var(--s6);
+  background:rgba(242,241,237,.86); backdrop-filter:blur(14px) saturate(150%);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);
+  border-bottom:1px solid var(--rule);
+}
+.topbar-tit{ min-width:0; flex:1 1 260px; }
+.topbar-tit h1{
+  margin:0; font-family:var(--serif); font-weight:400; font-size:27px;
+  letter-spacing:-.012em; line-height:1.15; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.topbar-meta{
+  display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+  margin-top:3px; font-size:11.5px; color:var(--ink-3);
+}
+.topbar-meta .sep{ width:3px; height:3px; border-radius:99px; background:var(--ink-5); }
+.topbar-meta b{ font-family:var(--mono); font-weight:600; color:var(--ink-2); font-size:11px; }
+.topbar-meta .fijo{
+  display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:99px;
+  background:var(--verde-soft); color:var(--verde); font-size:10.5px; font-weight:600;
+  letter-spacing:.005em; cursor:help;
+}
+.topbar-acc{ display:flex; align-items:center; gap:var(--s2); flex:0 0 auto; }
+
+.btn{
+  height:38px; padding:0 14px; border-radius:var(--r2);
+  display:inline-flex; align-items:center; gap:7px;
+  font-size:13px; font-weight:600; white-space:nowrap;
+  border:1px solid var(--rule); background:var(--card); color:var(--ink-2);
+  box-shadow:var(--sh-1);
+  transition:background var(--t-fast), border-color var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+.btn:hover{ border-color:var(--ink-5); color:var(--ink); }
+.btn:active{ transform:translateY(1px); }
+.btn:disabled{ opacity:.45; cursor:not-allowed; }
+.btn-oscuro{ background:var(--ink); border-color:var(--ink); color:#fff; }
+.btn-oscuro:hover{ background:var(--violeta-2); border-color:var(--violeta-2); color:#fff; }
+.btn-icono{ width:38px; padding:0; justify-content:center; }
+
+/* --- galeria de plantillas --- */
+.plantillas{
+  padding:var(--s5) var(--s6) 0;
+}
+.plantillas-cab{
+  display:flex; align-items:baseline; gap:var(--s3); margin-bottom:var(--s3);
+}
+.rotulo{
+  font-size:10px; font-weight:700; letter-spacing:.17em; text-transform:uppercase;
+  color:var(--ink-4);
+}
+.plantillas-cab p{ margin:0; font-size:12px; color:var(--ink-4); }
+.plantillas-pista{
+  display:flex; gap:var(--s2); overflow-x:auto; padding-bottom:var(--s3);
+  scroll-snap-type:x proximity; scrollbar-width:thin;
+}
+.plantillas-pista::-webkit-scrollbar{ height:8px; }
+.plantillas-pista::-webkit-scrollbar-track{ background:transparent; }
+.plantillas-pista::-webkit-scrollbar-thumb{ background:var(--rule); border-radius:99px; border:2px solid transparent; background-clip:content-box; }
+.plantilla{
+  flex:0 0 auto; width:198px; scroll-snap-align:start; text-align:left;
+  padding:13px 14px; border-radius:var(--r3);
+  background:var(--card); border:1px solid var(--rule); box-shadow:var(--sh-1);
+  transition:transform var(--t-base), box-shadow var(--t-base), border-color var(--t-base);
+}
+.plantilla:hover{ transform:translateY(-2px); box-shadow:var(--sh-2); border-color:var(--ink-5); }
+.plantilla[aria-pressed="true"]{
+  border-color:var(--violeta); box-shadow:0 0 0 3px var(--violeta-soft), var(--sh-2);
+}
+.plantilla-ico{
+  width:30px; height:30px; border-radius:9px; display:grid; place-items:center;
+  margin-bottom:9px; background:var(--violeta-soft); color:var(--violeta);
+}
+.plantilla[data-tono="ocre"] .plantilla-ico{ background:var(--ocre-soft); color:var(--ocre); }
+.plantilla[data-tono="verde"] .plantilla-ico{ background:var(--verde-soft); color:var(--verde); }
+.plantilla b{ display:block; font-size:13px; font-weight:600; line-height:1.25; }
+.plantilla small{ display:block; margin-top:3px; font-size:11px; color:var(--ink-4); line-height:1.35; }
+
+/* --- cuerpo del reporte --- */
+.reporte{ padding:var(--s5) var(--s6) var(--s8); display:grid; gap:var(--s4); }
+
+/* KPIs */
+.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:var(--s3); }
+.kpi{
+  position:relative; overflow:hidden; padding:15px 16px 14px;
+  background:var(--card); border:1px solid var(--rule); border-radius:var(--r3);
+  box-shadow:var(--sh-1);
+  animation:kpiEntra .42s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes kpiEntra{ from{ opacity:0; transform:translateY(8px);} to{ opacity:1; transform:none;} }
+.kpi::after{
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--violeta); opacity:.85;
+}
+.kpi[data-signo="neg"]::after{ background:var(--rojo); }
+.kpi[data-signo="pos"]::after{ background:var(--verde); }
+.kpi-rot{
+  font-size:9.5px; font-weight:700; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--ink-4); display:block; margin-bottom:7px;
+}
+.kpi-val{
+  font-family:var(--mono); font-variant-numeric:tabular-nums;
+  font-size:25px; font-weight:600; letter-spacing:-.02em; line-height:1.05;
+  color:var(--ink); display:block; word-break:break-word;
+}
+.kpi[data-signo="neg"] .kpi-val{ color:var(--rojo); }
+.kpi-sub{ display:block; margin-top:5px; font-size:11px; color:var(--ink-4); }
+
+/* panel generico */
+.panel{
+  background:var(--card); border:1px solid var(--rule); border-radius:var(--r3);
+  box-shadow:var(--sh-1); overflow:hidden;
+}
+.panel-cab{
+  display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap;
+  padding:13px var(--s5); border-bottom:1px solid var(--rule-2); background:var(--card-2);
+}
+.panel-cab h2{
+  margin:0; font-family:var(--serif); font-weight:400; font-size:19px; letter-spacing:-.005em;
+}
+.panel-cab .der{ margin-left:auto; display:flex; align-items:center; gap:var(--s2); }
+
+/* selector chico */
+.mini-sel{
+  height:30px; padding:0 24px 0 9px; border-radius:var(--r1);
+  border:1px solid var(--rule); background:var(--card);
+  font-size:12px; color:var(--ink-2); outline:none; cursor:pointer;
+  appearance:none; -webkit-appearance:none;
+  background-image:var(--chev-svg-claro);
+  background-repeat:no-repeat; background-position:right 7px center;
+  transition:border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.mini-sel:focus{ border-color:var(--violeta); box-shadow:0 0 0 3px var(--violeta-soft); }
+.mini-tabs{ display:flex; gap:2px; padding:2px; border-radius:var(--r1); background:var(--paper-2); }
+.mini-tabs button{
+  padding:5px 10px; border-radius:5px; font-size:11.5px; font-weight:600; color:var(--ink-3);
+  transition:background var(--t-fast), color var(--t-fast);
+}
+.mini-tabs button:hover{ color:var(--ink); }
+.mini-tabs button[aria-pressed="true"]{ background:var(--card); color:var(--ink); box-shadow:var(--sh-1); }
+
+/* --- grafico --- */
+.gr-caja{ padding:var(--s5) var(--s5) var(--s4); position:relative; }
+.gr-svg{ display:block; width:100%; height:auto; overflow:visible; }
+.gr-grid line{ stroke:var(--rule-2); stroke-width:1; shape-rendering:crispEdges; }
+.gr-eje{ fill:var(--ink-4); font-size:10px; font-family:var(--mono); }
+.gr-eje-cat{ fill:var(--ink-3); font-size:11px; font-family:var(--font); }
+.gr-barra{ fill:var(--serie); transition:fill var(--t-fast); }
+.gr-barra.neg{ fill:var(--serie-neg); }
+.gr-hit{ fill:transparent; cursor:pointer; }
+.gr-fila:hover .gr-barra{ fill:var(--violeta-2); }
+.gr-fila:hover .gr-barra.neg{ fill:#8f1e18; }
+.gr-linea{ fill:none; stroke:var(--serie); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+.gr-area{ fill:url(#gradSerie); }
+.gr-punto{ fill:var(--serie); stroke:var(--card); stroke-width:2; }
+.gr-valor{ fill:var(--ink-2); font-size:10.5px; font-family:var(--mono); font-weight:600; }
+.gr-cursor{ stroke:var(--ink-4); stroke-width:1; stroke-dasharray:3 3; }
+.gr-vacio{
+  padding:var(--s8) var(--s5); text-align:center; color:var(--ink-4); font-size:13px;
+}
+
+/* tooltip */
+.tip{
+  position:fixed; z-index:400; pointer-events:none; opacity:0;
+  padding:8px 11px; border-radius:var(--r1);
+  background:var(--ink); color:#fff; font-size:12px; line-height:1.45;
+  box-shadow:var(--sh-3); transform:translate(-50%,-118%);
+  transition:opacity var(--t-fast);
+  max-width:280px;
+}
+.tip.visible{ opacity:1; }
+.tip b{ display:block; font-weight:600; margin-bottom:3px; }
+.tip .v{ font-family:var(--mono); color:#cbbcf2; }
+
+/* --- tabla --- */
+.tabla-scroll{ overflow:auto; max-height:min(66vh,760px); scrollbar-width:thin; }
+.tabla-scroll::-webkit-scrollbar{ width:11px; height:11px; }
+.tabla-scroll::-webkit-scrollbar-track{ background:var(--card-2); }
+.tabla-scroll::-webkit-scrollbar-thumb{ background:var(--rule); border-radius:99px; border:3px solid var(--card-2); background-clip:content-box; }
+table.datos{ width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+table.datos thead th{
+  position:sticky; top:0; z-index:3;
+  padding:9px 13px; text-align:left; white-space:nowrap;
+  background:var(--card-2); color:var(--ink-3);
+  font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  border-bottom:1px solid var(--rule); cursor:pointer; user-select:none;
+  transition:color var(--t-fast), background var(--t-fast);
+}
+table.datos thead th:hover{ color:var(--ink); background:var(--paper-2); }
+table.datos thead th.n{ text-align:right; }
+table.datos thead th .flecha{ opacity:0; margin-left:4px; font-size:9px; }
+table.datos thead th[aria-sort] .flecha{ opacity:1; color:var(--violeta); }
+table.datos tbody td{
+  padding:9px 13px; border-bottom:1px solid var(--rule-3); vertical-align:top;
+  color:var(--ink-2);
+}
+table.datos tbody tr:hover td{ background:var(--card-2); }
+table.datos tbody tr.par td{ background:rgba(0,0,0,.012); }
+table.datos tbody tr.par:hover td{ background:var(--card-2); }
+table.datos td.n{
+  text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums;
+  white-space:nowrap; color:var(--ink);
+}
+table.datos td.n.neg{ color:var(--rojo); }
+table.datos td.n.cero{ color:var(--ink-5); }
+table.datos td.dim{ font-weight:500; color:var(--ink); }
+table.datos td.dim .mini{ display:block; font-size:11px; color:var(--ink-4); font-weight:400; }
+table.datos tfoot td{
+  position:sticky; bottom:0; z-index:2;
+  padding:11px 13px; background:var(--paper-2); border-top:1.5px solid var(--rule);
+  font-weight:700; color:var(--ink);
+}
+table.datos tfoot td.n{ text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.celda-rank{
+  display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 5px;
+  border-radius:5px; background:var(--paper-2); color:var(--ink-3);
+  font-family:var(--mono); font-size:10.5px; font-weight:600; margin-right:8px;
+}
+tr:nth-child(1) .celda-rank{ background:var(--violeta); color:#fff; }
+.barra-celda{
+  position:relative; display:block; height:3px; margin-top:5px; border-radius:99px;
+  background:var(--serie-soft); overflow:hidden;
+}
+.barra-celda i{ position:absolute; inset:0 auto 0 0; background:var(--serie); border-radius:99px; }
+.etq{
+  display:inline-block; padding:2px 7px; border-radius:99px;
+  font-size:10.5px; font-weight:600; letter-spacing:.01em;
+  background:var(--paper-2); color:var(--ink-3);
+}
+.etq.venta{ background:var(--verde-soft); color:var(--verde); }
+.etq.devolucion{ background:var(--ocre-soft); color:var(--ocre); }
+.etq.garantia{ background:var(--rojo-soft); color:var(--rojo); }
+.etq.cancelado{ background:var(--rojo-soft); color:var(--rojo); }
+
+.tabla-pie{
+  display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap;
+  padding:11px var(--s5); border-top:1px solid var(--rule-2);
+  background:var(--card-2); font-size:12px; color:var(--ink-3);
+}
+.tabla-pie .der{ margin-left:auto; display:flex; align-items:center; gap:var(--s2); }
+
+/* --- estados vacio / carga --- */
+.vacio{
+  display:grid; place-items:center; gap:var(--s3); padding:var(--s8) var(--s5);
+  text-align:center;
+}
+.vacio-ico{
+  width:54px; height:54px; border-radius:var(--r3); display:grid; place-items:center;
+  background:var(--paper-2); color:var(--ink-4);
+}
+.vacio h3{ margin:0; font-family:var(--serif); font-weight:400; font-size:22px; }
+.vacio p{ margin:0; max-width:46ch; font-size:13px; color:var(--ink-3); line-height:1.55; }
+.arranque-resumen{
+  display:grid; gap:1px; width:100%; max-width:440px; margin:var(--s2) 0;
+  border:1px solid var(--rule-2); border-radius:var(--r2); overflow:hidden;
+  background:var(--rule-3); text-align:left;
+}
+.arranque-fila{
+  display:flex; align-items:baseline; gap:var(--s3); padding:9px 13px; background:var(--card-2);
+}
+.arranque-fila span{
+  flex:0 0 118px; font-size:9.5px; font-weight:700; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--ink-4);
+}
+.arranque-fila b{ min-width:0; font-size:12.5px; font-weight:600; color:var(--ink-2); }
+
+.barra-carga{
+  position:fixed; top:0; left:0; right:0; height:2px; z-index:900;
+  background:transparent; overflow:hidden; opacity:0; transition:opacity var(--t-fast);
+}
+.barra-carga.activa{ opacity:1; }
+.barra-carga i{
+  position:absolute; inset:0; width:34%; border-radius:99px;
+  background:linear-gradient(90deg, transparent, var(--violeta), var(--violeta-claro), transparent);
+  animation:correr 1.05s cubic-bezier(.5,0,.5,1) infinite;
+}
+@keyframes correr{ from{ transform:translateX(-110%);} to{ transform:translateX(340%);} }
+
+.esqueleto{ display:grid; gap:var(--s3); padding:var(--s5); }
+.esqueleto i{
+  display:block; height:13px; border-radius:5px;
+  background:linear-gradient(90deg,var(--rule-3),var(--paper-2),var(--rule-3));
+  background-size:220% 100%; animation:brillo 1.3s ease-in-out infinite;
+}
+.esqueleto i:nth-child(2){ width:82%; } .esqueleto i:nth-child(3){ width:64%; }
+.esqueleto i:nth-child(4){ width:74%; } .esqueleto i:nth-child(5){ width:52%; }
+@keyframes brillo{ from{ background-position:120% 0;} to{ background-position:-120% 0;} }
+
+/* ============================================================== modales == */
+.overlay{
+  position:fixed; inset:0; z-index:800; display:none;
+  align-items:center; justify-content:center; padding:var(--s5);
+  background:rgba(16,18,24,.5); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+}
+.overlay.abierto{ display:flex; animation:fundir var(--t-base) both; }
+@keyframes fundir{ from{opacity:0;} to{opacity:1;} }
+.modal{
+  width:100%; max-width:600px; max-height:88vh; overflow:auto;
+  background:var(--card); border-radius:var(--r4); box-shadow:var(--sh-modal);
+  animation:subir .34s cubic-bezier(.16,1,.3,1) both; scrollbar-width:thin;
+}
+.modal-cab{
+  display:flex; align-items:flex-start; gap:var(--s3);
+  padding:var(--s6) var(--s6) var(--s4);
+}
+.modal-cab h2{ margin:0; font-family:var(--serif); font-weight:400; font-size:26px; letter-spacing:-.01em; }
+.modal-cab p{ margin:4px 0 0; font-size:13px; color:var(--ink-3); line-height:1.5; }
+.modal-cerrar{
+  margin-left:auto; width:32px; height:32px; border-radius:var(--r1); flex:0 0 auto;
+  display:grid; place-items:center; color:var(--ink-4);
+  transition:background var(--t-fast), color var(--t-fast);
+}
+.modal-cerrar:hover{ background:var(--paper-2); color:var(--ink); }
+.modal-cnt{ padding:0 var(--s6) var(--s6); }
+.modal-pie{
+  display:flex; align-items:center; gap:var(--s2); justify-content:flex-end;
+  padding:var(--s4) var(--s6); border-top:1px solid var(--rule-2); background:var(--card-2);
+  position:sticky; bottom:0;
+}
+
+.formatos{ display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s2); margin-bottom:var(--s5); }
+.formato{
+  padding:15px 13px; border-radius:var(--r3); text-align:left;
+  border:1.5px solid var(--rule); background:var(--card-2);
+  transition:border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
+}
+.formato:hover{ border-color:var(--ink-5); transform:translateY(-1px); }
+.formato[aria-pressed="true"]{ border-color:var(--violeta); background:var(--violeta-soft); }
+.formato-ext{
+  font-family:var(--mono); font-size:15px; font-weight:700; color:var(--ink);
+  display:block; letter-spacing:-.01em;
+}
+.formato small{ display:block; margin-top:4px; font-size:11px; color:var(--ink-4); line-height:1.4; }
+.formato[aria-pressed="true"] .formato-ext{ color:var(--violeta-2); }
+
+.opcion-fila{
+  display:flex; align-items:flex-start; gap:11px; padding:11px 12px; margin-bottom:6px;
+  border:1px solid var(--rule-2); border-radius:var(--r2); background:var(--card-2);
+  cursor:pointer; transition:border-color var(--t-fast), background var(--t-fast);
+}
+.opcion-fila:hover{ border-color:var(--ink-5); }
+.opcion-fila input{ position:absolute; opacity:0; pointer-events:none; }
+.opcion-fila .box{
+  flex:0 0 auto; margin-top:1px; width:17px; height:17px; border-radius:5px;
+  border:1.5px solid var(--rule); background:var(--card); display:grid; place-items:center;
+  transition:background var(--t-fast), border-color var(--t-fast);
+}
+.opcion-fila.radio .box{ border-radius:99px; }
+.opcion-fila .box svg{ opacity:0; transform:scale(.5); transition:opacity var(--t-fast), transform var(--t-fast); }
+.opcion-fila input:checked ~ .box{ background:var(--violeta); border-color:var(--violeta); }
+.opcion-fila input:checked ~ .box svg{ opacity:1; transform:none; }
+.opcion-fila b{ display:block; font-size:13px; font-weight:600; }
+.opcion-fila small{ display:block; font-size:11.5px; color:var(--ink-4); margin-top:2px; line-height:1.4; }
+.modal-rotulo{
+  font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-4); margin:var(--s5) 0 var(--s2);
+}
+.modal-rotulo:first-child{ margin-top:0; }
+.previa{
+  font-family:var(--mono); font-size:11px; line-height:1.6; color:var(--ink-2);
+  background:var(--paper); border:1px solid var(--rule-2); border-radius:var(--r2);
+  padding:11px 13px; max-height:150px; overflow:auto; white-space:pre;
+  scrollbar-width:thin;
+}
+
+/* guardados */
+.guardado{
+  display:flex; align-items:center; gap:var(--s2); padding:9px 11px;
+  border:1px solid var(--rule-2); border-radius:var(--r2); background:var(--card-2);
+  margin-bottom:6px;
+}
+.guardado b{ font-size:13px; font-weight:600; }
+.guardado small{ display:block; font-size:11px; color:var(--ink-4); }
+.guardado .der{ margin-left:auto; display:flex; gap:5px; }
+
+
+/* ====================================================== desglose (drill) = */
+.modal-ancho{ max-width:min(1180px, 96vw); }
+
+/* Celda que se puede abrir: se anuncia al pasar por encima, no antes. */
+table.datos tbody td.drill{ cursor:zoom-in; position:relative; }
+table.datos tbody td.drill::after{
+  content:''; position:absolute; left:13px; right:13px; bottom:6px; height:1px;
+  background:var(--violeta); opacity:0; transition:opacity var(--t-fast);
+}
+table.datos tbody td.drill:hover::after{ opacity:.55; }
+table.datos tbody td.drill:hover{ color:var(--violeta-2); }
+table.datos tbody tr:hover td.drill.n{ color:var(--violeta-2); }
+
+.drill-cab{ padding:var(--s6) var(--s6) var(--s4); border-bottom:1px solid var(--rule-2); }
+.drill-titulo{
+  display:flex; align-items:flex-start; gap:var(--s3); margin-bottom:var(--s4);
+}
+.drill-titulo h2{ margin:0; font-family:var(--serif); font-weight:400; font-size:26px; letter-spacing:-.01em; }
+.drill-titulo p{ margin:4px 0 0; font-size:13px; color:var(--ink-3); line-height:1.5; }
+
+.drill-cifras{ display:flex; flex-wrap:wrap; gap:var(--s2); }
+.drill-cifra{
+  flex:1 1 140px; min-width:0; padding:11px 13px; border-radius:var(--r2);
+  background:var(--card-2); border:1px solid var(--rule-2);
+}
+.drill-cifra.destacada{ background:var(--violeta-soft); border-color:var(--violeta); }
+.drill-cifra span{
+  display:block; font-size:9.5px; font-weight:700; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-4); margin-bottom:5px;
+}
+.drill-cifra b{
+  display:block; font-family:var(--mono); font-variant-numeric:tabular-nums;
+  font-size:19px; font-weight:600; letter-spacing:-.015em; color:var(--ink);
+}
+.drill-cifra.destacada b{ color:var(--violeta-2); }
+.drill-cifra.neg b{ color:var(--rojo); }
+
+.drill-formula{
+  margin:var(--s4) 0 0; padding:10px 13px; border-radius:var(--r2);
+  background:var(--paper); border-left:3px solid var(--violeta);
+  font-size:12.5px; line-height:1.55; color:var(--ink-2);
+}
+.drill-formula code{
+  font-family:var(--mono); font-size:11.5px; background:var(--paper-2);
+  padding:1px 5px; border-radius:4px;
+}
+.drill-tabla{ max-height:min(50vh,520px); overflow:auto; scrollbar-width:thin; }
+.drill-tabla::-webkit-scrollbar{ width:11px; height:11px; }
+.drill-tabla::-webkit-scrollbar-track{ background:var(--card-2); }
+.drill-tabla::-webkit-scrollbar-thumb{ background:var(--rule); border-radius:99px; border:3px solid var(--card-2); background-clip:content-box; }
+.drill-pie-info{ margin-right:auto; font-size:12px; color:var(--ink-3); }
+
+/* ================================================================ toast == */
+.toasts{
+  position:fixed; right:var(--s5); bottom:var(--s5); z-index:950;
+  display:flex; flex-direction:column-reverse; gap:var(--s2); pointer-events:none;
+}
+.toast{
+  display:flex; align-items:center; gap:10px; min-width:250px; max-width:400px;
+  padding:12px 15px; border-radius:var(--r2);
+  background:var(--ink); color:#fff; font-size:13px; box-shadow:var(--sh-3);
+  pointer-events:auto; animation:toastEntra .34s cubic-bezier(.16,1,.3,1) both;
+}
+.toast.saliendo{ animation:toastSale .22s ease-in both; }
+@keyframes toastEntra{ from{ opacity:0; transform:translateY(12px) scale(.97);} to{ opacity:1; transform:none;} }
+@keyframes toastSale{ to{ opacity:0; transform:translateY(8px) scale(.97);} }
+.toast .ico{ flex:0 0 auto; display:grid; place-items:center; }
+.toast.ok .ico{ color:#4ed08c; }
+.toast.error .ico{ color:#ff8b80; }
+.toast.info .ico{ color:var(--violeta-claro); }
+.toast b{ font-weight:600; }
+.toast small{ display:block; opacity:.72; font-size:11.5px; margin-top:1px; }
+
+/* ============================================================= responsive */
+.rail-toggle{ display:none; }
+@media (max-width:1140px){
+  .app.listo{ grid-template-columns:1fr; }
+  .rail{
+    position:fixed; top:0; left:0; width:min(var(--rail-w),88vw); height:100vh;
+    transform:translateX(-102%); transition:transform .28s cubic-bezier(.3,0,.2,1);
+    box-shadow:var(--sh-3);
+  }
+  .app[data-rail="abierto"] .rail{ transform:none; }
+  .rail-velo{
+    display:block; position:fixed; inset:0; z-index:55; background:rgba(16,18,24,.42);
+    opacity:0; pointer-events:none; transition:opacity var(--t-base);
+  }
+  .app[data-rail="abierto"] .rail-velo{ opacity:1; pointer-events:auto; }
+  .rail-toggle{ display:inline-flex; }
+  .topbar{ padding:var(--s3) var(--s4); }
+  .plantillas, .reporte{ padding-left:var(--s4); padding-right:var(--s4); }
+}
+@media (max-width:680px){
+  .topbar-tit h1{ font-size:22px; }
+  .formatos{ grid-template-columns:1fr; }
+  .kpis{ grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); }
+  .kpi-val{ font-size:21px; }
+  .toasts{ left:var(--s4); right:var(--s4); }
+  .toast{ min-width:0; max-width:none; }
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
+@media print{
+  .rail,.topbar-acc,.plantillas,.tabla-pie,.rail-velo,.toasts{ display:none !important; }
+  body{ background:#fff; }
+  .app.listo{ grid-template-columns:1fr; }
+  .panel{ box-shadow:none; break-inside:avoid; }
+  .tabla-scroll{ max-height:none; overflow:visible; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================== login == -->
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <img src="logo.png" alt="HomePoint" class="login-logo">
+    <h1 class="login-title">Reportes</h1>
+    <p class="login-sub">Extracción y análisis sobre la base de pedidos.</p>
+    <div id="loginError" class="login-error"></div>
+    <input type="email" id="loginEmail" class="login-input" placeholder="Correo electrónico" autocomplete="email">
+    <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
+    <button id="loginBtn" class="login-btn">Iniciar sesión</button>
+  </div>
+</div>
+
+<div id="barraCarga" class="barra-carga"><i></i></div>
+
+<!-- ================================================================ app == -->
+<div id="app" class="app" data-rail="cerrado">
+
+  <div class="rail-velo" id="railVelo" aria-hidden="true"></div>
+
+  <!-- ========================================================== riel ==== -->
+  <aside class="rail" id="rail" aria-label="Constructor de consultas">
+    <div class="rail-head">
+      <div class="rail-marca">
+        <img src="logoblanco.png" alt="">
+        <div class="rail-marca-txt">
+          <b>Reportes</b>
+          <span>Sala de máquinas</span>
+        </div>
+      </div>
+      <div class="rail-estado" id="railEstado" data-estado="idle" role="status" aria-live="polite">
+        <span class="rail-estado-punto"></span>
+        <span id="railEstadoTxt">Sin consultar — no se leyó Firebase</span>
+      </div>
+    </div>
+
+    <div class="rail-body scroll-fino">
+
+      <!-- Período -->
+      <section class="blq" data-abierto="si" id="blqPeriodo">
+        <button type="button" class="blq-cab" data-plegar="blqPeriodo">
+          Período
+          <span class="blq-badge" id="badgePeriodo"></span>
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="blq-cnt">
+          <div class="pills" id="pillsPeriodo"></div>
+          <div class="rango-fechas">
+            <div>
+              <label for="fDesde">Desde</label>
+              <input type="date" id="fDesde" class="ctrl">
+            </div>
+            <div>
+              <label for="fHasta">Hasta</label>
+              <input type="date" id="fHasta" class="ctrl">
+            </div>
+          </div>
+          <p class="rango-nota">
+            La consulta se acota en el servidor sobre <b>pedidos/fecha</b>: sólo baja el rango pedido.
+          </p>
+        </div>
+      </section>
+
+      <!-- Conjunto de datos -->
+      <section class="blq" data-abierto="si" id="blqDataset">
+        <button type="button" class="blq-cab" data-plegar="blqDataset">
+          Conjunto de datos
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="blq-cnt">
+          <div class="seg" id="segDataset"></div>
+        </div>
+      </section>
+
+      <!-- Agrupar por -->
+      <section class="blq" data-abierto="si" id="blqDims">
+        <button type="button" class="blq-cab" data-plegar="blqDims">
+          Agrupar por
+          <span class="blq-badge" id="badgeDims"></span>
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="blq-cnt">
+          <div class="chips" id="chipsDims"></div>
+          <input type="search" class="busca-campo" id="buscaDim" placeholder="Buscar dimensión…" style="margin-top:10px;">
+          <div class="opts" id="optsDims"></div>
+        </div>
+      </section>
+
+      <!-- Métricas / columnas -->
+      <section class="blq" data-abierto="si" id="blqMetricas">
+        <button type="button" class="blq-cab" data-plegar="blqMetricas">
+          <span id="tituloMetricas">Métricas</span>
+          <span class="blq-badge" id="badgeMetricas"></span>
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="blq-cnt">
+          <input type="search" class="busca-campo" id="buscaMetrica" placeholder="Buscar…">
+          <div class="opts" id="optsMetricas"></div>
+          <div class="opts-acciones">
+            <button type="button" id="metricasTodas">Marcar todas</button>
+            <button type="button" id="metricasNinguna">Ninguna</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filtros -->
+      <section class="blq" data-abierto="si" id="blqFiltros">
+        <button type="button" class="blq-cab" data-plegar="blqFiltros">
+          Filtros
+          <span class="blq-badge" id="badgeFiltros"></span>
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="blq-cnt">
+          <div id="listaFiltros"></div>
+          <button type="button" class="btn-fantasma" id="addFiltro">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Agregar filtro
+          </button>
+        </div>
+      </section>
+
+      <!-- Guardados -->
+      <section class="blq" data-abierto="no" id="blqGuardados">
+        <button type="button" class="blq-cab" data-plegar="blqGuardados">
+          Reportes guardados
+          <span class="blq-badge" id="badgeGuardados"></span>
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="blq-cnt">
+          <div id="listaGuardados"></div>
+          <button type="button" class="btn-fantasma" id="guardarConfig" style="margin-top:6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+            Guardar esta configuración
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="rail-pie">
+      <button type="button" class="btn-ejecutar" id="btnEjecutar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3Z"/></svg>
+        Ejecutar consulta
+        <kbd>Ctrl ↵</kbd>
+      </button>
+      <div class="rail-pie-links">
+        <a href="index.html">← Panel</a>
+        <button type="button" id="btnAyuda">¿Cómo se usa?</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ======================================================== lienzo ==== -->
+  <main class="lienzo">
+    <header class="topbar">
+      <button type="button" class="btn btn-icono rail-toggle" id="railToggle" aria-label="Abrir constructor">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="topbar-tit">
+        <h1 id="tituloReporte">Reportes</h1>
+        <div class="topbar-meta" id="metaReporte">
+          <span>Elegí un período y ejecutá la consulta</span>
+        </div>
+      </div>
+      <div class="topbar-acc">
+        <button type="button" class="btn btn-icono" id="btnRefrescar" title="Volver a consultar Firebase" aria-label="Refrescar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+        </button>
+        <button type="button" class="btn btn-oscuro" id="btnExportar" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
+          Exportar
+        </button>
+      </div>
+    </header>
+
+    <section class="plantillas" aria-label="Plantillas de reporte">
+      <div class="plantillas-cab">
+        <span class="rotulo">Plantillas</span>
+        <p>Un clic arma el reporte completo. Después ajustalo a mano.</p>
+      </div>
+      <div class="plantillas-pista" id="pistaPlantillas"></div>
+    </section>
+
+    <div class="reporte" id="reporte"></div>
+  </main>
+</div>
+
+<!-- ========================================================= modal export -->
+<div class="overlay" id="ovExport" role="dialog" aria-modal="true" aria-labelledby="exportTit">
+  <div class="modal">
+    <div class="modal-cab">
+      <div>
+        <h2 id="exportTit">Exportar</h2>
+        <p id="exportSub">—</p>
+      </div>
+      <button type="button" class="modal-cerrar" data-cerrar="ovExport" aria-label="Cerrar">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-cnt">
+      <div class="formatos" id="formatos">
+        <button type="button" class="formato" data-fmt="csv" aria-pressed="true">
+          <span class="formato-ext">.csv</span>
+          <small>Planilla. Excel, Sheets, Numbers.</small>
+        </button>
+        <button type="button" class="formato" data-fmt="json" aria-pressed="false">
+          <span class="formato-ext">.json</span>
+          <small>Estructurado. Para scripts y APIs.</small>
+        </button>
+        <button type="button" class="formato" data-fmt="sqlite" aria-pressed="false">
+          <span class="formato-ext">.sqlite</span>
+          <small>Base relacional consultable con SQL.</small>
+        </button>
+      </div>
+
+      <div id="opcExport"></div>
+
+      <div class="modal-rotulo">Vista previa</div>
+      <pre class="previa" id="previaExport">—</pre>
+    </div>
+    <div class="modal-pie">
+      <button type="button" class="btn" data-cerrar="ovExport">Cancelar</button>
+      <button type="button" class="btn btn-oscuro" id="btnDescargar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
+        Descargar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================== modal ayuda -->
+<div class="overlay" id="ovAyuda" role="dialog" aria-modal="true" aria-labelledby="ayudaTit">
+  <div class="modal">
+    <div class="modal-cab">
+      <div>
+        <h2 id="ayudaTit">Cómo se usa</h2>
+        <p>Tres decisiones y ya tenés el reporte.</p>
+      </div>
+      <button type="button" class="modal-cerrar" data-cerrar="ovAyuda" aria-label="Cerrar">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-cnt" id="cntAyuda"></div>
+    <div class="modal-pie">
+      <button type="button" class="btn btn-oscuro" data-cerrar="ovAyuda">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================== modal desglose (drill) -->
+<div class="overlay" id="ovDetalle" role="dialog" aria-modal="true" aria-labelledby="drillTit">
+  <div class="modal modal-ancho">
+    <div class="drill-cab">
+      <div class="drill-titulo">
+        <div style="min-width:0">
+          <h2 id="drillTit">Cómo se compone</h2>
+          <p id="drillSub">—</p>
+        </div>
+        <button type="button" class="modal-cerrar" data-cerrar="ovDetalle" aria-label="Cerrar">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="drill-cifras" id="drillCifras"></div>
+      <p class="drill-formula" id="drillFormula"></p>
+    </div>
+    <div class="drill-tabla" id="drillTabla"></div>
+    <div class="modal-pie">
+      <span class="drill-pie-info" id="drillInfo"></span>
+      <button type="button" class="btn" data-cerrar="ovDetalle">Cerrar</button>
+      <button type="button" class="btn btn-oscuro" id="drillExportar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
+        Exportar este desglose
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+/* ============================================================================
+   Reportes.html — motor de consultas sobre la Realtime Database
+   ----------------------------------------------------------------------------
+   Nodos que lee (los mismos que escribe ingresoPedidoV2.js):
+
+     pedidos/{id}      timestamp, fecha "YYYY-MM-DD HH:mm:ss", locked, adminViewed,
+                       status, entrega, nota, vendedor, createdby, cotizacionCierre,
+                       costoUSD, tipoOperacion, cambio{}, devoluciones{},
+                       cliente{ nombre, direccion, tipoCliente },
+                       pagos{ medioPago, recargo, descuento, envio, subtotal,
+                              totalFinal, costos, ganancia, gananciaSelec, alias },
+                       items[]{ codigo, codigoBarras, nombre, cantidad, valorU,
+                                valorC, categoria, seleccionado, valorG,
+                                tipoLinea?, pedidoOrigenId?, motivo?, valorULista? }
+
+     movimientos/{id}  timestamp, codigo, nombre, cantidad, tipo ENTRADA|SALIDA,
+                       pedidoId, motivo?, pedidoOrigenId?
+                       (id = mov_YYYYMMDD_HHMMSS_codigo_[E|S]_pedidoId)
+
+     clientes/{id}     nombre, telefono, direccion, dni, email, tipoCliente, registro
+
+   Reglas de negocio heredadas (NO tocar sin mirar ingresoPedidoV2.js:60-72):
+     · signo de línea: VENTA/sin tipo = +1, DEVOLUCION = -1, GARANTIA = 0.
+       Una garantía mueve stock pero no mueve plata: su venta, costo y ganancia
+       valen 0. Por eso existe "unidades brutas" además de "unidades netas".
+     · ganancia de línea = signo * (valorU - valorC) * cantidad  (viene en valorG).
+   ========================================================================== */
+
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+/* ----------------------------------------------------------------- utils -- */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+const num = v => {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (v == null || v === '') return 0;
+  const n = parseFloat(String(v).replace(/[^\d.,-]/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'));
+  return isFinite(n) ? n : 0;
+};
+
+const fmtDinero = n => (n < 0 ? '-$' : '$') + Math.round(Math.abs(n)).toLocaleString('es-AR');
+const fmtEntero  = n => Math.round(n).toLocaleString('es-AR');
+const fmtDec     = n => (Math.round(n * 100) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPct     = n => (isFinite(n) ? (Math.round(n * 10) / 10).toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '0') + '%';
+const fmtUSD     = n => 'US$ ' + (Math.round(n * 100) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const FORMATOS = { dinero: fmtDinero, entero: fmtEntero, dec: fmtDec, pct: fmtPct, usd: fmtUSD, texto: v => String(v ?? '') };
+
+const hoyISO = () => {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const sumarDias = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date(y, m - 1, d + n), p = x => String(x).padStart(2, '0');
+  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
+};
+const DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// "2025-08-14" -> "14 Ago 2025". Etiqueta corta y ordenable por la clave original.
+function fechaLinda(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return iso || '';
+  const [y, m, d] = iso.split('-');
+  return `${Number(d)} ${MESES[Number(m) - 1]} ${y}`;
+}
+function semanaISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const f = new Date(Date.UTC(y, m - 1, d));
+  const dow = f.getUTCDay() || 7;
+  f.setUTCDate(f.getUTCDate() + 4 - dow);
+  const ini = new Date(Date.UTC(f.getUTCFullYear(), 0, 1));
+  const sem = Math.ceil(((f - ini) / 86400000 + 1) / 7);
+  return `${f.getUTCFullYear()}-S${String(sem).padStart(2, '0')}`;
+}
+const ticketDe = id => String(id || '').slice(-8);
+
+/* ------------------------------------------------------------- feedback -- */
+function toast(titulo, detalle, tipo) {
+  const cont = $('#toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (tipo || 'info');
+  const icos = {
+    ok:   '<path d="m5 13 4 4L19 7"/>',
+    error:'<path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
+  };
+  el.innerHTML =
+    `<span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icos[tipo] || icos.info}</svg></span>` +
+    `<span><b>${esc(titulo)}</b>${detalle ? `<small>${esc(detalle)}</small>` : ''}</span>`;
+  cont.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('saliendo');
+    setTimeout(() => el.remove(), 240);
+  }, tipo === 'error' ? 6000 : 3600);
+}
+function estado(modo, texto) {
+  const e = $('#railEstado');
+  e.dataset.estado = modo;
+  $('#railEstadoTxt').textContent = texto;
+  $('#barraCarga').classList.toggle('activa', modo === 'carga');
+}
+
+/* ================================================================ login == */
+let authOk = false;
+function mostrarLogin() { $('#loginOverlay').style.display = 'flex'; $('#app').classList.remove('listo'); setTimeout(() => $('#loginEmail')?.focus(), 90); }
+function mostrarApp()   { $('#loginOverlay').style.display = 'none'; $('#app').classList.add('listo'); }
+
+setTimeout(() => { if (!authOk) mostrarLogin(); }, 5000);
+firebase.auth().onAuthStateChanged(u => { authOk = true; u ? mostrarApp() : mostrarLogin(); });
+
+function entrar() {
+  const mail = $('#loginEmail').value.trim(), pass = $('#loginPassword').value;
+  const btn = $('#loginBtn'), err = $('#loginError');
+  if (!mail || !pass) { err.textContent = 'Completá ambos campos.'; err.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Iniciando sesión…'; err.style.display = 'none';
+  firebase.auth().signInWithEmailAndPassword(mail, pass).catch(e => {
+    btn.disabled = false; btn.textContent = 'Iniciar sesión';
+    const msgs = {
+      'auth/user-not-found': 'Correo o contraseña incorrectos',
+      'auth/wrong-password': 'Correo o contraseña incorrectos',
+      'auth/invalid-credential': 'Correo o contraseña incorrectos',
+      'auth/invalid-email': 'Correo electrónico inválido',
+      'auth/too-many-requests': 'Demasiados intentos. Probá más tarde'
+    };
+    err.textContent = msgs[e.code] || 'No se pudo iniciar sesión';
+    err.style.display = 'block';
+  });
+}
+$('#loginBtn').addEventListener('click', entrar);
+['loginEmail','loginPassword'].forEach(id =>
+  $('#' + id).addEventListener('keypress', e => { if (e.key === 'Enter') entrar(); }));
+
+/* ============================================================== esquema == */
+/* Cada dataset declara:
+     campos[]   → todo lo que se puede filtrar, mostrar como columna cruda y
+                  (si dim:true) usar para agrupar.
+     metricas[] → agregaciones; calc() recibe el array de filas del grupo.
+   Los ids de campo son los mismos que viajan al CSV/JSON/SQLite, así que
+   cambiarlos rompe los reportes guardados en localStorage. */
+
+const G = { tiempo:'Tiempo', pedido:'Pedido', cliente:'Cliente', articulo:'Artículo', cambio:'Cambios', dinero:'Dinero', stock:'Stock', ficha:'Ficha' };
+
+const sum = (rows, k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
+const ratio = (a, b) => (b ? a / b * 100 : 0);
+
+const CAMPOS_TIEMPO = [
+  { id:'fecha',     label:'Fecha (día)',   grupo:G.tiempo, tipo:'texto', dim:true, etiqueta:fechaLinda },
+  { id:'semana',    label:'Semana',        grupo:G.tiempo, tipo:'texto', dim:true },
+  { id:'mes',       label:'Mes',           grupo:G.tiempo, tipo:'texto', dim:true,
+    etiqueta:v => v ? `${MESES[Number(v.slice(5,7)) - 1]} ${v.slice(0,4)}` : '' },
+  { id:'anio',      label:'Año',           grupo:G.tiempo, tipo:'texto', dim:true },
+  { id:'diaSemana', label:'Día de semana', grupo:G.tiempo, tipo:'texto', dim:true },
+  { id:'hora',      label:'Hora del día',  grupo:G.tiempo, tipo:'texto', dim:true, etiqueta:v => v + ':00' },
+  { id:'fechaHora', label:'Fecha y hora',  grupo:G.tiempo, tipo:'texto' }
+];
+
+const CAMPOS_PEDIDO = [
+  { id:'ticket',        label:'Ticket',            grupo:G.pedido, tipo:'texto' },
+  { id:'pedidoId',      label:'ID de pedido',      grupo:G.pedido, tipo:'texto' },
+  { id:'vendedor',      label:'Vendedor',          grupo:G.pedido, tipo:'texto', dim:true },
+  { id:'medioPago',     label:'Medio de pago',     grupo:G.pedido, tipo:'texto', dim:true },
+  { id:'alias',         label:'Alias transferencia', grupo:G.pedido, tipo:'texto', dim:true },
+  { id:'status',        label:'Estado',            grupo:G.pedido, tipo:'texto', dim:true },  // constante: ver ESTADO_VALIDO
+  { id:'entrega',       label:'Entrega',           grupo:G.pedido, tipo:'texto', dim:true },
+  { id:'createdby',     label:'Origen de carga',   grupo:G.pedido, tipo:'texto', dim:true },
+  { id:'tipoOperacion', label:'Tipo de operación', grupo:G.pedido, tipo:'texto', dim:true },
+  { id:'nota',          label:'Nota',              grupo:G.pedido, tipo:'texto' }
+];
+
+const CAMPOS_CLIENTE = [
+  { id:'cliente',      label:'Cliente',           grupo:G.cliente, tipo:'texto', dim:true },
+  { id:'clienteTipo',  label:'Tipo de cliente',   grupo:G.cliente, tipo:'texto', dim:true },
+  { id:'direccion',    label:'Dirección / info',  grupo:G.cliente, tipo:'texto' }
+];
+
+const CAMPOS_ARTICULO = [
+  { id:'articulo',     label:'Artículo',          grupo:G.articulo, tipo:'texto', dim:true },
+  { id:'codigo',       label:'Código interno',    grupo:G.articulo, tipo:'texto', dim:true },
+  { id:'codigoBarras', label:'Código de barras',  grupo:G.articulo, tipo:'texto' },
+  { id:'categoria',    label:'Categoría',         grupo:G.articulo, tipo:'texto', dim:true },
+  { id:'seleccionado', label:'Marcado "Selec."',  grupo:G.articulo, tipo:'texto', dim:true }
+];
+</script>
+
+<script>
+/* ------------------------------------------------- métricas compartidas -- */
+const nDist = (rows, k) => { const s = new Set(); for (const r of rows) if (r[k]) s.add(r[k]); return s.size; };
+
+const ICO = {
+  lineas: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h11"/></svg>',
+  pedidos:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l4 4v16H6z"/><path d="M15 2v4h4"/><path d="M9 13h6M9 17h4"/></svg>',
+  movimientos:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14M7 3 3 7M7 3l4 4"/><path d="M17 21V7m0 14 4-4m-4 4-4-4"/></svg>',
+  clientes:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 8.5a3 3 0 0 1 0 5M18.5 20a6.6 6.6 0 0 0-2-4.7"/></svg>'
+};
+
+const DATASETS = {
+
+  /* ---------------------------------------------------- líneas de venta -- */
+  lineas: {
+    label:'Líneas de venta',
+    desc:'Un renglón por artículo. Es el grano más fino: sirve para todo lo que se pregunte por producto.',
+    icono: ICO.lineas,
+    campos: [
+      ...CAMPOS_TIEMPO, ...CAMPOS_ARTICULO, ...CAMPOS_CLIENTE, ...CAMPOS_PEDIDO,
+      { id:'tipoLinea',      label:'Tipo de línea',       grupo:G.cambio, tipo:'texto', dim:true },
+      { id:'motivo',         label:'Motivo del cambio',   grupo:G.cambio, tipo:'texto', dim:true },
+      { id:'pedidoOrigenId', label:'Pedido original',     grupo:G.cambio, tipo:'texto' },
+      { id:'cantidad',   label:'Cantidad (bruta)',        grupo:G.dinero, tipo:'num' },
+      { id:'valorU',     label:'Precio unitario',         grupo:G.dinero, tipo:'num', fmt:'dinero', sumable:false },
+      { id:'valorC',     label:'Costo unitario',          grupo:G.dinero, tipo:'num', fmt:'dinero', sumable:false },
+      { id:'valorULista',label:'Precio de lista al cambio', grupo:G.dinero, tipo:'num', fmt:'dinero', sumable:false },
+      { id:'venta',      label:'Venta de la línea',       grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'costo',      label:'Costo de la línea',       grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'ganancia',   label:'Ganancia de la línea',    grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'cotizacion', label:'Dólar al cierre',         grupo:G.dinero, tipo:'num', fmt:'dec', sumable:false }
+    ],
+    metricas: [
+      { id:'unidades',   label:'Unidades',        sub:'Netas: la devolución resta', grupo:G.stock,  fmt:'entero', calc:r => sum(r, 'cantidadNeta') },
+      { id:'unidadesBr', label:'Unidades brutas', sub:'Todo lo que se movió, incluidas garantías', grupo:G.stock, fmt:'entero', calc:r => sum(r, 'cantidad') },
+      { id:'lineas',     label:'Renglones',       grupo:G.stock,  fmt:'entero', calc:r => r.length },
+      { id:'pedidos',    label:'Pedidos',         sub:'Distintos', grupo:G.pedido, fmt:'entero', calc:r => nDist(r, 'pedidoId') },
+      { id:'clientes',   label:'Clientes',        sub:'Distintos', grupo:G.cliente, fmt:'entero', calc:r => nDist(r, 'cliente') },
+      { id:'articulos',  label:'Artículos',       sub:'Distintos', grupo:G.articulo, fmt:'entero', calc:r => nDist(r, 'articulo') },
+      { id:'venta',      label:'Venta',           sub:'Precio × cantidad, sin recargos ni descuentos del pedido', grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'venta'), principal:true },
+      { id:'costo',      label:'Costo',           grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'costo') },
+      { id:'ganancia',   label:'Ganancia',        sub:'Venta − costo', grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'ganancia') },
+      { id:'margen',     label:'Margen %',        sub:'Ganancia sobre venta', grupo:G.dinero, fmt:'pct', calc:r => ratio(sum(r, 'ganancia'), sum(r, 'venta')) },
+      { id:'markup',     label:'Markup %',        sub:'Ganancia sobre costo', grupo:G.dinero, fmt:'pct', calc:r => ratio(sum(r, 'ganancia'), sum(r, 'costo')) },
+      { id:'precioProm', label:'Precio promedio',  grupo:G.dinero, fmt:'dinero', calc:r => { const u = sum(r, 'cantidadNeta'); return u ? sum(r, 'venta') / u : 0; } },
+      { id:'costoProm',  label:'Costo promedio',   grupo:G.dinero, fmt:'dinero', calc:r => { const u = sum(r, 'cantidadNeta'); return u ? sum(r, 'costo') / u : 0; } },
+      { id:'ventaPorPedido', label:'Venta por pedido', grupo:G.dinero, fmt:'dinero', calc:r => { const p = nDist(r, 'pedidoId'); return p ? sum(r, 'venta') / p : 0; } },
+      { id:'devueltas',  label:'Unidades devueltas', grupo:G.cambio, fmt:'entero', calc:r => r.filter(x => x.tipoLinea === 'DEVOLUCION').reduce((a, x) => a + x.cantidad, 0) },
+      { id:'garantias',  label:'Unidades en garantía', grupo:G.cambio, fmt:'entero', calc:r => r.filter(x => x.tipoLinea === 'GARANTIA').reduce((a, x) => a + x.cantidad, 0) },
+      { id:'tasaDevol',  label:'Tasa de devolución %', sub:'Devueltas sobre vendidas', grupo:G.cambio, fmt:'pct',
+        calc:r => { const v = r.filter(x => x.tipoLinea === 'VENTA').reduce((a, x) => a + x.cantidad, 0);
+                    const d = r.filter(x => x.tipoLinea === 'DEVOLUCION').reduce((a, x) => a + x.cantidad, 0);
+                    return ratio(d, v); } },
+      { id:'ventaUSD',   label:'Venta en USD', sub:'Al dólar del cierre de cada pedido', grupo:G.dinero, fmt:'usd',
+        calc:r => r.reduce((a, x) => a + (x.cotizacion ? x.venta / x.cotizacion : 0), 0) },
+      { id:'ultimaVenta',label:'Última venta', grupo:G.tiempo, fmt:'texto', calc:r => fechaLinda(r.reduce((a, x) => x.fecha > a ? x.fecha : a, '')) },
+      { id:'primeraVenta',label:'Primera venta', grupo:G.tiempo, fmt:'texto', calc:r => fechaLinda(r.reduce((a, x) => (!a || x.fecha < a) ? x.fecha : a, '')) }
+    ]
+  },
+
+  /* ----------------------------------------------------------- pedidos -- */
+  pedidos: {
+    label:'Pedidos',
+    desc:'Un renglón por venta. Único lugar donde viven descuentos, recargos y el total realmente cobrado.',
+    icono: ICO.pedidos,
+    campos: [
+      ...CAMPOS_TIEMPO, ...CAMPOS_CLIENTE, ...CAMPOS_PEDIDO,
+      { id:'pedidoOrigenId', label:'Pedido original (cambio)', grupo:G.cambio, tipo:'texto' },
+      { id:'subtotal',   label:'Subtotal',        grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'recargo',    label:'Recargo',         grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'descuento',  label:'Descuento',       grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'envio',      label:'Envío',           grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'totalFinal', label:'Total final',     grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'costos',     label:'Costo de la mercadería', grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'ganancia',   label:'Ganancia',        grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'gananciaSelec', label:'Ganancia de artículos "Selec."', grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'cotizacion', label:'Dólar al cierre', grupo:G.dinero, tipo:'num', fmt:'dec', sumable:false },
+      { id:'costoUSD',   label:'Costo en USD',    grupo:G.dinero, tipo:'num', fmt:'dec' },
+      { id:'unidades',   label:'Unidades del pedido', grupo:G.stock, tipo:'num' },
+      { id:'articulos',  label:'Renglones del pedido', grupo:G.stock, tipo:'num' }
+    ],
+    metricas: [
+      { id:'pedidos',    label:'Pedidos',         grupo:G.pedido, fmt:'entero', calc:r => r.length, principal:true },
+      { id:'totalFinal', label:'Total cobrado',   sub:'Lo que efectivamente se facturó', grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'totalFinal') },
+      { id:'subtotal',   label:'Subtotal',        grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'subtotal') },
+      { id:'descuento',  label:'Descuentos',      grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'descuento') },
+      { id:'recargo',    label:'Recargos',        grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'recargo') },
+      { id:'envio',      label:'Envíos',          grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'envio') },
+      { id:'costos',     label:'Costo',           grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'costos') },
+      { id:'ganancia',   label:'Ganancia',        grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'ganancia') },
+      { id:'gananciaSelec', label:'Ganancia "Selec."', grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'gananciaSelec') },
+      { id:'margen',     label:'Margen %',        sub:'Ganancia sobre total cobrado', grupo:G.dinero, fmt:'pct', calc:r => ratio(sum(r, 'ganancia'), sum(r, 'totalFinal')) },
+      { id:'ticket',     label:'Ticket promedio', grupo:G.dinero, fmt:'dinero', calc:r => r.length ? sum(r, 'totalFinal') / r.length : 0 },
+      { id:'unidades',   label:'Unidades',        grupo:G.stock,  fmt:'entero', calc:r => sum(r, 'unidades') },
+      { id:'unidPorPedido', label:'Unidades por pedido', grupo:G.stock, fmt:'dec', calc:r => r.length ? sum(r, 'unidades') / r.length : 0 },
+      { id:'clientes',   label:'Clientes distintos', grupo:G.cliente, fmt:'entero', calc:r => nDist(r, 'cliente') },
+      { id:'descuentoPct', label:'Descuento %',   sub:'Sobre subtotal', grupo:G.dinero, fmt:'pct', calc:r => ratio(sum(r, 'descuento'), sum(r, 'subtotal')) },
+      { id:'totalUSD',   label:'Total en USD',    grupo:G.dinero, fmt:'usd', calc:r => sum(r, 'totalUSD') },
+      { id:'dolarProm',  label:'Dólar promedio',  grupo:G.dinero, fmt:'dec', calc:r => { const v = r.filter(x => x.cotizacion); return v.length ? sum(v, 'cotizacion') / v.length : 0; } },
+      { id:'cambios',    label:'Operaciones de cambio', grupo:G.cambio, fmt:'entero', calc:r => r.filter(x => x.tipoOperacion === 'CAMBIO').length },
+      { id:'ultimaCompra',label:'Última compra',  grupo:G.tiempo, fmt:'texto', calc:r => fechaLinda(r.reduce((a, x) => x.fecha > a ? x.fecha : a, '')) }
+    ]
+  },
+
+  /* ------------------------------------------------------- movimientos -- */
+  movimientos: {
+    label:'Movimientos de stock',
+    desc:'El libro de entradas y salidas del depósito, tal como lo escribe la caja.',
+    icono: ICO.movimientos,
+    sinPedidos:true,
+    campos: [
+      { id:'fecha',     label:'Fecha (día)',  grupo:G.tiempo, tipo:'texto', dim:true, etiqueta:fechaLinda },
+      { id:'mes',       label:'Mes',          grupo:G.tiempo, tipo:'texto', dim:true, etiqueta:v => v ? `${MESES[Number(v.slice(5,7)) - 1]} ${v.slice(0,4)}` : '' },
+      { id:'anio',      label:'Año',          grupo:G.tiempo, tipo:'texto', dim:true },
+      { id:'fechaHora', label:'Fecha y hora', grupo:G.tiempo, tipo:'texto' },
+      { id:'articulo',  label:'Artículo',     grupo:G.articulo, tipo:'texto', dim:true },
+      { id:'codigo',    label:'Código',       grupo:G.articulo, tipo:'texto', dim:true },
+      { id:'tipo',      label:'Tipo',         grupo:G.stock, tipo:'texto', dim:true },
+      { id:'motivo',    label:'Motivo',       grupo:G.cambio, tipo:'texto', dim:true },
+      { id:'pedidoId',  label:'Pedido',       grupo:G.pedido, tipo:'texto' },
+      { id:'pedidoOrigenId', label:'Pedido original', grupo:G.cambio, tipo:'texto' },
+      { id:'movId',     label:'ID movimiento', grupo:G.stock, tipo:'texto' },
+      { id:'cantidad',  label:'Cantidad',     grupo:G.stock, tipo:'num' }
+    ],
+    metricas: [
+      { id:'neto',       label:'Saldo neto',    sub:'Entradas − salidas', grupo:G.stock, fmt:'entero', calc:r => sum(r, 'neto'), principal:true },
+      { id:'salidas',    label:'Salidas',       grupo:G.stock, fmt:'entero', calc:r => sum(r, 'salida') },
+      { id:'entradas',   label:'Entradas',      grupo:G.stock, fmt:'entero', calc:r => sum(r, 'entrada') },
+      { id:'movimientos',label:'Movimientos',   grupo:G.stock, fmt:'entero', calc:r => r.length },
+      { id:'pedidos',    label:'Pedidos',       grupo:G.pedido, fmt:'entero', calc:r => nDist(r, 'pedidoId') },
+      { id:'articulos',  label:'Artículos',     grupo:G.articulo, fmt:'entero', calc:r => nDist(r, 'codigo') },
+      { id:'ultimoMov',  label:'Último movimiento', grupo:G.tiempo, fmt:'texto', calc:r => fechaLinda(r.reduce((a, x) => x.fecha > a ? x.fecha : a, '')) }
+    ]
+  },
+
+  /* ---------------------------------------------------------- clientes -- */
+  clientes: {
+    label:'Clientes registrados',
+    desc:'El padrón del nodo "clientes", cruzado con lo que cada uno compró en el período.',
+    icono: ICO.clientes,
+    campos: [
+      { id:'nombre',      label:'Nombre',          grupo:G.ficha, tipo:'texto', dim:true },
+      { id:'tipoCliente', label:'Tipo',            grupo:G.ficha, tipo:'texto', dim:true },
+      { id:'registro',    label:'Registro',        grupo:G.ficha, tipo:'texto', dim:true },
+      { id:'telefono',    label:'Teléfono',        grupo:G.ficha, tipo:'texto' },
+      { id:'email',       label:'Email',           grupo:G.ficha, tipo:'texto' },
+      { id:'dni',         label:'DNI',             grupo:G.ficha, tipo:'texto' },
+      { id:'direccion',   label:'Dirección',       grupo:G.ficha, tipo:'texto' },
+      { id:'clienteId',   label:'ID',              grupo:G.ficha, tipo:'texto' },
+      { id:'compras',     label:'Pedidos del período', grupo:G.pedido, tipo:'num' },
+      { id:'gastado',     label:'Gastado',         grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'gananciaCli', label:'Ganancia aportada', grupo:G.dinero, tipo:'num', fmt:'dinero' },
+      { id:'unidades',    label:'Unidades',        grupo:G.stock,  tipo:'num' },
+      { id:'ultimaCompra',label:'Última compra',   grupo:G.tiempo, tipo:'texto' },
+      { id:'primeraCompra',label:'Primera compra', grupo:G.tiempo, tipo:'texto' },
+      { id:'diasSinComprar', label:'Días sin comprar', grupo:G.tiempo, tipo:'num', sumable:false }
+    ],
+    metricas: [
+      { id:'clientes',  label:'Clientes',        grupo:G.ficha,  fmt:'entero', calc:r => r.length, principal:true },
+      { id:'gastado',   label:'Gastado',         grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'gastado') },
+      { id:'ganancia',  label:'Ganancia aportada', grupo:G.dinero, fmt:'dinero', calc:r => sum(r, 'gananciaCli') },
+      { id:'compras',   label:'Pedidos',         grupo:G.pedido, fmt:'entero', calc:r => sum(r, 'compras') },
+      { id:'unidades',  label:'Unidades',        grupo:G.stock,  fmt:'entero', calc:r => sum(r, 'unidades') },
+      { id:'ticket',    label:'Ticket promedio', grupo:G.dinero, fmt:'dinero', calc:r => { const c = sum(r, 'compras'); return c ? sum(r, 'gastado') / c : 0; } },
+      { id:'activos',   label:'Compraron en el período', grupo:G.pedido, fmt:'entero', calc:r => r.filter(x => x.compras > 0).length },
+      { id:'margen',    label:'Margen %',        grupo:G.dinero, fmt:'pct', calc:r => ratio(sum(r, 'gananciaCli'), sum(r, 'gastado')) }
+    ]
+  }
+};
+
+/* Índices por id, para no recorrer arrays en cada render. */
+Object.values(DATASETS).forEach(d => {
+  d.campoPorId   = Object.fromEntries(d.campos.map(c => [c.id, c]));
+  d.metricaPorId = Object.fromEntries(d.metricas.map(m => [m.id, m]));
+});
+</script>
+
+<script>
+/* ============================================================== estado === */
+// Arranca vacio a proposito: sin conjunto, sin agrupacion y sin metricas. Una
+// consulta precargada es una consulta que el usuario no pidio, aunque no se
+// ejecute sola. Lo unico con valor inicial es el periodo: toda consulta necesita
+// uno y elegirlo no lee nada.
+const cfg = {
+  dataset: null,
+  preset:  null,
+  titulo:  'Reportes',
+  periodo: 'ultimos30',
+  desde:   sumarDias(hoyISO(), -29),
+  hasta:   hoyISO(),
+  dims:    [],
+  metricas:[],
+  columnas:[],                 // sólo en modo detalle (sin agrupar)
+  filtros: [],
+  orden:   { col: null, dir: 'desc' },
+  limite:  50,
+  grafico: 'auto'
+};
+
+// Sin conjunto elegido no hay nada que agrupar, medir ni filtrar.
+const hayConjunto = () => !!DATASETS[cfg.dataset];
+
+const CACHE = { pedidosRaw:null, movimientosRaw:null, clientesRaw:null, rango:null, traidoEn:null };
+const DATOS = { lineas:[], pedidos:[], movimientos:[], clientes:[] };
+let RESULTADO = null;
+
+/* ======================================================== lectura de BD == */
+function limitesFecha() {
+  const d = cfg.desde || '0000-01-01';
+  const h = cfg.hasta || '9999-12-31';
+  return { desde: d + ' 00:00:00', hasta: h + ' 23:59:59', d, h };
+}
+
+async function traerPedidos() {
+  const { desde, hasta } = limitesFecha();
+  const snap = await db.ref('pedidos').orderByChild('fecha').startAt(desde).endAt(hasta).once('value');
+  return snap.val() || {};
+}
+
+// Los ids de movimiento empiezan con mov_YYYYMMDD, así que orderByKey acota el
+// rango en el servidor sin necesidad de un índice extra en las reglas.
+async function traerMovimientos() {
+  const { d, h } = limitesFecha();
+  const ini = 'mov_' + d.replace(/-/g, '');
+  const fin = 'mov_' + h.replace(/-/g, '') + '_';
+  const snap = await db.ref('movimientos').orderByKey().startAt(ini).endAt(fin).once('value');
+  return snap.val() || {};
+}
+
+async function traerClientes() {
+  const snap = await db.ref('clientes').once('value');
+  return snap.val() || {};
+}
+
+/* ============================================================== aplanado = */
+function partesFecha(fechaHora, ts) {
+  let fh = fechaHora;
+  if (!fh && ts) {
+    const dt = new Date(ts), p = n => String(n).padStart(2, '0');
+    fh = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}:${p(dt.getSeconds())}`;
+  }
+  fh = fh || '';
+  const fecha = fh.slice(0, 10);
+  const hora  = fh.slice(11, 13) || '';
+  let diaSemana = '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    const [y, m, d] = fecha.split('-').map(Number);
+    diaSemana = DIAS[new Date(y, m - 1, d).getDay()];
+  }
+  return {
+    fechaHora: fh, fecha, hora, diaSemana,
+    mes: fecha.slice(0, 7), anio: fecha.slice(0, 4),
+    semana: /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? semanaISO(fecha) : ''
+  };
+}
+
+const signoDe = tipoLinea => (!tipoLinea || tipoLinea === 'VENTA') ? 1 : (tipoLinea === 'DEVOLUCION' ? -1 : 0);
+
+// Todo reporte se calcula SOLO sobre ventas efectivamente entregadas. El nodo
+// "pedidos" tambien guarda ABIERTO, CERRADO y CANCELADO (los escriben la caja
+// web y el flujo de WhatsApp): esos no son ventas cerradas y ensuciarian
+// unidades, facturacion y margenes. El corte se hace aca, en el aplanado, para
+// que pedidos, lineas y el cruce de clientes partan todos del mismo universo.
+const ESTADO_VALIDO = 'DESPACHADO/ENTREGADO';
+
+function aplanarPedidos(raw) {
+  const pedidos = [], lineas = [];
+  let descartados = 0;
+  for (const id of Object.keys(raw)) {
+    const p = raw[id] || {};
+    if ((p.status || '').toUpperCase() !== ESTADO_VALIDO) { descartados++; continue; }
+    const t  = partesFecha(p.fecha, p.timestamp);
+    const cl = p.cliente || {};
+    const pg = p.pagos   || {};
+    const items = Array.isArray(p.items) ? p.items : Object.values(p.items || {});
+    const cotiz = num(p.cotizacionCierre);
+
+    const base = {
+      pedidoId: id, ticket: ticketDe(id), ...t,
+      cliente: cl.nombre || '(sin nombre)', clienteTipo: cl.tipoCliente || '', direccion: cl.direccion || '',
+      vendedor: p.vendedor || '(sin vendedor)', medioPago: pg.medioPago || '(sin medio)',
+      alias: pg.alias || '',
+      // Se compara sin distinguir mayusculas pero se guarda canonico: si no, un
+      // 'despachado/entregado' en minuscula abriria un grupo aparte al agrupar
+      // por Estado y partiria en dos el mismo dato.
+      status: ESTADO_VALIDO,
+      entrega: p.entrega || '',
+      createdby: p.createdby || '', tipoOperacion: p.tipoOperacion || 'VENTA',
+      nota: p.nota || '', cotizacion: cotiz
+    };
+
+    let unidades = 0;
+    for (const it of items) {
+      if (!it) continue;
+      const tipoLinea = it.tipoLinea || 'VENTA';
+      const s = signoDe(tipoLinea);
+      const cant = num(it.cantidad), vu = num(it.valorU), vc = num(it.valorC);
+      unidades += cant;
+      lineas.push({
+        ...base,
+        articulo: it.nombre || '(sin nombre)', codigo: it.codigo || '',
+        codigoBarras: it.codigoBarras || '', categoria: it.categoria || '(sin categoría)',
+        seleccionado: (it.seleccionado || '').toUpperCase() === 'SI' ? 'SI' : 'NO',
+        tipoLinea, motivo: it.motivo || '', pedidoOrigenId: it.pedidoOrigenId || '',
+        cantidad: cant, cantidadNeta: s * cant,
+        valorU: vu, valorC: vc, valorULista: num(it.valorULista),
+        venta: s * cant * vu, costo: s * cant * vc,
+        ganancia: it.valorG != null ? num(it.valorG) : s * cant * (vu - vc)
+      });
+    }
+
+    const totalFinal = num(pg.totalFinal);
+    pedidos.push({
+      ...base,
+      pedidoOrigenId: (p.cambio && p.cambio.pedidoOrigenId) || '',
+      subtotal: num(pg.subtotal), recargo: num(pg.recargo), descuento: num(pg.descuento),
+      envio: num(pg.envio), totalFinal,
+      costos: num(pg.costos), ganancia: num(pg.ganancia), gananciaSelec: num(pg.gananciaSelec),
+      costoUSD: num(p.costoUSD), totalUSD: cotiz ? totalFinal / cotiz : 0,
+      unidades, articulos: items.length,
+      devoluciones: Object.keys(p.devoluciones || {}).length
+    });
+  }
+  return { pedidos, lineas, descartados };
+}
+
+function aplanarMovimientos(raw) {
+  return Object.keys(raw).map(id => {
+    const m = raw[id] || {};
+    const t = partesFecha(null, m.timestamp);
+    const cant = num(m.cantidad);
+    const esEntrada = m.tipo === 'ENTRADA';
+    return {
+      movId: id, ...t,
+      articulo: m.nombre || '(sin nombre)', codigo: m.codigo || '',
+      tipo: m.tipo || '', motivo: m.motivo || '',
+      pedidoId: m.pedidoId || '', pedidoOrigenId: m.pedidoOrigenId || '',
+      cantidad: cant,
+      entrada: esEntrada ? cant : 0,
+      salida:  esEntrada ? 0 : cant,
+      neto:    esEntrada ? cant : -cant
+    };
+  });
+}
+
+// El padrón no tiene fechas: lo que se cruza es la compra del período, por
+// nombre normalizado (es la única llave que comparten pedidos y clientes).
+function aplanarClientes(raw, pedidos) {
+  const porNombre = new Map();
+  for (const p of pedidos) {
+    const k = (p.cliente || '').trim().toLowerCase();
+    if (!k) continue;
+    if (!porNombre.has(k)) porNombre.set(k, []);
+    porNombre.get(k).push(p);
+  }
+  const hoy = hoyISO();
+  const diasEntre = (a, b) => {
+    if (!a || !b) return null;
+    return Math.round((new Date(b) - new Date(a)) / 86400000);
+  };
+  return Object.keys(raw).map(id => {
+    const c = raw[id] || {};
+    const ps = porNombre.get((c.nombre || '').trim().toLowerCase()) || [];
+    const fechas = ps.map(p => p.fecha).filter(Boolean).sort();
+    const ultima = fechas[fechas.length - 1] || '';
+    return {
+      clienteId: id,
+      nombre: c.nombre || '(sin nombre)', telefono: c.telefono || '', email: c.email || '',
+      dni: c.dni || '', direccion: c.direccion || '',
+      tipoCliente: c.tipoCliente || '', registro: c.registro || '',
+      compras: ps.length,
+      gastado: ps.reduce((a, p) => a + p.totalFinal, 0),
+      gananciaCli: ps.reduce((a, p) => a + p.ganancia, 0),
+      unidades: ps.reduce((a, p) => a + p.unidades, 0),
+      primeraCompra: fechas[0] || '',
+      ultimaCompra: ultima,
+      diasSinComprar: ultima ? diasEntre(ultima, hoy) : null
+    };
+  });
+}
+
+/* ================================================================ carga = */
+async function cargarDatos(forzar) {
+  const clave = `${cfg.desde}|${cfg.hasta}`;
+  const necesitaMov = cfg.dataset === 'movimientos';
+  const necesitaCli = cfg.dataset === 'clientes';
+
+  const mismoRango = CACHE.rango === clave;
+  const faltaMov   = necesitaMov && !CACHE.movimientosRaw;
+  const faltaCli   = necesitaCli && !CACHE.clientesRaw;
+
+  if (!forzar && mismoRango && CACHE.pedidosRaw && !faltaMov && !faltaCli) return;
+
+  estado('carga', 'Consultando Firebase…');
+  const t0 = performance.now();
+
+  if (forzar || !mismoRango || !CACHE.pedidosRaw) {
+    CACHE.pedidosRaw = await traerPedidos();
+    CACHE.movimientosRaw = null;
+  }
+  if (necesitaMov && (forzar || !CACHE.movimientosRaw)) CACHE.movimientosRaw = await traerMovimientos();
+  if (necesitaCli && (forzar || !CACHE.clientesRaw))    CACHE.clientesRaw    = await traerClientes();
+
+  const { pedidos, lineas, descartados } = aplanarPedidos(CACHE.pedidosRaw);
+  CACHE.descartados = descartados;
+  DATOS.pedidos = pedidos;
+  DATOS.lineas  = lineas;
+  DATOS.movimientos = CACHE.movimientosRaw ? aplanarMovimientos(CACHE.movimientosRaw) : [];
+  DATOS.clientes    = CACHE.clientesRaw ? aplanarClientes(CACHE.clientesRaw, pedidos) : [];
+
+  CACHE.rango = clave;
+  CACHE.traidoEn = Math.round(performance.now() - t0);
+  estado('ok', `${fmtEntero(pedidos.length)} pedidos · ${fmtEntero(lineas.length)} renglones` +
+               (descartados ? ` · ${fmtEntero(descartados)} sin entregar, fuera` : ''));
+}
+
+/* ============================================================== filtros = */
+const OPERADORES = {
+  texto: [
+    { id:'contiene',    label:'contiene' },
+    { id:'no_contiene', label:'no contiene' },
+    { id:'es',          label:'es exactamente' },
+    { id:'no_es',       label:'no es' },
+    { id:'empieza',     label:'empieza con' },
+    { id:'vacio',       label:'está vacío', sinValor:true },
+    { id:'no_vacio',    label:'no está vacío', sinValor:true }
+  ],
+  num: [
+    { id:'mayor',       label:'mayor que' },
+    { id:'mayor_igual', label:'mayor o igual' },
+    { id:'menor',       label:'menor que' },
+    { id:'menor_igual', label:'menor o igual' },
+    { id:'igual',       label:'igual a' },
+    { id:'distinto',    label:'distinto de' },
+    { id:'entre',       label:'entre', doble:true }
+  ]
+};
+
+function pasaFiltro(fila, f, campo) {
+  const bruto = fila[f.campo];
+  if (campo && campo.tipo === 'num') {
+    const v = num(bruto), a = num(f.valor), b = num(f.valor2);
+    switch (f.op) {
+      case 'mayor': return v > a;
+      case 'mayor_igual': return v >= a;
+      case 'menor': return v < a;
+      case 'menor_igual': return v <= a;
+      case 'igual': return v === a;
+      case 'distinto': return v !== a;
+      case 'entre': return v >= Math.min(a, b) && v <= Math.max(a, b);
+      default: return true;
+    }
+  }
+  const v = String(bruto ?? '').toLowerCase();
+  const q = String(f.valor ?? '').toLowerCase().trim();
+  switch (f.op) {
+    case 'vacio': return v === '';
+    case 'no_vacio': return v !== '';
+    case 'contiene': return !q || v.includes(q);
+    case 'no_contiene': return !q || !v.includes(q);
+    case 'es': return v === q;
+    case 'no_es': return v !== q;
+    case 'empieza': return v.startsWith(q);
+    default: return true;
+  }
+}
+
+function aplicarFiltros(filas, ds) {
+  const activos = cfg.filtros.filter(f => f.campo && (f.valor !== '' || ['vacio','no_vacio'].includes(f.op)));
+  if (!activos.length) return filas;
+  return filas.filter(fila => activos.every(f => pasaFiltro(fila, f, ds.campoPorId[f.campo])));
+}
+
+/* ============================================================== agregar = */
+const SEP = String.fromCharCode(1);
+
+function construirResultado() {
+  const ds = DATASETS[cfg.dataset];
+  const base = aplicarFiltros(DATOS[cfg.dataset] || [], ds);
+
+  // --- modo detalle: filas crudas con las columnas elegidas ---------------
+  // armarDetalle() lo comparte con el desglose, para que una fila cruda se vea
+  // igual venga de donde venga.
+  if (!cfg.dims.length) {
+    return armarDetalle(ds, base, cfg.columnas.length ? cfg.columnas : ds.campos.slice(0, 8).map(c => c.id));
+  }
+
+  // --- modo agrupado ------------------------------------------------------
+  const grupos = new Map();
+  for (const r of base) {
+    const clave = cfg.dims.map(d => String(r[d] ?? '')).join(SEP);
+    let g = grupos.get(clave);
+    if (!g) { g = []; grupos.set(clave, g); }
+    g.push(r);
+  }
+
+  const mets = cfg.metricas.map(id => ds.metricaPorId[id]).filter(Boolean);
+  const columnas = [
+    ...cfg.dims.map(id => {
+      const c = ds.campoPorId[id];
+      return { id, label: c ? c.label : id, tipo:'dim', campo:c };
+    }),
+    ...mets.map(m => ({ id:m.id, label:m.label, tipo:'num', fmt:m.fmt, metrica:m }))
+  ];
+
+  const filas = [];
+  for (const [clave, rows] of grupos) {
+    const partes = clave.split(SEP);
+    const celdas = [
+      ...partes.map((v, i) => {
+        const c = ds.campoPorId[cfg.dims[i]];
+        const et = c && c.etiqueta ? c.etiqueta(v) : v;
+        return { v, txt: String(et || '—') };
+      }),
+      ...mets.map(m => {
+        const val = m.calc(rows);
+        return m.fmt === 'texto'
+          ? { v: val, txt: String(val || '—') }
+          : { v: val, txt: FORMATOS[m.fmt](val) };
+      })
+    ];
+    filas.push({ celdas, rows, clave });
+  }
+
+  const totales = [
+    ...cfg.dims.map((_, i) => i === 0 ? { v:0, txt:`${fmtEntero(filas.length)} grupos` } : null),
+    ...mets.map(m => {
+      const val = m.calc(base);
+      return m.fmt === 'texto' ? null : { v: val, txt: FORMATOS[m.fmt](val) };
+    })
+  ];
+
+  return { modo:'agrupado', ds, columnas, filas, totales, universo: base, nDims: cfg.dims.length, mets };
+}
+
+function ordenarResultado(res) {
+  let idx = cfg.orden.col;
+  if (idx == null || idx >= res.columnas.length) {
+    idx = res.columnas.findIndex(c => c.tipo === 'num');
+    if (idx < 0) idx = 0;
+    cfg.orden = { col: idx, dir: res.columnas[idx].tipo === 'num' ? 'desc' : 'asc' };
+  }
+  const dir = cfg.orden.dir === 'asc' ? 1 : -1;
+  const esNum = res.columnas[idx].tipo === 'num';
+  res.filas.sort((a, b) => {
+    const x = a.celdas[idx]?.v, y = b.celdas[idx]?.v;
+    if (esNum) return ((x || 0) - (y || 0)) * dir;
+    return String(x).localeCompare(String(y), 'es', { numeric:true }) * dir;
+  });
+  return res;
+}
+
+async function ejecutar(forzar) {
+  if (!hayConjunto()) {
+    toast('Falta elegir el conjunto de datos', 'Es lo primero que define qué se puede consultar', 'info');
+    $('#blqDataset').dataset.abierto = 'si';
+    return;
+  }
+  const btn = $('#btnEjecutar');
+  btn.disabled = true;
+  try {
+    await cargarDatos(forzar);
+    const t0 = performance.now();
+    RESULTADO = ordenarResultado(construirResultado());
+    RESULTADO.ms = Math.round(performance.now() - t0);
+    renderReporte();
+    $('#btnExportar').disabled = !RESULTADO.filas.length;
+  } catch (e) {
+    console.error(e);
+    estado('error', 'La consulta falló');
+    toast('No se pudo completar la consulta', e && e.message, 'error');
+  } finally {
+    btn.disabled = !hayConjunto();
+  }
+}
+</script>
+
+<script>
+/* ============================================================== render === */
+const DIMS_TIEMPO = new Set(['fecha','mes','semana','anio','hora','fechaHora']);
+
+function renderReporte() {
+  const res = RESULTADO;
+  const cont = $('#reporte');
+
+  $('#tituloReporte').textContent = cfg.titulo;
+  $('#metaReporte').innerHTML = [
+    `<span>${fechaLinda(cfg.desde)} → ${fechaLinda(cfg.hasta)}</span>`,
+    `<span class="sep"></span>`,
+    `<span><b>${fmtEntero(res.universo.length)}</b> registros</span>`,
+    `<span class="sep"></span>`,
+    `<span><b>${fmtEntero(res.filas.length)}</b> ${res.modo === 'agrupado' ? 'grupos' : 'filas'}</span>`,
+    `<span class="sep"></span>`,
+    `<span>${res.ms} ms · lectura ${CACHE.traidoEn} ms</span>`,
+    `<span class="fijo" title="Los pedidos ABIERTO, CERRADO y CANCELADO nunca entran en el reporte">
+       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+       Sólo ${esc(ESTADO_VALIDO)}${CACHE.descartados ? ` · ${fmtEntero(CACHE.descartados)} excluidos` : ''}
+     </span>`
+  ].join('');
+
+  if (!res.filas.length) {
+    cont.innerHTML = `<div class="panel"><div class="vacio">
+      <div class="vacio-ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+      <h3>Sin resultados</h3>
+      <p>El período o los filtros no dejaron ningún registro. Probá ampliar el rango de fechas o quitar algún filtro.</p>
+    </div></div>`;
+    return;
+  }
+
+  cont.innerHTML = '';
+  if (res.modo === 'agrupado') cont.appendChild(bloqueKPIs(res));
+  const gr = bloqueGrafico(res);
+  if (gr) cont.appendChild(gr);
+  cont.appendChild(bloqueTabla(res));
+}
+
+/* ------------------------------------------------------------- KPI tiles */
+function bloqueKPIs(res) {
+  const wrap = document.createElement('div');
+  wrap.className = 'kpis';
+  const mets = res.mets || [];
+  mets.slice(0, 6).forEach((m, i) => {
+    const val = m.calc(res.universo);
+    const txt = m.fmt === 'texto' ? String(val || '—') : FORMATOS[m.fmt](val);
+    const signo = m.fmt === 'texto' ? '' : (val < 0 ? 'neg' : '');
+    const el = document.createElement('div');
+    el.className = 'kpi';
+    if (signo) el.dataset.signo = signo;
+    el.style.animationDelay = (i * 45) + 'ms';
+    el.innerHTML =
+      `<span class="kpi-rot">${esc(m.label)}</span>` +
+      `<span class="kpi-val">${esc(txt)}</span>` +
+      (m.sub ? `<span class="kpi-sub">${esc(m.sub)}</span>` : '');
+    wrap.appendChild(el);
+  });
+  return wrap;
+}
+
+/* -------------------------------------------------------------- gráfico -- */
+function bloqueGrafico(res) {
+  if (res.modo !== 'agrupado' || !res.mets || !res.mets.length) return null;
+  const dimId = cfg.dims[0];
+  const metIdx = res.nDims;
+  if (metIdx >= res.columnas.length) return null;
+
+  const panel = document.createElement('section');
+  panel.className = 'panel';
+  const metOpts = res.mets.map((m, i) =>
+    `<option value="${res.nDims + i}">${esc(m.label)}</option>`).join('');
+
+  panel.innerHTML =
+    `<div class="panel-cab">
+       <h2>${esc(res.columnas[0].label)}</h2>
+       <div class="der">
+         <select class="mini-sel" id="grMetrica" aria-label="Métrica del gráfico">${metOpts}</select>
+         <div class="mini-tabs" id="grTipo" role="group" aria-label="Tipo de gráfico">
+           <button type="button" data-tipo="auto" aria-pressed="true">Auto</button>
+           <button type="button" data-tipo="barras" aria-pressed="false">Barras</button>
+           <button type="button" data-tipo="linea" aria-pressed="false">Línea</button>
+         </div>
+       </div>
+     </div>
+     <div class="gr-caja" id="grCaja"></div>`;
+
+  const sel = panel.querySelector('#grMetrica');
+  sel.value = String(metIdx);
+
+  const pintar = () => dibujarGrafico(panel.querySelector('#grCaja'), res, Number(sel.value), cfg.grafico, dimId);
+  sel.addEventListener('change', pintar);
+  panel.querySelectorAll('#grTipo button').forEach(b => b.addEventListener('click', () => {
+    cfg.grafico = b.dataset.tipo;
+    panel.querySelectorAll('#grTipo button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    pintar();
+  }));
+  setTimeout(pintar, 0);
+  return panel;
+}
+
+function dibujarGrafico(caja, res, colIdx, tipo, dimId) {
+  const esTiempo = DIMS_TIEMPO.has(dimId);
+  const modo = tipo === 'auto' ? (esTiempo ? 'linea' : 'barras') : tipo;
+  const col = res.columnas[colIdx];
+  const fmt = FORMATOS[col.fmt || 'entero'];
+
+  let datos = res.filas.map(f => ({
+    etq: f.celdas.slice(0, res.nDims).map(c => c.txt).join(' · '),
+    clave: f.celdas[0].v,
+    val: num(f.celdas[colIdx]?.v)
+  }));
+
+  if (modo === 'linea') datos.sort((a, b) => String(a.clave).localeCompare(String(b.clave), 'es', { numeric:true }));
+  else datos = datos.slice().sort((a, b) => Math.abs(b.val) - Math.abs(a.val)).slice(0, 14);
+
+  if (!datos.length || datos.every(d => d.val === 0)) {
+    caja.innerHTML = '<div class="gr-vacio">La métrica elegida no tiene valores que graficar.</div>';
+    return;
+  }
+  caja.innerHTML = modo === 'linea' ? svgLinea(datos, fmt) : svgBarras(datos, fmt);
+  activarTips(caja, datos, fmt, col.label);
+}
+
+// Barras horizontales: la etiqueta se lee sin girar la cabeza y los nombres de
+// artículo son largos. Un solo color: hay una sola serie.
+function svgBarras(datos, fmt) {
+  const W = 1000, filaH = 34, padTop = 8, padBot = 8, anchoEtq = 300, anchoVal = 118;
+  const H = padTop + padBot + datos.length * filaH;
+  const x0 = anchoEtq, x1 = W - anchoVal;
+  const max = Math.max(...datos.map(d => Math.abs(d.val)), 1);
+  const hayNeg = datos.some(d => d.val < 0);
+  const cero = hayNeg ? x0 + (x1 - x0) * 0.28 : x0;
+  const escala = v => (Math.abs(v) / max) * (hayNeg ? Math.min(x1 - cero, cero - x0) : (x1 - x0));
+
+  const filas = datos.map((d, i) => {
+    const y = padTop + i * filaH;
+    const w = Math.max(escala(d.val), d.val === 0 ? 0 : 2);
+    const neg = d.val < 0;
+    const bx = neg ? cero - w : cero;
+    const etq = d.etq.length > 40 ? d.etq.slice(0, 39) + '…' : d.etq;
+    return `<g class="gr-fila" data-i="${i}">
+      <rect class="gr-hit" x="0" y="${y}" width="${W}" height="${filaH}"></rect>
+      <text class="gr-eje-cat" x="${x0 - 12}" y="${y + filaH / 2 + 4}" text-anchor="end">${esc(etq)}</text>
+      <rect class="gr-barra${neg ? ' neg' : ''}" x="${bx}" y="${y + 7}" width="${w}" height="${filaH - 16}" rx="4"></rect>
+      <text class="gr-valor" x="${W - 12}" y="${y + filaH / 2 + 4}" text-anchor="end">${esc(fmt(d.val))}</text>
+    </g>`;
+  }).join('');
+
+  return `<svg class="gr-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMin meet" role="img">
+    ${hayNeg ? `<line class="gr-cursor" x1="${cero}" x2="${cero}" y1="${padTop}" y2="${H - padBot}"></line>` : ''}
+    ${filas}
+  </svg>`;
+}
+
+// Serie temporal: área + línea + puntos. Etiquetas de eje ralas para no
+// apelmazar rangos largos.
+function svgLinea(datos, fmt) {
+  const W = 1000, H = 300, mL = 78, mR = 20, mT = 18, mB = 40;
+  const iw = W - mL - mR, ih = H - mT - mB;
+  const vals = datos.map(d => d.val);
+  const max = Math.max(...vals, 0), min = Math.min(...vals, 0);
+  const span = (max - min) || 1;
+  const px = i => mL + (datos.length === 1 ? iw / 2 : (i / (datos.length - 1)) * iw);
+  const py = v => mT + ih - ((v - min) / span) * ih;
+
+  const ticks = 4;
+  const grid = Array.from({ length: ticks + 1 }, (_, k) => {
+    const v = min + (span * k / ticks), y = py(v);
+    return `<line x1="${mL}" x2="${W - mR}" y1="${y}" y2="${y}"></line>
+            <text class="gr-eje" x="${mL - 10}" y="${y + 3.5}" text-anchor="end">${esc(fmt(v))}</text>`;
+  }).join('');
+
+  const d = datos.map((p, i) => `${i ? 'L' : 'M'}${px(i).toFixed(1)},${py(p.val).toFixed(1)}`).join(' ');
+  const area = `${d} L${px(datos.length - 1).toFixed(1)},${py(min)} L${px(0).toFixed(1)},${py(min)} Z`;
+
+  const paso = Math.max(1, Math.ceil(datos.length / 9));
+  const ejeX = datos.map((p, i) => (i % paso === 0 || i === datos.length - 1)
+    ? `<text class="gr-eje" x="${px(i)}" y="${H - 14}" text-anchor="middle">${esc(p.etq.length > 12 ? p.etq.slice(0, 11) + '…' : p.etq)}</text>` : '').join('');
+
+  const puntos = datos.map((p, i) =>
+    `<g class="gr-fila" data-i="${i}">
+       <rect class="gr-hit" x="${px(i) - (iw / Math.max(datos.length, 1)) / 2}" y="${mT}" width="${Math.max(iw / Math.max(datos.length, 1), 12)}" height="${ih}"></rect>
+       <circle class="gr-punto" cx="${px(i)}" cy="${py(p.val)}" r="${datos.length > 60 ? 0 : 3.6}"></circle>
+     </g>`).join('');
+
+  return `<svg class="gr-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img">
+    <defs><linearGradient id="gradSerie" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6c4eb6" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="#6c4eb6" stop-opacity="0"/>
+    </linearGradient></defs>
+    <g class="gr-grid">${grid}</g>
+    <path class="gr-area" d="${area}"></path>
+    <path class="gr-linea" d="${d}"></path>
+    ${puntos}${ejeX}
+  </svg>`;
+}
+
+function activarTips(caja, datos, fmt, etiquetaMetrica) {
+  const tip = $('#tip');
+  caja.querySelectorAll('.gr-fila').forEach(g => {
+    const d = datos[Number(g.dataset.i)];
+    g.addEventListener('mousemove', e => {
+      tip.innerHTML = `<b>${esc(d.etq)}</b>${esc(etiquetaMetrica)}: <span class="v">${esc(fmt(d.val))}</span>`;
+      tip.style.left = e.clientX + 'px';
+      tip.style.top  = e.clientY + 'px';
+      tip.classList.add('visible');
+    });
+    g.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+  });
+}
+
+/* ---------------------------------------------------------------- tabla -- */
+function bloqueTabla(res) {
+  const panel = document.createElement('section');
+  panel.className = 'panel';
+  const total = res.filas.length;
+  const limite = cfg.limite === 0 ? total : Math.min(cfg.limite, total);
+  const visibles = res.filas.slice(0, limite);
+
+  // Escala para la barrita en la primera métrica: da lectura de proporción sin
+  // agregar un segundo gráfico.
+  const colBarra = res.nDims;
+  const maxBarra = Math.max(...res.filas.map(f => Math.abs(num(f.celdas[colBarra]?.v))), 1);
+
+  const thead = res.columnas.map((c, i) => {
+    const orden = cfg.orden.col === i ? ` aria-sort="${cfg.orden.dir === 'asc' ? 'ascending' : 'descending'}"` : '';
+    const flecha = cfg.orden.col === i ? (cfg.orden.dir === 'asc' ? '▲' : '▼') : '▼';
+    return `<th class="${c.tipo === 'num' ? 'n' : ''}" data-col="${i}"${orden} tabindex="0" role="columnheader button" title="Ordenar por ${esc(c.label)}">${esc(c.label)}<span class="flecha">${flecha}</span></th>`;
+  }).join('');
+
+  const cuerpo = visibles.map((f, fi) => {
+    const tds = f.celdas.map((cel, i) => {
+      const c = res.columnas[i];
+      if (c.tipo === 'num') {
+        const v = num(cel.v);
+        const cls = v < 0 ? ' neg' : (v === 0 ? ' cero' : '');
+        // Toda celda de metrica abre su desglose: es el numero que hay que auditar.
+        const drill = res.modo === 'agrupado' ? ' drill' : '';
+        const tit = drill ? ' title="Ver los registros que componen este numero"' : '';
+        if (i === colBarra && res.modo === 'agrupado') {
+          const pc = Math.min(100, Math.abs(v) / maxBarra * 100);
+          return `<td class="n${cls}${drill}"${tit}>${esc(cel.txt)}<span class="barra-celda"><i style="width:${pc.toFixed(1)}%"></i></span></td>`;
+        }
+        return `<td class="n${cls}${drill}"${tit}>${esc(cel.txt)}</td>`;
+      }
+      const etiqueta = etiquetaEspecial(c.id, cel.txt);
+      const rank = (i === 0 && res.modo === 'agrupado' && cfg.orden.col >= res.nDims)
+        ? `<span class="celda-rank">${fi + 1}</span>` : '';
+      const clsDim = (i < res.nDims || res.modo === 'detalle' ? 'dim' : '') + (i < res.nDims ? ' drill' : '');
+      const titDim = i < res.nDims ? ' title="Ver todos los registros de este grupo"' : '';
+      return `<td class="${clsDim}"${titDim}>${rank}${etiqueta}</td>`;
+    }).join('');
+    return `<tr class="${fi % 2 ? 'par' : ''}" data-fila="${fi}">${tds}</tr>`;
+  }).join('');
+
+  const tfoot = res.totales.some(Boolean)
+    ? `<tfoot><tr>${res.totales.map((t, i) =>
+        `<td class="${res.columnas[i].tipo === 'num' ? 'n' : ''}">${t ? esc(t.txt) : ''}</td>`).join('')}</tr></tfoot>`
+    : '';
+
+  panel.innerHTML =
+    `<div class="panel-cab">
+       <h2>Detalle</h2>
+       <div class="der">
+         <select class="mini-sel" id="selLimite" aria-label="Filas visibles">
+           ${[10, 25, 50, 100, 250, 0].map(n =>
+             `<option value="${n}" ${cfg.limite === n ? 'selected' : ''}>${n === 0 ? 'Todas' : 'Top ' + n}</option>`).join('')}
+         </select>
+       </div>
+     </div>
+     <div class="tabla-scroll">
+       <table class="datos"><thead><tr>${thead}</tr></thead><tbody>${cuerpo}</tbody>${tfoot}</table>
+     </div>
+     <div class="tabla-pie">
+       <span>Mostrando <strong>${fmtEntero(visibles.length)}</strong> de <strong>${fmtEntero(total)}</strong> ${res.modo === 'agrupado' ? 'grupos' : 'filas'}</span>
+       <div class="der">
+         <button type="button" class="btn" id="btnCopiar">
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+           Copiar tabla
+         </button>
+       </div>
+     </div>`;
+
+  const ordenarPor = i => {
+    if (cfg.orden.col === i) cfg.orden.dir = cfg.orden.dir === 'asc' ? 'desc' : 'asc';
+    else cfg.orden = { col: i, dir: res.columnas[i].tipo === 'num' ? 'desc' : 'asc' };
+    ordenarResultado(res);
+    renderReporte();
+  };
+  panel.querySelectorAll('thead th').forEach(th => {
+    th.addEventListener('click', () => ordenarPor(Number(th.dataset.col)));
+    th.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ordenarPor(Number(th.dataset.col)); }
+    });
+  });
+  // Delegado: el tbody se reescribe entero en cada reorden, un listener alcanza.
+  panel.querySelector('tbody').addEventListener('click', e => {
+    const td = e.target.closest('td');
+    if (!td || !td.parentElement.dataset.fila) return;
+    const fila = visibles[Number(td.parentElement.dataset.fila)];
+    if (!fila) return;
+    if (res.modo === 'detalle') { abrirFicha(res, fila); return; }
+    if (!td.classList.contains('drill')) return;
+    abrirDesglose(res, fila, Array.prototype.indexOf.call(td.parentElement.children, td));
+  });
+  panel.querySelector('#selLimite').addEventListener('change', e => {
+    cfg.limite = Number(e.target.value);
+    renderReporte();
+  });
+  panel.querySelector('#btnCopiar').addEventListener('click', () => {
+    navigator.clipboard.writeText(aTexto(res, '\t', cfg.limite))
+      .then(() => toast('Tabla copiada', 'Pegala en cualquier planilla', 'ok'))
+      .catch(() => toast('No se pudo copiar', 'El navegador bloqueó el portapapeles', 'error'));
+  });
+  return panel;
+}
+
+function etiquetaEspecial(colId, txt) {
+  const t = String(txt || '');
+  if (colId === 'tipoLinea' || colId === 'motivo') {
+    const k = t.toUpperCase();
+    if (k === 'VENTA') return `<span class="etq venta">Venta</span>`;
+    if (k === 'DEVOLUCION') return `<span class="etq devolucion">Devolución</span>`;
+    if (k === 'GARANTIA') return `<span class="etq garantia">Garantía</span>`;
+  }
+  if (colId === 'status' && t.toUpperCase() === 'CANCELADO') return `<span class="etq cancelado">Cancelado</span>`;
+  if (colId === 'tipo') {
+    if (t === 'ENTRADA') return `<span class="etq venta">Entrada</span>`;
+    if (t === 'SALIDA')  return `<span class="etq devolucion">Salida</span>`;
+  }
+  return esc(t);
+}
+</script>
+
+<script>
+/* =========================================================== plantillas == */
+const svgIco = d => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+
+const PLANTILLAS = [
+  { id:'mas-vendidos', titulo:'Artículos más vendidos', desc:'Ranking por unidades netas del período.',
+    ico:svgIco('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
+    cfg:{ dataset:'lineas', dims:['articulo'], metricas:['unidades','venta','ganancia','margen','pedidos'], limite:50 } },
+
+  { id:'margen-articulo', titulo:'Margen por artículo', desc:'Qué deja cada producto, no cuánto vende.', tono:'verde',
+    ico:svgIco('<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
+    cfg:{ dataset:'lineas', dims:['articulo'], metricas:['venta','costo','ganancia','margen','markup','unidades'], limite:50, orden:{ col:3, dir:'desc' } } },
+
+  { id:'mejores-clientes', titulo:'Clientes que más compran', desc:'Ordenados por lo que gastaron.',
+    ico:svgIco('<circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 8.5a3 3 0 0 1 0 5M18.5 20a6.6 6.6 0 0 0-2-4.7"/>'),
+    cfg:{ dataset:'lineas', dims:['cliente'], metricas:['venta','pedidos','unidades','ganancia','ventaPorPedido'], limite:50 } },
+
+  { id:'por-vendedor', titulo:'Ventas por vendedor', desc:'Pedidos, facturación y ticket promedio.',
+    ico:svgIco('<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/>'),
+    cfg:{ dataset:'pedidos', dims:['vendedor'], metricas:['pedidos','totalFinal','ganancia','ticket','margen'], limite:25 } },
+
+  { id:'por-categoria', titulo:'Ventas por categoría', desc:'Dónde se concentra el negocio.',
+    ico:svgIco('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
+    cfg:{ dataset:'lineas', dims:['categoria'], metricas:['venta','unidades','ganancia','margen','articulos'], limite:50 } },
+
+  { id:'medios-pago', titulo:'Medios de pago', desc:'Cómo paga la gente y con qué ticket.',
+    ico:svgIco('<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/>'),
+    cfg:{ dataset:'pedidos', dims:['medioPago'], metricas:['pedidos','totalFinal','ticket','descuento','recargo'], limite:25 } },
+
+  { id:'evolucion-diaria', titulo:'Evolución diaria', desc:'Facturación día por día.',
+    ico:svgIco('<path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/>'),
+    cfg:{ dataset:'pedidos', dims:['fecha'], metricas:['totalFinal','pedidos','ganancia','ticket'], limite:0, orden:{ col:0, dir:'asc' } } },
+
+  { id:'ventas-mes', titulo:'Ventas por mes', desc:'La serie larga, para mirar tendencia.',
+    ico:svgIco('<rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 10h18M8 2v4M16 2v4"/>'),
+    cfg:{ dataset:'pedidos', dims:['mes'], metricas:['totalFinal','pedidos','ganancia','margen','unidades'], limite:0, orden:{ col:0, dir:'asc' } } },
+
+  { id:'horas-pico', titulo:'Horas pico', desc:'A qué hora entra la plata.',
+    ico:svgIco('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+    cfg:{ dataset:'pedidos', dims:['hora'], metricas:['pedidos','totalFinal','ticket'], limite:0, orden:{ col:0, dir:'asc' } } },
+
+  { id:'devoluciones', titulo:'Cambios y devoluciones', desc:'Qué vuelve y con qué frecuencia.', tono:'ocre',
+    ico:svgIco('<path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>'),
+    cfg:{ dataset:'lineas', dims:['articulo'], metricas:['devueltas','garantias','tasaDevol','unidadesBr','venta'], limite:50 } },
+
+  { id:'stock-movido', titulo:'Movimiento de stock', desc:'Entradas y salidas del depósito.',
+    ico:svgIco('<path d="M7 3v14M7 3 3 7M7 3l4 4"/><path d="M17 21V7m0 14 4-4m-4 4-4-4"/>'),
+    cfg:{ dataset:'movimientos', dims:['articulo'], metricas:['salidas','entradas','neto','movimientos'], limite:50 } },
+
+  { id:'inactivos', titulo:'Clientes dormidos', desc:'Padrón con días sin comprar.', tono:'ocre',
+    ico:svgIco('<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M17 3h5v5"/>'),
+    cfg:{ dataset:'clientes', dims:[], columnas:['nombre','telefono','tipoCliente','ultimaCompra','diasSinComprar','compras','gastado'], limite:100,
+          orden:{ col:4, dir:'desc' } } },
+
+  { id:'detalle-crudo', titulo:'Detalle línea por línea', desc:'Todo el grano fino, sin agrupar. Ideal para exportar.',
+    ico:svgIco('<path d="M3 6h18M3 12h18M3 18h18"/>'),
+    cfg:{ dataset:'lineas', dims:[], columnas:['fecha','ticket','cliente','vendedor','medioPago','articulo','codigo','categoria','tipoLinea','cantidad','valorU','valorC','venta','ganancia'], limite:100,
+          orden:{ col:0, dir:'desc' } } },
+
+  { id:'rentabilidad-dia', titulo:'Rentabilidad diaria', desc:'Venta contra costo, día a día.', tono:'verde',
+    ico:svgIco('<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/>'),
+    cfg:{ dataset:'lineas', dims:['fecha'], metricas:['venta','costo','ganancia','margen'], limite:0, orden:{ col:0, dir:'asc' } } }
+];
+
+/* ============================================================ UI del riel */
+const PERIODOS = [
+  { id:'hoy',        label:'Hoy',           rango:() => [hoyISO(), hoyISO()] },
+  { id:'ayer',       label:'Ayer',          rango:() => [sumarDias(hoyISO(), -1), sumarDias(hoyISO(), -1)] },
+  { id:'ultimos7',   label:'7 días',        rango:() => [sumarDias(hoyISO(), -6), hoyISO()] },
+  { id:'ultimos30',  label:'30 días',       rango:() => [sumarDias(hoyISO(), -29), hoyISO()] },
+  { id:'ultimos90',  label:'90 días',       rango:() => [sumarDias(hoyISO(), -89), hoyISO()] },
+  { id:'esteMes',    label:'Este mes',      rango:() => [hoyISO().slice(0, 8) + '01', hoyISO()] },
+  { id:'mesPasado',  label:'Mes pasado',    rango:() => {
+      const h = hoyISO(); const primeroEste = h.slice(0, 8) + '01';
+      const finAnterior = sumarDias(primeroEste, -1);
+      return [finAnterior.slice(0, 8) + '01', finAnterior]; } },
+  { id:'esteAnio',   label:'Este año',      rango:() => [hoyISO().slice(0, 4) + '-01-01', hoyISO()] },
+  { id:'anioPasado', label:'Año pasado',    rango:() => { const y = Number(hoyISO().slice(0, 4)) - 1; return [`${y}-01-01`, `${y}-12-31`]; } },
+  { id:'todo',       label:'Todo',          rango:() => ['2000-01-01', hoyISO()] }
+];
+
+function renderPills() {
+  $('#pillsPeriodo').innerHTML = PERIODOS.map(p =>
+    `<button type="button" class="pill" data-periodo="${p.id}" aria-pressed="${cfg.periodo === p.id}">${p.label}</button>`).join('');
+  $$('#pillsPeriodo .pill').forEach(b => b.addEventListener('click', () => {
+    const p = PERIODOS.find(x => x.id === b.dataset.periodo);
+    const [d, h] = p.rango();
+    cfg.periodo = p.id; cfg.desde = d; cfg.hasta = h;
+    $('#fDesde').value = d; $('#fHasta').value = h;
+    renderPills(); actualizarBadges();
+  }));
+  const p = PERIODOS.find(x => x.id === cfg.periodo);
+  $('#badgePeriodo').textContent = p ? p.label : 'Manual';
+}
+
+function renderDatasets() {
+  $('#segDataset').innerHTML = Object.keys(DATASETS).map(id => {
+    const d = DATASETS[id];
+    return `<button type="button" class="seg-op" data-ds="${id}" aria-pressed="${cfg.dataset === id}">
+      ${d.icono}<span><b>${esc(d.label)}</b><small>${esc(d.desc)}</small></span></button>`;
+  }).join('');
+  $$('#segDataset .seg-op').forEach(b => b.addEventListener('click', () => {
+    if (cfg.dataset === b.dataset.ds) return;
+    cfg.dataset = b.dataset.ds;
+    const ds = DATASETS[cfg.dataset];
+    cfg.dims = ds.campos.filter(c => c.dim).slice(0, 1).map(c => c.id);
+    cfg.metricas = ds.metricas.slice(0, 4).map(m => m.id);
+    cfg.columnas = ds.campos.slice(0, 8).map(c => c.id);
+    cfg.filtros = []; cfg.orden = { col:null, dir:'desc' }; cfg.preset = null;
+    cfg.titulo = ds.label;
+    renderRiel();
+  }));
+}
+
+function agrupadoPorGrupo(items) {
+  const out = new Map();
+  items.forEach(i => { if (!out.has(i.grupo)) out.set(i.grupo, []); out.get(i.grupo).push(i); });
+  return out;
+}
+
+const AVISO_CONJUNTO = '<div class="opts-aviso">Elegí primero un <strong>conjunto de datos</strong>.</div>';
+
+function renderDims() {
+  const ds = DATASETS[cfg.dataset];
+  if (!ds) {
+    $('#chipsDims').innerHTML = AVISO_CONJUNTO;
+    $('#optsDims').innerHTML = '';
+    $('#badgeDims').textContent = '';
+    return;
+  }
+  const chips = $('#chipsDims');
+  chips.innerHTML = cfg.dims.length
+    ? cfg.dims.map((id, i) => {
+        const c = ds.campoPorId[id];
+        return `<span class="chip"><span class="ord">${i + 1}</span>${esc(c ? c.label : id)}
+          <button type="button" data-quitar="${id}" aria-label="Quitar ${esc(c ? c.label : id)}">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button></span>`;
+      }).join('')
+    : `<span class="chip-vacio">Sin agrupar → detalle fila por fila</span>`;
+  chips.querySelectorAll('[data-quitar]').forEach(b => b.addEventListener('click', () => {
+    cfg.dims = cfg.dims.filter(x => x !== b.dataset.quitar);
+    cfg.orden = { col:null, dir:'desc' }; renderRiel();
+  }));
+
+  const q = ($('#buscaDim').value || '').toLowerCase();
+  const disponibles = ds.campos.filter(c => c.dim && (!q || c.label.toLowerCase().includes(q)));
+  const cont = $('#optsDims');
+  let html = '';
+  for (const [grupo, items] of agrupadoPorGrupo(disponibles)) {
+    html += `<div class="opt-grupo">${esc(grupo)}</div>`;
+    html += items.map(c => {
+      const on = cfg.dims.includes(c.id);
+      const bloqueado = !on && cfg.dims.length >= 3;
+      return `<label class="opt" style="${bloqueado ? 'opacity:.4;cursor:not-allowed' : ''}">
+        <input type="checkbox" data-dim="${c.id}" ${on ? 'checked' : ''} ${bloqueado ? 'disabled' : ''}>
+        <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>
+        <span class="txt">${esc(c.label)}</span></label>`;
+    }).join('');
+  }
+  cont.innerHTML = html || '<div class="opt-grupo">Sin coincidencias</div>';
+  cont.querySelectorAll('[data-dim]').forEach(i => i.addEventListener('change', () => {
+    const id = i.dataset.dim;
+    if (i.checked) { if (cfg.dims.length < 3) cfg.dims.push(id); }
+    else cfg.dims = cfg.dims.filter(x => x !== id);
+    cfg.orden = { col:null, dir:'desc' }; renderRiel();
+  }));
+  $('#badgeDims').textContent = cfg.dims.length ? String(cfg.dims.length) : 'detalle';
+}
+
+function renderMetricas() {
+  const ds = DATASETS[cfg.dataset];
+  if (!ds) {
+    $('#tituloMetricas').textContent = 'Métricas';
+    $('#optsMetricas').innerHTML = AVISO_CONJUNTO;
+    $('#badgeMetricas').textContent = '';
+    return;
+  }
+  const detalle = cfg.dims.length === 0;
+  $('#tituloMetricas').textContent = detalle ? 'Columnas' : 'Métricas';
+  $('#buscaMetrica').placeholder = detalle ? 'Buscar campo…' : 'Buscar métrica…';
+
+  const q = ($('#buscaMetrica').value || '').toLowerCase();
+  const items = (detalle ? ds.campos : ds.metricas).filter(x => !q || x.label.toLowerCase().includes(q));
+  const sel = detalle ? cfg.columnas : cfg.metricas;
+
+  let html = '';
+  for (const [grupo, list] of agrupadoPorGrupo(items)) {
+    html += `<div class="opt-grupo">${esc(grupo)}</div>`;
+    html += list.map(x => `<label class="opt">
+      <input type="checkbox" data-met="${x.id}" ${sel.includes(x.id) ? 'checked' : ''}>
+      <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>
+      <span class="txt">${esc(x.label)}${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</span></label>`).join('');
+  }
+  const cont = $('#optsMetricas');
+  cont.innerHTML = html || '<div class="opt-grupo">Sin coincidencias</div>';
+  cont.querySelectorAll('[data-met]').forEach(i => i.addEventListener('change', () => {
+    const id = i.dataset.met;
+    const lista = detalle ? cfg.columnas : cfg.metricas;
+    const idx = lista.indexOf(id);
+    if (i.checked && idx < 0) lista.push(id);
+    if (!i.checked && idx >= 0) lista.splice(idx, 1);
+    cfg.orden = { col:null, dir:'desc' };
+    actualizarBadges();
+  }));
+  actualizarBadges();
+}
+
+function actualizarBadges() {
+  if (!hayConjunto()) return;
+  const detalle = cfg.dims.length === 0;
+  $('#badgeMetricas').textContent = String((detalle ? cfg.columnas : cfg.metricas).length);
+  $('#badgeDims').textContent = cfg.dims.length ? String(cfg.dims.length) : 'detalle';
+  const nf = cfg.filtros.filter(f => f.campo).length;
+  $('#badgeFiltros').textContent = nf ? String(nf) : '';
+  const p = PERIODOS.find(x => x.id === cfg.periodo);
+  $('#badgePeriodo').textContent = p ? p.label : 'Manual';
+}
+
+/* ------------------------------------------------------------- filtros -- */
+function valoresPosibles(campoId) {
+  const filas = DATOS[cfg.dataset] || [];
+  const set = new Set();
+  for (const r of filas) {
+    const v = r[campoId];
+    if (v !== '' && v != null) set.add(String(v));
+    if (set.size > 300) break;
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { numeric:true }));
+}
+
+function renderFiltros() {
+  const ds = DATASETS[cfg.dataset];
+  const addBtn = $('#addFiltro');
+  if (addBtn) addBtn.disabled = !ds;
+  if (!ds) {
+    $('#listaFiltros').innerHTML = AVISO_CONJUNTO;
+    $('#badgeFiltros').textContent = '';
+    return;
+  }
+  const cont = $('#listaFiltros');
+  cont.innerHTML = cfg.filtros.map((f, i) => {
+    const campo = ds.campoPorId[f.campo];
+    const tipo = campo && campo.tipo === 'num' ? 'num' : 'texto';
+    const ops = OPERADORES[tipo];
+    const opDef = ops.find(o => o.id === f.op) || ops[0];
+    const opciones = [];
+    for (const [grupo, items] of agrupadoPorGrupo(ds.campos)) {
+      opciones.push(`<optgroup label="${esc(grupo)}">` +
+        items.map(c => `<option value="${c.id}" ${c.id === f.campo ? 'selected' : ''}>${esc(c.label)}</option>`).join('') +
+        `</optgroup>`);
+    }
+    const listaId = `dl_${i}`;
+    const valores = (tipo === 'texto' && f.campo) ? valoresPosibles(f.campo) : [];
+    return `<div class="filtro">
+      <div class="filtro-fila">
+        <select class="ctrl" data-f="${i}" data-k="campo">${opciones.join('')}</select>
+        <div class="filtro-fila-2">
+          <select class="ctrl" data-f="${i}" data-k="op">
+            ${ops.map(o => `<option value="${o.id}" ${o.id === opDef.id ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+          </select>
+          ${opDef.sinValor ? '<span></span>' : `<input class="ctrl" data-f="${i}" data-k="valor" value="${esc(f.valor || '')}" placeholder="valor" ${valores.length ? `list="${listaId}"` : ''}>`}
+        </div>
+        ${opDef.doble ? `<input class="ctrl" data-f="${i}" data-k="valor2" value="${esc(f.valor2 || '')}" placeholder="hasta">` : ''}
+        ${valores.length ? `<datalist id="${listaId}">${valores.slice(0, 300).map(v => `<option value="${esc(v)}">`).join('')}</datalist>` : ''}
+      </div>
+      <button type="button" class="quitar" data-del="${i}" aria-label="Quitar filtro">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+
+  cont.querySelectorAll('[data-f]').forEach(el => {
+    const ev = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      const f = cfg.filtros[Number(el.dataset.f)];
+      f[el.dataset.k] = el.value;
+      if (el.dataset.k === 'campo') {
+        const c = DATASETS[cfg.dataset].campoPorId[f.campo];
+        f.op = (c && c.tipo === 'num') ? 'mayor' : 'contiene';
+        f.valor = ''; f.valor2 = '';
+        renderFiltros();
+      }
+      if (el.dataset.k === 'op') renderFiltros();
+      actualizarBadges();
+    });
+  });
+  cont.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+    cfg.filtros.splice(Number(b.dataset.del), 1); renderFiltros(); actualizarBadges();
+  }));
+  actualizarBadges();
+}
+
+/* ---------------------------------------------------------- plantillas -- */
+function renderPlantillas() {
+  $('#pistaPlantillas').innerHTML = PLANTILLAS.map(p =>
+    `<button type="button" class="plantilla" data-p="${p.id}" data-tono="${p.tono || ''}" aria-pressed="${cfg.preset === p.id}">
+       <span class="plantilla-ico">${p.ico}</span>
+       <b>${esc(p.titulo)}</b><small>${esc(p.desc)}</small>
+     </button>`).join('');
+  $$('#pistaPlantillas .plantilla').forEach(b => b.addEventListener('click', () => aplicarPlantilla(b.dataset.p)));
+}
+
+function aplicarPlantilla(id) {
+  const p = PLANTILLAS.find(x => x.id === id);
+  if (!p) return;
+  const ds = DATASETS[p.cfg.dataset];
+  Object.assign(cfg, {
+    preset: p.id, titulo: p.titulo,
+    dataset: p.cfg.dataset,
+    dims: (p.cfg.dims || []).slice(),
+    metricas: (p.cfg.metricas || ds.metricas.slice(0, 4).map(m => m.id)).slice(),
+    columnas: (p.cfg.columnas || ds.campos.slice(0, 8).map(c => c.id)).slice(),
+    filtros: (p.cfg.filtros || []).map(f => ({ ...f })),
+    limite: p.cfg.limite != null ? p.cfg.limite : 50,
+    orden: p.cfg.orden ? { ...p.cfg.orden } : { col:null, dir:'desc' },
+    grafico: 'auto'
+  });
+  renderRiel();
+  ejecutar(false);
+}
+
+/* ------------------------------------------------------------ guardados -- */
+const LS_KEY = 'homepoint.reportes.guardados.v1';
+const leerGuardados = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { return []; } };
+const escribirGuardados = g => { try { localStorage.setItem(LS_KEY, JSON.stringify(g)); } catch {} };
+
+function renderGuardados() {
+  const g = leerGuardados();
+  $('#badgeGuardados').textContent = g.length ? String(g.length) : '';
+  $('#listaGuardados').innerHTML = g.length ? g.map((x, i) =>
+    `<div class="filtro" style="grid-template-columns:1fr auto auto;">
+       <button type="button" data-cargar="${i}" style="text-align:left;color:var(--rail-ink-2);font-size:12.5px;font-weight:600;min-width:0;">
+         ${esc(x.nombre)}<br><span style="font-weight:400;font-size:10.5px;color:var(--rail-ink-5)">${esc(DATASETS[x.cfg.dataset]?.label || '')} · ${x.cfg.dims.length ? x.cfg.dims.length + ' dim' : 'detalle'}</span>
+       </button>
+       <button type="button" class="quitar" data-borrar="${i}" aria-label="Borrar">
+         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+       </button>
+     </div>`).join('') : `<p style="font-size:11.5px;color:var(--rail-ink-5);margin:0 0 8px;">Todavía no guardaste ninguna configuración.</p>`;
+
+  $$('#listaGuardados [data-cargar]').forEach(b => b.addEventListener('click', () => {
+    const x = leerGuardados()[Number(b.dataset.cargar)];
+    if (!x) return;
+    Object.assign(cfg, x.cfg, { titulo:x.nombre, preset:null });
+    $('#fDesde').value = cfg.desde; $('#fHasta').value = cfg.hasta;
+    renderRiel(); ejecutar(false);
+  }));
+  $$('#listaGuardados [data-borrar]').forEach(b => b.addEventListener('click', () => {
+    const g2 = leerGuardados(); g2.splice(Number(b.dataset.borrar), 1); escribirGuardados(g2); renderGuardados();
+  }));
+}
+
+/* --------------------------------------------------------------- riel --- */
+function renderRiel() {
+  renderPills(); renderDatasets(); renderDims(); renderMetricas(); renderFiltros(); renderPlantillas(); renderGuardados();
+  $$('#pistaPlantillas .plantilla').forEach(b => b.setAttribute('aria-pressed', String(cfg.preset === b.dataset.p)));
+  const btn = $('#btnEjecutar');
+  if (btn) {
+    btn.disabled = !hayConjunto();
+    btn.title = hayConjunto() ? '' : 'Elegí un conjunto de datos para poder consultar';
+  }
+  if (typeof pintarEstadoInicial === 'function') pintarEstadoInicial();
+}
+</script>
+
+<script>
+/* ============================================================ exportar === */
+const expo = { fmt:'csv', alcance:'todo', sep:',', bom:true, totales:true, envoltura:true, pretty:true, esquema:'completo', vistas:true };
+
+const sinAcentos = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+const slug = s => sinAcentos(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'col';
+
+function filasExportables(res) {
+  if (expo.alcance !== 'visible') return res.filas;
+  const tope = res.contexto ? 500 : cfg.limite;   // el desglose lista hasta 500
+  return tope ? res.filas.slice(0, tope) : res.filas;
+}
+
+function aTexto(res, sep, limite) {
+  const filas = limite ? res.filas.slice(0, limite) : res.filas;
+  const cita = v => {
+    const s = String(v ?? '');
+    return (s.includes(sep) || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lineas = [res.columnas.map(c => cita(c.label)).join(sep)];
+  for (const f of filas) lineas.push(f.celdas.map((c, i) =>
+    cita(res.columnas[i].tipo === 'num' ? num(c.v) : c.v)).join(sep));
+  return lineas.join('\r\n');
+}
+
+function generarCSV(res) {
+  const sep = expo.sep === 'tab' ? '\t' : expo.sep;
+  const filas = filasExportables(res);
+  const cita = v => {
+    const s = String(v ?? '');
+    return (s.includes(sep) || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const out = [res.columnas.map(c => cita(c.label)).join(sep)];
+  for (const f of filas) out.push(f.celdas.map((c, i) =>
+    cita(res.columnas[i].tipo === 'num' ? num(c.v) : c.v)).join(sep));
+  if (expo.totales && res.totales.some(Boolean)) {
+    // La primera celda del total en pantalla dice "N grupos"; en un CSV eso se
+    // lee como un dato mas, asi que se rotula explicitamente.
+    out.push(res.columnas.map((c, i) => {
+      if (i === 0) return cita('TOTAL');
+      return cita(res.totales[i] ? (c.tipo === 'num' ? num(res.totales[i].v) : res.totales[i].txt) : '');
+    }).join(sep));
+  }
+  return (expo.bom ? '﻿' : '') + out.join('\r\n');
+}
+
+function generarJSON(res) {
+  const filas = filasExportables(res).map(f => {
+    const o = {};
+    res.columnas.forEach((c, i) => {
+      o[slug(c.label)] = c.tipo === 'num' ? num(f.celdas[i].v) : f.celdas[i].v;
+    });
+    return o;
+  });
+  const cuerpo = expo.envoltura ? {
+    reporte: TITULO_EXPORT || cfg.titulo,
+    ...(res.contexto ? { desglose: res.contexto } : {}),
+    generado: new Date().toISOString(),
+    origen: { base:'firebase-rtdb', proyecto: firebaseConfig.projectId, nodo: cfg.dataset },
+    periodo: { desde: cfg.desde, hasta: cfg.hasta },
+    consulta: {
+      conjunto: cfg.dataset,
+      agrupado_por: cfg.dims,
+      metricas: cfg.dims.length ? cfg.metricas : null,
+      columnas: cfg.dims.length ? null : cfg.columnas,
+      filtros: cfg.filtros.filter(f => f.campo)
+    },
+    totales: res.totales.some(Boolean)
+      ? Object.fromEntries(res.columnas.map((c, i) => [slug(c.label), res.totales[i] ? (c.tipo === 'num' ? num(res.totales[i].v) : res.totales[i].txt) : null]))
+      : null,
+    filas: filas.length,
+    datos: filas
+  } : filas;
+  return JSON.stringify(cuerpo, null, expo.pretty ? 2 : 0);
+}
+
+/* --- SQLite: se carga sql.js on-demand, sólo si el usuario elige .sqlite -- */
+let promesaSQL = null;
+const SQLJS_BASE = 'https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/';
+function cargarSQLjs() {
+  if (promesaSQL) return promesaSQL;
+  promesaSQL = new Promise((ok, mal) => {
+    const s = document.createElement('script');
+    s.src = SQLJS_BASE + 'sql-wasm.js';
+    s.onload = () => window.initSqlJs({ locateFile: f => SQLJS_BASE + f }).then(ok, mal);
+    s.onerror = () => mal(new Error('No se pudo descargar el motor SQLite (sql.js). Revisá la conexión.'));
+    document.head.appendChild(s);
+  });
+  return promesaSQL;
+}
+
+function tipoSQL(col) { return col.tipo === 'num' ? 'REAL' : 'TEXT'; }
+
+// Los nombres de columna salen de la etiqueta visible; se desduplican porque dos
+// métricas distintas pueden compartir rótulo (p. ej. "Ganancia" en dos grupos).
+function columnasSQL(res) {
+  const usados = new Set();
+  return res.columnas.map(c => {
+    const raiz = slug(c.label);
+    let s = raiz, i = 2;
+    while (usados.has(s)) s = raiz + '_' + (i++);
+    usados.add(s);
+    return { sql:s, sqlTipo: tipoSQL(c) };
+  });
+}
+
+async function generarSQLite(res) {
+  const SQL = await cargarSQLjs();
+  const bd = new SQL.Database();
+
+  // 1) La tabla del reporte tal como se ve en pantalla.
+  const cols = columnasSQL(res);
+  bd.run(`CREATE TABLE "reporte" (${cols.map(c => `"${c.sql}" ${c.sqlTipo}`).join(', ')});`);
+  {
+    const filas = filasExportables(res);
+    if (filas.length) {
+      const stmt = bd.prepare(`INSERT INTO "reporte" VALUES (${cols.map(() => '?').join(',')});`);
+      bd.run('BEGIN TRANSACTION;');
+      for (const f of filas) stmt.run(cols.map((c, i) => c.sqlTipo === 'REAL' ? num(f.celdas[i].v) : String(f.celdas[i].v ?? '')));
+      bd.run('COMMIT;');
+      stmt.free();
+    }
+  }
+
+  // 2) Esquema relacional completo: las tablas crudas del período consultado.
+  if (expo.esquema === 'completo') {
+    const defs = {
+      pedidos: [
+        ['pedido_id','TEXT'],['ticket','TEXT'],['fecha','TEXT'],['fecha_hora','TEXT'],['hora','TEXT'],
+        ['mes','TEXT'],['anio','TEXT'],['semana','TEXT'],['dia_semana','TEXT'],
+        ['cliente','TEXT'],['cliente_tipo','TEXT'],['direccion','TEXT'],
+        ['vendedor','TEXT'],['medio_pago','TEXT'],['alias','TEXT'],['status','TEXT'],['entrega','TEXT'],
+        ['createdby','TEXT'],['tipo_operacion','TEXT'],['nota','TEXT'],['pedido_origen_id','TEXT'],
+        ['subtotal','REAL'],['recargo','REAL'],['descuento','REAL'],['envio','REAL'],['total_final','REAL'],
+        ['costos','REAL'],['ganancia','REAL'],['ganancia_selec','REAL'],
+        ['cotizacion','REAL'],['costo_usd','REAL'],['total_usd','REAL'],
+        ['unidades','REAL'],['articulos','REAL'],['devoluciones','REAL']
+      ],
+      pedido_items: [
+        ['pedido_id','TEXT'],['ticket','TEXT'],['fecha','TEXT'],['mes','TEXT'],
+        ['cliente','TEXT'],['vendedor','TEXT'],['medio_pago','TEXT'],['status','TEXT'],
+        ['articulo','TEXT'],['codigo','TEXT'],['codigo_barras','TEXT'],['categoria','TEXT'],['seleccionado','TEXT'],
+        ['tipo_linea','TEXT'],['motivo','TEXT'],['pedido_origen_id','TEXT'],
+        ['cantidad','REAL'],['cantidad_neta','REAL'],['valor_u','REAL'],['valor_c','REAL'],
+        ['venta','REAL'],['costo','REAL'],['ganancia','REAL'],['cotizacion','REAL']
+      ],
+      movimientos: [
+        ['mov_id','TEXT'],['fecha','TEXT'],['fecha_hora','TEXT'],['mes','TEXT'],
+        ['articulo','TEXT'],['codigo','TEXT'],['tipo','TEXT'],['motivo','TEXT'],
+        ['pedido_id','TEXT'],['pedido_origen_id','TEXT'],
+        ['cantidad','REAL'],['entrada','REAL'],['salida','REAL'],['neto','REAL']
+      ],
+      clientes: [
+        ['cliente_id','TEXT'],['nombre','TEXT'],['telefono','TEXT'],['email','TEXT'],['dni','TEXT'],
+        ['direccion','TEXT'],['tipo_cliente','TEXT'],['registro','TEXT'],
+        ['compras','REAL'],['gastado','REAL'],['ganancia','REAL'],['unidades','REAL'],
+        ['primera_compra','TEXT'],['ultima_compra','TEXT'],['dias_sin_comprar','REAL']
+      ]
+    };
+    const mapeos = {
+      pedidos: ['pedidoId','ticket','fecha','fechaHora','hora','mes','anio','semana','diaSemana','cliente','clienteTipo','direccion','vendedor','medioPago','alias','status','entrega','createdby','tipoOperacion','nota','pedidoOrigenId','subtotal','recargo','descuento','envio','totalFinal','costos','ganancia','gananciaSelec','cotizacion','costoUSD','totalUSD','unidades','articulos','devoluciones'],
+      pedido_items: ['pedidoId','ticket','fecha','mes','cliente','vendedor','medioPago','status','articulo','codigo','codigoBarras','categoria','seleccionado','tipoLinea','motivo','pedidoOrigenId','cantidad','cantidadNeta','valorU','valorC','venta','costo','ganancia','cotizacion'],
+      movimientos: ['movId','fecha','fechaHora','mes','articulo','codigo','tipo','motivo','pedidoId','pedidoOrigenId','cantidad','entrada','salida','neto'],
+      clientes: ['clienteId','nombre','telefono','email','dni','direccion','tipoCliente','registro','compras','gastado','gananciaCli','unidades','primeraCompra','ultimaCompra','diasSinComprar']
+    };
+    const fuentes = { pedidos: DATOS.pedidos, pedido_items: DATOS.lineas, movimientos: DATOS.movimientos, clientes: DATOS.clientes };
+
+    for (const tabla of Object.keys(defs)) {
+      const def = defs[tabla], claves = mapeos[tabla], filas = fuentes[tabla] || [];
+      bd.run(`CREATE TABLE "${tabla}" (${def.map(([n, t]) => `"${n}" ${t}`).join(', ')});`);
+      if (!filas.length) continue;
+      const stmt = bd.prepare(`INSERT INTO "${tabla}" VALUES (${def.map(() => '?').join(',')});`);
+      bd.run('BEGIN TRANSACTION;');
+      for (const r of filas) {
+        stmt.run(def.map(([, t], i) => {
+          const v = r[claves[i]];
+          if (t === 'REAL') return v == null ? null : num(v);
+          return v == null ? '' : String(v);
+        }));
+      }
+      bd.run('COMMIT;');
+      stmt.free();
+    }
+
+    bd.run(`
+      CREATE INDEX idx_pedidos_fecha    ON pedidos(fecha);
+      CREATE INDEX idx_pedidos_cliente  ON pedidos(cliente);
+      CREATE INDEX idx_items_pedido     ON pedido_items(pedido_id);
+      CREATE INDEX idx_items_articulo   ON pedido_items(articulo);
+      CREATE INDEX idx_items_codigo     ON pedido_items(codigo);
+      CREATE INDEX idx_items_fecha      ON pedido_items(fecha);
+      CREATE INDEX idx_mov_codigo       ON movimientos(codigo);
+    `);
+
+    if (expo.vistas) {
+      bd.run(`
+        CREATE VIEW v_top_articulos AS
+          SELECT articulo, codigo, categoria,
+                 SUM(cantidad_neta) AS unidades,
+                 SUM(venta)        AS venta,
+                 SUM(ganancia)     AS ganancia,
+                 CASE WHEN SUM(venta)<>0 THEN ROUND(SUM(ganancia)*100.0/SUM(venta),2) END AS margen_pct,
+                 COUNT(DISTINCT pedido_id) AS pedidos
+          FROM pedido_items GROUP BY articulo, codigo, categoria ORDER BY unidades DESC;
+
+        CREATE VIEW v_ventas_por_dia AS
+          SELECT fecha, COUNT(*) AS pedidos, SUM(total_final) AS total,
+                 SUM(ganancia) AS ganancia, ROUND(AVG(total_final),2) AS ticket_promedio
+          FROM pedidos GROUP BY fecha ORDER BY fecha;
+
+        CREATE VIEW v_ranking_clientes AS
+          SELECT cliente, COUNT(*) AS pedidos, SUM(total_final) AS gastado,
+                 SUM(ganancia) AS ganancia, MAX(fecha) AS ultima_compra
+          FROM pedidos GROUP BY cliente ORDER BY gastado DESC;
+
+        CREATE VIEW v_por_vendedor AS
+          SELECT vendedor, COUNT(*) AS pedidos, SUM(total_final) AS total,
+                 SUM(ganancia) AS ganancia, ROUND(AVG(total_final),2) AS ticket_promedio
+          FROM pedidos GROUP BY vendedor ORDER BY total DESC;
+
+        CREATE VIEW v_devoluciones AS
+          SELECT articulo, codigo, SUM(cantidad) AS unidades, tipo_linea, COUNT(*) AS renglones
+          FROM pedido_items WHERE tipo_linea <> 'VENTA'
+          GROUP BY articulo, codigo, tipo_linea ORDER BY unidades DESC;
+      `);
+    }
+  }
+
+  bd.run(`CREATE TABLE meta (clave TEXT, valor TEXT);`);
+  const meta = [
+    ['reporte', cfg.titulo], ['generado', new Date().toISOString()],
+    ['proyecto', firebaseConfig.projectId], ['conjunto', cfg.dataset],
+    ['periodo_desde', cfg.desde], ['periodo_hasta', cfg.hasta],
+    ['agrupado_por', cfg.dims.join(', ')],
+    ['metricas', cfg.dims.length ? cfg.metricas.join(', ') : ''],
+    ['columnas', cfg.dims.length ? '' : cfg.columnas.join(', ')],
+    ['filtros', JSON.stringify(cfg.filtros.filter(f => f.campo))],
+    ['filas_reporte', String(filasExportables(res).length)],
+    ['app', 'Reportes.html — HomePoint']
+  ];
+  const st = bd.prepare('INSERT INTO meta VALUES (?,?);');
+  meta.forEach(m => st.run(m)); st.free();
+
+  const bytes = bd.export();
+  bd.close();
+  return bytes;
+}
+
+/* ---------------------------------------------------------- descarga --- */
+function bajar(contenido, nombre, mime) {
+  const blob = contenido instanceof Uint8Array
+    ? new Blob([contenido], { type: mime })
+    : new Blob([contenido], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// El exportador trabaja sobre RES_EXPORT, que puede ser el reporte en pantalla
+// o el desglose de una celda. Se fija al abrir el modal y no cambia despues.
+let RES_EXPORT = null, TITULO_EXPORT = null;
+const nombreArchivo = ext => `${slug(TITULO_EXPORT || cfg.titulo)}_${cfg.desde}_${cfg.hasta}.${ext}`;
+
+/* ------------------------------------------------------ modal exportar -- */
+const OPCIONES_EXPORT = {
+  csv: () => `
+    <div class="modal-rotulo">Separador</div>
+    ${[[',', 'Coma (,)', 'Estándar internacional. Sheets, Numbers, Python.'],
+       [';', 'Punto y coma (;)', 'Excel en español: evita que rompa por los decimales.'],
+       ['tab', 'Tabulación', 'Para pegar directo en una planilla.']]
+      .map(([v, t, d]) => opcionRadio('sep', v, t, d)).join('')}
+    <div class="modal-rotulo">Opciones</div>
+    ${opcionCheck('bom', 'Compatibilidad con Excel (BOM UTF-8)', 'Sin esto Excel rompe los acentos y la ñ.')}
+    ${opcionCheck('totales', 'Incluir fila de totales', 'Se agrega al final del archivo.')}
+    ${bloqueAlcance()}`,
+  json: () => `
+    <div class="modal-rotulo">Estructura</div>
+    ${opcionCheck('envoltura', 'Incluir metadatos de la consulta', 'Agrega período, filtros, métricas y totales junto a los datos.')}
+    ${opcionCheck('pretty', 'Indentado legible', 'Desactivalo para un archivo más liviano.')}
+    ${bloqueAlcance()}`,
+  sqlite: () => `
+    <div class="modal-rotulo">Contenido de la base</div>
+    ${[['completo', 'Esquema relacional completo', 'Tablas pedidos, pedido_items, movimientos y clientes del período, con índices y vistas listas para consultar.'],
+       ['solo', 'Sólo la tabla del reporte', 'Una única tabla "reporte" con lo que ves en pantalla.']]
+      .map(([v, t, d]) => opcionRadio('esquema', v, t, d)).join('')}
+    ${opcionCheck('vistas', 'Crear vistas de análisis', 'v_top_articulos, v_ventas_por_dia, v_ranking_clientes, v_por_vendedor, v_devoluciones.')}
+    ${bloqueAlcance()}`
+};
+
+const opcionRadio = (k, v, t, d) => `
+  <label class="opcion-fila radio">
+    <input type="radio" name="op_${k}" data-op="${k}" value="${v}" ${expo[k] === v ? 'checked' : ''}>
+    <span class="box"><svg width="8" height="8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#fff"/></svg></span>
+    <span><b>${esc(t)}</b><small>${esc(d)}</small></span></label>`;
+
+const opcionCheck = (k, t, d) => `
+  <label class="opcion-fila">
+    <input type="checkbox" data-op="${k}" ${expo[k] ? 'checked' : ''}>
+    <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>
+    <span><b>${esc(t)}</b><small>${esc(d)}</small></span></label>`;
+
+function bloqueAlcance() {
+  const total = RES_EXPORT ? RES_EXPORT.filas.length : 0;
+  const vis = cfg.limite ? Math.min(cfg.limite, total) : total;
+  return `<div class="modal-rotulo">Alcance</div>
+    ${opcionRadio('alcance', 'todo', `Todo el resultado (${fmtEntero(total)} filas)`, 'Ignora el "Top N" de la tabla.')}
+    ${opcionRadio('alcance', 'visible', `Sólo lo visible (${fmtEntero(vis)} filas)`, 'Lo mismo que estás viendo en pantalla.')}`;
+}
+
+function pintarOpcionesExport() {
+  $('#opcExport').innerHTML = OPCIONES_EXPORT[expo.fmt]();
+  $$('#opcExport [data-op]').forEach(el => el.addEventListener('change', () => {
+    expo[el.dataset.op] = el.type === 'checkbox' ? el.checked : el.value;
+    pintarOpcionesExport();
+    pintarPrevia();
+  }));
+  pintarPrevia();
+}
+
+function pintarPrevia() {
+  if (!RES_EXPORT) return;
+  const p = $('#previaExport');
+  try {
+    if (expo.fmt === 'csv') {
+      const t = generarCSV(RES_EXPORT).replace(/^﻿/, '').split('\r\n').slice(0, 6).join('\n');
+      p.textContent = t + '\n…';
+    } else if (expo.fmt === 'json') {
+      const t = generarJSON(RES_EXPORT);
+      p.textContent = t.length > 900 ? t.slice(0, 900) + '\n…' : t;
+    } else {
+      const cols = RES_EXPORT.columnas.map(c => `  "${slug(c.label)}" ${tipoSQL(c)}`).join(',\n');
+      p.textContent =
+        `-- ${nombreArchivo('sqlite')}\nCREATE TABLE "reporte" (\n${cols}\n);\n` +
+        (expo.esquema === 'completo'
+          ? `\n-- + pedidos, pedido_items, movimientos, clientes\n-- + índices` + (expo.vistas ? `\n-- + vistas v_top_articulos, v_ventas_por_dia, v_ranking_clientes,\n--         v_por_vendedor, v_devoluciones` : '')
+          : '') +
+        `\n\nSELECT articulo, SUM(cantidad_neta) AS u\n  FROM pedido_items\n GROUP BY 1 ORDER BY u DESC LIMIT 10;`;
+    }
+  } catch (e) { p.textContent = 'No se pudo generar la vista previa.'; }
+}
+
+function abrirExport(res, titulo) {
+  RES_EXPORT = (res && res.columnas) ? res : RESULTADO;
+  TITULO_EXPORT = titulo || null;
+  if (!RES_EXPORT || !RES_EXPORT.filas.length) return;
+  const total = RES_EXPORT.filas.length;
+  $('#exportTit').textContent = titulo ? 'Exportar desglose' : 'Exportar';
+  $('#exportSub').textContent = `${TITULO_EXPORT || cfg.titulo} · ${fechaLinda(cfg.desde)} → ${fechaLinda(cfg.hasta)} · ${fmtEntero(total)} filas`;
+  $$('#formatos .formato').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fmt === expo.fmt)));
+  pintarOpcionesExport();
+  $('#ovExport').classList.add('abierto');
+}
+
+async function descargar() {
+  const btn = $('#btnDescargar');
+  try {
+    btn.disabled = true;
+    if (expo.fmt === 'csv') {
+      bajar(generarCSV(RES_EXPORT), nombreArchivo('csv'), 'text/csv');
+    } else if (expo.fmt === 'json') {
+      bajar(generarJSON(RES_EXPORT), nombreArchivo('json'), 'application/json');
+    } else {
+      // El esquema completo incluye movimientos y clientes aunque el reporte en
+      // pantalla no los use: hay que bajarlos antes de armar la base.
+      if (expo.esquema === 'completo') {
+        btn.textContent = 'Trayendo tablas…';
+        await asegurarTodosLosNodos();
+      }
+      btn.textContent = 'Armando la base…';
+      const bytes = await generarSQLite(RES_EXPORT);
+      bajar(bytes, nombreArchivo('sqlite'), 'application/vnd.sqlite3');
+    }
+    $('#ovExport').classList.remove('abierto');
+    toast('Archivo generado', nombreArchivo(expo.fmt === 'sqlite' ? 'sqlite' : expo.fmt), 'ok');
+  } catch (e) {
+    console.error(e);
+    toast('No se pudo exportar', e && e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg> Descargar`;
+  }
+}
+</script>
+
+<script>
+/* ============================================================== desglose ==
+   Toda métrica agregada esconde un conjunto de registros. Acá se abre ese
+   conjunto: qué renglones la componen, ordenados por cuánto aportan, y con la
+   misma cañería de exportación que el reporte principal.
+   ========================================================================= */
+
+/* Qué columna suma cada métrica y, cuando corresponde, qué subconjunto de
+   registros participa realmente. Vive fuera de DATASETS para no engordar las
+   definiciones: es metadato del desglose, no de la agregación. */
+const CAMPO_METRICA = {
+  lineas: { unidades:'cantidadNeta', unidadesBr:'cantidad', venta:'venta', costo:'costo',
+            ganancia:'ganancia', devueltas:'cantidad', garantias:'cantidad' },
+  pedidos: { totalFinal:'totalFinal', subtotal:'subtotal', descuento:'descuento', recargo:'recargo',
+             envio:'envio', costos:'costos', ganancia:'ganancia', gananciaSelec:'gananciaSelec',
+             unidades:'unidades', totalUSD:'totalUSD' },
+  movimientos: { neto:'neto', salidas:'salida', entradas:'entrada', cantidad:'cantidad' },
+  clientes: { gastado:'gastado', ganancia:'gananciaCli', compras:'compras', unidades:'unidades' }
+};
+
+const FILTRO_METRICA = {
+  lineas: {
+    devueltas: r => r.tipoLinea === 'DEVOLUCION',
+    garantias: r => r.tipoLinea === 'GARANTIA',
+    tasaDevol: r => r.tipoLinea !== 'VENTA'
+  },
+  pedidos: { cambios: r => r.tipoOperacion === 'CAMBIO' },
+  movimientos: {
+    salidas:  r => r.tipo === 'SALIDA',
+    entradas: r => r.tipo === 'ENTRADA'
+  },
+  clientes: { activos: r => r.compras > 0 }
+};
+
+Object.keys(DATASETS).forEach(id => {
+  const ds = DATASETS[id];
+  ds.metricas.forEach(m => {
+    m.campoSuma = (CAMPO_METRICA[id] || {})[m.id] || null;
+    m.filtraFilas = (FILTRO_METRICA[id] || {})[m.id] || null;
+  });
+});
+
+/* Columnas por defecto del desglose: lo mínimo para reconocer cada registro y
+   auditar el número, sin volcar los 30 campos del conjunto. */
+const COLS_DESGLOSE = {
+  lineas: ['fecha','ticket','cliente','vendedor','medioPago','articulo','codigo','categoria',
+           'tipoLinea','cantidad','valorU','valorC','venta','costo','ganancia'],
+  pedidos: ['fecha','ticket','cliente','vendedor','medioPago','status','articulos','unidades',
+            'subtotal','descuento','recargo','totalFinal','costos','ganancia'],
+  movimientos: ['fechaHora','articulo','codigo','tipo','motivo','cantidad','pedidoId','movId'],
+  clientes: ['nombre','telefono','tipoCliente','registro','compras','gastado','gananciaCli',
+             'unidades','ultimaCompra','diasSinComprar']
+};
+
+let RES_DESGLOSE = null;
+
+/* Arma un resultado en modo detalle a partir de filas sueltas. Devuelve la
+   misma forma que construirResultado(), así el render y los exportadores no
+   necesitan saber de dónde salió. */
+function armarDetalle(ds, filas, ids) {
+  const columnas = ids.map(id => {
+    const c = ds.campoPorId[id];
+    return { id, label: c ? c.label : id, tipo: c && c.tipo === 'num' ? 'num' : 'texto', fmt: c && c.fmt, campo:c };
+  });
+  const celdasDe = r => columnas.map(c => {
+    const v = r[c.id];
+    if (c.tipo === 'num') return { v: num(v), txt: FORMATOS[c.fmt || 'entero'](num(v)) };
+    const et = c.campo && c.campo.etiqueta ? c.campo.etiqueta(v) : v;
+    return { v: v ?? '', txt: String(et ?? '') };
+  });
+  const totales = columnas.map(c => {
+    // Un precio unitario o una cotización no se suman: el total sería un número
+    // sin significado. Esas columnas quedan sin pie.
+    if (c.tipo !== 'num' || (c.campo && c.campo.sumable === false)) return null;
+    const t = filas.reduce((a, r) => a + num(r[c.id]), 0);
+    return { v:t, txt: FORMATOS[c.fmt || 'entero'](t) };
+  });
+  if (totales.length) totales[0] = { v:0, txt:`${fmtEntero(filas.length)} registros` };
+  return {
+    modo:'detalle', ds, columnas,
+    filas: filas.map(r => ({ celdas: celdasDe(r), rows:[r], raw:r })),
+    totales, universo: filas, nDims:0
+  };
+}
+
+/* Abre el desglose de una celda del reporte agrupado. */
+function abrirDesglose(res, fila, colIdx) {
+  const ds = res.ds;
+  const col = res.columnas[colIdx];
+  const met = col && col.metrica;
+
+  // Registros del grupo, recortados al subconjunto que la métrica realmente usa.
+  let filas = fila.rows.slice();
+  const totalGrupo = filas.length;
+  if (met && met.filtraFilas) filas = filas.filter(met.filtraFilas);
+
+  // El aporte manda el orden: quien más pesa, primero.
+  const campo = met && met.campoSuma;
+  if (campo) filas.sort((a, b) => Math.abs(num(b[campo])) - Math.abs(num(a[campo])));
+
+  const etiquetaGrupo = fila.celdas.slice(0, res.nDims).map(c => c.txt).join(' · ');
+  const valor = met ? fila.celdas[colIdx].txt : `${fmtEntero(totalGrupo)} registros`;
+
+  RES_DESGLOSE = armarDetalle(ds, filas, COLS_DESGLOSE[cfg.dataset] || ds.campos.slice(0, 10).map(c => c.id));
+  RES_DESGLOSE.contexto = {
+    grupo: etiquetaGrupo,
+    dimensiones: Object.fromEntries(cfg.dims.map((d, i) => [d, fila.celdas[i].v])),
+    metrica: met ? met.label : null,
+    metrica_id: met ? met.id : null,
+    valor: met ? num(fila.celdas[colIdx].v) : totalGrupo,
+    registros_del_grupo: totalGrupo,
+    registros_que_aportan: filas.length
+  };
+  RES_DESGLOSE.titulo = `${cfg.titulo} — ${etiquetaGrupo}${met ? ' · ' + met.label : ''}`;
+
+  $('#drillTit').textContent = etiquetaGrupo || 'Desglose';
+  $('#drillSub').textContent = met
+    ? `${met.label}: ${valor}${met.sub ? ' — ' + met.sub : ''}`
+    : `Todos los registros del grupo dentro del período consultado.`;
+
+  // Cifras de contexto: el valor, cuántos registros lo forman y el mayor aporte.
+  const cifras = [];
+  if (met) cifras.push({ rot: met.label, val: valor, destacada:true, neg: num(fila.celdas[colIdx].v) < 0 });
+  cifras.push({ rot:'Registros que aportan', val: fmtEntero(filas.length) });
+  if (filas.length !== totalGrupo) cifras.push({ rot:'Registros del grupo', val: fmtEntero(totalGrupo) });
+  if (campo && filas.length) {
+    const campoDef = ds.campoPorId[campo] || {};
+    const fmt = FORMATOS[campoDef.fmt || (campoDef.tipo === 'num' ? 'entero' : 'texto')] || fmtEntero;
+    cifras.push({ rot:'Mayor aporte', val: fmt(num(filas[0][campo])) });
+    if (filas.length > 1) {
+      const top = filas.slice(0, Math.ceil(filas.length * 0.2))
+        .reduce((a, r) => a + num(r[campo]), 0);
+      const tot = filas.reduce((a, r) => a + num(r[campo]), 0);
+      if (tot) cifras.push({ rot:'Top 20% aporta', val: fmtPct(top / tot * 100) });
+    }
+  }
+  cifras.push({ rot:'Pedidos involucrados', val: fmtEntero(nDist(filas, 'pedidoId')) });
+
+  $('#drillCifras').innerHTML = cifras.map(c =>
+    `<div class="drill-cifra${c.destacada ? ' destacada' : ''}${c.neg ? ' neg' : ''}">
+       <span>${esc(c.rot)}</span><b>${esc(c.val)}</b></div>`).join('');
+
+  $('#drillFormula').innerHTML = textoFormula(met, campo, ds, filas.length, totalGrupo);
+
+  // La tabla del desglose usa el mismo renderizador que el reporte, sin panel.
+  $('#drillTabla').innerHTML = tablaSimple(RES_DESGLOSE, 500);
+  $('#drillInfo').textContent = filas.length > 500
+    ? `Se muestran los primeros 500 de ${fmtEntero(filas.length)} registros. La exportación los incluye todos.`
+    : `${fmtEntero(filas.length)} registros.`;
+
+  $('#ovDetalle').classList.add('abierto');
+}
+
+function textoFormula(met, campo, ds, nAportan, nGrupo) {
+  if (!met) return `Todos los registros del grupo, tal como quedaron guardados en Firebase.`;
+  const campoDef = campo ? ds.campoPorId[campo] : null;
+  const nombreCampo = campoDef ? campoDef.label : campo;
+  let t = '';
+  if (campo) {
+    t = `Es la <strong>suma de <code>${esc(nombreCampo)}</code></strong> sobre ${fmtEntero(nAportan)} registro${nAportan === 1 ? '' : 's'}.`;
+  } else if (met.fmt === 'pct') {
+    t = `Es una <strong>proporción</strong>, no una suma: se calcula sobre los ${fmtEntero(nGrupo)} registros del grupo, no renglón por renglón.`;
+  } else if (met.id.startsWith('ticket') || met.id.includes('Prom') || met.id.includes('Por')) {
+    t = `Es un <strong>promedio</strong> derivado del grupo completo (${fmtEntero(nGrupo)} registros).`;
+  } else {
+    t = `Se calcula sobre los ${fmtEntero(nGrupo)} registros del grupo.`;
+  }
+  if (nAportan !== nGrupo) {
+    t += ` De los ${fmtEntero(nGrupo)} del grupo, sólo ${fmtEntero(nAportan)} cumplen la condición de esta métrica; el resto no la afecta.`;
+  }
+  if (met.sub) t += ` <em>${esc(met.sub)}.</em>`;
+  return t;
+}
+
+/* Tabla sin panel ni controles: la del desglose y la de la ficha de un registro. */
+function tablaSimple(res, limite) {
+  const filas = res.filas.slice(0, limite || res.filas.length);
+  const thead = res.columnas.map(c =>
+    `<th class="${c.tipo === 'num' ? 'n' : ''}">${esc(c.label)}</th>`).join('');
+  const cuerpo = filas.map((f, fi) => {
+    const tds = f.celdas.map((cel, i) => {
+      const c = res.columnas[i];
+      if (c.tipo === 'num') {
+        const v = num(cel.v);
+        return `<td class="n${v < 0 ? ' neg' : (v === 0 ? ' cero' : '')}">${esc(cel.txt)}</td>`;
+      }
+      return `<td class="dim">${etiquetaEspecial(c.id, cel.txt)}</td>`;
+    }).join('');
+    return `<tr class="${fi % 2 ? 'par' : ''}">${tds}</tr>`;
+  }).join('');
+  const tfoot = res.totales.some(Boolean)
+    ? `<tfoot><tr>${res.totales.map((t, i) =>
+        `<td class="${res.columnas[i].tipo === 'num' ? 'n' : ''}">${t ? esc(t.txt) : ''}</td>`).join('')}</tr></tfoot>`
+    : '';
+  return `<table class="datos"><thead><tr>${thead}</tr></thead><tbody>${cuerpo}</tbody>${tfoot}</table>`;
+}
+
+/* Ficha de un registro suelto: en modo detalle la fila YA es el dato, así que
+   lo que falta no es desagregarla sino verla entera. */
+function abrirFicha(res, fila) {
+  const ds = res.ds;
+  const r = fila.raw;
+  const ids = ds.campos.map(c => c.id);
+  RES_DESGLOSE = armarDetalle(ds, [r], ids);
+  RES_DESGLOSE.contexto = { registro: r[ds.campos[0].id], tipo:'ficha' };
+  RES_DESGLOSE.titulo = `${cfg.titulo} — registro`;
+
+  $('#drillTit').textContent = 'Registro completo';
+  $('#drillSub').textContent = 'Todos los campos de este renglón, tal como están guardados.';
+  $('#drillCifras').innerHTML = '';
+  $('#drillFormula').innerHTML = 'Un único registro: no hay nada que desagregar, esto es el dato de origen.';
+
+  // Vertical: 30 columnas en horizontal no se leen.
+  $('#drillTabla').innerHTML =
+    `<table class="datos"><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>` +
+    ds.campos.map((c, i) => {
+      const v = r[c.id];
+      const txt = c.tipo === 'num'
+        ? FORMATOS[c.fmt || 'entero'](num(v))
+        : String((c.etiqueta ? c.etiqueta(v) : v) ?? '');
+      return `<tr class="${i % 2 ? 'par' : ''}"><td class="dim">${esc(c.label)}</td>
+        <td class="${c.tipo === 'num' ? 'n' : ''}">${c.tipo === 'num' ? esc(txt) : etiquetaEspecial(c.id, txt)}</td></tr>`;
+    }).join('') + `</tbody></table>`;
+
+  $('#drillInfo').textContent = `${ds.campos.length} campos.`;
+  $('#ovDetalle').classList.add('abierto');
+}
+
+$('#drillExportar').addEventListener('click', () => {
+  $('#ovDetalle').classList.remove('abierto');
+  abrirExport(RES_DESGLOSE, RES_DESGLOSE.titulo);
+});
+</script>
+
+<script>
+/* ================================================== nodos bajo demanda == */
+async function asegurarTodosLosNodos() {
+  if (!CACHE.movimientosRaw) CACHE.movimientosRaw = await traerMovimientos();
+  if (!CACHE.clientesRaw)    CACHE.clientesRaw    = await traerClientes();
+  DATOS.movimientos = aplanarMovimientos(CACHE.movimientosRaw);
+  DATOS.clientes    = aplanarClientes(CACHE.clientesRaw, DATOS.pedidos);
+}
+
+/* ================================================================ ayuda = */
+$('#cntAyuda').innerHTML = `
+  <ol style="margin:0;padding-left:20px;display:grid;gap:14px;font-size:13.5px;line-height:1.6;color:var(--ink-2)">
+    <li><strong>Elegí el período.</strong> La consulta baja de Firebase sólo los pedidos de ese rango,
+        acotados en el servidor por el campo <code>fecha</code>. Cuanto más corto, más rápido.</li>
+    <li><strong>Elegí el conjunto de datos.</strong> Es la decisión que más cambia el resultado:
+        <em>Líneas de venta</em> tiene un renglón por artículo (para todo lo que se pregunte por producto);
+        <em>Pedidos</em> tiene un renglón por venta y es el único que conoce descuentos, recargos y el total
+        realmente cobrado. Mezclarlos daría números dobles, por eso están separados.</li>
+    <li><strong>Agrupá y elegí métricas.</strong> Cada dimensión que agregás abre una columna más
+        (hasta tres). Si no agrupás por nada, el reporte pasa a modo detalle y podés elegir las columnas
+        crudas una por una.</li>
+    <li><strong>Filtrá</strong> lo que haga falta y ejecutá con el botón o con <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</li>
+  </ol>
+  <div class="modal-rotulo">Detalles que conviene saber</div>
+  <ul style="margin:0;padding-left:20px;display:grid;gap:10px;font-size:13px;line-height:1.55;color:var(--ink-3)">
+    <li>El reporte trabaja <strong>sólo con pedidos en estado <code>DESPACHADO/ENTREGADO</code></strong>.
+        Los que quedaron ABIERTO, CERRADO o CANCELADO no entran nunca, ni en los totales ni en las
+        exportaciones. Cuántos quedaron afuera se indica en la barra superior.</li>
+    <li>Una <strong>devolución resta</strong> unidades y plata; una <strong>garantía</strong> mueve stock
+        pero no mueve plata (venta, costo y ganancia valen 0). Por eso hay "Unidades" netas y
+        "Unidades brutas".</li>
+    <li>La <strong>ganancia</strong> es la que dejó grabada la caja al cerrar la venta: usa el costo del
+        artículo en ese momento, no el de hoy.</li>
+    <li><strong>Clientes registrados</strong> se cruza con las compras por nombre, que es la única llave
+        que comparten los dos nodos. Un cliente cargado con el nombre escrito distinto no cruza.</li>
+    <li>Los reportes guardados viven en este navegador (localStorage), no en Firebase.</li>
+    <li><strong>Abrir la app no consulta nada.</strong> La lectura la dispara siempre un gesto tuyo:
+        Ejecutar, tocar una plantilla o abrir un reporte guardado. Mientras el período no cambie,
+        volver a ejecutar reutiliza lo ya descargado; el botón de refrescar fuerza una lectura nueva.</li>
+  </ul>
+  <div class="modal-rotulo">Ver cómo se compone un número</div>
+  <p style="margin:0;font-size:13px;line-height:1.6;color:var(--ink-3)">
+    En un reporte agrupado, <strong>hacé clic en cualquier celda</strong>. Sobre una métrica se abren
+    los registros que forman ese número, ordenados por cuánto aportan; sobre el nombre del grupo se
+    abren todos los del grupo. Ese desglose se exporta aparte, en los tres formatos. En modo detalle,
+    el clic sobre una fila muestra la ficha completa del registro.
+  </p>
+
+  <div class="modal-rotulo">Sobre la exportación</div>
+  <p style="margin:0;font-size:13px;line-height:1.6;color:var(--ink-3)">
+    <strong>CSV</strong> para planillas, <strong>JSON</strong> para scripts, y <strong>SQLite</strong>
+    cuando querés seguir preguntando: el archivo trae las tablas
+    <code>pedidos</code>, <code>pedido_items</code>, <code>movimientos</code> y <code>clientes</code>
+    del período, con índices y vistas armadas, así podés escribir SQL sobre los datos sin volver a bajarlos.
+  </p>`;
+
+/* ============================================================== eventos = */
+$$('[data-plegar]').forEach(b => b.addEventListener('click', () => {
+  const s = $('#' + b.dataset.plegar);
+  s.dataset.abierto = s.dataset.abierto === 'si' ? 'no' : 'si';
+}));
+
+$('#fDesde').addEventListener('change', e => { cfg.desde = e.target.value; cfg.periodo = null; renderPills(); actualizarBadges(); });
+$('#fHasta').addEventListener('change', e => { cfg.hasta = e.target.value; cfg.periodo = null; renderPills(); actualizarBadges(); });
+
+$('#buscaDim').addEventListener('input', () => { if (hayConjunto()) renderDims(); });
+$('#buscaMetrica').addEventListener('input', () => { if (hayConjunto()) renderMetricas(); });
+
+$('#metricasTodas').addEventListener('click', () => {
+  const ds = DATASETS[cfg.dataset];
+  if (!ds) return;
+  if (cfg.dims.length) cfg.metricas = ds.metricas.map(m => m.id);
+  else cfg.columnas = ds.campos.map(c => c.id);
+  renderMetricas();
+});
+$('#metricasNinguna').addEventListener('click', () => {
+  if (!hayConjunto()) return;
+  if (cfg.dims.length) cfg.metricas = []; else cfg.columnas = [];
+  renderMetricas();
+});
+
+$('#addFiltro').addEventListener('click', () => {
+  const ds = DATASETS[cfg.dataset];
+  if (!ds) return;
+  cfg.filtros.push({ campo: ds.campos[0].id, op:'contiene', valor:'', valor2:'' });
+  renderFiltros();
+  $('#blqFiltros').dataset.abierto = 'si';
+});
+
+$('#guardarConfig').addEventListener('click', () => {
+  if (!hayConjunto()) { toast('No hay nada que guardar', 'Armá una consulta primero', 'info'); return; }
+  const nombre = prompt('¿Con qué nombre guardás este reporte?', cfg.titulo);
+  if (!nombre) return;
+  const g = leerGuardados();
+  g.unshift({ nombre, cfg: JSON.parse(JSON.stringify(cfg)) });
+  escribirGuardados(g.slice(0, 30));
+  renderGuardados();
+  $('#blqGuardados').dataset.abierto = 'si';
+  toast('Reporte guardado', nombre, 'ok');
+});
+
+$('#btnEjecutar').addEventListener('click', () => ejecutar(false));
+$('#btnRefrescar').addEventListener('click', () => { CACHE.clientesRaw = null; ejecutar(true); });
+$('#btnExportar').addEventListener('click', abrirExport);
+$('#btnAyuda').addEventListener('click', () => $('#ovAyuda').classList.add('abierto'));
+$('#btnDescargar').addEventListener('click', descargar);
+
+$$('#formatos .formato').forEach(b => b.addEventListener('click', () => {
+  expo.fmt = b.dataset.fmt;
+  $$('#formatos .formato').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  pintarOpcionesExport();
+}));
+
+$$('[data-cerrar]').forEach(b => b.addEventListener('click', () => $('#' + b.dataset.cerrar).classList.remove('abierto')));
+$$('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('abierto'); }));
+
+$('#railToggle').addEventListener('click', () => {
+  const a = $('#app');
+  a.dataset.rail = a.dataset.rail === 'abierto' ? 'cerrado' : 'abierto';
+});
+$('#railVelo').addEventListener('click', () => { $('#app').dataset.rail = 'cerrado'; });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') $$('.overlay.abierto').forEach(o => o.classList.remove('abierto'));
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ejecutar(false); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && !$('#btnExportar').disabled) { e.preventDefault(); abrirExport(); }
+});
+
+/* ------------------------------------------------- pantalla de arranque --
+   Muestra QUE se va a consultar antes de consultarlo. Se repinta con cada
+   cambio del riel mientras no haya resultados, asi el resumen nunca miente. */
+function pintarEstadoInicial() {
+  if (RESULTADO) return;
+  const ds = DATASETS[cfg.dataset];
+
+  // Sin conjunto no hay consulta que resumir: se explica qué falta y se ofrecen
+  // los dos caminos, la plantilla o el armado a mano.
+  if (!ds) {
+    $('#reporte').innerHTML =
+      `<div class="panel">
+         <div class="vacio">
+           <div class="vacio-ico">
+             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+           </div>
+           <h3>Armá tu consulta</h3>
+           <p>No hay nada cargado ni consultado: esta pantalla no lee Firebase hasta que se lo pidas.
+              Empezá eligiendo un <strong>conjunto de datos</strong> en el panel izquierdo, o tocá una
+              <strong>plantilla</strong> de arriba y se arma sola.</p>
+         </div>
+       </div>`;
+    return;
+  }
+  const detalle = cfg.dims.length === 0;
+  const filtros = cfg.filtros.filter(f => f.campo);
+  const linea = (rot, val) =>
+    `<div class="arranque-fila"><span>${esc(rot)}</span><b>${esc(val)}</b></div>`;
+
+  $('#reporte').innerHTML =
+    `<div class="panel">
+       <div class="vacio">
+         <div class="vacio-ico">
+           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+         </div>
+         <h3>Todavía no se consultó nada</h3>
+         <p>Esta pantalla no lee Firebase sola. Revisá que la consulta sea la que querés
+            y ejecutala: recién ahí baja los datos del período.</p>
+
+         <div class="arranque-resumen">
+           ${linea('Conjunto de datos', ds.label)}
+           ${linea('Período', `${fechaLinda(cfg.desde)} → ${fechaLinda(cfg.hasta)}`)}
+           ${linea(detalle ? 'Modo' : 'Agrupado por',
+                   detalle ? 'Detalle, sin agrupar'
+                           : cfg.dims.map(d => (ds.campoPorId[d] || {}).label || d).join(' · '))}
+           ${linea(detalle ? 'Columnas' : 'Métricas',
+                   detalle
+                     ? `${cfg.columnas.length} campos`
+                     : (cfg.metricas.map(m => (ds.metricaPorId[m] || {}).label || m).join(' · ') || 'ninguna'))}
+           ${filtros.length ? linea('Filtros', `${filtros.length} activo${filtros.length === 1 ? '' : 's'}`) : ''}
+         </div>
+
+         <button type="button" class="btn btn-oscuro" id="btnEjecutarVacio" style="height:44px;padding:0 22px;">
+           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3Z"/></svg>
+           Ejecutar consulta
+         </button>
+       </div>
+     </div>`;
+  $('#btnEjecutarVacio').addEventListener('click', () => ejecutar(false));
+}
+
+/* ================================================================ init = */
+$('#fDesde').value = cfg.desde;
+$('#fHasta').value = cfg.hasta;
+renderRiel();
+
+// Abrir la app NO consulta Firebase. Cada lectura cuesta, y entrar a mirar
+// otra cosa no deberia pagar un reporte que nadie pidio. La primera lectura la
+// dispara siempre un gesto explicito: Ejecutar, una plantilla o un guardado.
+pintarEstadoInicial();
+</script>
+</body>
+</html>
