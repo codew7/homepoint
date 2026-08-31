@@ -78,32 +78,6 @@
       margin-top: 3px;
       letter-spacing: .2px;
     }
-    .header-stats {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .header-stat {
-      text-align: center;
-      background: rgba(255,255,255,.15);
-      padding: 7px 14px;
-      border-radius: var(--radius-sm);
-      min-width: 80px;
-      backdrop-filter: blur(6px);
-    }
-    .header-stat .val {
-      font-size: 18px;
-      font-weight: 700;
-      display: block;
-      line-height: 1.2;
-    }
-    .header-stat .lbl {
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: .7px;
-      opacity: .75;
-    }
     .header-actions {
       display: flex;
       align-items: center;
@@ -156,7 +130,7 @@
 
     /* ─── Container ──────────────────────────────────────────────── */
     .container {
-      max-width: 1200px;
+      max-width: 1320px;
       margin: 0 auto;
       padding: 24px 18px 64px;
     }
@@ -418,6 +392,7 @@
     .stat-icon.purple { background: var(--primary-light); }
     .stat-icon.pink { background: var(--accent-light); }
     .stat-icon.green { background: var(--success-light); }
+    .stat-icon.amber { background: #fef3c7; }
     .stat-body .val {
       font-size: 24px;
       font-weight: 800;
@@ -429,6 +404,17 @@
       color: var(--text-secondary);
       margin-top: 3px;
     }
+    .stat-card.has-note { cursor: pointer; }
+    .stat-note {
+      display: none;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.4;
+      border-top: 1px dashed var(--border);
+      padding-top: 6px;
+    }
+    .stat-card.note-open .stat-note { display: block; }
 
     /* ─── Section Title ──────────────────────────────────────────── */
     .section-title {
@@ -679,19 +665,12 @@
     td:first-child { text-align: center; color: var(--text-muted); font-size: 12px; }
     .td-code { font-family: 'Courier New', monospace; font-size: 12px; color: var(--text-secondary); }
     .td-nombre { font-weight: 600; max-width: 240px; }
-    .td-cat {
-      font-size: 11px;
-      font-weight: 600;
-      background: var(--accent-light);
-      color: var(--accent);
-      padding: 2px 8px;
-      border-radius: 12px;
-      white-space: nowrap;
-      display: inline-block;
-    }
     .td-qty { font-weight: 700; text-align: right; }
     .td-price { text-align: right; color: var(--text-secondary); }
     .td-total { text-align: right; font-weight: 700; }
+    .td-profit { text-align: right; font-weight: 700; color: var(--success); }
+    .td-profit.neg { color: #dc2626; }
+    .td-margin { text-align: right; font-weight: 600; color: var(--text-secondary); }
     .td-pct { min-width: 100px; }
     .pct-bar-wrap {
       display: flex;
@@ -760,9 +739,6 @@
     @media (max-width: 680px) {
       .app-header { padding: 16px 16px 14px; }
       .header-brand h1 { font-size: 18px; }
-      .header-stats { gap: 7px; }
-      .header-stat { padding: 5px 10px; min-width: 65px; }
-      .header-stat .val { font-size: 15px; }
       .container { padding: 16px 12px 48px; }
       .drop-zone { padding: 36px 18px; }
       .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -775,7 +751,6 @@
     }
     @media (max-width: 400px) {
       .stats-grid { grid-template-columns: 1fr; }
-      .header-stat .val { font-size: 13px; }
       .quick-btn { font-size: 11px; padding: 5px 10px; }
     }
   </style>
@@ -798,20 +773,6 @@
       <h1>👗 Punto Maresia</h1>
       <p>Dashboard de ventas — Categoría Moda</p>
     </div>
-    <div class="header-stats" id="headerStats" style="display:none">
-      <div class="header-stat">
-        <span class="val" id="hStatArts">0</span>
-        <span class="lbl">Artículos</span>
-      </div>
-      <div class="header-stat">
-        <span class="val" id="hStatUnits">0</span>
-        <span class="lbl">Unidades</span>
-      </div>
-      <div class="header-stat">
-        <span class="val" id="hStatUSD">$0</span>
-        <span class="lbl">Total</span>
-      </div>
-    </div>
   </div>
 </header>
 
@@ -825,8 +786,8 @@
       <button class="quick-btn" data-days="today">Hoy</button>
       <button class="quick-btn" data-days="yesterday">Ayer</button>
       <button class="quick-btn" data-days="7">Última semana</button>
-      <button class="quick-btn" data-days="30">Último mes</button>
-      <button class="quick-btn active" data-days="0">Todo</button>
+      <button class="quick-btn active" data-days="30">Último mes</button>
+      <button class="quick-btn" data-days="0">Todo</button>
     </div>
     <div class="date-range-row">
       <div class="date-group">
@@ -863,7 +824,22 @@
         <div class="stat-icon green">💵</div>
         <div class="stat-body">
           <div class="val" id="statUSD">$0</div>
-          <div class="lbl">Total</div>
+          <div class="lbl">Total vendido</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">📈</div>
+        <div class="stat-body">
+          <div class="val" id="statProfit">$0</div>
+          <div class="lbl">Ganancia</div>
+        </div>
+      </div>
+      <div class="stat-card has-note" id="cardMargin" title="Tocá para ver cómo se calcula">
+        <div class="stat-icon amber">🎯</div>
+        <div class="stat-body">
+          <div class="val" id="statMargin">0%</div>
+          <div class="lbl">Margen sobre venta</div>
+          <div class="stat-note">Ganancia ÷ venta &times; 100, contando solo artículos con costo cargado (excluye PUNTO MARESIA VARIOS).</div>
         </div>
       </div>
     </div>
@@ -883,6 +859,9 @@
           <option value="qty-asc">Menor cantidad</option>
           <option value="total-desc">Mayor total</option>
           <option value="total-asc">Menor total</option>
+          <option value="profit-desc">Mayor ganancia</option>
+          <option value="profit-asc">Menor ganancia</option>
+          <option value="margin-desc">Mayor margen %</option>
           <option value="name-asc">Nombre A→Z</option>
           <option value="name-desc">Nombre Z→A</option>
         </select>
@@ -894,10 +873,13 @@
               <th>#</th>
               <th>Código</th>
               <th>Artículo</th>
-              <th>Subcategoría</th>
               <th style="text-align:right">Cant.</th>
               <th style="text-align:right">Precio</th>
+              <th style="text-align:right">Costo unit.</th>
               <th style="text-align:right">Total</th>
+              <th style="text-align:right">Costo total</th>
+              <th style="text-align:right">Ganancia</th>
+              <th style="text-align:right">Margen</th>
               <th>% del total</th>
             </tr>
           </thead>
@@ -913,12 +895,18 @@
   /* ─── Constants ────────────────────────────────────────────── */
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzs8fJtVLkdUjOwx76miDSku6m-tVp371iqfxjepxgWydumKKHhd7w0zLHTMZxDo95Cw/exec';
 
+  // Articulos que no entran en el analisis de rentabilidad: son bolsas genericas
+  // sin costo real cargado, asi que su venta se muestra pero su costo y su
+  // ganancia quedarian falseados (ganancia = venta entera) y torcerian el margen.
+  const ARTICULOS_SIN_GANANCIA = ['PUNTO MARESIA VARIOS'];
+
   /* ─── State ─────────────────────────────────────────────────── */
   let allPedidos = [];         // raw array of pedido objects
   let filteredArts = [];       // current filtered+aggregated articles
   let dateFrom = null;
   let dateTo = null;
   let searchDebounce = null;
+  const RANGO_INICIAL = '30';   // al abrir se muestra el ultimo mes
 
   /* ─── Helpers ───────────────────────────────────────────────── */
   function esc(str) {
@@ -938,13 +926,17 @@
 
   function fmtUSD(n) {
     if (n == null || isNaN(n)) return '$0';
-    return '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 
-  function fmtUSDShort(n) {
-    if (!n) return '$0';
-    if (n >= 1000) return '$' + (n / 1000).toFixed(1) + 'k';
-    return '$' + Number(n).toFixed(0);
+  function sinGanancia(nombre) {
+    const n = String(nombre || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    return ARTICULOS_SIN_GANANCIA.includes(n);
+  }
+
+  function fmtPct(part, whole) {
+    if (!whole) return '—';
+    return Math.round(part / whole * 100) + '%';
   }
 
   function showLoading(msg) {
@@ -996,15 +988,7 @@
     showSection('sectionStats');
 
     showSection('sectionTable');
-    // Reset filters
-    dateFrom = null;
-    dateTo = null;
-    document.getElementById('dateFrom').value = '';
-    document.getElementById('dateTo').value = '';
-    // Mark "Todo" active
-    document.querySelectorAll('.quick-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.days === '0');
-    });
+    aplicarRangoRapido(RANGO_INICIAL);
     renderAll();
     showToast('Datos cargados: ' + pedidos.length + ' pedidos', 'success');
   }
@@ -1051,21 +1035,37 @@
         const key = (it.codigo || '') + '|' + (it.nombre || '');
         const qty = parseInt(it.cantidad) || 0;
         const price = parseFloat(it.valorU || it.valorUSD) || 0;
+        const cost = parseFloat(it.valorC) || 0;
+        // La ganancia de la linea la escribe ingresoPedidoV2 en valorG y ya trae
+        // el signo del tipo de linea (DEVOLUCION resta, GARANTIA vale 0). Solo
+        // se recalcula como venta - costo si el pedido viejo no la tiene.
+        const profit = (it.valorG != null && it.valorG !== '')
+          ? (parseFloat(it.valorG) || 0)
+          : (price - cost) * qty;
 
         if (!artMap[key]) {
           artMap[key] = {
             codigo: it.codigo || '',
             nombre: it.nombre || '(sin nombre)',
-            categoria: it.categoria || 'Moda',
+            sinGanancia: sinGanancia(it.nombre),
             cantidad: 0,
             valorU: 0,
+            valorC: 0,
             totalUSD: 0,
+            costoUSD: 0,
+            gananciaUSD: 0,
             codigoBarras: it.codigoBarras || ''
           };
         }
         artMap[key].cantidad += qty;
         artMap[key].totalUSD += qty * price;
         if (price > 0) artMap[key].valorU = price;
+        // El articulo excluido se sigue mostrando con sus unidades y su venta,
+        // pero no aporta costo ni ganancia a ningun total.
+        if (artMap[key].sinGanancia) return;
+        artMap[key].costoUSD += qty * cost;
+        artMap[key].gananciaUSD += profit;
+        if (cost > 0) artMap[key].valorC = cost;
       });
     });
 
@@ -1081,17 +1081,16 @@
     // Stats
     const totalUnits = allArts.reduce((s, a) => s + a.cantidad, 0);
     const totalUSD = allArts.reduce((s, a) => s + a.totalUSD, 0);
+    const totalProfit = allArts.reduce((s, a) => s + a.gananciaUSD, 0);
+    // Base del margen: la venta de los articulos que si tienen costo cargado.
+    const ventaRentable = allArts.reduce((s, a) => s + (a.sinGanancia ? 0 : a.totalUSD), 0);
     const uniqueArts = allArts.length;
 
     document.getElementById('statArts').textContent = fmtNum(uniqueArts);
     document.getElementById('statUnits').textContent = fmtNum(totalUnits);
     document.getElementById('statUSD').textContent = fmtUSD(totalUSD);
-
-    // Header stats
-    document.getElementById('hStatArts').textContent = fmtNum(uniqueArts);
-    document.getElementById('hStatUnits').textContent = fmtNum(totalUnits);
-    document.getElementById('hStatUSD').textContent = fmtUSDShort(totalUSD);
-    document.getElementById('headerStats').style.display = 'flex';
+    document.getElementById('statProfit').textContent = fmtUSD(totalProfit);
+    document.getElementById('statMargin').textContent = fmtPct(totalProfit, ventaRentable);
 
     // Table
     renderTable();
@@ -1117,6 +1116,13 @@
         case 'qty-desc':   return b.cantidad - a.cantidad;
         case 'total-asc':  return a.totalUSD - b.totalUSD;
         case 'total-desc': return b.totalUSD - a.totalUSD;
+        case 'profit-asc':  return a.gananciaUSD - b.gananciaUSD;
+        case 'profit-desc': return b.gananciaUSD - a.gananciaUSD;
+        case 'margin-desc': {
+          const ma = a.sinGanancia || !a.totalUSD ? -Infinity : a.gananciaUSD / a.totalUSD;
+          const mb = b.sinGanancia || !b.totalUSD ? -Infinity : b.gananciaUSD / b.totalUSD;
+          return mb - ma;
+        }
         case 'name-asc':   return a.nombre.localeCompare(b.nombre, 'es');
         case 'name-desc':  return b.nombre.localeCompare(a.nombre, 'es');
         default:           return b.cantidad - a.cantidad;
@@ -1130,12 +1136,15 @@
     const arr = getSortedFiltered();
     const totalUSD = arr.reduce((s, a) => s + a.totalUSD, 0);
     const totalQty = arr.reduce((s, a) => s + a.cantidad, 0);
+    const totalCost = arr.reduce((s, a) => s + a.costoUSD, 0);
+    const totalProfit = arr.reduce((s, a) => s + a.gananciaUSD, 0);
+    const ventaRentable = arr.reduce((s, a) => s + (a.sinGanancia ? 0 : a.totalUSD), 0);
     const tbody = document.getElementById('artTableBody');
 
     if (!arr.length) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="8">
+          <td colspan="11">
             <div class="empty-state">
               <span class="es-icon">👗</span>
               <h3>Sin resultados</h3>
@@ -1154,16 +1163,19 @@
           <td>${i + 1}</td>
           <td class="td-code">${esc(art.codigo)}</td>
           <td class="td-nombre" title="${esc(art.nombre)}">${esc(art.nombre)}</td>
-          <td><span class="td-cat">${esc(art.categoria)}</span></td>
           <td class="td-qty">${fmtNum(art.cantidad)}</td>
           <td class="td-price">${art.valorU > 0 ? fmtUSD(art.valorU) : '—'}</td>
+          <td class="td-price">${art.sinGanancia || art.valorC <= 0 ? '—' : fmtUSD(art.valorC)}</td>
           <td class="td-total">${fmtUSD(art.totalUSD)}</td>
+          <td class="td-price">${art.sinGanancia || art.costoUSD <= 0 ? '—' : fmtUSD(art.costoUSD)}</td>
+          <td class="td-profit${!art.sinGanancia && art.gananciaUSD < 0 ? ' neg' : ''}"${art.sinGanancia ? ' title="Excluido del cálculo de ganancia"' : ''}>${art.sinGanancia ? '—' : fmtUSD(art.gananciaUSD)}</td>
+          <td class="td-margin">${art.sinGanancia ? '—' : fmtPct(art.gananciaUSD, art.totalUSD)}</td>
           <td class="td-pct">
             <div class="pct-bar-wrap">
               <div class="pct-bar-track">
                 <div class="pct-bar-fill" style="width:${pct.toFixed(1)}%"></div>
               </div>
-              <span class="pct-text">${pct.toFixed(1)}%</span>
+              <span class="pct-text">${Math.round(pct)}%</span>
             </div>
           </td>
         </tr>
@@ -1175,10 +1187,13 @@
         <td>—</td>
         <td class="td-code"></td>
         <td class="td-nombre"><strong>TOTAL</strong></td>
-        <td></td>
         <td class="td-qty"><strong>${fmtNum(totalQty)}</strong></td>
         <td class="td-price"></td>
+        <td class="td-price"></td>
         <td class="td-total"><strong>${fmtUSD(totalUSD)}</strong></td>
+        <td class="td-price"><strong>${fmtUSD(totalCost)}</strong></td>
+        <td class="td-profit${totalProfit < 0 ? ' neg' : ''}"><strong>${fmtUSD(totalProfit)}</strong></td>
+        <td class="td-margin"><strong>${fmtPct(totalProfit, ventaRentable)}</strong></td>
         <td class="td-pct">
           <div class="pct-bar-wrap">
             <div class="pct-bar-track">
@@ -1201,39 +1216,42 @@
 
   document.getElementById('sortSelect').addEventListener('change', renderTable);
 
+  /* ─── Leyenda del margen ──────────────────────────────── */
+  document.getElementById('cardMargin').addEventListener('click', function () {
+    this.classList.toggle('note-open');
+  });
+
   /* ─── Date Filter ────────────────────────────────────────────── */
-  document.getElementById('quickBtns').addEventListener('click', e => {
-    const btn = e.target.closest('.quick-btn');
-    if (!btn) return;
-    document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const val = btn.dataset.days;
+  // Fecha local en YYYY-MM-DD: toISOString() sola devuelve UTC y de tarde en
+  // Argentina (UTC-3) "Hoy" ya caeria en el dia siguiente.
+  function fechaISO(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  }
+
+  function aplicarRangoRapido(val) {
+    document.querySelectorAll('.quick-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.days === val);
+    });
     const today = new Date();
-    const pad = d => d.toISOString().split('T')[0];
     if (val === '0') {
       dateFrom = null;
       dateTo = null;
-      document.getElementById('dateFrom').value = '';
-      document.getElementById('dateTo').value = '';
     } else if (val === 'today') {
-      dateFrom = pad(today);
-      dateTo = pad(today);
-      document.getElementById('dateFrom').value = dateFrom;
-      document.getElementById('dateTo').value = dateTo;
+      dateFrom = dateTo = fechaISO(today);
     } else if (val === 'yesterday') {
-      const ayer = new Date(today - 86400000);
-      dateFrom = pad(ayer);
-      dateTo = pad(ayer);
-      document.getElementById('dateFrom').value = dateFrom;
-      document.getElementById('dateTo').value = dateTo;
+      dateFrom = dateTo = fechaISO(new Date(today - 86400000));
     } else {
-      const days = parseInt(val);
-      const from = new Date(today - days * 86400000);
-      dateFrom = pad(from);
-      dateTo = pad(today);
-      document.getElementById('dateFrom').value = dateFrom;
-      document.getElementById('dateTo').value = dateTo;
+      dateFrom = fechaISO(new Date(today - parseInt(val) * 86400000));
+      dateTo = fechaISO(today);
     }
+    document.getElementById('dateFrom').value = dateFrom || '';
+    document.getElementById('dateTo').value = dateTo || '';
+  }
+
+  document.getElementById('quickBtns').addEventListener('click', e => {
+    const btn = e.target.closest('.quick-btn');
+    if (!btn) return;
+    aplicarRangoRapido(btn.dataset.days);
     renderAll();
   });
 
@@ -1248,16 +1266,9 @@
 
   /* ─── Clear Filters ──────────────────────────────────────────── */
   document.getElementById('btnClear').addEventListener('click', () => {
-    dateFrom = null;
-    dateTo = null;
-    document.getElementById('dateFrom').value = '';
-    document.getElementById('dateTo').value = '';
     document.getElementById('searchInput').value = '';
-    document.querySelectorAll('.quick-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.days === '0');
-    });
+    aplicarRangoRapido(RANGO_INICIAL);
     renderAll();
-
   });
 </script>
 </body>

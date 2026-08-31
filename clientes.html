@@ -922,6 +922,10 @@
                 <i class="bi bi-trash3"></i>
                 <span id="btnEliminarTexto">Eliminar seleccionados</span>
             </button>
+            <button class="btn btn-outline" onclick="abrirModalLimpieza()">
+                <i class="bi bi-funnel"></i>
+                <span>Limpiar mayoristas locales sin dirección</span>
+            </button>
             <button class="btn btn-primary" onclick="agregarNuevoCliente()">
                 <i class="bi bi-plus-lg"></i>
                 <span>Nuevo cliente</span>
@@ -1060,6 +1064,25 @@
             <input type="password" id="passInput" class="modal-pass-input" placeholder="••••••••" maxlength="20" autocomplete="off">
             <div class="modal-pass-error" id="passError"></div>
             <button class="modal-pass-btn" onclick="verificarContrasena()">Ingresar</button>
+        </div>
+    </div>
+
+    <!-- Modal de limpieza: mayoristas locales sin dirección -->
+    <div id="modalLimpieza" class="modal-reporte">
+        <div class="modal-reporte-content">
+            <div class="modal-reporte-header" style="background: linear-gradient(135deg, var(--danger), #f87171);">
+                <h3><i class="bi bi-exclamation-triangle"></i> <span>Limpiar mayoristas locales sin dirección</span></h3>
+                <button class="modal-close" onclick="cerrarModalLimpieza()" aria-label="Cerrar">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-reporte-body" id="modalLimpiezaBody"></div>
+            <div style="padding: 1rem 1.25rem; border-top: 1px solid var(--gray-200); background: #fff; display: flex; justify-content: flex-end; gap: 0.6rem;">
+                <button class="btn btn-secondary" onclick="cerrarModalLimpieza()">Cancelar</button>
+                <button class="btn btn-danger" id="btnConfirmarLimpieza" onclick="confirmarLimpieza()" disabled>
+                    <i class="bi bi-trash3"></i> <span id="btnConfirmarLimpiezaTexto">Eliminar</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1878,6 +1901,109 @@
             }
             eliminarSiguiente(0);
         }
+
+        // === LIMPIEZA: mayoristas locales sin dirección ===
+        let clientesParaLimpiar = [];
+
+        function esCandidatoLimpieza(cliente) {
+            const registro = (cliente.registro || '').trim().toLowerCase();
+            const tipoCliente = (cliente.tipoCliente || '').trim().toLowerCase();
+            const direccion = (cliente.direccion || '').trim();
+            return registro === 'local' && tipoCliente === 'mayorista' && direccion === '';
+        }
+
+        function abrirModalLimpieza() {
+            if (clienteEditando) cancelarEdicion();
+
+            clientesParaLimpiar = todosLosClientes.filter(esCandidatoLimpieza);
+
+            const body = document.getElementById('modalLimpiezaBody');
+            const btnConfirmar = document.getElementById('btnConfirmarLimpieza');
+            const btnTexto = document.getElementById('btnConfirmarLimpiezaTexto');
+
+            if (clientesParaLimpiar.length === 0) {
+                body.innerHTML = '<div class="sin-pedidos"><i class="bi bi-check2-circle"></i><div>No se encontraron clientes con registro "Local", tipo "mayorista" y dirección vacía.</div></div>';
+                btnConfirmar.disabled = true;
+                btnTexto.textContent = 'Eliminar';
+            } else {
+                let html = `<p style="margin-bottom: 0.9rem; color: var(--gray-700); font-size: 0.88rem;">
+                    Se eliminarán <strong>${clientesParaLimpiar.length}</strong> cliente${clientesParaLimpiar.length !== 1 ? 's' : ''} que cumplen <strong>todas</strong> estas condiciones a la vez: registro = "Local", tipo = "mayorista", dirección vacía. Revisá la lista con cuidado — esta acción no se puede deshacer.
+                </p>`;
+                clientesParaLimpiar.forEach(cliente => {
+                    html += `
+                        <div class="pedido-item">
+                            <div class="pedido-header">
+                                <span><strong>${cliente.nombre || '<em>Sin nombre</em>'}</strong></span>
+                            </div>
+                            <div class="pedido-meta">
+                                <span>${cliente.email || 'Sin email'} · ${cliente.telefono || 'Sin teléfono'}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                body.innerHTML = html;
+                btnConfirmar.disabled = false;
+                btnTexto.textContent = `Eliminar (${clientesParaLimpiar.length})`;
+            }
+
+            document.getElementById('modalLimpieza').style.display = 'flex';
+        }
+
+        function cerrarModalLimpieza() {
+            document.getElementById('modalLimpieza').style.display = 'none';
+            clientesParaLimpiar = [];
+        }
+
+        function confirmarLimpieza() {
+            if (clientesParaLimpiar.length === 0) return;
+
+            const cantidad = clientesParaLimpiar.length;
+            const mensaje = `Última confirmación: se eliminarán ${cantidad} cliente${cantidad !== 1 ? 's' : ''} (registro "Local", tipo "mayorista", sin dirección).\n\nEsta acción no se puede deshacer. ¿Continuar?`;
+            if (!confirm(mensaje)) return;
+
+            // Re-verifica contra los datos actuales por si algo cambió mientras el modal estaba abierto
+            const updates = {};
+            let omitidos = 0;
+            clientesParaLimpiar.forEach(candidato => {
+                const clienteActual = todosLosClientes.find(c => c.id === candidato.id);
+                if (clienteActual && esCandidatoLimpieza(clienteActual)) {
+                    updates[candidato.id] = null;
+                } else {
+                    omitidos++;
+                }
+            });
+
+            const idsAEliminar = Object.keys(updates);
+            if (idsAEliminar.length === 0) {
+                alert('Ninguno de los clientes listados sigue cumpliendo las condiciones. No se eliminó nada.');
+                cerrarModalLimpieza();
+                return;
+            }
+
+            db.ref('clientes').update(updates)
+                .then(() => {
+                    let msg = `✅ ${idsAEliminar.length} cliente${idsAEliminar.length !== 1 ? 's' : ''} eliminado${idsAEliminar.length !== 1 ? 's' : ''} correctamente.`;
+                    if (omitidos > 0) msg += `\n⚠️ ${omitidos} cliente${omitidos !== 1 ? 's' : ''} se omitieron porque ya no cumplían las condiciones.`;
+                    alert(msg);
+                    cerrarModalLimpieza();
+                })
+                .catch(error => {
+                    console.error('Error al eliminar clientes:', error);
+                    alert('Error al eliminar los clientes. No se realizaron cambios.');
+                });
+        }
+
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('modalLimpieza');
+            if (e.target === modal) cerrarModalLimpieza();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('modalLimpieza');
+                if (modal.style.display === 'flex') cerrarModalLimpieza();
+            }
+        });
     </script>
 </body>
 </html>
