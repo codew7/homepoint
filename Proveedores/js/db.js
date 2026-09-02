@@ -13,7 +13,6 @@
  * decide cómo mostrarlo.
  */
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getDatabase,
   ref,
@@ -25,22 +24,18 @@ import {
   onValue,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-import { firebaseConfig, DB_PATHS } from './firebase-config.js';
+import { getFirebaseApp } from './firebase-app.js';
+import { DB_PATHS } from './firebase-config.js';
 
 let db = null;
 
-/** Inicializa Firebase una sola vez. Lanza si la config sigue con placeholders. */
+/**
+ * Inicializa la base una sola vez, sobre la app compartida con Auth.
+ * Se llama recién con sesión iniciada: las reglas de la base exigen usuario.
+ */
 export function initDb() {
   if (db) return db;
-
-  if (!firebaseConfig.databaseURL || firebaseConfig.databaseURL.includes('TU_PROYECTO')) {
-    throw new Error(
-      'Firebase no está configurado. Completá js/firebase-config.js con las credenciales de tu proyecto.'
-    );
-  }
-
-  const app = initializeApp(firebaseConfig);
-  db = getDatabase(app);
+  db = getDatabase(getFirebaseApp());
   return db;
 }
 

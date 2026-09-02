@@ -1,8 +1,9 @@
 /**
- * Punto de entrada. Inicializa Firebase, engancha las suscripciones en vivo y
- * coordina el render de las vistas.
+ * Punto de entrada. Pide sesión, inicializa Firebase, engancha las suscripciones
+ * en vivo y coordina el render de las vistas.
  */
 
+import { esperarSesion } from './auth.js';
 import { initDb, subscribeProveedores, subscribePagos, subscribeFacturas } from './db.js';
 import { refrescarDolar, getDolar } from './cotizacion.js';
 import { setProveedores, setPagos, setFacturas, setCargando, suscribir } from './store.js';
@@ -76,16 +77,20 @@ function renderTodo() {
 async function main() {
   initTabs();
 
+  // Puerta de entrada: nada se inicializa ni se lee de la base sin usuario logueado.
   try {
-    initDb();
+    await esperarSesion();
   } catch (error) {
-    // Config con placeholders: la UI queda visible pero sin datos.
+    // Config con placeholders: se destraba la UI para poder mostrar el aviso.
+    document.body.classList.remove('app--bloqueada');
     mostrarBanner(
       `<strong>Falta configurar Firebase.</strong> Completá <code>js/firebase-config.js</code> con las credenciales de tu proyecto y recargá la página.`,
       true
     );
     return;
   }
+
+  initDb();
 
   initProveedores();
   initPagos();
