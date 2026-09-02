@@ -289,6 +289,12 @@
     // de la cabecera. Vacío = sin filtro.
     let filtroMedio = '';
 
+    // El tipo de cliente vive en cliente.tipoCliente ('admin', 'mayorista',
+    // 'consumidor final'…). Se compara normalizado porque el dato se carga a mano.
+    function esClienteAdmin(pedido) {
+      return ((pedido || {}).cliente || {}).tipoCliente?.toString().trim().toLowerCase() === 'admin';
+    }
+
     function toggleFiltroMedio(slug) {
       if (!slug) return;
       // Volver a marcar el mismo medio lo apaga: el doble clic es un interruptor.
@@ -304,6 +310,13 @@
 
       // Los registros ya vienen filtrados por fecha de hoy y createdby = admin desde Firebase
       let keys = Object.keys(pedidos).reverse();
+
+      // Pedidos de clientes tipo Admin (consumo interno): ocultos por defecto.
+      // Se descartan ANTES de renderIndicadores para que los totales del día
+      // reflejen exactamente lo que se está mostrando.
+      if (!document.getElementById('chkMostrarAdmin').checked) {
+        keys = keys.filter(id => !esClienteAdmin(pedidos[id]));
+      }
 
       renderIndicadores(keys);
 
@@ -500,6 +513,7 @@
     }
     function limpiarFiltros() {
       document.getElementById('filtroNombre').value = '';
+      document.getElementById('chkMostrarAdmin').checked = false;
       filtroMedio = '';
       paginaActual = 1;
       renderPedidos();
@@ -1308,6 +1322,19 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       font-size: 14.5px; color: var(--ink);
       transition: border-color var(--t-base), box-shadow var(--t-base);
     }
+    .toolbar-check {
+      display: inline-flex; align-items: center; gap: var(--s2);
+      height: var(--h-md); padding: 0 var(--s3);
+      border: 1px solid var(--line); border-radius: var(--r2);
+      background: var(--surface);
+      font-size: 14px; color: var(--ink-3);
+      cursor: pointer; user-select: none;
+      transition: border-color var(--t-base), color var(--t-base);
+    }
+    .toolbar-check:hover { border-color: var(--violeta); color: var(--ink); }
+    .toolbar-check input { width: 15px; height: 15px; accent-color: var(--violeta); cursor: pointer; }
+    .toolbar-check:has(input:checked) { border-color: var(--violeta); color: var(--ink); }
+
     .toolbar-input::placeholder { color: var(--ink-5); }
     .toolbar-input:focus {
       outline: none; border-color: var(--violeta);
@@ -1713,6 +1740,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       </div>
       <button type="button" class="primary" onclick="aplicarFiltros()">Filtrar</button>
       <button type="button" class="secondary" onclick="limpiarFiltros()">Limpiar</button>
+      <!-- Los pedidos de clientes tipo Admin son consumos internos: quedan
+           fuera del listado y de los totales salvo que se pidan expresamente. -->
+      <label class="toolbar-check" title="Incluir pedidos de clientes tipo Admin">
+        <input type="checkbox" id="chkMostrarAdmin" onchange="aplicarFiltros()">
+        <span>Mostrar Admin</span>
+      </label>
     </div>
 
     <section class="card-tabla" aria-label="Pedidos del día">
