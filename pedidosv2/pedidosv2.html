@@ -550,6 +550,39 @@
     .status-badge--dispatched{ background: var(--ok-soft);     color: var(--ok);     border-color: var(--ok-ring); }
     .status-badge--cancelled { background: var(--bad-soft);    color: var(--bad);    border-color: var(--bad-soft); }
 
+    /* Marca de los pedidos con cat = "int" en Firebase. Es un rasgo del pedido y
+       no un estado, por eso no reusa .status-badge: color propio (el unico libre
+       en las dos vistas) para que salte a la vista sin competir con el estado. */
+    .badge-int {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex: none;
+      height: 23px;
+      padding: 0 9px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: var(--violeta-soft);
+      color: var(--violeta);
+      border: 1px solid var(--violeta-soft);
+    }
+    .badge-int::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 99px;
+      background: currentColor;
+      flex: none;
+    }
+    /* .badge-int fija display, asi que el hidden del markup necesita ganarle */
+    .badge-int[hidden] { display: none; }
+    /* Variante para la fila del panel, mas baja que la franja de contexto */
+    .badge-int--sm { height: 18px; padding: 0 7px; font-size: 9px; gap: 4px; }
+
     /* Progreso — vive en la franja superior para no perderse al scrollear */
     .progress-section {
       display: flex;
@@ -2965,6 +2998,7 @@
   <div class="ctx-bar" id="contextBar">
     <span class="ctx-id" id="ctxId"></span>
     <span class="status-badge" id="ctxEstado"></span>
+    <span class="badge-int" id="ctxCatInt" title="Pedido con cat = &quot;int&quot;" hidden>int</span>
     <span class="ctx-dot"></span>
     <span class="ctx-fecha" id="ctxFecha"></span>
     <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
@@ -4288,6 +4322,13 @@
       return NOTA_PAGO_SOLICITADO;
     }
 
+    // cat = "int" solo aparece en algunos pedidos y puede llegar con mayusculas
+    // o con espacios; se normaliza aca para que la franja de contexto y el panel
+    // de pedidos decidan igual.
+    function esCatInt(p) {
+      return !!p && String(p.cat || '').trim().toLowerCase() === 'int';
+    }
+
     // El hito "cerrado" no se mide: cerrar el pedido dejo de ser un paso propio
     // porque solicitar el pago ya lo cierra y lo bloquea (ver marcarPagoSolicitado
     // y sellarYCerrarCotizacion), asi que el tramo solo repetia lo que dice el de
@@ -4428,6 +4469,10 @@
       const ctxEstado = document.getElementById('ctxEstado');
       ctxEstado.className = 'status-badge ' + getStatusClass(pedidoActual.status);
       ctxEstado.textContent = pedidoActual.status || 'N/A';
+      // La marca de cat = "int" viaja al lado del estado: es lo primero que se
+      // mira al abrir el pedido.
+      const ctxCatInt = document.getElementById('ctxCatInt');
+      if (ctxCatInt) ctxCatInt.hidden = !esCatInt(pedidoActual);
       document.getElementById('ctxFecha').textContent = fechaIngreso ? 'Ingresado ' + fechaIngreso : '';
 
       // ---------- COLUMNA IZQUIERDA: ARTICULOS ----------
@@ -5453,6 +5498,7 @@
             todosListos: todosListos,
             algunoListo: algunoListo,
             nota: p.nota || '',
+            cat: p.cat || '',
             timestamp: p.timestamp || 0
           };
           // Las etapas se calculan una sola vez, en la carga: el sort, el
@@ -5536,6 +5582,7 @@
       return '<div class="pedidos-panel-item pp-item--rail' + (listo ? ' is-listo' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
         ppRailHtml(p) +
         '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+        (esCatInt(p) ? '<span class="badge-int badge-int--sm" title="Pedido con cat = &quot;int&quot;">int</span>' : '') +
         (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
         ppBotonPagoHtml(p) +
         '</div>';
