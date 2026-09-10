@@ -146,13 +146,27 @@
   var contadorBT = 0;
   var promesasBT = {};
 
+  // Tope de espera. Conectar puede tardar (se prueban varias formas de abrir
+  // el puerto) y un rotulo largo tarda en salir, pero si Android nunca
+  // contesta -por ejemplo si el sistema recreo la pantalla en el medio- la
+  // promesa quedaria colgada para siempre y la pantalla no mostraria NADA,
+  // que es justo lo peor que puede pasarle a quien esta esperando el ticket.
+  var TOPE_ESPERA_BT = 90000;
+
   window.imprimirEscPosBT = function (bytesBase64) {
     return new Promise(function (resolver, rechazar) {
       var id = 'bt' + (++contadorBT) + '_' + Date.now();
-      promesasBT[id] = { resolver: resolver, rechazar: rechazar };
+      var reloj = setTimeout(function () {
+        if (!promesasBT[id]) return;
+        delete promesasBT[id];
+        rechazar(new Error('La impresora no respondió a tiempo'));
+      }, TOPE_ESPERA_BT);
+
+      promesasBT[id] = { resolver: resolver, rechazar: rechazar, reloj: reloj };
       try {
         nativo.imprimirEscPos(id, bytesBase64);
       } catch (e) {
+        clearTimeout(reloj);
         delete promesasBT[id];
         rechazar(e);
       }
@@ -165,6 +179,7 @@
     var p = promesasBT[id];
     if (!p) return;
     delete promesasBT[id];
+    clearTimeout(p.reloj);
     if (ok) p.resolver();
     else p.rechazar(new Error(mensaje || 'No se pudo imprimir'));
   };

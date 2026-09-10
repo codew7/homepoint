@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.util.Log;
 import android.util.Base64;
 import android.widget.Toast;
 
@@ -38,10 +39,15 @@ import java.util.concurrent.Executors;
  */
 class ImpresoraBluetooth {
 
+    private static final String TAG = "ImpresoraBT";
+
     /** UUID estandar del perfil SPP (Serial Port Profile) que hablan las termicas. */
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final String PREFS = "impresora_bt";
     private static final String CLAVE_MAC = "direccion_mac";
+
+    /** Bytes por escritura: el buffer de la impresora no traga mucho mas de una vez. */
+    private static final int TROZO = 2048;
 
     /** A quien avisarle cuando termina un trabajo de impresion (no de configuracion). */
     interface Callback {
@@ -172,25 +178,30 @@ class ImpresoraBluetooth {
     }
 
     private void enviar(BluetoothDevice dispositivo) {
-        byte[] datos = trabajoDatos;
+        final byte[] datos = trabajoDatos;
+        Toast.makeText(app, R.string.bt_conectando, Toast.LENGTH_SHORT).show();
         hiloEnvio.execute(() -> {
             BluetoothSocket socket = null;
             try {
-                BluetoothAdapter adaptador = obtenerAdaptador();
-                if (adaptador != null) adaptador.cancelDiscovery();
-                socket = dispositivo.createRfcommSocketToServiceRecord(SPP_UUID);
-                socket.connect();
-                OutputStream out = socket.getOutputStream();
-                out.write(datos);
-                out.flush();
-                // Le da tiempo al buffer de la impresora a vaciarse: cerrar el
-                // socket apenas se manda puede recortar el final del ticket.
-                Thread.sleep(400);
+                // Nunca arrancamos un descubrimiento, pero si el sistema esta
+                // escaneando, la conexion RFCOMM se puede caer. Cancelarlo es
+                // solo una precaucion y en Android 12+ exige BLUETOOTH_SCAN,
+                // un permiso que no pedimos: sin este try/catch la
+                // SecurityException se comia el trabajo entero ANTES de
+                // intentar conectar, y no se imprimia nada.
+                try {
+                    BluetoothAdapter adaptador = obtenerAdaptador();
+                    if (adaptador != null) adaptador.cancelDiscovery();
+                } catch (Exception ignorado) { /* se sigue igual */ }
+
+                socket = abrirSocket(dispositivo);
+                escribirTodo(socket, datos);
                 app.runOnUiThread(() -> terminar(true, null));
             } catch (Exception e) {
-                String motivo = (e instanceof IOException)
-                        ? app.getString(R.string.bt_sin_conexion)
-                        : "No se pudo imprimir: " + e.getMessage();
+                Log.w(TAG, "No se pudo imprimir por Bluetooth", e);
+                final String motivo = app.getString(R.string.bt_sin_conexion)
+                        + "\n\nDetalle: " + e.getClass().getSimpleName()
+                        + (e.getMessage() == null ? "" : ": " + e.getMessage());
                 app.runOnUiThread(() -> terminar(false, motivo));
             } finally {
                 if (socket != null) {
@@ -198,6 +209,63 @@ class ImpresoraBluetooth {
                 }
             }
         });
+    }
+
+    /**
+     * Abre el puerto serie con la impresora probando las cuatro formas que
+     * existen, en orden. Las termicas baratas suelen fallar con la primera:
+     * muchas no publican el service record de SPP (y entonces buscarlas por
+     * UUID no encuentra nada) o rechazan el canal cifrado. El canal 1 a mano
+     * por reflexion es el ultimo recurso, y es el que termina funcionando en
+     * buena parte de los modulos genericos.
+     */
+    private BluetoothSocket abrirSocket(BluetoothDevice dispositivo) throws Exception {
+        Exception ultimo = null;
+        for (int intento = 1; intento <= 4; intento++) {
+            BluetoothSocket socket = null;
+            try {
+                socket = crearSocket(dispositivo, intento);
+                socket.connect();
+                Log.i(TAG, "Impresora conectada en el intento " + intento);
+                return socket;
+            } catch (Exception e) {
+                ultimo = e;
+                Log.w(TAG, "Intento " + intento + " de conexion fallido: " + e);
+                if (socket != null) {
+                    try { socket.close(); } catch (IOException ignorado) { /* nada */ }
+                }
+            }
+        }
+        throw ultimo != null ? ultimo : new IOException("No se pudo abrir el puerto de la impresora");
+    }
+
+    private BluetoothSocket crearSocket(BluetoothDevice d, int intento) throws Exception {
+        switch (intento) {
+            case 1:  return d.createRfcommSocketToServiceRecord(SPP_UUID);
+            case 2:  return d.createInsecureRfcommSocketToServiceRecord(SPP_UUID);
+            case 3:  return (BluetoothSocket) d.getClass()
+                            .getMethod("createRfcommSocket", int.class).invoke(d, 1);
+            default: return (BluetoothSocket) d.getClass()
+                            .getMethod("createInsecureRfcommSocket", int.class).invoke(d, 1);
+        }
+    }
+
+    /**
+     * Manda los bytes de a poco. El buffer de una termica es de unos pocos KB:
+     * volcarle un rotulo entero (~90 KB) de una sola vez le hace perder la
+     * mitad del trabajo. Al final espera un rato proporcional al tamano, para
+     * que el socket no se cierre mientras la impresora todavia esta sacando
+     * papel, que es lo que corta los tickets por la mitad.
+     */
+    private void escribirTodo(BluetoothSocket socket, byte[] datos) throws IOException, InterruptedException {
+        OutputStream out = socket.getOutputStream();
+        for (int i = 0; i < datos.length; i += TROZO) {
+            int largo = Math.min(TROZO, datos.length - i);
+            out.write(datos, i, largo);
+            out.flush();
+            Thread.sleep(20);
+        }
+        Thread.sleep(Math.min(5000, 500 + datos.length / 40));
     }
 
     private void terminar(boolean ok, String mensaje) {
