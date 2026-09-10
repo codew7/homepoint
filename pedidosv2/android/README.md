@@ -74,6 +74,10 @@ El workflow también se dispara solo cuando se modifica algo dentro de `pedidosv
    **Configuración** y habilitá *Permitir instalar apps de esta fuente* para el navegador.
 3. Volvé atrás y tocá **Instalar**.
 4. La primera vez que escanees un código, la app va a pedir permiso de **cámara**: aceptalo.
+5. Antes de imprimir por primera vez, emparejá la impresora térmica desde los
+   **ajustes de Bluetooth de Android** (una sola vez, como con cualquier otro dispositivo
+   Bluetooth). La app va a pedir permiso de **Bluetooth** y, si hace falta, activar el
+   Bluetooth del equipo.
 
 Para actualizar más adelante: se instala el APK nuevo encima, sin desinstalar nada y sin
 perder la sesión.
@@ -84,8 +88,16 @@ perder la sesión.
 
 Un navegador incrustado no sabe hacer algunas cosas por su cuenta. La app las resuelve:
 
-- **Imprimir** rótulos, facturas y recibos: abre el cuadro de impresión de Android, donde
-  aparecen las impresoras del sistema (incluida la 3nStar por *ESC Print Service*).
+- **Imprimir el Ticket y el Rótulo (tira POS)**: los dos van directo por **Bluetooth** a
+  la impresora térmica emparejada, con los mismos comandos ESC-POS que usa la impresión
+  por PC. El Ticket sale como texto nítido de la fuente nativa; el Rótulo (que es una
+  imagen: nombre, dirección, QR) se manda como bitmap ESC-POS partido en tiras, para no
+  saturar el buffer de impresoras chicas. Ninguno de los dos depende de *ESC Print
+  Service* ni de ningún cuadro de diálogo. La primera vez piden elegir la impresora;
+  después queda guardada, y se puede cambiar en cualquier momento desde el menú
+  **Imprimir → Impresora Bluetooth**.
+- **Generar Rótulo PDF y Generar Pedido PDF**: siguen igual, se descargan/comparten como
+  PDF, no pasan por la impresora.
 - **Guardar PDF**: van a la carpeta Descargas y se abren en el visor.
 - **Compartir PDF**: usa el menú de compartir de Android (WhatsApp, mail, Drive).
 - **Copiar al portapapeles**: usa el portapapeles del sistema.
@@ -94,7 +106,7 @@ Un navegador incrustado no sabe hacer algunas cosas por su cuenta. La app las re
 - **Sin conexión**: muestra una pantalla con botón *Reintentar*.
 
 QZ Tray (la impresión por USB desde la PC) no existe en Android; la propia página ya lo
-detecta y usa el camino del sistema.
+detecta y usa Bluetooth directo para el Ticket y el Rótulo.
 
 ---
 

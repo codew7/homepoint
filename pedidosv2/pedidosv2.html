@@ -3093,6 +3093,9 @@
             <div class="print-menu" id="printMenu">
               <div class="print-menu-item" id="printRotuloPOS">R&oacute;tulo</div>
               <div class="print-menu-item" id="printTicket">Ticket</div>
+              <!-- Solo aplica dentro de la app Android (impresion Bluetooth directa);
+                   se muestra u oculta desde JS, ver btnImpresion click. -->
+              <div class="print-menu-item" id="printConfigBT" style="display:none">Impresora Bluetooth</div>
               <div class="print-menu-item" id="printRotulo">Generar R&oacute;tulo PDF</div>
               <div class="print-menu-item" id="printFactura">Generar Pedido PDF</div>
             </div>
@@ -6332,6 +6335,11 @@
     btnImpresion.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btnImpresion.disabled) return;
+      // window.APP_ANDROID lo pone puente.js recien cuando termina de cargar
+      // la pagina; se revisa aca (al abrir el menu) y no al cargar, para no
+      // depender del orden exacto entre la inyeccion del puente y el resto.
+      document.getElementById('printConfigBT').style.display =
+        (window.APP_ANDROID && typeof window.configurarImpresoraBluetooth === 'function') ? '' : 'none';
       printMenu.classList.toggle('active');
     });
 
@@ -6358,10 +6366,16 @@
       generarPedidoPDF();
     });
 
-    // Imprimir Ticket (POS 80mm, ESC-POS via QZ Tray)
+    // Imprimir Ticket (POS 80mm, ESC-POS via QZ Tray en PC / Bluetooth directo en la app)
     document.getElementById('printTicket').addEventListener('click', () => {
       printMenu.classList.remove('active');
       imprimirTicket();
+    });
+
+    // Elegir o cambiar la impresora Bluetooth (solo dentro de la app Android)
+    document.getElementById('printConfigBT').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      if (typeof window.configurarImpresoraBluetooth === 'function') window.configurarImpresoraBluetooth();
     });
 
     // El modal de cantidad lo comparten los dos rotulos: esto recuerda
@@ -7022,6 +7036,48 @@
     const escCmd = (hex) => ({ type: 'raw', format: 'command', flavor: 'hex', data: hex });
     const escTxt = (s) => ({ type: 'raw', format: 'command', flavor: 'plain', data: s });
 
+    // Convierte la lista de comandos de construirESCPOS() en una tira de bytes
+    // para mandar directo por Bluetooth desde la app Android (ver puente.js /
+    // imprimirEscPosBT). Se ignora cualquier entrada que no sea texto/hex: la
+    // imagen del logo es un truco propio de QZ Tray, no una tira de bytes.
+    function escposABytes(data) {
+      const bytes = [];
+      data.forEach(item => {
+        if (!item || item.type !== 'raw' || item.format !== 'command') return;
+        if (item.flavor === 'hex') {
+          const hex = item.data;
+          for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.substr(i, 2), 16));
+        } else if (item.flavor === 'plain') {
+          const s = item.data;
+          for (let i = 0; i < s.length; i++) bytes.push(s.charCodeAt(i) & 0xFF);
+        }
+      });
+      return new Uint8Array(bytes);
+    }
+
+    function bytesABase64(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    }
+
+    // Junta varias tiras de bytes (Uint8Array) en una sola. Lo usa el rótulo
+    // por Bluetooth para pegar cabecera + bloques de imagen + corte.
+    function escposConcatenar(partes) {
+      let total = 0;
+      partes.forEach(p => { total += p.length; });
+      const out = new Uint8Array(total);
+      let o = 0;
+      partes.forEach(p => { out.set(p, o); o += p.length; });
+      return out;
+    }
+
+    function escposHexABytes(hex) {
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) out[i / 2] = parseInt(hex.substr(i, 2), 16);
+      return out;
+    }
+
     // Construye el documento ESC-POS completo del recibo.
     // conLogo=false omite la imagen (el logo es lo único raster; si la
     // impresora/QZ no lo puede procesar, igual sale todo el texto nativo).
@@ -7193,6 +7249,16 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return await qz.printers.getDefault();
     }
 
+    // App Android: mismo ticket ESC-POS que en PC, pero mandado directo por
+    // Bluetooth (ver puente.js) en vez de por QZ Tray. Sin logo: el logo es
+    // una imagen raster armada solo para QZ, así que va el mismo encabezado de
+    // texto en negrita que ya usa el respaldo "sin logo" de la impresión en PC.
+    async function imprimirReciboESCPOSBluetooth(d) {
+      const bytes = escposABytes(construirESCPOS(d, false));
+      const base64 = bytesABase64(bytes);
+      await window.imprimirEscPosBT(base64);
+    }
+
     async function imprimirReciboESCPOS(d) {
       await conectarQZ();
       const printerName = await seleccionarImpresoraPOS();
@@ -7294,7 +7360,26 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     async function imprimirComprobante(d) {
-      // Android: no hay QZ Tray que intentar. Va directo al servicio de
+      // App Android empaquetada (APK): imprime directo por Bluetooth, con los
+      // mismos comandos ESC-POS que la PC. window.APP_ANDROID solo existe
+      // dentro de la app (lo pone puente.js); en Chrome de un Android normal
+      // NO entra acá, sigue yendo por el camino de siempre unas líneas abajo.
+      if (window.APP_ANDROID && typeof window.imprimirEscPosBT === 'function') {
+        try {
+          await imprimirReciboESCPOSBluetooth(d);
+        } catch (e) {
+          console.error('Fallo impresión ESC-POS por Bluetooth:', e);
+          const motivo = (e && e.message) ? e.message : String(e);
+          const usarHTML = confirm(
+            'No se pudo imprimir por Bluetooth.\n\n' + motivo +
+            '\n\n¿Querés imprimir con el método de respaldo (menos nítido)?'
+          );
+          if (usarHTML) imprimirReciboHTML(d);
+        }
+        return;
+      }
+
+      // Android sin la app (navegador suelto): va directo al servicio de
       // impresion del sistema, sin intento fallido y sin cartel de error.
       if (ES_ANDROID) { imprimirReciboHTML(d); return; }
 
@@ -7580,6 +7665,79 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       imprimirDocumentoHTML(html);
     }
 
+    // ====================================================================
+    // ROTULO POR BLUETOOTH DIRECTO (app Android)
+    // ====================================================================
+    // rotConstruirCanvas() ya deja el rotulo binarizado a blanco/negro puro
+    // (rotBinarizar) y devuelve solo el dataURL, para no tocar el camino de
+    // siempre (HTML / QZ). Acá se vuelve a levantar ese PNG -sin perdida- como
+    // canvas para poder leer sus píxeles y armar el comando de imagen nativo
+    // de la impresora (GS v 0), sin pasar por QZ Tray ni por ningún diálogo.
+
+    function rotDataUrlACanvas(dataUrl) {
+      return new Promise((resolver, rechazar) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          resolver(canvas);
+        };
+        img.onerror = () => rechazar(new Error('No se pudo leer la imagen del rótulo'));
+        img.src = dataUrl;
+      });
+    }
+
+    // Filas por bloque GS v 0. El rótulo entero mide 1240 puntos de largo; se
+    // manda en tiras de a 256 en vez de una sola imagen gigante para no
+    // saturar el buffer de imagen de impresoras chicas (el mismo motivo por
+    // el que los PDF viajan en trozos hacia Android, ver puente.js).
+    const ROT_BT_FILAS_POR_BLOQUE = 256;
+
+    function rotCanvasAEscPosBloques(canvas) {
+      const w = canvas.width, h = canvas.height;
+      const datos = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+      const bytesPorFila = w / 8;   // 576 / 8 = 72: el ancho ya viene alineado a bytes
+      const bloques = [];
+      for (let y0 = 0; y0 < h; y0 += ROT_BT_FILAS_POR_BLOQUE) {
+        const filas = Math.min(ROT_BT_FILAS_POR_BLOQUE, h - y0);
+        const bitmap = new Uint8Array(bytesPorFila * filas);
+        for (let y = 0; y < filas; y++) {
+          for (let x = 0; x < w; x++) {
+            // El canvas ya es blanco/negro puro: bit en 1 = punto negro (tinta).
+            if (datos[((y0 + y) * w + x) * 4] < 128) {
+              bitmap[y * bytesPorFila + (x >> 3)] |= (0x80 >> (x & 7));
+            }
+          }
+        }
+        const xL = bytesPorFila & 0xFF, xH = (bytesPorFila >> 8) & 0xFF;
+        const yL = filas & 0xFF, yH = (filas >> 8) & 0xFF;
+        bloques.push(escposConcatenar([
+          new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]),   // GS v 0 m xL xH yL yH
+          bitmap
+        ]));
+      }
+      return bloques;
+    }
+
+    async function imprimirRotuloPOSBluetooth(canvas, cantidad) {
+      const cuerpo = escposConcatenar([
+        escposHexABytes('1B40'),              // ESC @ -> reset
+        ...rotCanvasAEscPosBloques(canvas),
+        new Uint8Array([0x0A]),               // salto de línea
+        escposHexABytes('1D564203')           // GS V 66 3 -> avanza y corta (parcial)
+      ]);
+      const base64 = bytesABase64(cuerpo);
+      // Una llamada por copia: cada rótulo pesa ~90 KB de imagen y el puente
+      // hacia Android no parte este mensaje en trozos (a diferencia del de
+      // PDF), así que mandar hasta 20 copias juntas de una podría superar el
+      // límite de una sola llamada JS→Android y perderse sin aviso.
+      for (let i = 0; i < cantidad; i++) {
+        await window.imprimirEscPosBT(base64);
+      }
+    }
+
     async function imprimirRotuloPOS(cantidad) {
       if (!pedidoActual || !pedidoId) return;
 
@@ -7619,7 +7777,25 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         showToast('No se pudo generar el rotulo');
         return;
       }
-      // Android: la tira sale por ESC Print Service, sin armar ESC-POS.
+      // App Android empaquetada (APK): imprime directo por Bluetooth, igual
+      // que el Ticket. window.APP_ANDROID solo existe dentro de la app.
+      if (window.APP_ANDROID && typeof window.imprimirEscPosBT === 'function') {
+        try {
+          const canvas = await rotDataUrlACanvas(dataUrl);
+          await imprimirRotuloPOSBluetooth(canvas, cantidad);
+        } catch (e) {
+          console.error('Fallo impresión del rótulo por Bluetooth:', e);
+          const motivo = (e && e.message) ? e.message : String(e);
+          const usarHTML = confirm(
+            'No se pudo imprimir el rótulo por Bluetooth.\n\n' + motivo +
+            '\n\n¿Querés imprimir con el método de respaldo?'
+          );
+          if (usarHTML) rotRespaldoHTML(dataUrl, cantidad);
+        }
+        return;
+      }
+
+      // Android sin la app (navegador suelto): la tira sale por ESC Print Service.
       if (ES_ANDROID) { rotRespaldoHTML(dataUrl, cantidad); return; }
 
       const base64 = dataUrl.split(',')[1];

@@ -55,6 +55,24 @@ public class PuenteAndroid {
         app.imprimirPantalla(titulo);
     }
 
+    /**
+     * Manda a imprimir directo por Bluetooth los bytes ESC-POS que arma
+     * pedidosv2.html (los mismos comandos que usa la impresión por PC vía QZ
+     * Tray). id correlaciona esta llamada con la promesa que quedó pendiente
+     * del lado de puente.js: la respuesta llega por evaluateJavascript.
+     */
+    @JavascriptInterface
+    public void imprimirEscPos(String id, String base64) {
+        if (id == null || base64 == null) return;
+        app.imprimirEscPos(id, base64);
+    }
+
+    /** Abre el selector nativo para elegir o cambiar la impresora Bluetooth guardada. */
+    @JavascriptInterface
+    public void configurarImpresoraBluetooth() {
+        app.configurarImpresoraBluetooth();
+    }
+
     // ------------------------------------------------------------ archivos
 
     @JavascriptInterface

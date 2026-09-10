@@ -64,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final Handler hilo = new Handler(Looper.getMainLooper());
     private ActivityResultLauncher<String> pedirCamara;
+    private ImpresoraBluetooth impresoraBt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,6 +86,8 @@ public class MainActivity extends AppCompatActivity {
             }
             permisoWebPendiente = null;
         });
+
+        impresoraBt = new ImpresoraBluetooth(this);
 
         configurarWebView();
 
@@ -338,6 +341,47 @@ public class MainActivity extends AppCompatActivity {
         String nombre = (titulo == null || titulo.isEmpty()) ? getString(R.string.app_name) : titulo;
         PrintDocumentAdapter adaptador = origen.createPrintDocumentAdapter(nombre);
         pm.print(nombre, adaptador, new PrintAttributes.Builder().build());
+    }
+
+    // ---------------------------------------------------------------- impresion Bluetooth
+
+    /**
+     * Imprime los bytes ESC-POS armados por pedidosv2.html directo por
+     * Bluetooth (ver ImpresoraBluetooth), sin pasar por el dialogo de
+     * impresion del sistema. El resultado vuelve a la pagina resolviendo o
+     * rechazando la promesa que puente.js dejo pendiente con ese mismo id.
+     */
+    void imprimirEscPos(String id, String base64) {
+        byte[] datos;
+        try {
+            datos = ImpresoraBluetooth.decodificar(base64);
+        } catch (Exception e) {
+            responderImpresionBt(id, false, "Datos inválidos");
+            return;
+        }
+        if (datos.length == 0) {
+            responderImpresionBt(id, false, "Nada para imprimir");
+            return;
+        }
+        runOnUiThread(() -> impresoraBt.imprimir(datos,
+                (ok, mensaje) -> responderImpresionBt(id, ok, mensaje)));
+    }
+
+    /** Abre el selector para elegir o cambiar la impresora Bluetooth guardada. */
+    void configurarImpresoraBluetooth() {
+        runOnUiThread(() -> impresoraBt.elegirImpresora());
+    }
+
+    private void responderImpresionBt(String id, boolean ok, String mensaje) {
+        String js = "window.__resultadoImpresionBT && window.__resultadoImpresionBT("
+                + jsonString(id) + "," + ok + "," + jsonString(mensaje) + ")";
+        runOnUiThread(() -> web.evaluateJavascript(js, null));
+    }
+
+    private String jsonString(String s) {
+        if (s == null) return "null";
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "") + "\"";
     }
 
     // ---------------------------------------------------------------- ciclo de vida

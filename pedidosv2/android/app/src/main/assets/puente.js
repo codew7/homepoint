@@ -135,4 +135,42 @@
       return resultado;
     };
   }
+
+  // ------------------------------------------------------------ impresora POS por Bluetooth
+
+  // Impresion ESC-POS directa (perfil SPP), sin pasar por el dialogo de
+  // impresion del sistema ni por ninguna app puente. pedidosv2.html arma los
+  // mismos comandos que ya usa para la impresora de PC via QZ Tray y los manda
+  // aca como una tira de bytes en base64; Android hace de cuenta que es el
+  // puerto serie de la impresora.
+  var contadorBT = 0;
+  var promesasBT = {};
+
+  window.imprimirEscPosBT = function (bytesBase64) {
+    return new Promise(function (resolver, rechazar) {
+      var id = 'bt' + (++contadorBT) + '_' + Date.now();
+      promesasBT[id] = { resolver: resolver, rechazar: rechazar };
+      try {
+        nativo.imprimirEscPos(id, bytesBase64);
+      } catch (e) {
+        delete promesasBT[id];
+        rechazar(e);
+      }
+    });
+  };
+
+  // Lo llama Android (MainActivity.responderImpresionBt) cuando termina el
+  // intento de impresion, para resolver o rechazar la promesa de arriba.
+  window.__resultadoImpresionBT = function (id, ok, mensaje) {
+    var p = promesasBT[id];
+    if (!p) return;
+    delete promesasBT[id];
+    if (ok) p.resolver();
+    else p.rechazar(new Error(mensaje || 'No se pudo imprimir'));
+  };
+
+  // Abre el selector nativo para elegir o cambiar la impresora emparejada.
+  window.configurarImpresoraBluetooth = function () {
+    try { nativo.configurarImpresoraBluetooth(); } catch (e) { /* nada */ }
+  };
 })();
