@@ -809,6 +809,50 @@
             color: var(--primary);
         }
 
+        /* Distintivo para el rol root: dorado, con borde y avatar propios */
+        .session-role.root {
+            color: #b45309;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .session-bar.root {
+            border-color: #fcd34d;
+            box-shadow: 0 4px 6px -1px rgba(180, 83, 9, 0.18), 0 0 0 3px rgba(252, 211, 77, 0.25);
+        }
+
+        .session-avatar.root {
+            background: linear-gradient(135deg, #f59e0b, #fbbf24);
+            color: #422006;
+        }
+
+        /* Corona sobre el avatar del root */
+        .session-avatar-wrap {
+            position: relative;
+            flex-shrink: 0;
+            display: inline-flex;
+        }
+
+        .session-root-crown {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #f59e0b;
+            color: var(--white);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .session-bar.root .session-root-crown {
+            display: flex;
+        }
+
         .session-logout {
             flex-shrink: 0;
             width: 36px;
@@ -865,10 +909,31 @@
         
         // Sistema de autenticación
         let admin = false; // Declarar admin al principio para evitar errores de hoisting
+        let esRoot = false; // true si el usuario autenticado tiene rol "root" en /admins
         let authResolved = false; // Flag para controlar si la autenticación se resolvió
-        
+
         // Lista de emails de administradores
         const adminEmails = ["distribuidorahomepoint@gmail.com"];
+
+        // Las claves del nodo /admins son el email con el primer punto cambiado por coma,
+        // igual que en las reglas de seguridad: auth.token.email.replace('.', ',')
+        function claveAdmin(email) {
+            return (email || '').replace('.', ',');
+        }
+
+        // Lee /admins/<clave>/rol. Si el usuario no es admin la lectura da
+        // permission_denied, que aquí simplemente significa "no es root".
+        function detectarRolRoot(user) {
+            if (!user || !user.email) return Promise.resolve(false);
+            return firebase.database()
+                .ref('admins/' + claveAdmin(user.email) + '/rol')
+                .once('value')
+                .then(snap => String(snap.val() || '').trim().toLowerCase() === 'root')
+                .catch(error => {
+                    console.warn('No se pudo leer el rol del usuario:', error.code || error.message);
+                    return false;
+                });
+        }
 
         // Función para inicializar la página después de la autenticación
         function inicializarPagina() {
@@ -980,17 +1045,25 @@
             }
 
             const nombre = nombreDeUsuario(user);
-            document.getElementById('sessionAvatar').textContent = inicialesDeUsuario(nombre);
+            const avatarEl = document.getElementById('sessionAvatar');
+            avatarEl.textContent = inicialesDeUsuario(nombre);
+            avatarEl.classList.toggle('root', esRoot);
 
             const nameEl = document.getElementById('sessionName');
             nameEl.textContent = nombre;
             nameEl.title = user.email || '';
 
             const roleEl = document.getElementById('sessionRole');
-            roleEl.innerHTML = admin
-                ? '<i class="bi bi-shield-check"></i> Modo Administrador'
-                : '<i class="bi bi-person"></i> Usuario';
-            roleEl.classList.toggle('admin', admin);
+            if (esRoot) {
+                roleEl.innerHTML = '<i class="bi bi-shield-fill-check"></i> Root · Acceso total';
+            } else if (admin) {
+                roleEl.innerHTML = '<i class="bi bi-shield-check"></i> Modo Administrador';
+            } else {
+                roleEl.innerHTML = '<i class="bi bi-person"></i> Usuario';
+            }
+            roleEl.classList.toggle('admin', admin && !esRoot);
+            roleEl.classList.toggle('root', esRoot);
+            bar.classList.toggle('root', esRoot);
 
             bar.style.display = 'flex';
         }
@@ -1011,11 +1084,21 @@
                 console.log('Usuario autenticado:', user.email);
 
                 admin = adminEmails.includes(user.email);
-                mostrarSesion(user);
                 mostrarPanel();
                 inicializarPagina();
+
+                // El rol llega de la base, así que primero se pinta la sesión con lo
+                // que ya se sabe y luego se refresca si resulta ser root.
+                mostrarSesion(user);
+                detectarRolRoot(user).then(root => {
+                    esRoot = root;
+                    if (root) admin = true;
+                    mostrarSesion(user);
+                });
             } else {
                 console.log('No hay usuario autenticado, mostrando login...');
+                admin = false;
+                esRoot = false;
                 mostrarLogin();
             }
         });
@@ -1118,7 +1201,10 @@
         <!-- Barra de sesión -->
         <div class="user-status-section">
             <div id="sessionBar" class="session-bar" style="display: none;">
-                <span id="sessionAvatar" class="session-avatar" aria-hidden="true"></span>
+                <span class="session-avatar-wrap">
+                    <span id="sessionAvatar" class="session-avatar" aria-hidden="true"></span>
+                    <span class="session-root-crown" title="Rol root" aria-hidden="true"><i class="bi bi-star-fill"></i></span>
+                </span>
                 <span class="session-info">
                     <span id="sessionName" class="session-name"></span>
                     <span id="sessionRole" class="session-role"></span>
@@ -1374,12 +1460,35 @@
             console.log('Abriendo modal para:', tipo, 'URL:', url);
             urlDestino = url;
             accionModal = (url === 'admin') ? 'admin' : (url === 'envios') ? 'envios' : 'redirect';
+
+            // El rol root no pasa por la contraseña: entra directo
+            if (esRoot) {
+                console.log('Usuario root: se omite la contraseña');
+                accederDirecto();
+                return;
+            }
+
             const modal = document.getElementById('authModal');
             const passwordInput = document.getElementById('passwordInput');
             
             modal.classList.add('show');
             passwordInput.value = '';
             passwordInput.focus();
+        }
+
+        // Ejecuta la acción del destino sin pedir contraseña (usuarios root)
+        function accederDirecto() {
+            if (accionModal === 'admin') {
+                abrirModalAdministracion();
+            } else if (accionModal === 'envios') {
+                abrirModalEnvios();
+            } else if (urlDestino) {
+                window.open(urlDestino, '_blank');
+            } else {
+                console.error('URL está vacía');
+                alert('Error: URL de destino no válida');
+            }
+            urlDestino = '';
         }
 
         // Función para cerrar el modal
