@@ -292,6 +292,107 @@
             color: #666;
         }
 
+        /* ── Sesión: modal de ingreso y barra de usuario ── */
+
+        /* El contenido no se muestra hasta que hay sesión iniciada. */
+        body.app--bloqueada .container {
+            display: none;
+        }
+
+        .sesion {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .sesion__btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .sesion__btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        #modal-auth {
+            border: none;
+            border-radius: 15px;
+            padding: 35px;
+            width: min(400px, 90vw);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        #modal-auth::backdrop {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #modal-auth h2 {
+            color: #667eea;
+            font-size: 22px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #modal-auth input {
+            width: 100%;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        #modal-auth input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #modal-auth button[type="submit"] {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #667eea;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        #modal-auth button[type="submit"]:hover:not(:disabled) {
+            background: #764ba2;
+        }
+
+        #modal-auth button[type="submit"]:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .auth-error {
+            background: #ffe5e5;
+            color: #ff4757;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 24px;
@@ -320,13 +421,28 @@
         }
     </style>
 </head>
-<body>
+<body class="app--bloqueada">
+    <!-- Modal de ingreso. No se puede cerrar con Escape: sin sesión no hay nada detrás. -->
+    <dialog id="modal-auth">
+        <h2><i class="fas fa-lock"></i> Panel de reseñas</h2>
+        <form id="form-auth">
+            <div class="auth-error" id="auth-error" hidden></div>
+            <input id="auth-email" type="email" placeholder="Email" autocomplete="username" required>
+            <input id="auth-pass" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+            <button type="submit" id="btn-auth-entrar">Ingresar</button>
+        </form>
+    </dialog>
+
     <div class="container">
         <div class="header">
             <h1>
                 <i class="fas fa-star"></i>
                 Reseñas de Clientes
             </h1>
+            <div class="sesion" id="sesion" hidden>
+                <span id="sesion-email"></span>
+                <button type="button" class="sesion__btn" id="btn-cerrar-sesion">Cerrar sesión</button>
+            </div>
             <div class="stats">
                 <div class="stat-card">
                     <i class="fas fa-comments"></i>
@@ -385,6 +501,14 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
         import { getDatabase, ref, onValue, remove, update } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-database.js";
+        import {
+            getAuth,
+            setPersistence,
+            browserLocalPersistence,
+            signInWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
 
         // Configuración de Firebase
         const firebaseConfig = {
@@ -515,28 +639,39 @@
             renderReviews(filtered);
         }
 
-        // Cargar reseñas desde Firebase
-        const reviewsRef = ref(database, 'resenas');
-        onValue(reviewsRef, (snapshot) => {
-            allReviews = [];
-            
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnapshot) => {
-                    allReviews.push({
-                        id: childSnapshot.key,
-                        ...childSnapshot.val()
+        // Cargar reseñas desde Firebase. Se llama recién con la sesión iniciada:
+        // antes de eso las reglas de la base rechazan la lectura.
+        function iniciarApp() {
+            const reviewsRef = ref(database, 'resenas');
+            onValue(reviewsRef, (snapshot) => {
+                allReviews = [];
+
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        allReviews.push({
+                            id: childSnapshot.key,
+                            ...childSnapshot.val()
+                        });
                     });
-                });
-                
-                // Ordenar por fecha más reciente
-                allReviews.sort((a, b) => {
-                    return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
-                });
-            }
-            
-            updateStats(allReviews);
-            filterReviews();
-        });
+
+                    // Ordenar por fecha más reciente
+                    allReviews.sort((a, b) => {
+                        return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+                    });
+                }
+
+                updateStats(allReviews);
+                filterReviews();
+            }, (error) => {
+                document.getElementById('reviewsContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <h2>No se pudieron cargar las reseñas</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            });
+        }
 
         // Event listeners para filtros
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -574,6 +709,104 @@
                 }
             }
         };
+
+        /* ─────────────────────────── Sesión ─────────────────────────── */
+
+        const auth = getAuth(app);
+        let appIniciada = false;
+
+        const modalAuth = document.getElementById('modal-auth');
+        const formAuth = document.getElementById('form-auth');
+        const inputEmail = document.getElementById('auth-email');
+        const inputPass = document.getElementById('auth-pass');
+        const errorAuth = document.getElementById('auth-error');
+        const btnEntrar = document.getElementById('btn-auth-entrar');
+        const sesionEl = document.getElementById('sesion');
+        const sesionEmailEl = document.getElementById('sesion-email');
+        const btnSalir = document.getElementById('btn-cerrar-sesion');
+
+        function mostrarErrorAuth(mensaje) {
+            errorAuth.textContent = mensaje;
+            errorAuth.hidden = !mensaje;
+        }
+
+        // Firebase devuelve el mismo código para usuario inexistente y contraseña
+        // incorrecta: no conviene aclarar cuál de las dos falló.
+        function mensajeDeError(error) {
+            switch (error?.code) {
+                case 'auth/invalid-email':      return 'El email no tiene un formato válido.';
+                case 'auth/missing-password':   return 'Escribí la contraseña.';
+                case 'auth/invalid-credential':
+                case 'auth/wrong-password':
+                case 'auth/user-not-found':     return 'Email o contraseña incorrectos.';
+                case 'auth/user-disabled':      return 'Este usuario está deshabilitado.';
+                case 'auth/too-many-requests':  return 'Demasiados intentos fallidos. Esperá unos minutos.';
+                case 'auth/network-request-failed': return 'No hay conexión con Firebase.';
+                default: return error?.message || 'No se pudo iniciar sesión.';
+            }
+        }
+
+        // El modal no se puede cerrar con Escape.
+        modalAuth.addEventListener('cancel', (evento) => evento.preventDefault());
+
+        formAuth.addEventListener('submit', async (evento) => {
+            evento.preventDefault();
+            mostrarErrorAuth('');
+
+            btnEntrar.disabled = true;
+            btnEntrar.textContent = 'Ingresando…';
+
+            try {
+                await signInWithEmailAndPassword(auth, inputEmail.value.trim(), inputPass.value);
+                // El cierre del modal lo hace onAuthStateChanged.
+            } catch (error) {
+                mostrarErrorAuth(mensajeDeError(error));
+                inputPass.value = '';
+                inputPass.focus();
+            } finally {
+                btnEntrar.disabled = false;
+                btnEntrar.textContent = 'Ingresar';
+            }
+        });
+
+        btnSalir.addEventListener('click', () => signOut(auth));
+
+        // Si el navegador bloquea el almacenamiento, la sesión dura lo que la
+        // pestaña: preferible eso a no poder entrar.
+        setPersistence(auth, browserLocalPersistence)
+            .catch(() => {})
+            .then(() => {
+                onAuthStateChanged(auth, (usuario) => {
+                    if (usuario) {
+                        document.body.classList.remove('app--bloqueada');
+                        mostrarErrorAuth('');
+                        formAuth.reset();
+                        if (modalAuth.open) modalAuth.close();
+
+                        sesionEmailEl.textContent = usuario.email || 'Sesión iniciada';
+                        sesionEl.hidden = false;
+
+                        if (!appIniciada) {
+                            appIniciada = true;
+                            iniciarApp();
+                        }
+                        return;
+                    }
+
+                    // Sin usuario: o es el primer arranque, o la sesión se cerró
+                    // mientras la página estaba abierta. En el segundo caso hay que
+                    // recargar, porque la suscripción activa queda sin permisos.
+                    if (appIniciada) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    document.body.classList.add('app--bloqueada');
+                    sesionEl.hidden = true;
+                    if (!modalAuth.open) modalAuth.showModal();
+                    inputEmail.focus();
+                });
+            });
     </script>
 </body>
 </html>
