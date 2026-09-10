@@ -1,0 +1,67 @@
+plugins {
+    id 'com.android.application'
+}
+
+// La firma se toma de firma.properties, que NO va al repositorio (ver .gitignore).
+// En GitHub Actions ese archivo lo arma el workflow con los secrets. Si no
+// existe, solo se puede compilar la variante debug.
+def firma = new Properties()
+def archivoFirma = rootProject.file('firma.properties')
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { firma.load(it) }
+}
+def hayFirma = firma['storeFile'] != null
+
+android {
+    namespace 'ar.com.homepoint.pedidos'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "ar.com.homepoint.pedidos"
+        minSdk 24
+        targetSdk 34
+        // GitHub Actions los pasa por linea de comandos. El versionCode tiene que
+        // subir en cada compilacion o Android no deja instalar la nueva version
+        // encima de la que ya esta en el telefono.
+        versionCode project.hasProperty('appVersionCode') ? appVersionCode.toInteger() : 1
+        versionName project.hasProperty('appVersionName') ? appVersionName.toString() : "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (hayFirma) {
+                storeFile file(firma['storeFile'])
+                storePassword firma['storePassword']
+                keyAlias firma['keyAlias']
+                keyPassword firma['keyPassword']
+                storeType firma.getProperty('storeType', 'PKCS12')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hayFirma) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Un aviso de lint no tiene por que frenar la compilacion del APK.
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.core:core:1.13.1'
+}
