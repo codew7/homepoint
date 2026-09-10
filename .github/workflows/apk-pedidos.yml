@@ -1,0 +1,119 @@
+name: APK Pedidos
+
+# Compila la app Android que envuelve pedidosv2.html.
+# Se puede lanzar a mano desde la pestana Actions, o sale sola cuando se
+# toca algo dentro de pedidosv2/android.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar el APK en Releases (link de descarga directo)'
+        type: boolean
+        default: true
+      version:
+        description: 'Numero de version visible (ej: 1.0)'
+        type: string
+        default: '1.0'
+  push:
+    branches: [main]
+    paths:
+      - 'pedidosv2/android/**'
+      - '.github/workflows/apk-pedidos.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Bajar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar el SDK de Android
+        uses: android-actions/setup-android@v3
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # Si estan cargados los secrets de firma, el APK sale firmado con la
+      # clave de siempre y se puede instalar encima del que ya esta en el
+      # telefono. Sin secrets sale una version debug, que sirve para probar
+      # pero cambia de firma en cada compilacion.
+      - name: Preparar la firma
+        id: firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/pedidosv2/android/firma.p12"
+            {
+              echo "storeFile=$GITHUB_WORKSPACE/pedidosv2/android/firma.p12"
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+              echo "storeType=PKCS12"
+            } > "$GITHUB_WORKSPACE/pedidosv2/android/firma.properties"
+            echo "variante=release" >> "$GITHUB_OUTPUT"
+            echo "Se firma con la clave del repositorio."
+          else
+            echo "variante=debug" >> "$GITHUB_OUTPUT"
+            echo "Sin secrets de firma: se compila la variante debug."
+          fi
+
+      - name: Compilar APK firmado
+        if: steps.firma.outputs.variante == 'release'
+        working-directory: pedidosv2/android
+        run: >
+          gradle assembleRelease --no-daemon
+          -PappVersionCode=${{ github.run_number }}
+          -PappVersionName=${{ inputs.version || '1.0' }}.${{ github.run_number }}
+
+      - name: Compilar APK de prueba
+        if: steps.firma.outputs.variante == 'debug'
+        working-directory: pedidosv2/android
+        run: >
+          gradle assembleDebug --no-daemon
+          -PappVersionCode=${{ github.run_number }}
+          -PappVersionName=${{ inputs.version || '1.0' }}.${{ github.run_number }}
+
+      - name: Juntar el APK
+        id: apk
+        run: |
+          mkdir -p salida
+          archivo=$(find pedidosv2/android/app/build/outputs/apk -name '*.apk' | head -n1)
+          if [ -z "$archivo" ]; then echo "No se genero ningun APK"; exit 1; fi
+          nombre="PedidosHomePoint-${{ github.run_number }}.apk"
+          cp "$archivo" "salida/$nombre"
+          echo "nombre=$nombre" >> "$GITHUB_OUTPUT"
+          ls -lh salida
+
+      - name: Guardar el APK como archivo descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PedidosHomePoint-apk
+          path: salida/*.apk
+          retention-days: 60
+
+      - name: Publicar en Releases
+        if: github.event_name == 'workflow_dispatch' && inputs.publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          etiqueta="pedidos-v${{ inputs.version || '1.0' }}.${{ github.run_number }}"
+          gh release create "$etiqueta" "salida/${{ steps.apk.outputs.nombre }}" \
+            --title "Pedidos HomePoint ${{ inputs.version || '1.0' }}.${{ github.run_number }}" \
+            --notes "APK de la app de pedidos. Descargalo desde el celular y abrilo para instalar."
