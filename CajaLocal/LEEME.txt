@@ -1,0 +1,152 @@
+===============================================================================
+  CAJA HOMEPOINT - Version para usar en la PC del local
+===============================================================================
+
+  Este paquete permite trabajar con la caja sin entrar a la pagina web:
+  se instala una vez y despues se abre con un doble clic, como cualquier
+  otro programa.
+
+
+-------------------------------------------------------------------------------
+  INSTALACION (una sola vez por PC)
+-------------------------------------------------------------------------------
+
+  1. Copiar la carpeta CajaLocal entera a la PC.
+     Recomendado: C:\HomePoint\CajaLocal
+     (Puede ir en cualquier lado, pero NO dentro de Archivos de programa.)
+
+  2. Doble clic en INSTALAR.bat
+
+  3. Listo: queda el icono "Caja HomePoint" en el Escritorio.
+
+  Windows puede mostrar un cartel azul que dice "Windows protegio su PC".
+  Es normal, porque el archivo no tiene firma digital comprada.
+  Hay que hacer clic en "Mas informacion" y despues en "Ejecutar de todas
+  formas". Pasa una sola vez.
+
+
+-------------------------------------------------------------------------------
+  USO DIARIO
+-------------------------------------------------------------------------------
+
+  ABRIR   ->  doble clic en "Caja HomePoint" (Escritorio)
+  CERRAR  ->  cerrar la ventana con la X, como cualquier programa
+
+  La caja se abre en una ventana propia, sin barra de direcciones ni
+  pestanas. La sesion queda iniciada de un dia para el otro: no hay que
+  escribir el usuario y la contrasena todas las mananas.
+
+  El boton "Historial" abre la pantalla de pedidos del dia en otra ventana.
+
+
+-------------------------------------------------------------------------------
+  QUE NECESITA LA PC
+-------------------------------------------------------------------------------
+
+  - Windows 10 u 11.                          (no hay que instalar nada mas)
+  - Conexion a internet.
+  - Google Chrome o Microsoft Edge.           (Edge ya viene con Windows)
+
+  NO hace falta instalar Node, Python, XAMPP ni ningun servidor.
+  El paquete usa un componente que ya trae Windows.
+
+  IMPORTANTE: la caja necesita internet SIEMPRE. Los pedidos, los articulos y
+  los precios viven en Firebase y en la planilla de Google, no en esta PC.
+  Este paquete evita depender del hosting de la pagina, no de internet.
+
+
+-------------------------------------------------------------------------------
+  COMO FUNCIONA (para quien tenga que dar soporte)
+-------------------------------------------------------------------------------
+
+  Los archivos HTML de la caja no se pueden abrir con doble clic directo.
+  Al abrirlos asi el navegador los trata como "archivo suelto" (file://) y,
+  por seguridad, les niega todo: el login de Firebase falla, el guardado de
+  fotos no arranca y la lectura de la planilla queda bloqueada por CORS.
+
+  Por eso el acceso directo enciende primero un servidor local minimo, que
+  publica la carpeta "app" en http://localhost:8123 y abre ahi la caja. Para
+  el navegador eso es un sitio web normal y seguro, asi que todo funciona.
+
+  El servidor:
+    - escucha solamente en localhost, no en la red del local;
+    - no lo ve ni lo puede usar nadie desde otra PC;
+    - se apaga solo al cerrar la ventana de la caja;
+    - anota lo que hace en sistema\registro.txt.
+
+
+-------------------------------------------------------------------------------
+  QUE HAY ADENTRO
+-------------------------------------------------------------------------------
+
+  INSTALAR.bat        Crea los accesos directos. Se ejecuta una sola vez.
+  DESINSTALAR.bat     Saca los accesos directos de esta PC.
+  ABRIR CAJA.bat      Abre la caja sin instalar (para probar o usar de un pendrive).
+  LEEME.txt           Este archivo.
+
+  app\                Las pantallas de la caja. Son copias exactas de la web:
+                      ingresoPedidoV2.html / .css / .js   la caja
+                      historialRecientes.html             pedidos del dia
+                      login.html                          pantalla de ingreso
+                      config.js                           datos de conexion
+                      sw-imagenes.js                      cache de fotos
+                      logo.png, faviconnegro.png          imagenes
+
+  sistema\            El motor. Aca no hay que tocar nada.
+                      servidor.ps1     el servidor local
+                      iniciar.vbs      lo enciende sin ventanas negras
+                      instalar.ps1     crea los accesos directos
+                      desinstalar.ps1  los borra
+                      detener.ps1      apaga todo si algo queda colgado
+                      DETENER.bat      lo mismo, con doble clic
+                      registro.txt     se crea solo, con el historial de arranques
+
+
+-------------------------------------------------------------------------------
+  ACTUALIZAR LA CAJA A UNA VERSION NUEVA
+-------------------------------------------------------------------------------
+
+  Reemplazar los archivos de la carpeta "app" por los nuevos y volver a abrir.
+  No hay que reinstalar ni tocar los accesos directos.
+  El servidor entrega los archivos sin cache, asi que el cambio se ve enseguida.
+
+
+-------------------------------------------------------------------------------
+  SI ALGO NO ANDA
+-------------------------------------------------------------------------------
+
+  * No abre nada al hacer doble clic
+    Revisar sistema\registro.txt: ahi queda anotado el motivo.
+
+  * Se abre pero dice "Correo o contrasena incorrectos" con datos correctos
+    En la consola de Firebase, Authentication > Settings > Authorized domains,
+    tiene que figurar "localhost". Viene por defecto; si alguien lo borro,
+    hay que agregarlo de nuevo.
+
+  * Abre y el login funciona, pero no aparecen los articulos, ni la cotizacion
+    del dolar, ni los vendedores
+    Es la clave de Google Sheets restringida por dominio. En Google Cloud
+    Console > Credentials > la API key de Sheets, agregar estos referrers:
+        http://localhost:8123/*
+        http://localhost:8124/*
+        http://localhost:8125/*
+
+  * Se movio la carpeta de lugar y el acceso directo dejo de funcionar
+    Ejecutar INSTALAR.bat otra vez desde la ubicacion nueva.
+
+  * La caja quedo abierta y no responde
+    Doble clic en sistema\DETENER.bat y volver a abrir.
+
+  * Se necesitan dos cajas abiertas al mismo tiempo
+    Doble clic en el acceso del Escritorio otra vez: abre una segunda ventana
+    reutilizando el mismo servidor. El servidor se apaga recien cuando se
+    cierran todas las ventanas de la caja, no cuando se cierra la primera.
+
+
+-------------------------------------------------------------------------------
+  IMPRESION DE TICKETS
+-------------------------------------------------------------------------------
+
+  La impresion por QZ Tray sigue funcionando igual que en la version web:
+  QZ Tray tiene que estar instalado y corriendo en esta PC, aparte de este
+  paquete. Si no esta, la caja imprime por el metodo comun del navegador.
