@@ -31,14 +31,15 @@ Pasos en la web de GitHub:
 
 1. Entrá al repositorio → pestaña **Settings** → menú izquierdo **Secrets and variables** →
    **Actions**.
-2. Botón **New repository secret**. Hay que crear cuatro, uno por vez:
+2. Botón **New repository secret**. Alcanza con estos dos:
 
    | Name (nombre exacto)        | Secret (valor)                                            |
    |-----------------------------|-----------------------------------------------------------|
    | `ANDROID_KEYSTORE_BASE64`   | todo el contenido de `firma-base64.txt` (una línea larga) |
    | `ANDROID_KEYSTORE_PASSWORD` | la contraseña que figura en `clave.txt`                   |
-   | `ANDROID_KEY_ALIAS`         | `pedidos`                                                  |
-   | `ANDROID_KEY_PASSWORD`      | la misma contraseña de `clave.txt`                        |
+
+   Al pegarlos, cuidado con no dejar espacios ni saltos de línea al final.
+   El nombre interno de la clave (*alias*) lo detecta solo el workflow.
 
 Si te salteás este paso igual se compila, pero sale una versión de prueba que **cambia de
 firma cada vez** y no se puede instalar encima de la anterior.

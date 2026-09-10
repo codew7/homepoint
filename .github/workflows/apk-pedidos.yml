@@ -58,21 +58,44 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/pedidosv2/android/firma.p12"
-            {
-              echo "storeFile=$GITHUB_WORKSPACE/pedidosv2/android/firma.p12"
-              echo "storePassword=$KEYSTORE_PASSWORD"
-              echo "keyAlias=$KEY_ALIAS"
-              echo "keyPassword=$KEY_PASSWORD"
-              echo "storeType=PKCS12"
-            } > "$GITHUB_WORKSPACE/pedidosv2/android/firma.properties"
-            echo "variante=release" >> "$GITHUB_OUTPUT"
-            echo "Se firma con la clave del repositorio."
-          else
+          if [ -z "$KEYSTORE_BASE64" ]; then
             echo "variante=debug" >> "$GITHUB_OUTPUT"
             echo "Sin secrets de firma: se compila la variante debug."
+            exit 0
           fi
+
+          almacen="$GITHUB_WORKSPACE/pedidosv2/android/firma.p12"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$almacen"
+
+          # Un PKCS12 tiene una sola contrasena: la del almacen vale tambien
+          # para la clave. El secret ANDROID_KEY_PASSWORD queda como reserva
+          # por si algun dia se usa un keystore de los que llevan dos.
+          clave_pass="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+          if [ "$almacen" != "${almacen%.p12}" ]; then
+            clave_pass="$KEYSTORE_PASSWORD"
+          fi
+
+          # El alias se lee del propio archivo en vez de confiar en el secret:
+          # un espacio de mas ahi adentro hace fallar la firma recien al final
+          # de la compilacion, con un error que no dice que el problema es ese.
+          if ! keytool -list -keystore "$almacen" -storepass "$KEYSTORE_PASSWORD" -storetype PKCS12 > /tmp/aliases.txt 2>&1; then
+            echo "No se pudo abrir el keystore. Revisa el secret ANDROID_KEYSTORE_PASSWORD."
+            exit 1
+          fi
+          alias_detectado=$(grep -i 'PrivateKeyEntry' /tmp/aliases.txt | head -n1 | cut -d, -f1)
+          if [ -z "$alias_detectado" ]; then
+            alias_detectado="$KEY_ALIAS"
+          fi
+          echo "Alias usado para firmar: $alias_detectado"
+
+          {
+            echo "storeFile=$almacen"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$alias_detectado"
+            echo "keyPassword=$clave_pass"
+            echo "storeType=PKCS12"
+          } > "$GITHUB_WORKSPACE/pedidosv2/android/firma.properties"
+          echo "variante=release" >> "$GITHUB_OUTPUT"
 
       - name: Compilar APK firmado
         if: steps.firma.outputs.variante == 'release'
