@@ -49,9 +49,9 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends AppCompatActivity {
 
     /** Pagina que se abre al iniciar. */
-    private static final String URL_APP = "https://homepoint-admin.dev.ar/pedidosv2/pedidosv2.html";
+    private static final String URL_APP = "https://home-point-admin.dev.ar/pedidosv2/pedidosv2.html";
     /** Lo de este dominio se abre adentro; el resto va a la app que corresponda. */
-    private static final String HOST_APP = "homepoint-admin.dev.ar";
+    private static final String HOST_APP = "home-point-admin.dev.ar";
 
     private WebView web;
     private View panelCarga;

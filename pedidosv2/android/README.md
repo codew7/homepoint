@@ -3,7 +3,7 @@
 Esto arma la app instalable de **Pedidos HomePoint** para tablets y celulares Android.
 
 La app es una ventana propia que muestra `pedidosv2.html` desde el sitio publicado
-(`https://homepoint-admin.dev.ar/pedidosv2/pedidosv2.html`). O sea: **cuando subís un cambio
+(`https://home-point-admin.dev.ar/pedidosv2/pedidosv2.html`). O sea: **cuando subís un cambio
 al repositorio, la app lo toma sola**. No hay que volver a instalar nada salvo que cambie
 algo de esta carpeta (el ícono, el nombre, la dirección que abre).
 
