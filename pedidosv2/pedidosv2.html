@@ -3728,13 +3728,18 @@
           });
 
           // Datos para Pedido View
+          // valorU sale de G para pedidos comunes y de E para pedidos con cat = "int";
+          // se guardan ambos y valorUSheet() elige segun el pedido abierto.
+          const valorUIntRaw = row[4] || '';
           const valorURaw = row[6] || '';
           const valorCRaw = row[7] || '';
+          let valorUIntLimpio = 0;
+          if (valorUIntRaw) valorUIntLimpio = parseFloat(valorUIntRaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0;
           let valorULimpio = 0;
           if (valorURaw) valorULimpio = parseFloat(valorURaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0;
           let valorCLimpio = 0;
           if (valorCRaw) valorCLimpio = parseFloat(valorCRaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0;
-          sheetValorMap[codigo] = { valorU: valorULimpio, valorC: valorCLimpio };
+          sheetValorMap[codigo] = { valorU: valorULimpio, valorUInt: valorUIntLimpio, valorC: valorCLimpio };
           if (stockRaw !== '') window.sheetStockMap[codigo] = parseInt(stockRaw, 10) || 0;
           if (nombre) mapImg[nombre] = imgPartes;
         });
@@ -3751,6 +3756,14 @@
     // ==========================================
     // ACTUALIZAR STOCK EN TIEMPO REAL
     // ==========================================
+    // valorU que corresponde a un articulo para el pedido abierto: columna E si el
+    // pedido tiene cat = "int" en Firebase, columna G en cualquier otro caso.
+    function valorUSheet(codigo, pedido) {
+      const v = sheetValorMap[codigo];
+      if (!v) return undefined;
+      return esCatInt(pedido) ? v.valorUInt : v.valorU;
+    }
+
     // Refresca en vivo valorU/valorC de los items del pedido abierto desde sheetValorMap.
     // No toca pedidos bloqueados (DESPACHADO/CANCELADO = registro historico congelado)
     // ni sobrescribe con valores vacios (>0) para no destruir precios reales.
@@ -3764,7 +3777,8 @@
         if (!item.codigo) return;
         const v = sheetValorMap[item.codigo];
         if (!v) return;
-        if (v.valorU > 0 && Number(item.valorU) !== v.valorU) { item.valorU = v.valorU; cambio = true; }
+        const vU = valorUSheet(item.codigo, pedidoActual);
+        if (vU > 0 && Number(item.valorU) !== vU) { item.valorU = vU; cambio = true; }
         if (v.valorC > 0 && Number(item.valorC) !== v.valorC) { item.valorC = v.valorC; cambio = true; }
       });
       return cambio;
@@ -3772,7 +3786,7 @@
 
     async function actualizarStock() {
       try {
-        // Fetches columnas C:K (relativo a C: codigo=0, valorU/G=4, valorC/H=5, stock/K=8)
+        // Fetches columnas C:K (relativo a C: codigo=0, valorUInt/E=2, valorU/G=4, valorC/H=5, stock/K=8)
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Lista!C2:K?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
         const res = await fetch(url);
         const data = await res.json();
@@ -3796,13 +3810,15 @@
             }
           }
           // Precios (ya vienen en el mismo payload, sin costo de red extra)
+          const valorUIntRaw = row[2] || '';
           const valorURaw = row[4] || '';
           const valorCRaw = row[5] || '';
+          const valorUInt = valorUIntRaw ? (parseFloat(valorUIntRaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0) : 0;
           const valorU = valorURaw ? (parseFloat(valorURaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0) : 0;
           const valorC = valorCRaw ? (parseFloat(valorCRaw.toString().replace(/\$/g, '').replace(/,/g, '')) || 0) : 0;
           const prev = sheetValorMap[codigo];
-          if (!prev || prev.valorU !== valorU || prev.valorC !== valorC) {
-            sheetValorMap[codigo] = { valorU, valorC };
+          if (!prev || prev.valorU !== valorU || prev.valorUInt !== valorUInt || prev.valorC !== valorC) {
+            sheetValorMap[codigo] = { valorU, valorUInt, valorC };
             hubocambios = true;
           }
         });
@@ -5099,7 +5115,7 @@
       } else {
         const newItem = { codigo, nombre: info.nombre, cantidad: 1 };
         if (sheetValorMap[codigo]) {
-          newItem.valorU = sheetValorMap[codigo].valorU;
+          newItem.valorU = valorUSheet(codigo, pedidoActual);
           newItem.valorC = sheetValorMap[codigo].valorC;
         }
         pedidoActual.items.push(newItem);
@@ -7842,12 +7858,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // ==========================================
     // Actualizar valores items desde Sheets
     // ==========================================
+    // Al abrir el pedido se mira primero cat = "int" en Firebase (esCatInt):
+    // con esa marca valorU sale de la columna E, sin ella de la G.
     function actualizarValoresItems() {
       if (!pedidoActual || !pedidoActual.items || Object.keys(sheetValorMap).length === 0) return;
       pedidoActual.items.forEach(item => {
         if (item.codigo && sheetValorMap[item.codigo]) {
           const v = sheetValorMap[item.codigo];
-          if (item.valorU === undefined || item.valorU === null || item.valorU === '') item.valorU = v.valorU;
+          if (item.valorU === undefined || item.valorU === null || item.valorU === '') item.valorU = valorUSheet(item.codigo, pedidoActual);
           if (item.valorC === undefined || item.valorC === null || item.valorC === '') item.valorC = v.valorC;
         }
       });
