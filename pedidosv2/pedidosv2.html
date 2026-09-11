@@ -2071,6 +2071,27 @@
       color: #fff;
     }
 
+    /* WhatsApp en la fila: mismo tamano que el boton de pago, mismo verde y
+       mismo estado apagado que .dock-wa del pie del pedido. */
+    .pp-btn-wa {
+      width: 38px;
+      height: 38px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ok);
+      text-decoration: none;
+      touch-action: manipulation;
+      transition: background .14s, border-color .14s, transform .12s, opacity .14s;
+    }
+    .pp-btn-wa:hover { background: var(--ok-soft); border-color: var(--ok-ring); }
+    .pp-btn-wa:active { transform: scale(.92); }
+    .pp-btn-wa.disabled { color: var(--ink-4); pointer-events: none; opacity: .45; }
+
     .pedidos-panel-empty, .faltantes-panel-empty {
       padding: 44px 20px;
       text-align: center;
@@ -2196,6 +2217,624 @@
     .btn-faltantes-copiar:hover { background: var(--inverso-bg-hover); }
     .btn-faltantes-limpiar { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
     .btn-faltantes-limpiar:hover { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+
+    /* =========================================
+       ARMADO · ARTICULOS NECESARIOS
+       -----------------------------------------
+       Consolida los items pendientes de todos los pedidos web (abiertos y
+       cerrados) en una sola lista por articulo, agrupada por categoria, para
+       juntar mercaderia antes de despachar. Reemplaza a necesarios.html: misma
+       logica y mismas claves de localStorage (armado_verificado_*), pero
+       montada sobre el sistema visual de Despacho.
+       ========================================= */
+    .nec-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--scrim);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: fadeIn .16s ease both;
+    }
+    .nec-panel.active { display: flex; }
+
+    .nec-box {
+      width: 100%;
+      max-width: 800px;
+      height: min(92vh, 940px);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-radius: var(--r4);
+      box-shadow: var(--sh3);
+      overflow: hidden;
+      animation: sheetIn .24s var(--ease-out) both;
+    }
+
+    /* Cabecera: titulo + resumen a la izquierda, acciones secundarias a la
+       derecha. El progreso vive como una linea fina bajo la cabecera, igual
+       que en la franja de contexto del pedido. */
+    .nec-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 20px 12px;
+    }
+    .nec-head .pp-title { gap: 3px; }
+    .nec-head h3 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -.4px;
+      color: var(--ink);
+    }
+    .nec-resumen {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px 0;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--ink-3);
+      min-height: 17px;
+    }
+    .nec-resumen b { font-family: var(--font-mono); font-weight: 700; color: var(--ink); }
+    .nec-resumen b.is-ok { color: var(--ok); }
+    .nec-resumen .nec-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-4); margin: 0 8px; flex: none; }
+
+    .nec-head-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+    .nec-ibtn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      border-radius: var(--r1);
+      color: var(--ink-3);
+      transition: background .14s, color .14s, transform .12s, border-color .14s;
+    }
+    .nec-ibtn .ic { width: 17px; height: 17px; }
+    .nec-ibtn:hover { background: var(--surface-3); color: var(--ink); }
+    .nec-ibtn:active { transform: scale(.92); }
+    .nec-ibtn:disabled { opacity: .45; pointer-events: none; }
+    .nec-ibtn--peligro:hover { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+    .nec-ibtn--cerrar { font-size: 20px; line-height: 1; margin-left: 6px; }
+    .nec-ibtn.is-girando .ic { animation: spin .7s linear infinite; }
+
+    .nec-progreso {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px 14px;
+    }
+    .nec-progreso-track {
+      flex: 1;
+      height: 4px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      overflow: hidden;
+    }
+    .nec-progreso-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 99px;
+      background: var(--accent);
+      transition: width .45s var(--ease-out), background .3s;
+    }
+    .nec-progreso-fill.is-completo { background: var(--ok); }
+    .nec-progreso-pct {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-2);
+      min-width: 38px;
+      text-align: right;
+    }
+
+    /* Barra de herramientas: buscador + segmentado Faltan/Todos + filtro de
+       pedidos. Sobre surface-2 para separarla de la lista sin una linea dura. */
+    .nec-tools {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--line-2);
+      border-bottom: 1px solid var(--line);
+    }
+    .nec-search {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .nec-search .ic-sm {
+      position: absolute;
+      left: 13px;
+      color: var(--ink-4);
+      pointer-events: none;
+    }
+    .nec-search input {
+      width: 100%;
+      height: 40px;
+      padding: 0 36px 0 38px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color .14s, box-shadow .14s;
+    }
+    .nec-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    .nec-search-clear {
+      position: absolute;
+      right: 6px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--ink-4);
+      font-size: 18px;
+      line-height: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .nec-search-clear:hover { background: var(--surface-3); color: var(--ink); }
+    .nec-search.has-texto .nec-search-clear { display: flex; }
+
+    .nec-seg {
+      flex: none;
+      display: flex;
+      height: 40px;
+      padding: 3px;
+      border-radius: var(--r1);
+      background: var(--surface-3);
+      border: 1px solid var(--line);
+    }
+    .nec-seg button {
+      height: 100%;
+      padding: 0 13px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ink-3);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .14s, color .14s, box-shadow .14s;
+    }
+    .nec-seg button.is-on {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--sh1);
+    }
+    .nec-seg-n {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--ink-4);
+      background: var(--surface-2);
+      padding: 1px 6px;
+      border-radius: 99px;
+    }
+    .nec-seg button.is-on .nec-seg-n { color: var(--accent); background: var(--accent-soft); }
+
+    .nec-btn-pedidos {
+      flex: none;
+      height: 40px;
+      padding: 0 13px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      transition: background .14s, color .14s, border-color .14s, transform .12s;
+    }
+    .nec-btn-pedidos:hover { background: var(--surface-3); color: var(--ink); }
+    .nec-btn-pedidos:active { transform: scale(.96); }
+    .nec-btn-pedidos.has-filtro {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .nec-btn-pedidos .ic-sm { width: 16px; height: 16px; }
+
+    /* Lista */
+    .nec-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0 12px 20px;
+      position: relative;
+    }
+
+    /* Cabecera de columnas: pegada arriba mientras se scrollea. Los anchos de
+       Stock / Neces. / OK son los mismos que en las filas. */
+    .nec-cols {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 10px 8px 76px;
+      background: var(--surface);
+      box-shadow: 0 1px 0 var(--line-2);
+    }
+    .nec-cols span {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+      text-align: center;
+      flex: none;
+    }
+    .nec-cols .nc-art { flex: 1; text-align: left; }
+    .nec-cols .nc-stock, .nec-cols .nc-nec { width: 52px; }
+    .nec-cols .nc-ok { width: 44px; }
+
+    .nec-cat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 18px 8px 8px;
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .nec-cat::after { content: ''; flex: 1; height: 1px; background: var(--line); order: 3; }
+    .nec-cat-n {
+      order: 2;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+
+    .nec-row {
+      background: var(--surface);
+      border-radius: var(--r2);
+      box-shadow: var(--sh1);
+      margin-bottom: 7px;
+      overflow: hidden;
+      transition: box-shadow .18s var(--ease-out), background .22s var(--ease-out), opacity .22s, transform .22s var(--ease-out), max-height .26s var(--ease-out), margin .26s var(--ease-out);
+      animation: cardIn .3s var(--ease-out) both;
+      max-height: 1600px;
+    }
+    .nec-row:hover { box-shadow: var(--sh2); }
+    .nec-row.is-ok { background: var(--ok-soft); box-shadow: var(--sh1), inset 3px 0 0 var(--ok); }
+    .nec-row.is-ok .nec-name { color: var(--ok); }
+    .nec-row.is-ok .nec-img, .nec-row.is-ok .nec-img-ph { opacity: .75; }
+    .nec-row.is-saliendo { opacity: 0; transform: translateX(18px) scale(.98); max-height: 0; margin-bottom: 0; }
+    .nec-row.is-abierta { box-shadow: var(--sh2), 0 0 0 1px var(--accent-ring); }
+
+    .nec-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 8px 9px 10px;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .nec-main:active { background: var(--surface-2); }
+    .nec-row.is-ok .nec-main:active { background: transparent; }
+
+    .nec-img, .nec-img-ph {
+      width: 52px;
+      height: 52px;
+      flex: none;
+      border-radius: 10px;
+      background: var(--surface-3);
+      border: 1px solid var(--line-2);
+      object-fit: cover;
+      transition: transform .18s var(--ease-out), opacity .2s;
+    }
+    .nec-img { cursor: zoom-in; }
+    .nec-img:hover { transform: scale(1.06); }
+    .nec-img:active { transform: scale(.95); }
+    .nec-img-ph { display: flex; align-items: center; justify-content: center; color: var(--ink-4); }
+    .nec-img-ph .ic { width: 18px; height: 18px; }
+
+    .nec-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .nec-name {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -.15px;
+      color: var(--ink);
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: color .15s;
+    }
+    .nec-code {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .2px;
+      color: var(--ink-4);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nec-code .nec-npedidos {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      color: var(--ink-3);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .nec-code .nec-npedidos .ic-sm { width: 11px; height: 11px; }
+
+    .nec-stock, .nec-nec {
+      width: 52px;
+      flex: none;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+    }
+    .nec-stock { font-size: 13.5px; color: var(--ink-3); }
+    .nec-stock.stock-zero { color: var(--bad); }
+    .nec-stock.stock-low  { color: var(--warn); }
+    .nec-stock.stock-ok   { color: var(--ok); }
+    .nec-stock.stock-nd   { color: var(--ink-4); }
+    .nec-nec {
+      font-size: 17px;
+      color: var(--ink);
+      letter-spacing: -.3px;
+    }
+    /* Faltan mas de los que hay: el numero necesario avisa en rojo. */
+    .nec-nec.is-falta { color: var(--bad); }
+
+    /* Tilde: boton redondo de 44px de zona de toque con el circulo adentro.
+       Reacciona al pointer-down (escala), y al marcar rebota con ease-spring. */
+    .nec-check {
+      width: 44px;
+      height: 44px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      border-radius: 50%;
+      color: var(--ink-4);
+    }
+    .nec-check i {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .16s, border-color .16s, transform .12s;
+    }
+    .nec-check i .ic-sm { width: 14px; height: 14px; stroke-width: 2.6; color: #fff; opacity: 0; transform: scale(.5); transition: opacity .12s, transform .18s var(--ease-spring); }
+    .nec-check:hover i { border-color: var(--ok); }
+    .nec-check:active i { transform: scale(.88); }
+    .nec-row.is-ok .nec-check i { background: var(--ok); border-color: var(--ok); }
+    .nec-row.is-ok .nec-check i .ic-sm { opacity: 1; transform: scale(1); }
+    .nec-check.is-rebote i { animation: necRebote .32s var(--ease-spring); }
+    @keyframes necRebote { 0% { transform: scale(.7); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+    /* Detalle desplegable: que pedidos piden este articulo y cuanto cada uno.
+       Tocar un cliente abre ese pedido en Despacho. */
+    .nec-det {
+      display: none;
+      padding: 4px 10px 10px 74px;
+      border-top: 1px solid var(--line-2);
+      background: var(--surface-2);
+      animation: fadeIn .18s ease both;
+    }
+    .nec-row.is-ok .nec-det { background: transparent; border-top-color: var(--ok-ring); }
+    .nec-row.is-abierta .nec-det { display: block; }
+    .nec-det-lbl {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+      padding: 8px 4px 4px;
+    }
+    .nec-det-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 38px;
+      padding: 0 6px 0 8px;
+      border-radius: var(--r1);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .nec-det-row:hover { background: var(--surface-3); }
+    .nec-det-row:active { background: var(--accent-soft); }
+    .nec-det-cli {
+      flex: 1;
+      min-width: 0;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nec-det-cant {
+      flex: none;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 3px 9px;
+      border-radius: 99px;
+    }
+    .nec-det-row .ic-sm { width: 14px; height: 14px; color: var(--ink-4); flex: none; }
+
+    .nec-empty {
+      padding: 56px 20px;
+      text-align: center;
+      color: var(--ink-4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .nec-empty .ic-lg { width: 40px; height: 40px; color: var(--ink-4); }
+    .nec-empty b { font-size: 14.5px; font-weight: 700; color: var(--ink-2); }
+    .nec-empty span { font-size: 13px; font-weight: 500; }
+    .nec-empty--ok .ic-lg, .nec-empty--ok b { color: var(--ok); }
+
+    /* Sub-hoja: filtro de pedidos que entran en el calculo. Se apila sobre el
+       panel con su propio scrim para no perder el contexto de la lista. */
+    .nec-sub {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 210;
+      background: var(--scrim);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: fadeIn .14s ease both;
+    }
+    .nec-sub.active { display: flex; }
+    .nec-sub-box {
+      width: 100%;
+      max-width: 420px;
+      max-height: 78vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-radius: var(--r4);
+      box-shadow: var(--sh3);
+      overflow: hidden;
+      animation: sheetIn .22s var(--ease-out) both;
+    }
+    .nec-sub-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 20px 12px;
+    }
+    .nec-sub-head h3 { font-size: 17px; font-weight: 800; letter-spacing: -.35px; color: var(--ink); }
+    .nec-sub-acciones {
+      flex: none;
+      display: flex;
+      gap: 8px;
+      padding: 0 20px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .nec-sub-acciones button {
+      height: 32px;
+      padding: 0 13px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink-2);
+      font-size: 12px;
+      font-weight: 700;
+      transition: background .14s, color .14s;
+    }
+    .nec-sub-acciones button:hover { background: var(--surface-3); color: var(--ink); }
+    .nec-sub-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px 12px 12px; }
+    .nec-ped {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+      padding: 0 10px;
+      border-radius: var(--r2);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .nec-ped:hover { background: var(--surface-2); }
+    .nec-ped input { position: absolute; opacity: 0; pointer-events: none; }
+    .nec-ped i {
+      width: 22px;
+      height: 22px;
+      flex: none;
+      border-radius: 7px;
+      border: 2px solid var(--line);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .14s, border-color .14s;
+    }
+    .nec-ped i .ic-sm { width: 13px; height: 13px; stroke-width: 2.6; color: #fff; opacity: 0; }
+    .nec-ped.is-on i { background: var(--accent); border-color: var(--accent); }
+    .nec-ped.is-on i .ic-sm { opacity: 1; }
+    .nec-ped-nombre {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: color .14s;
+    }
+    .nec-ped:not(.is-on) .nec-ped-nombre { color: var(--ink-4); text-decoration: line-through; }
+    .nec-ped-n { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-4); }
+
+    @media (max-width: 720px) {
+      .nec-panel { padding: 0; }
+      .nec-box { height: 100%; max-width: none; border-radius: 0; }
+      .nec-head { padding: 14px 14px 10px; }
+      .nec-progreso { padding: 0 14px 12px; }
+      .nec-tools { flex-wrap: wrap; padding: 10px 14px; gap: 8px; }
+      .nec-search { flex-basis: 100%; }
+      .nec-seg { flex: 1; }
+      .nec-seg button { flex: 1; justify-content: center; padding: 0 8px; }
+      .nec-list { padding: 0 10px 20px; }
+      .nec-cols { padding-left: 66px; gap: 9px; }
+      .nec-cols .nc-stock, .nec-cols .nc-nec { width: 46px; }
+      .nec-cols .nc-ok { width: 40px; }
+      .nec-main { gap: 9px; padding: 8px 6px 8px 8px; }
+      .nec-img, .nec-img-ph { width: 46px; height: 46px; }
+      .nec-name { font-size: 13px; }
+      .nec-stock, .nec-nec { width: 46px; }
+      .nec-stock { font-size: 12.5px; }
+      .nec-nec { font-size: 15.5px; }
+      .nec-check { width: 40px; height: 40px; }
+      .nec-det { padding-left: 14px; }
+      .nec-sub { padding: 14px; }
+    }
 
     /* =========================================
        BUSCADOR DE ARTICULOS (agregar / busqueda inversa)
@@ -2902,6 +3541,8 @@
 
       <button class="header-btn header-btn--icon" id="btnPedidos" title="Pedidos pendientes"><svg class="ic" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><line x1="4.2" y1="6" x2="4.21" y2="6"></line><line x1="4.2" y1="12" x2="4.21" y2="12"></line><line x1="4.2" y1="18" x2="4.21" y2="18"></line></svg><span class="header-badge" id="pedidosBadge"></span></button>
 
+      <button class="header-btn header-btn--icon" id="btnNecesarios" title="Art&iacute;culos necesarios para armar"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4.5V3.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M8.8 13.2l2.2 2.2 4.4-4.6"></path></svg><span class="header-badge" id="necesariosBadge"></span></button>
+
       <span class="header-sep"></span>
 
       <button class="header-btn header-btn--icon" id="btnTema" title="Cambiar entre tema claro y oscuro" aria-label="Cambiar tema"><svg class="ic tema-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="ic tema-luna" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5z"></path></svg></button>
@@ -3165,6 +3806,63 @@
         <button class="btn-faltantes-copiar" id="btnFaltantesCopiar">Copiar lista</button>
         <button class="btn-faltantes-limpiar" id="btnFaltantesLimpiar">Limpiar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ARMADO: ARTICULOS NECESARIOS (ex necesarios.html) -->
+  <div class="nec-panel" id="necPanel" role="dialog" aria-modal="true" aria-labelledby="necTitulo">
+    <div class="nec-box">
+      <div class="nec-head">
+        <div class="pp-title">
+          <h3 id="necTitulo">Artículos necesarios</h3>
+          <div class="nec-resumen" id="necResumen"></div>
+        </div>
+        <div class="nec-head-actions">
+          <button type="button" class="nec-ibtn" id="necBtnPrint" title="Imprimir listado"><svg class="ic" viewBox="0 0 24 24"><polyline points="6 9 6 3 18 3 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="7"></rect></svg></button>
+          <button type="button" class="nec-ibtn" id="necBtnReload" title="Volver a cargar los pedidos"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"></path><polyline points="20 3.4 20 7.4 16 7.4"></polyline></svg></button>
+          <button type="button" class="nec-ibtn nec-ibtn--peligro" id="necBtnClear" title="Limpiar todos los tildes"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 14h10l1-14"></path><path d="M10 11v5M14 11v5"></path></svg></button>
+          <button type="button" class="nec-ibtn nec-ibtn--cerrar" id="necBtnClose" title="Cerrar">&times;</button>
+        </div>
+      </div>
+
+      <div class="nec-progreso">
+        <div class="nec-progreso-track"><div class="nec-progreso-fill" id="necProgFill"></div></div>
+        <span class="nec-progreso-pct" id="necProgPct">0%</span>
+      </div>
+
+      <div class="nec-tools">
+        <div class="nec-search" id="necSearchWrap">
+          <svg class="ic-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input type="text" id="necSearch" placeholder="Buscar artículo o código" autocomplete="off" spellcheck="false">
+          <button type="button" class="nec-search-clear" id="necSearchClear" title="Borrar búsqueda">&times;</button>
+        </div>
+        <div class="nec-seg" role="tablist" aria-label="Filtro de verificados">
+          <button type="button" class="is-on" id="necSegFaltan" role="tab">Faltan <span class="nec-seg-n" id="necNFaltan">0</span></button>
+          <button type="button" id="necSegTodos" role="tab">Todos <span class="nec-seg-n" id="necNTodos">0</span></button>
+        </div>
+        <button type="button" class="nec-btn-pedidos" id="necBtnPedidos" title="Elegir qué pedidos entran en el cálculo"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg><span id="necBtnPedidosTxt">Pedidos</span></button>
+      </div>
+
+      <div class="nec-list" id="necList">
+        <div class="pedidos-panel-loading"><div class="spinner"></div>Cargando artículos de pedidos...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nec-sub" id="necSub">
+    <div class="nec-sub-box">
+      <div class="nec-sub-head">
+        <div class="pp-title">
+          <h3>Pedidos en el cálculo</h3>
+          <span class="pp-resumen" id="necSubResumen"></span>
+        </div>
+        <button type="button" class="nec-ibtn nec-ibtn--cerrar" id="necSubClose" title="Cerrar">&times;</button>
+      </div>
+      <div class="nec-sub-acciones">
+        <button type="button" id="necSubTodos">Todos</button>
+        <button type="button" id="necSubNinguno">Ninguno</button>
+      </div>
+      <div class="nec-sub-list" id="necSubList"></div>
     </div>
   </div>
 
@@ -3707,6 +4405,7 @@
             imagen: imgPartes[0] || '',
             imagenAlt: imgPartes[3] || '',
             nombre: nombre,
+            categoria: (row[0] || '').trim(),
             codigoBarras: (row[11] || '').split(',').map(s => s.trim()).filter(Boolean),
             stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
           };
@@ -3750,8 +4449,9 @@
       }
     }
 
-    // Cargar sheets al inicio
-    cargarSheets();
+    // Cargar sheets al inicio. La promesa queda a mano para que quien necesite
+    // el catalogo completo (Armado) espere esta carga en vez de lanzar otra.
+    const sheetsInicial = cargarSheets();
 
     // ==========================================
     // ACTUALIZAR STOCK EN TIEMPO REAL
@@ -3826,6 +4526,8 @@
           const preciosActualizados = refrescarPreciosItems();
           if (hubocambios || preciosActualizados) renderUnificado();
         }
+        // El panel de Armado muestra el mismo stock: si esta abierto se repinta.
+        if (hubocambios && typeof necRenderSiAbierto === 'function') necRenderSiAbierto();
       } catch (err) {
         console.warn('Error actualizando stock:', err);
       }
@@ -5391,6 +6093,7 @@
           const fila = {
             id: child.key,
             nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre',
+            telefono: (p.cliente && p.cliente.telefono) || '',
             status: p.status,
             locked: p.locked === true,
             todosListos: todosListos,
@@ -5474,6 +6177,17 @@
         ' title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">$</button>';
     }
 
+    // Contacto por WhatsApp sin abrir el pedido. Mismo link y mismo estado
+    // "sin telefono" que el boton de la barra plegada (dockPeekActualizar).
+    function ppBotonWaHtml(p) {
+      const link = linkWhatsapp(p.telefono);
+      if (!link) {
+        return '<span class="pp-btn-wa disabled" title="Sin tel&eacute;fono" aria-hidden="true">' + IC_CHAT + '</span>';
+      }
+      return '<a class="pp-btn-wa" href="' + link + '" target="_blank" rel="noopener"' +
+        ' title="Enviar WhatsApp al cliente" aria-label="Enviar WhatsApp a ' + escapeHtml(p.nombre) + '">' + IC_CHAT + '</a>';
+    }
+
     function ppFilaHtml(p) {
       const ant = textoAntiguedad(p.timestamp);
       const listo = p.score === 2;
@@ -5482,6 +6196,7 @@
         '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
         (esCatInt(p) ? '<span class="badge-int badge-int--sm" title="Pedido con cat = &quot;int&quot;">int</span>' : '') +
         (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
+        ppBotonWaHtml(p) +
         ppBotonPagoHtml(p) +
         '</div>';
     }
@@ -5535,6 +6250,9 @@
         ppToggleNotaPago(btnPago);
         return;
       }
+      // El link de WhatsApp se abre solo (target=_blank); aca solo se evita
+      // que el mismo click cargue el pedido.
+      if (e.target.closest('.pp-btn-wa')) return;
       const item = e.target.closest('.pedidos-panel-item');
       if (!item) return;
       const id = item.dataset.id;
@@ -8980,6 +9698,495 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       realtimeListener = callback;
       db.ref('pedidos/' + id).on('value', callback);
     };
+
+    // ==========================================
+    // ARMADO: ARTICULOS NECESARIOS
+    // ==========================================
+    // Consolida los items sin empacar (listo != 'y') de todos los pedidos web
+    // ABIERTOS y CERRADOS en una lista por articulo: cuanto hace falta juntar
+    // de cada uno, en que pedidos se pide y cuanto stock hay. Es la misma
+    // logica que tenia necesarios.html, ahora montada sobre el catalogo, el
+    // lightbox, el confirm y el tema que ya viven en esta pantalla.
+    //
+    // El tilde "verificado" se guarda en localStorage con las claves
+    // armado_verificado_<codigo>, las mismas que usaba necesarios.html, asi lo
+    // que se marco en uno se ve en el otro.
+    (function setupNecesarios() {
+      const panel = document.getElementById('necPanel');
+      const lista = document.getElementById('necList');
+      const resumen = document.getElementById('necResumen');
+      const inputBusqueda = document.getElementById('necSearch');
+      const searchWrap = document.getElementById('necSearchWrap');
+      const segFaltan = document.getElementById('necSegFaltan');
+      const segTodos = document.getElementById('necSegTodos');
+      const btnPedidos = document.getElementById('necBtnPedidos');
+      const btnHeader = document.getElementById('btnNecesarios');
+      const badgeHeader = document.getElementById('necesariosBadge');
+      const sub = document.getElementById('necSub');
+      const subList = document.getElementById('necSubList');
+      const subResumen = document.getElementById('necSubResumen');
+
+      const IC_CHECK = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M4.5 12.6 9.4 17.5 19.5 7.4"></path></svg>';
+      const IC_FOTO = '<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="12" cy="12" r="3.2"></circle><path d="M8 5l1.2-2h5.6L16 5"></path></svg>';
+      const IC_PERSONAS = '<svg class="ic-sm" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 19a5.5 5.5 0 0 1 11 0"></path><path d="M16 4.5a3.2 3.2 0 0 1 0 6.4"></path><path d="M20.5 19a5.5 5.5 0 0 0-3.8-5.2"></path></svg>';
+      const IC_FLECHA = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>';
+      const IC_LISTO = '<svg class="ic-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.6L16.5 9"></path></svg>';
+      const IC_VACIO = '<svg class="ic-lg" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
+
+      // Estado
+      let pedidos = [];              // [{ id, cliente, items: [{codigo, nombre, cantidad}] }]
+      let excluidos = new Set();     // ids de pedidos fuera del calculo
+      let articulos = {};            // { codigo: { codigo, nombre, cantidad, pedidos: [{id, cliente, cantidad}] } }
+      let pedidosEnCalculo = 0;
+      let soloFaltan = true;
+      let busqueda = '';
+      let abierta = null;            // codigo de la fila con el detalle desplegado
+      let cargando = false;
+      let cargado = false;
+
+      // ---------- Persistencia del tilde ----------
+      const claveVerif = (codigo) => 'armado_verificado_' + codigo;
+      const getVerificado = (codigo) => localStorage.getItem(claveVerif(codigo)) === 'true';
+      const setVerificado = (codigo, v) => localStorage.setItem(claveVerif(codigo), v ? 'true' : 'false');
+
+      // ---------- Datos ----------
+      async function cargar() {
+        if (cargando) return;
+        cargando = true;
+        document.getElementById('necBtnReload').classList.add('is-girando');
+        if (!cargado) {
+          lista.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando artículos de pedidos...</div>';
+        }
+        try {
+          // El catalogo trae imagen, categoria y stock; se espera la carga
+          // inicial en vez de disparar otra.
+          if (!sheetsLoaded) await sheetsInicial;
+
+          const [snapAbierto, snapCerrado] = await conTimeout(() => Promise.all([
+            db.ref('pedidos').orderByChild('status').equalTo('ABIERTO').once('value'),
+            db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
+          ]));
+
+          pedidos = [];
+          excluidos.clear();
+          const recolectar = (child) => {
+            const p = child.val();
+            if (!p || p.createdby !== 'web') return;
+            const itemsRaw = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
+            const items = itemsRaw
+              .filter(it => it && it.listo !== 'y')
+              .map(it => {
+                const codigo = it.codigo || 'SIN_CODIGO';
+                return { codigo, nombre: it.nombre || codigo, cantidad: parseInt(it.cantidad, 10) || 0 };
+              });
+            if (!items.length) return;
+            pedidos.push({
+              id: child.key,
+              cliente: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key),
+              items
+            });
+          };
+          snapAbierto.forEach(recolectar);
+          snapCerrado.forEach(recolectar);
+
+          cargado = true;
+          construir();
+          render();
+        } catch (err) {
+          console.error('Error cargando articulos necesarios:', err);
+          if (!cargado) {
+            lista.innerHTML = htmlErrorReintento(err, 'necRecargar()');
+          } else {
+            showToast(err && err.esTimeout ? 'Sin conexión con el servidor' : 'No se pudo actualizar');
+          }
+        } finally {
+          cargando = false;
+          document.getElementById('necBtnReload').classList.remove('is-girando');
+        }
+      }
+
+      // Suma por articulo solo los pedidos que entran en el calculo.
+      function construir() {
+        articulos = {};
+        pedidosEnCalculo = 0;
+        pedidos.forEach(p => {
+          if (excluidos.has(p.id)) return;
+          pedidosEnCalculo++;
+          p.items.forEach(it => {
+            if (!articulos[it.codigo]) {
+              articulos[it.codigo] = { codigo: it.codigo, nombre: it.nombre, cantidad: 0, pedidos: [] };
+            }
+            articulos[it.codigo].cantidad += it.cantidad;
+            articulos[it.codigo].pedidos.push({ id: p.id, cliente: p.cliente, cantidad: it.cantidad });
+          });
+        });
+      }
+
+      function listaOrdenada() {
+        const arr = Object.values(articulos);
+        arr.forEach(a => {
+          const si = sheetsData[a.codigo];
+          a.categoria = (si && si.categoria) ? si.categoria : 'Sin categoría';
+        });
+        arr.sort((a, b) => a.categoria.localeCompare(b.categoria, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
+        return arr;
+      }
+
+      function pasaBusqueda(a) {
+        if (!busqueda) return true;
+        return a.nombre.toLowerCase().includes(busqueda) || a.codigo.toLowerCase().includes(busqueda);
+      }
+
+      // ---------- Render ----------
+      function render() {
+        const todos = listaOrdenada();
+        const visibles = todos.filter(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)));
+
+        if (!todos.length) {
+          lista.innerHTML = '<div class="nec-empty">' + IC_VACIO +
+            '<b>No hay artículos pendientes</b><span>Los pedidos web no tienen items sin empacar.</span></div>';
+          actualizarStats(todos);
+          return;
+        }
+        if (!visibles.length) {
+          const html = busqueda
+            ? '<div class="nec-empty">' + IC_VACIO + '<b>Sin resultados</b><span>Ningún artículo coincide con "' + escapeHtml(busqueda) + '".</span></div>'
+            : '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>Todo verificado</b><span>No queda nada por juntar. Tocá "Todos" para revisar la lista completa.</span></div>';
+          lista.innerHTML = html;
+          actualizarStats(todos);
+          return;
+        }
+
+        let html = '<div class="nec-cols"><span class="nc-art">Artículo</span><span class="nc-stock">Stock</span><span class="nc-nec">Neces.</span><span class="nc-ok">OK</span></div>';
+
+        let cat = null;
+        let i = 0;
+        visibles.forEach(a => {
+          if (a.categoria !== cat) {
+            cat = a.categoria;
+            const n = visibles.filter(x => x.categoria === cat).length;
+            html += '<div class="nec-cat">' + escapeHtml(cat) + '<span class="nec-cat-n">' + n + '</span></div>';
+          }
+          html += filaHtml(a, Math.min(i * 0.025, 0.4));
+          i++;
+        });
+        lista.innerHTML = html;
+        actualizarStats(todos);
+      }
+
+      function filaHtml(a, delay) {
+        const si = sheetsData[a.codigo] || {};
+        const verif = getVerificado(a.codigo);
+        const img = si.imagen || '';
+        const imgAlt = si.imagenAlt || '';
+        const codAttr = escapeHtml(a.codigo);
+
+        let imgHtml;
+        if (img || imgAlt) {
+          const src = img || imgAlt;
+          const alt = imgAlt !== src ? imgAlt : '';
+          imgHtml = '<img class="nec-img" src="' + escapeHtml(src) + '" alt="" loading="lazy" data-alt="' + escapeHtml(alt) + '"' +
+            ' onerror="imgFallback(this, this.dataset.alt, \'nec-img-ph\')">';
+        } else {
+          imgHtml = '<div class="nec-img-ph">' + IC_FOTO + '</div>';
+        }
+
+        const stock = si.stock;
+        const hayStock = stock !== null && stock !== undefined && Number.isFinite(stock);
+        const stockClase = !hayStock ? 'stock-nd' : stock <= 0 ? 'stock-zero' : stock <= 10 ? 'stock-low' : 'stock-ok';
+        const stockTxt = hayStock ? stock : '—';
+        const falta = hayStock && stock < a.cantidad;
+
+        const barras = (si.codigoBarras && si.codigoBarras.length) ? si.codigoBarras[0] : '';
+        const nPed = a.pedidos.length;
+
+        let det = '<div class="nec-det"><div class="nec-det-lbl">Lo piden ' + nPed + (nPed === 1 ? ' pedido' : ' pedidos') + '</div>';
+        a.pedidos.forEach(p => {
+          det += '<div class="nec-det-row" data-pedido="' + escapeHtml(p.id) + '" title="Abrir el pedido">' +
+            '<span class="nec-det-cli">' + escapeHtml(p.cliente) + '</span>' +
+            '<span class="nec-det-cant">' + p.cantidad + '</span>' + IC_FLECHA + '</div>';
+        });
+        det += '</div>';
+
+        return '<div class="nec-row' + (verif ? ' is-ok' : '') + (abierta === a.codigo ? ' is-abierta' : '') + '" data-codigo="' + codAttr + '" style="animation-delay:' + delay + 's">' +
+          '<div class="nec-main">' +
+            imgHtml +
+            '<div class="nec-info">' +
+              '<div class="nec-name" title="' + escapeHtml(a.nombre) + '">' + escapeHtml(a.nombre) + '</div>' +
+              '<div class="nec-code"><span>' + codAttr + (barras ? ' · ' + escapeHtml(barras) : '') + '</span>' +
+                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span></div>' +
+            '</div>' +
+            '<span class="nec-stock ' + stockClase + '">' + stockTxt + '</span>' +
+            '<span class="nec-nec' + (falta ? ' is-falta' : '') + '" title="' + (falta ? 'Faltan ' + (a.cantidad - stock) + ' para cubrir los pedidos' : '') + '">' + a.cantidad + '</span>' +
+            '<button type="button" class="nec-check" aria-label="Verificado" aria-pressed="' + (verif ? 'true' : 'false') + '"><i>' + IC_CHECK + '</i></button>' +
+          '</div>' + det + '</div>';
+      }
+
+      function actualizarStats(todos) {
+        const total = todos.length;
+        let verificados = 0;
+        todos.forEach(a => { if (getVerificado(a.codigo)) verificados++; });
+        const faltan = total - verificados;
+        const pct = total ? Math.round(verificados / total * 100) : 0;
+
+        resumen.innerHTML =
+          '<span><b>' + pedidosEnCalculo + '</b> ' + (pedidosEnCalculo === 1 ? 'pedido' : 'pedidos') + '</span><i class="nec-dot"></i>' +
+          '<span><b>' + total + '</b> ' + (total === 1 ? 'artículo' : 'artículos') + '</span><i class="nec-dot"></i>' +
+          '<span><b class="is-ok">' + verificados + '</b> verificados</span>';
+
+        const fill = document.getElementById('necProgFill');
+        fill.style.width = pct + '%';
+        fill.classList.toggle('is-completo', total > 0 && pct >= 100);
+        document.getElementById('necProgPct').textContent = pct + '%';
+
+        document.getElementById('necNFaltan').textContent = faltan;
+        document.getElementById('necNTodos').textContent = total;
+
+        const nExcl = excluidos.size;
+        btnPedidos.classList.toggle('has-filtro', nExcl > 0);
+        document.getElementById('necBtnPedidosTxt').textContent = nExcl > 0
+          ? (pedidosEnCalculo + ' de ' + pedidos.length)
+          : 'Pedidos';
+
+        // El globo del boton de la barra superior muestra cuanto queda por juntar.
+        if (badgeHeader) {
+          badgeHeader.textContent = faltan > 99 ? '99+' : faltan;
+          badgeHeader.classList.toggle('visible', cargado && faltan > 0);
+        }
+      }
+
+      // ---------- Abrir / cerrar ----------
+      function abrir() {
+        panel.classList.add('active');
+        if (!cargado) cargar();
+        else render();
+      }
+      function cerrar() {
+        panel.classList.remove('active');
+        cerrarSub();
+      }
+      // Re-render silencioso cuando cambia el stock por el polling.
+      window.necRenderSiAbierto = function() {
+        if (cargado && panel.classList.contains('active')) render();
+      };
+      window.necRecargar = function() { cargar(); };
+
+      btnHeader.addEventListener('click', abrir);
+      document.getElementById('necBtnClose').addEventListener('click', cerrar);
+      panel.addEventListener('click', (e) => { if (e.target === panel) cerrar(); });
+      document.getElementById('necBtnReload').addEventListener('click', () => {
+        cargar();
+        if (typeof actualizarStock === 'function') actualizarStock();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (sub.classList.contains('active')) { e.preventDefault(); cerrarSub(); return; }
+        if (panel.classList.contains('active') && !confirmResolver) { e.preventDefault(); cerrar(); }
+      });
+
+      // ---------- Busqueda y filtros ----------
+      inputBusqueda.addEventListener('input', () => {
+        busqueda = inputBusqueda.value.toLowerCase().trim();
+        searchWrap.classList.toggle('has-texto', busqueda.length > 0);
+        render();
+      });
+      document.getElementById('necSearchClear').addEventListener('click', () => {
+        inputBusqueda.value = '';
+        busqueda = '';
+        searchWrap.classList.remove('has-texto');
+        render();
+        inputBusqueda.focus();
+      });
+
+      function setSoloFaltan(v) {
+        soloFaltan = v;
+        segFaltan.classList.toggle('is-on', v);
+        segTodos.classList.toggle('is-on', !v);
+        segFaltan.setAttribute('aria-selected', v ? 'true' : 'false');
+        segTodos.setAttribute('aria-selected', v ? 'false' : 'true');
+        render();
+      }
+      segFaltan.addEventListener('click', () => setSoloFaltan(true));
+      segTodos.addEventListener('click', () => setSoloFaltan(false));
+
+      // ---------- Interaccion sobre las filas ----------
+      lista.addEventListener('click', (e) => {
+        const row = e.target.closest('.nec-row');
+        if (!row) return;
+        const codigo = row.dataset.codigo;
+
+        // Imagen: lightbox con el link alternativo como respaldo.
+        const img = e.target.closest('.nec-img');
+        if (img) {
+          openLightbox(img.src, img.dataset.alt || '');
+          return;
+        }
+
+        // Cliente dentro del detalle: abre ese pedido en Despacho.
+        const cli = e.target.closest('.nec-det-row');
+        if (cli) {
+          const id = cli.dataset.pedido;
+          cerrar();
+          cargarPedido(id);
+          return;
+        }
+
+        // Tilde de verificado.
+        const check = e.target.closest('.nec-check');
+        if (check) {
+          const nuevo = !getVerificado(codigo);
+          setVerificado(codigo, nuevo);
+          row.classList.toggle('is-ok', nuevo);
+          check.setAttribute('aria-pressed', nuevo ? 'true' : 'false');
+          if (nuevo) {
+            check.classList.add('is-rebote');
+            setTimeout(() => check.classList.remove('is-rebote'), 320);
+          }
+          actualizarStats(listaOrdenada());
+          // Con "Faltan" activo la fila se va: primero se desliza y despues se
+          // reconstruye la lista, para que la categoria vacia tambien se retire.
+          if (soloFaltan && nuevo) {
+            row.classList.add('is-saliendo');
+            if (abierta === codigo) abierta = null;
+            setTimeout(render, 280);
+          }
+          return;
+        }
+
+        // Resto de la fila: despliega / repliega el detalle de pedidos.
+        if (e.target.closest('.nec-main')) {
+          const yaAbierta = row.classList.contains('is-abierta');
+          lista.querySelectorAll('.nec-row.is-abierta').forEach(r => r.classList.remove('is-abierta'));
+          if (!yaAbierta) {
+            row.classList.add('is-abierta');
+            abierta = codigo;
+          } else {
+            abierta = null;
+          }
+        }
+      });
+
+      // ---------- Sub-hoja: pedidos en el calculo ----------
+      function renderSub() {
+        const orden = [...pedidos].sort((a, b) => a.cliente.localeCompare(b.cliente, 'es'));
+        let html = '';
+        orden.forEach(p => {
+          const on = !excluidos.has(p.id);
+          const n = p.items.reduce((s, it) => s + it.cantidad, 0);
+          html += '<label class="nec-ped' + (on ? ' is-on' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+            '<input type="checkbox"' + (on ? ' checked' : '') + '><i>' + IC_CHECK + '</i>' +
+            '<span class="nec-ped-nombre">' + escapeHtml(p.cliente) + '</span>' +
+            '<span class="nec-ped-n">' + n + ' art.</span></label>';
+        });
+        subList.innerHTML = html || '<div class="pedidos-panel-empty">No hay pedidos con artículos pendientes</div>';
+        subResumen.textContent = (pedidos.length - excluidos.size) + ' de ' + pedidos.length + ' incluidos';
+      }
+      function abrirSub() {
+        if (!cargado || !pedidos.length) { showToast('Todavía no hay pedidos cargados'); return; }
+        renderSub();
+        sub.classList.add('active');
+      }
+      function cerrarSub() { sub.classList.remove('active'); }
+      function aplicarFiltro() {
+        construir();
+        render();
+        renderSub();
+      }
+
+      btnPedidos.addEventListener('click', abrirSub);
+      document.getElementById('necSubClose').addEventListener('click', cerrarSub);
+      sub.addEventListener('click', (e) => { if (e.target === sub) cerrarSub(); });
+      document.getElementById('necSubTodos').addEventListener('click', () => { excluidos.clear(); aplicarFiltro(); });
+      document.getElementById('necSubNinguno').addEventListener('click', () => { pedidos.forEach(p => excluidos.add(p.id)); aplicarFiltro(); });
+      subList.addEventListener('change', (e) => {
+        const cb = e.target;
+        const fila = cb.closest('.nec-ped');
+        if (!fila) return;
+        if (cb.checked) excluidos.delete(fila.dataset.id);
+        else excluidos.add(fila.dataset.id);
+        fila.classList.toggle('is-on', cb.checked);
+        construir();
+        render();
+        subResumen.textContent = (pedidos.length - excluidos.size) + ' de ' + pedidos.length + ' incluidos';
+      });
+
+      // ---------- Limpiar tildes ----------
+      document.getElementById('necBtnClear').addEventListener('click', async () => {
+        const ok = await confirmarAccion({
+          titulo: '¿Limpiar los verificados?',
+          texto: 'Se destildan todos los artículos y vuelven a entrar todos los pedidos en el cálculo.',
+          tono: 'peligro',
+          confirmar: 'Limpiar',
+          volver: 'Volver'
+        });
+        if (!ok) return;
+        // Se barren todas las claves, incluso las de articulos que ya no estan
+        // en la lista, para que no queden tildes viejos huerfanos.
+        const borrar = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('armado_verificado_') || k.startsWith('armado_preparado_'))) borrar.push(k);
+        }
+        borrar.forEach(k => localStorage.removeItem(k));
+        excluidos.clear();
+        abierta = null;
+        construir();
+        render();
+        showToast('Verificados limpiados');
+      });
+
+      // ---------- Imprimir ----------
+      document.getElementById('necBtnPrint').addEventListener('click', () => {
+        const arr = listaOrdenada();
+        if (!arr.length) { showToast('No hay artículos para imprimir'); return; }
+
+        const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        let filas = '';
+        let cat = null;
+        arr.forEach((a, i) => {
+          if (a.categoria !== cat) {
+            cat = a.categoria;
+            filas += '<tr class="cat"><td colspan="6">' + escapeHtml(cat) + '</td></tr>';
+          }
+          const si = sheetsData[a.codigo] || {};
+          const stock = (si.stock !== null && si.stock !== undefined && Number.isFinite(si.stock)) ? si.stock : '—';
+          const verif = getVerificado(a.codigo);
+          filas += '<tr' + (verif ? ' class="ok"' : '') + '>' +
+            '<td class="n">' + (i + 1) + '</td>' +
+            '<td class="nombre">' + escapeHtml(a.nombre) + '</td>' +
+            '<td class="cod">' + escapeHtml(a.codigo) + '</td>' +
+            '<td class="c">' + stock + '</td>' +
+            '<td class="c b">' + a.cantidad + '</td>' +
+            '<td class="c chk">' + (verif ? '&#10003;' : '') + '</td></tr>';
+        });
+
+        const html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Artículos necesarios</title><style>' +
+          '@page{size:A4;margin:12mm 10mm}*{margin:0;padding:0;box-sizing:border-box}' +
+          'body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#17181a}' +
+          '.h{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:8px;margin-bottom:10px;border-bottom:2px solid #17181a}' +
+          '.h h1{font-size:18px;font-weight:800;letter-spacing:-.3px}.h .m{font-size:10.5px;color:#666;text-align:right;line-height:1.5}' +
+          'table{width:100%;border-collapse:collapse}' +
+          'th{background:#1b1d21;color:#fff;padding:6px 8px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:left}' +
+          'td{padding:5px 8px;border-bottom:1px solid #e2e2dc;vertical-align:middle}' +
+          '.n{width:26px;text-align:center;color:#999;font-size:10px}.cod{font-family:"Courier New",monospace;font-size:10px;color:#666;width:96px}' +
+          '.c{text-align:center;width:52px;font-family:"Courier New",monospace}.b{font-weight:700}.chk{width:30px;font-size:13px;color:#2e7d5b}' +
+          'tr.cat td{background:#f5f5f2;color:#c2620f;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:7px 8px 4px;border-bottom:1px solid #c2620f}' +
+          'tr.ok td{background:#eaf3ee}tr.ok td.nombre{color:#2e7d5b}' +
+          '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
+          '</style></head><body>' +
+          '<div class="h"><h1>Artículos necesarios</h1><div class="m">' + fecha + '<br>' + pedidosEnCalculo + ' pedidos &middot; ' + arr.length + ' artículos</div></div>' +
+          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th><th class="c">Stock</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
+          '<tbody>' + filas + '</tbody></table>' +
+          '<script>window.onload=function(){window.print()}<\/script></body></html>';
+
+        const win = window.open('', '_blank');
+        if (!win) { showToast('El navegador bloqueó la ventana de impresión'); return; }
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+      });
+    })();
 
   </script>
 </body>
