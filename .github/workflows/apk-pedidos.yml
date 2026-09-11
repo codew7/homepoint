@@ -2,7 +2,9 @@ name: APK Pedidos
 
 # Compila la app Android que envuelve pedidosv2.html.
 # Se puede lanzar a mano desde la pestana Actions, o sale sola cuando se
-# toca algo dentro de pedidosv2/android.
+# toca algo dentro de pedidosv2/android. Solo se publica en Releases lo que
+# esta firmado con la clave de siempre: un APK debug no se puede instalar
+# encima del que ya esta en los telefonos.
 
 on:
   workflow_dispatch:
@@ -131,8 +133,10 @@ jobs:
           path: salida/*.apk
           retention-days: 60
 
+      # La app instalada busca su actualizacion en el ultimo release (ver
+      # ActualizadorApp.java): si un build no se publica, los telefonos no lo ven.
       - name: Publicar en Releases
-        if: github.event_name == 'workflow_dispatch' && inputs.publicar
+        if: steps.firma.outputs.variante == 'release' && (github.event_name == 'push' || inputs.publicar)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

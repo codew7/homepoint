@@ -45,6 +45,8 @@ import java.nio.charset.StandardCharsets;
  *
  * Lo unico que agrega esta clase es lo que un WebView pelado no sabe hacer y la
  * pagina si necesita: imprimir, guardar y compartir PDF, y pedir la camara.
+ * Los cambios en esta carpeta si requieren un APK nuevo: de eso se encarga
+ * ActualizadorApp, que lo baja de GitHub Releases y lo instala encima.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -65,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private final Handler hilo = new Handler(Looper.getMainLooper());
     private ActivityResultLauncher<String> pedirCamara;
     private ImpresoraBluetooth impresoraBt;
+    private ActualizadorApp actualizador;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         impresoraBt = new ImpresoraBluetooth(this);
+        actualizador = new ActualizadorApp(this);
 
         configurarWebView();
 
@@ -402,11 +406,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        actualizador.alVolver();
     }
 
     @Override
     protected void onDestroy() {
         hilo.removeCallbacksAndMessages(null);
+        actualizador.cerrar();
         super.onDestroy();
     }
 }

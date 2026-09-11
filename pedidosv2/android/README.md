@@ -79,8 +79,19 @@ El workflow también se dispara solo cuando se modifica algo dentro de `pedidosv
    Bluetooth). La app va a pedir permiso de **Bluetooth** y, si hace falta, activar el
    Bluetooth del equipo.
 
-Para actualizar más adelante: se instala el APK nuevo encima, sin desinstalar nada y sin
-perder la sesión.
+Para actualizar más adelante no hay que hacer nada a mano: la app revisa el último release
+de GitHub al abrirse (y como mucho una vez por hora mientras está abierta). Si hay una versión
+más nueva, pregunta **Actualizar / Más tarde**; con *Actualizar* baja el APK y abre el
+instalador de Android, que pide confirmar con un toque. Se instala encima, sin desinstalar
+nada y sin perder la sesión. *Más tarde* lo posterga 24 horas.
+
+La primera vez Android puede pedir habilitar *Instalar apps desconocidas* para
+**Pedidos HomePoint** (la app te lleva directo a ese ajuste); al volver, sigue sola.
+
+Para que los teléfonos vean una versión nueva tiene que estar publicada en **Releases**: los
+builds que salen solos por un push a `main` se publican siempre; los lanzados a mano, solo
+con *Publicar en Releases* tildado. Los APK de prueba (sin secrets de firma) nunca se
+publican, porque no se pueden instalar encima del firmado.
 
 ---
 
