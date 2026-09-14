@@ -6492,7 +6492,10 @@
       if (p1) articuloFooter.style.display = 'none';
     }
 
-    document.getElementById('btnBuscarArticulo').addEventListener('click', async () => {
+    // Abre el modal en paso 1. Con `conCamara` enciende el visor (boton de cabecera);
+    // la pistola lectora lo abre sin camara, que queda disponible con su boton.
+    // Resuelve cuando el catalogo ya esta cargado.
+    async function articuloAbrirModal({ conCamara }) {
       articuloModal.classList.add('active');
       articuloActual = null;
       articuloResultados = [];
@@ -6501,9 +6504,13 @@
       articuloSearch.value = '';
       articuloList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando catalogo...</div>';
       // Sin await: el permiso/arranque de camara corre en paralelo con la carga del catalogo
-      articuloIniciarScanner();
+      if (conCamara) articuloIniciarScanner();
       await cargarSheets();
       articuloRenderLista('');
+    }
+
+    document.getElementById('btnBuscarArticulo').addEventListener('click', () => {
+      articuloAbrirModal({ conCamara: true });
     });
 
     function articuloCerrarModal() {
@@ -6636,11 +6643,18 @@
       articuloUltimoScan = { texto, ts: ahora };
       if (navigator.vibrate) navigator.vibrate(60);
 
-      // 4) Confirmado: puede haber mas de un articulo con el mismo codigo de barras.
+      // 4) Confirmado: resolver el codigo (mismo camino que la pistola lectora).
+      articuloResolverLectura(texto);
+    }
+
+    // Lleva una lectura confirmada (camara o pistola) al articulo: paso 2 si es
+    // unico, lista de candidatos si el codigo de barras esta repetido.
+    // Devuelve false si el codigo no esta en el catalogo.
+    function articuloResolverLectura(texto) {
       const candidatos = articuloBuscarCandidatos(texto);
       if (candidatos.length === 0) {
         showToast('Codigo no encontrado en el catalogo');
-        return;
+        return false;
       }
 
       // Se pausa tambien en el caso multiple: si el decoder siguiera activo, pasados
@@ -6650,9 +6664,10 @@
       if (candidatos.length === 1) {
         articuloCandidatos = null;
         articuloSeleccionar(candidatos[0]);
-        return;
+        return true;
       }
       articuloRenderCandidatos(texto, candidatos);
+      return true;
     }
 
     // --- Paso 1: busqueda manual (mismo patron que renderAddItemList) ---
@@ -6911,6 +6926,147 @@
       // Modo continuo: volver al paso 1 y reanudar la camara (sin reiniciarla)
       articuloVolverAPaso1();
     });
+
+    // ==========================================
+    // PISTOLA LECTORA DE CODIGOS DE BARRAS (USB / Bluetooth en modo teclado)
+    // ==========================================
+    // La pistola se presenta como un teclado: "tipea" el codigo en pocos
+    // milisegundos y termina con Enter (o Tab). Se escucha a nivel documento,
+    // en fase de captura, para que funcione en cualquier pantalla de la app sin
+    // necesidad de tener un campo enfocado. Se distingue de una persona
+    // tipeando por el ritmo: varias teclas seguidas con menos de
+    // PISTOLA_GAP_MS entre una y otra.
+    const PISTOLA_GAP_MS = 80;        // separacion maxima entre teclas (Bluetooth en Android es mas lento que USB)
+    const PISTOLA_MIN_LEN = 3;        // largo minimo con sufijo Enter/Tab
+    const PISTOLA_MIN_LEN_SIN_FIN = 6; // largo minimo si la pistola no manda sufijo (cierre por silencio)
+    let pistolaBuffer = '';
+    let pistolaUltimaTecla = 0;
+    let pistolaTimer = null;
+    let pistolaTragarEnterHasta = 0;  // tras cerrar por silencio, ignora un Enter tardio del sufijo
+    let pistolaPendiente = null;      // ultima lectura mientras el catalogo carga
+    let pistolaTeclaSinChar = false;  // ultimo keydown vino sin caracter (Android + campo enfocado)
+
+    // Caracter que representa la tecla. Algunos Android/WebView reportan
+    // 'Unidentified' con teclados fisicos: se reconstruye desde e.code.
+    function pistolaCharDe(e) {
+      if (e.key && e.key.length === 1) return e.key;
+      const m = /^(?:Key([A-Z])|Digit(\d)|Numpad(\d))$/.exec(e.code || '');
+      if (!m) return '';
+      if (m[1]) return e.shiftKey ? m[1] : m[1].toLowerCase();
+      return m[2] || m[3];
+    }
+
+    function pistolaReset() {
+      pistolaBuffer = '';
+      if (pistolaTimer) { clearTimeout(pistolaTimer); pistolaTimer = null; }
+    }
+
+    // Si la lectura cayo dentro de un campo de texto, se la retira de ahi para
+    // no dejar el codigo pegado a lo que la persona estaba escribiendo.
+    function pistolaLimpiarInput(texto) {
+      const el = document.activeElement;
+      if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+      if (typeof el.value !== 'string' || !el.value.endsWith(texto)) return;
+      el.value = el.value.slice(0, -texto.length);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) { pistolaReset(); return; }
+      const ahora = Date.now();
+      const esFin = e.key === 'Enter' || e.key === 'Tab';
+
+      if (esFin) {
+        if (ahora < pistolaTragarEnterHasta) { e.preventDefault(); e.stopPropagation(); return; }
+        const rapido = ahora - pistolaUltimaTecla <= PISTOLA_GAP_MS;
+        const texto = pistolaBuffer;
+        pistolaReset();
+        if (!rapido || texto.length < PISTOLA_MIN_LEN) return; // Enter humano: sigue su curso
+        e.preventDefault(); e.stopPropagation();               // que no dispare botones ni formularios
+        pistolaLimpiarInput(texto);
+        pistolaLectura(texto);
+        return;
+      }
+
+      const ch = pistolaCharDe(e);
+      if (ch) { pistolaTeclaSinChar = false; pistolaAgregarChar(ch, ahora); return; }
+      if (e.key === 'Shift') return;
+      // Android con un campo enfocado: Chrome/WebView reporta la tecla fisica
+      // como 'Unidentified' (keyCode 229) y el caracter recien aparece en el
+      // evento `input`. Se deja la puerta abierta para que lo tome ese listener.
+      if (e.key === 'Unidentified' || e.keyCode === 229) { pistolaTeclaSinChar = true; return; }
+      pistolaReset();
+    }, true);
+
+    // Camino alternativo (Android + campo enfocado): el caracter llega por `input`.
+    // Solo se acepta la insercion de UN caracter precedida de un keydown sin
+    // caracter: asi el teclado en pantalla (que inserta palabras enteras o usa
+    // composicion) nunca se confunde con una pistola.
+    document.addEventListener('input', (e) => {
+      if (!pistolaTeclaSinChar) return;
+      pistolaTeclaSinChar = false;
+      const el = e.target;
+      if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+      if (e.inputType !== 'insertText' || typeof e.data !== 'string' || e.data.length !== 1) { pistolaReset(); return; }
+      pistolaAgregarChar(e.data, Date.now());
+    }, true);
+
+    function pistolaAgregarChar(ch, ahora) {
+      // Una tecla lenta arranca una secuencia nueva: descarta lo anterior.
+      if (ahora - pistolaUltimaTecla > PISTOLA_GAP_MS) pistolaBuffer = '';
+      pistolaBuffer += ch;
+      pistolaUltimaTecla = ahora;
+
+      // Pistolas sin sufijo: se cierra la lectura al primer silencio.
+      if (pistolaTimer) clearTimeout(pistolaTimer);
+      pistolaTimer = setTimeout(() => {
+        pistolaTimer = null;
+        const texto = pistolaBuffer;
+        pistolaBuffer = '';
+        if (texto.length < PISTOLA_MIN_LEN_SIN_FIN) return;
+        pistolaTragarEnterHasta = Date.now() + 300;
+        pistolaLimpiarInput(texto);
+        pistolaLectura(texto);
+      }, PISTOLA_GAP_MS * 2);
+    }
+
+    // Una lectura confirmada: abre "Buscar articulo" si hace falta y resuelve el codigo.
+    async function pistolaLectura(texto) {
+      // Sin sesion o con la app bloqueada no se hace nada.
+      if (document.getElementById('loginScreen').classList.contains('active')) return;
+      if (document.getElementById('blockingOverlay').classList.contains('active')) return;
+      // Con un dialogo de confirmacion abierto (accion irreversible) no se abre nada encima.
+      if (confirmResolver) return;
+
+      if (navigator.vibrate) navigator.vibrate(60);
+
+      if (!articuloModal.classList.contains('active')) {
+        // Primera lectura: abre el buscador sin camara. Mientras carga el
+        // catalogo se guarda solo la ultima lectura.
+        const eraPrimera = pistolaPendiente === null;
+        pistolaPendiente = texto;
+        if (!eraPrimera) return;
+        try { await articuloAbrirModal({ conCamara: false }); }
+        finally { texto = pistolaPendiente; pistolaPendiente = null; }
+      } else if (articuloActual) {
+        // Estaba en el paso 2 de otro articulo: una lectura nueva lo reemplaza.
+        articuloCandidatos = null;
+        articuloResultados = [];
+      }
+      // El modal pudo abrirse desde el boton con el catalogo todavia cargando.
+      if (!sheetsLoaded) await sheetsInicial;
+
+      if (!articuloResolverLectura(texto)) {
+        // No esta en el catalogo: se deja el codigo en el buscador para que se
+        // vea que se leyo y aparezcan coincidencias parciales, si las hay.
+        articuloActual = null;
+        articuloCandidatos = null;
+        articuloMostrarPaso(1);
+        articuloSearch.value = texto;
+        articuloRenderLista(texto.toLowerCase());
+        articuloReanudarScanner();
+      }
+    }
 
     // ==========================================
     // BOTON TERMINAR (integrado en btnToggleEstado)
