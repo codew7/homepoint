@@ -6515,6 +6515,7 @@
 
     function articuloCerrarModal() {
       articuloDetenerScanner();
+      pistolaModo = false;
       articuloModal.classList.remove('active');
     }
 
@@ -6680,6 +6681,31 @@
       articuloRenderLista(articuloSearch.value.trim().toLowerCase());
     });
 
+    // Enter en el buscador: toma lo escrito como una lectura. Es la red de
+    // seguridad de la pistola cuando el campo tiene el cursor: aunque el
+    // detector de ritmo no la reconozca, el codigo se "tipea" ahi y el Enter
+    // final del lector cae aca. (Si el detector si la reconocio, ya se trago el
+    // Enter en fase de captura y este handler no corre.)
+    articuloSearch.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      articuloBuscarDesdeCampo();
+    });
+
+    function articuloBuscarDesdeCampo() {
+      const texto = articuloSearch.value.trim();
+      if (!texto) return;
+      // Coincidencia exacta de codigo de barras o de producto
+      if (articuloBuscarCandidatos(texto).length) { articuloResolverLectura(texto); return; }
+      // Si el filtro deja un unico articulo, es ese
+      const f = articuloFiltrar(texto.toLowerCase());
+      if (f.length === 1) {
+        articuloCandidatos = null;
+        articuloPausarScanner();
+        articuloSeleccionar(f[0].codigo);
+      }
+    }
+
     // Fila de articulo del paso 1: la comparten la lista del catalogo y la de candidatos.
     function articuloOptionHtml(it) {
       const src = it.imagen || it.imagenAlt || '';
@@ -6693,16 +6719,17 @@
         '</div>';
     }
 
+    function articuloFiltrar(filter) {
+      if (!filter) return sheetsAllItems;
+      return sheetsAllItems.filter(it =>
+        it.nombre.toLowerCase().includes(filter) ||
+        it.codigo.toLowerCase().includes(filter) ||
+        (it.codigoBarras && it.codigoBarras.some(b => b.toLowerCase().includes(filter)))
+      );
+    }
+
     function articuloRenderLista(filter) {
-      let filtered = sheetsAllItems;
-      if (filter) {
-        filtered = sheetsAllItems.filter(it =>
-          it.nombre.toLowerCase().includes(filter) ||
-          it.codigo.toLowerCase().includes(filter) ||
-          (it.codigoBarras && it.codigoBarras.some(b => b.toLowerCase().includes(filter)))
-        );
-      }
-      const limited = filtered.slice(0, 50);
+      const limited = articuloFiltrar(filter).slice(0, 50);
       articuloList.innerHTML = limited.map(articuloOptionHtml).join('');
       if (limited.length === 0) {
         articuloList.innerHTML = '<div class="articulo-empty">Sin resultados</div>';
@@ -6875,6 +6902,8 @@
       articuloSearch.value = '';
       articuloRenderLista('');
       articuloReanudarScanner();
+      // Con pistola: el cursor vuelve al buscador para que la proxima lectura caiga ahi.
+      if (pistolaModo) articuloSearch.focus();
     }
 
     // --- Confirmar: marcar listo='y' solo en el item de cada pedido seleccionado ---
@@ -6936,7 +6965,7 @@
     // necesidad de tener un campo enfocado. Se distingue de una persona
     // tipeando por el ritmo: varias teclas seguidas con menos de
     // PISTOLA_GAP_MS entre una y otra.
-    const PISTOLA_GAP_MS = 80;        // separacion maxima entre teclas (Bluetooth en Android es mas lento que USB)
+    const PISTOLA_GAP_MS = 120;       // separacion maxima entre teclas (Bluetooth en Android es lento e irregular)
     const PISTOLA_MIN_LEN = 3;        // largo minimo con sufijo Enter/Tab
     const PISTOLA_MIN_LEN_SIN_FIN = 6; // largo minimo si la pistola no manda sufijo (cierre por silencio)
     let pistolaBuffer = '';
@@ -6944,6 +6973,7 @@
     let pistolaTimer = null;
     let pistolaTragarEnterHasta = 0;  // tras cerrar por silencio, ignora un Enter tardio del sufijo
     let pistolaPendiente = null;      // ultima lectura mientras el catalogo carga
+    let pistolaModo = false;          // el modal se usa con pistola: el cursor vive en el buscador
     let pistolaTeclaSinChar = false;  // ultimo keydown vino sin caracter (Android + campo enfocado)
 
     // Caracter que representa la tecla. Algunos Android/WebView reportan
@@ -7039,6 +7069,7 @@
       if (confirmResolver) return;
 
       if (navigator.vibrate) navigator.vibrate(60);
+      pistolaModo = true;
 
       if (!articuloModal.classList.contains('active')) {
         // Primera lectura: abre el buscador sin camara. Mientras carga el
@@ -7065,6 +7096,7 @@
         articuloSearch.value = texto;
         articuloRenderLista(texto.toLowerCase());
         articuloReanudarScanner();
+        articuloSearch.focus();
       }
     }
 
