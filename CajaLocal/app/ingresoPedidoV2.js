@@ -2485,6 +2485,7 @@ function getTipoCliente() {
             try {
               // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
               await guardarPedidoConMovimientos(pedidoId, pedidoObj, items);
+              pedidoRecienGuardado = true;
 
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
@@ -2515,6 +2516,9 @@ function getTipoCliente() {
           // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
           guardarPedidoConMovimientos(pedidoRef.key, pedidoObj, items)
             .then(async () => {
+              // El pedido ya está en Firebase: si se cierra la ventana con el modal
+              // de impresión abierto, no hay que anotarlo como descartado.
+              pedidoRecienGuardado = true;
               // Guardar alias en localStorage si se usó uno
               if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
                 guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
@@ -2532,6 +2536,7 @@ function getTipoCliente() {
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
                   items = [];
+                  pedidoRecienGuardado = false;
                   limpiarEstadoCambios();
                   renderItems();
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2542,6 +2547,7 @@ function getTipoCliente() {
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
                   items = [];
+                  pedidoRecienGuardado = false;
                   limpiarEstadoCambios();
                   renderItems();
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4316,6 +4322,61 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     return { exitosos, errores };
   }
 
+  // === REGISTRO LOCAL DE PEDIDOS DESCARTADOS ===
+  // Cada vez que se pierde un pedido con artículos cargados sin haberlo ingresado
+  // queda anotado en registro_nuevo.txt (carpeta raíz del paquete). Dos motivos:
+  //   'Nuevo'  -> el operador presionó el botón Nuevo y confirmó.
+  //   'Cierre' -> se cerró la ventana, se recargó o se navegó a otra pantalla.
+  // El archivo lo escribe el servidor local (sistema/servidor.ps1, endpoint
+  // POST /__log): desde el navegador no se puede escribir en disco. En la versión
+  // web no existe ese endpoint y la llamada falla en silencio.
+  //
+  // Un pedido que ya se guardó en Firebase no es un descarte: `pedidoRecienGuardado`
+  // cubre la ventana entre el guardado y el vaciado del carrito (el modal de
+  // impresión, o la navegación al historial tras editar).
+  let pedidoRecienGuardado = false;
+
+  function registrarDescarteEnLog(motivo) {
+    if (!items.length || pedidoRecienGuardado) return;
+    try {
+      const subtotal = items.reduce((acc, it) => acc + totalLinea(it), 0);
+      const datos = {
+        motivo: motivo || 'Nuevo',
+        articulos: items.map(it => ({
+          nombre: (it.nombre || '').trim(),
+          cantidad: parseInt(it.cantidad, 10) || 0,
+          tipo: it.tipoLinea || 'VENTA'
+        })),
+        subtotal: subtotal.toLocaleString('es-AR', { maximumFractionDigits: 0 }),
+        vendedor: form.vendedor ? form.vendedor.value.trim() : ''
+      };
+      const cuerpo = JSON.stringify(datos);
+      // Al cerrar la ventana un fetch común puede quedar cortado a mitad de camino;
+      // sendBeacon está pensado justamente para mandar datos durante la descarga.
+      if (motivo === 'Cierre' && navigator.sendBeacon) {
+        navigator.sendBeacon('/__log', new Blob([cuerpo], { type: 'application/json; charset=utf-8' }));
+        return;
+      }
+      fetch('/__log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: cuerpo,
+        keepalive: true
+      }).catch(() => {});
+    } catch (e) {
+      // El registro es secundario: nunca debe frenar al operador.
+    }
+  }
+
+  // Cierre de la ventana, recarga o navegación (por ejemplo al botón Historial):
+  // pagehide es el último evento confiable antes de que la página desaparezca.
+  // Al editar un pedido existente (?id=) los artículos ya están ingresados, así
+  // que cerrar sin guardar no es un pedido perdido y no se anota.
+  window.addEventListener('pagehide', function() {
+    if (pedidoId) return;
+    registrarDescarteEnLog('Cierre');
+  });
+
   // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===
   function restablecerFormulario() {
     // Confirmar con el usuario si hay datos
@@ -4329,7 +4390,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const confirmar = confirm('¿Está seguro de que desea crear un nuevo pedido? Se perderán los datos actuales.');
       if (!confirmar) return;
     }
-    
+
+    // Se anota antes de limpiar: después de este punto los artículos ya no existen.
+    registrarDescarteEnLog('Nuevo');
+
     // Limpiar campos del formulario
     form.nombre.value = '';
     form.telefono.value = '';

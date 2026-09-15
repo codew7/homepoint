@@ -41,6 +41,7 @@ $carpetaSistema  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $raiz            = Split-Path -Parent $carpetaSistema
 $app             = Join-Path $raiz 'app'
 $archivoLog      = Join-Path $carpetaSistema 'registro.txt'
+$archivoLogNuevo = Join-Path $raiz 'registro_nuevo.txt'
 $perfilNavegador = Join-Path $env:LOCALAPPDATA 'HomePointCaja\navegador'
 
 # ---------------------------------------------------------------- registro ---
@@ -57,6 +58,42 @@ function Escribir-Log {
       Set-Content -Path $archivoLog -Value $ultimas -Encoding UTF8
     }
   } catch {}
+}
+
+# --------------------------------------------------- registro del boton Nuevo ---
+# La caja avisa (POST /__log) cada vez que se pierde un pedido con articulos
+# cargados sin haberlo ingresado: por el boton "Nuevo" (motivo Nuevo) o porque se
+# cerro la ventana (motivo Cierre). Asi queda rastro de las ventas armadas y
+# descartadas. Cada linea: fecha | hora | motivo | vendedor | subtotal | articulos.
+# No se poda: es un registro de auditoria y tiene que conservarse completo.
+function Escribir-Log-Nuevo {
+  param($Datos)
+
+  $motivo = [string]$Datos.motivo
+  if (-not $motivo) { $motivo = 'Nuevo' }
+
+  $articulos = '(sin articulos)'
+  if ($Datos.articulos -and @($Datos.articulos).Count -gt 0) {
+    $partes = @()
+    foreach ($a in @($Datos.articulos)) {
+      $nombre = [string]$a.nombre
+      if (-not $nombre) { $nombre = '(sin nombre)' }
+      $texto = '{0}x {1}' -f $a.cantidad, $nombre
+      # Las lineas de devolucion o garantia se marcan para no confundirlas con ventas.
+      if ($a.tipo -and $a.tipo -ne 'VENTA') { $texto += ' [' + $a.tipo + ']' }
+      $partes += $texto
+    }
+    $articulos = $partes -join '; '
+  }
+
+  $subtotal = [string]$Datos.subtotal
+  if (-not $subtotal) { $subtotal = '0' }
+  $vendedor = [string]$Datos.vendedor
+  if (-not $vendedor) { $vendedor = '(sin vendedor)' }
+
+  $linea = '{0} | {1} | {2} | Vendedor: {3} | Subtotal: {4} | {5}' -f `
+    (Get-Date -Format 'yyyy-MM-dd'), (Get-Date -Format 'HH:mm:ss'), $motivo, $vendedor, $subtotal, $articulos
+  Add-Content -Path $archivoLogNuevo -Value $linea -Encoding UTF8
 }
 
 function Avisar {
@@ -279,6 +316,7 @@ function Responder-Texto {
 $paginaError = '<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;color:#2b2d31"><h2>No se encontro el archivo</h2><p><code>{0}</code></p><p>Falta un archivo del paquete. Hay que volver a copiar la carpeta <b>CajaLocal</b> completa.</p></body>'
 
 $navegador = Abrir-Navegador -Url "http://localhost:$puertoElegido/$Pagina"
+$apagarDesde = $null
 
 try {
   while ($listener.IsListening) {
@@ -288,9 +326,16 @@ try {
     $pendiente = $listener.GetContextAsync()
     while (-not $pendiente.Wait(500)) {
       if ($navegador -ne $null -and $navegador.HasExited) {
-        Escribir-Log 'Se cerro la ventana de la caja: se apaga el servidor'
-        $listener.Stop()
-        exit 0
+        # Al cerrar la ventana la caja manda el registro de "Cierre" justo antes
+        # de desaparecer: se espera un momento por si ese pedido todavia esta en
+        # camino, y recien despues se apaga.
+        if ($apagarDesde -eq $null) {
+          $apagarDesde = (Get-Date).AddSeconds(2)
+          Escribir-Log 'Se cerro la ventana de la caja: se apaga el servidor'
+        } elseif ((Get-Date) -gt $apagarDesde) {
+          $listener.Stop()
+          exit 0
+        }
       }
     }
 
@@ -304,6 +349,28 @@ try {
       # Senal de vida: la usa este mismo script para no levantar dos servidores.
       if ($ruta -eq '/__caja') {
         Responder-Texto $respuesta 200 'text/plain; charset=utf-8' 'HomePointCaja'
+        continue
+      }
+
+      # Registro del boton Nuevo: la caja manda un JSON con articulos, subtotal
+      # y vendedor, y aca se anota en registro_nuevo.txt (ver Escribir-Log-Nuevo).
+      if ($ruta -eq '/__log') {
+        if ($pedido.HttpMethod -ne 'POST') {
+          Responder-Texto $respuesta 405 'text/plain; charset=utf-8' 'Solo POST'
+          continue
+        }
+        $cuerpo = ''
+        try {
+          $lector = New-Object IO.StreamReader($pedido.InputStream, [Text.Encoding]::UTF8)
+          $cuerpo = $lector.ReadToEnd()
+          $lector.Close()
+          $datos = $cuerpo | ConvertFrom-Json
+          Escribir-Log-Nuevo -Datos $datos
+          Responder-Texto $respuesta 200 'text/plain; charset=utf-8' 'OK'
+        } catch {
+          Escribir-Log ("ERROR registrando Nuevo: " + $_.Exception.Message + " | cuerpo: " + $cuerpo)
+          Responder-Texto $respuesta 400 'text/plain; charset=utf-8' 'Registro invalido'
+        }
         continue
       }
 
