@@ -1,0 +1,1971 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Fuera de los buscadores: noindex impide que Google indexe la pagina y
+     nofollow que siga sus enlaces. Debe quedar rastreable en robots.txt,
+     porque si se bloquea el crawleo Google nunca lee esta etiqueta. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+<title>Buscar pedido — Homepoint</title>
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<!-- Firebase Auth Check -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  const db = firebase.database();
+
+  // La app no toca la base hasta que hay sesion: si el usuario no esta
+  // logueado se lo manda al login sin haber gastado una sola consulta.
+  let _resolverSesion;
+  const sesionLista = new Promise(function(r){ _resolverSesion = r; });
+
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (!user) {
+      window.location.href = 'login.html?redirect=' +
+        encodeURIComponent(window.location.pathname + window.location.search);
+      return;
+    }
+    _resolverSesion(user);
+  });
+</script>
+<!-- Fin Firebase Auth Check -->
+<script>
+/* Aplica el tema guardado antes del primer pintado: evita el destello. */
+(function(){ try{ var t = localStorage.getItem('homepoint-buscador-tema');
+  if (t === 'claro' || t === 'oscuro') document.documentElement.setAttribute('data-tema', t);
+}catch(e){} })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   BUSCADOR DE PEDIDOS — panel de instrumentos
+   Estética: archivo administrativo. Papel cálido, tinta densa,
+   un único acento bermellón, numerales monoespaciados tabulares.
+   ══════════════════════════════════════════════════════════════════ */
+
+:root{
+  --paper:   #EFEEE8;
+  --surface: #FBFAF7;
+  --raised:  #FFFFFF;
+  --ink:     #15160F;
+  --ink-2:   #3D3E33;
+  --muted:   #77756A;
+  --faint:   #A5A296;
+  --line:    #DCD9CE;
+  --line-2:  #E9E7DF;
+  --accent:  #4D7C0F;
+  --accent-w:#EDF6DA;
+  --on-accent:#FFFFFF;
+  --ok:      #1F6A4A;
+  --ok-w:    #E7F1EB;
+  --warn:    #8A5A06;
+  --warn-w:  #F7EEDC;
+  --danger:  #A32218;
+  --sel:     #FFF6D6;
+
+  --r-sm: 4px;
+  --r:    7px;
+  --r-lg: 12px;
+
+  --shadow-1: 0 1px 2px rgba(21,22,15,.06), 0 1px 1px rgba(21,22,15,.04);
+  --shadow-2: 0 2px 6px rgba(21,22,15,.07), 0 8px 24px rgba(21,22,15,.07);
+  --shadow-3: -1px 0 0 var(--line), -18px 0 48px rgba(21,22,15,.14), -60px 0 120px rgba(21,22,15,.10);
+
+  --ui: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bar-h: 34px;
+  color-scheme: light;
+}
+
+/* Oscuro por preferencia del sistema, salvo que se haya elegido claro a mano */
+@media (prefers-color-scheme: dark){
+  :root:not([data-tema="claro"]){
+    --paper:   #101109;
+    --surface: #17180F;
+    --raised:  #1D1E15;
+    --ink:     #EDEBE0;
+    --ink-2:   #C6C3B5;
+    --muted:   #8C897B;
+    --faint:   #62604F;
+    --line:    #2C2D22;
+    --line-2:  #24251B;
+    --accent:  #A3E635;
+    --accent-w:#22300D;
+    --on-accent:#16200A;
+    --ok:      #58C293;
+    --ok-w:    #12281E;
+    --warn:    #E0A94A;
+    --warn-w:  #2C2311;
+    --danger:  #F0705E;
+    --sel:     #3A3312;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-2: 0 2px 8px rgba(0,0,0,.5), 0 12px 32px rgba(0,0,0,.45);
+    --shadow-3: -1px 0 0 var(--line), -18px 0 48px rgba(0,0,0,.55), -60px 0 140px rgba(0,0,0,.45);
+    color-scheme: dark;
+  }
+}
+/* Oscuro elegido a mano, gane lo que gane el sistema */
+:root[data-tema="oscuro"]{
+    --paper:   #101109;
+    --surface: #17180F;
+    --raised:  #1D1E15;
+    --ink:     #EDEBE0;
+    --ink-2:   #C6C3B5;
+    --muted:   #8C897B;
+    --faint:   #62604F;
+    --line:    #2C2D22;
+    --line-2:  #24251B;
+    --accent:  #A3E635;
+    --accent-w:#22300D;
+    --on-accent:#16200A;
+    --ok:      #58C293;
+    --ok-w:    #12281E;
+    --warn:    #E0A94A;
+    --warn-w:  #2C2311;
+    --danger:  #F0705E;
+    --sel:     #3A3312;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-2: 0 2px 8px rgba(0,0,0,.5), 0 12px 32px rgba(0,0,0,.45);
+    --shadow-3: -1px 0 0 var(--line), -18px 0 48px rgba(0,0,0,.55), -60px 0 140px rgba(0,0,0,.45);
+    color-scheme: dark;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html,body{ height:100%; }
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--ui);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow:hidden;
+}
+
+/* Textura de papel: una trama diagonal muy tenue que da materia sin coste */
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(21,22,15,.014) 0 1px, transparent 1px 7px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-tema="claro"]) body::before{ background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.016) 0 1px, transparent 1px 7px); }
+}
+:root[data-tema="oscuro"] body::before{ background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.016) 0 1px, transparent 1px 7px); }
+
+button,input,select{ font:inherit; color:inherit; }
+button{ cursor:pointer; background:none; border:none; padding:0; }
+
+::selection{ background:var(--sel); color:var(--ink); }
+
+/* Scrollbars discretas */
+*::-webkit-scrollbar{ width:11px; height:11px; }
+*::-webkit-scrollbar-track{ background:transparent; }
+*::-webkit-scrollbar-thumb{ background:var(--line); border-radius:99px; border:3px solid transparent; background-clip:content-box; }
+*::-webkit-scrollbar-thumb:hover{ background:var(--faint); background-clip:content-box; border:3px solid transparent; }
+
+/* ───────────────────────── Estructura ───────────────────────── */
+
+.app{
+  position:relative; z-index:1;
+  height:100dvh;
+  display:grid;
+  grid-template-rows:auto 1fr var(--bar-h);
+}
+
+/* ───────────────────────── Cabecera / mando ───────────────────────── */
+
+header.mando{
+  background:color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter:blur(18px) saturate(170%);
+  -webkit-backdrop-filter:blur(18px) saturate(170%);
+  border-bottom:1px solid var(--line);
+  padding:14px 20px 12px;
+}
+
+.titulo-fila{
+  display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap;
+}
+.marca{
+  font-weight:700; font-size:17px; letter-spacing:-.035em; margin:0;
+}
+.marca .punto{ color:var(--accent); }
+.subtitulo{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--muted); font-weight:500;
+}
+.titulo-fila .crece{ flex:1 1 auto; }
+
+/* [hidden] no basta: el display de la clase le gana al del navegador */
+.estado-conexion[hidden]{ display:none; }
+.estado-conexion{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted);
+}
+.pip{ width:6px; height:6px; border-radius:99px; background:var(--faint); }
+.pip.on{ background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 20%,transparent); }
+.btn-salir{
+  font-family:var(--mono); font-size:9.5px; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase;
+  padding:3px 8px; border-radius:99px; margin-left:2px;
+  border:1px solid var(--line); background:var(--surface); color:var(--muted);
+  transition:background .14s ease, color .14s ease, border-color .14s ease, transform .12s ease;
+}
+.btn-salir:hover{ border-color:var(--danger); color:var(--danger); }
+.btn-salir:active{ transform:scale(.93); }
+
+.pip.err{ background:var(--danger); box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 20%,transparent); }
+
+/* Selector de tema: tres estados, el activo se marca con tinta plena */
+.tema{
+  display:inline-flex; align-items:center; gap:1px;
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:99px; padding:2px;
+}
+.tema button{
+  display:grid; place-items:center;
+  width:25px; height:22px; border-radius:99px;
+  color:var(--faint);
+  transition:background .15s ease, color .15s ease, transform .12s ease;
+}
+.tema button:hover{ color:var(--ink-2); }
+.tema button:active{ transform:scale(.9); }
+.tema button[aria-pressed="true"]{ background:var(--ink); color:var(--paper); }
+.tema button svg{ display:block; }
+
+/* Campo de búsqueda protagonista */
+.buscador{
+  display:flex; align-items:stretch; gap:0;
+  background:var(--raised);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  box-shadow:var(--shadow-1);
+  transition:border-color .16s ease, box-shadow .16s ease;
+  overflow:hidden;
+}
+.buscador:focus-within{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent), var(--shadow-1);
+}
+.buscador .lupa{
+  display:grid; place-items:center; padding-left:14px; color:var(--faint); flex:0 0 auto;
+}
+#q{
+  flex:1 1 auto; min-width:0;
+  border:none; outline:none; background:transparent;
+  padding:13px 12px;
+  font-size:16px; font-weight:500; letter-spacing:-.012em;
+}
+#q::placeholder{ color:var(--faint); font-weight:400; letter-spacing:0; }
+
+.campos{
+  display:flex; align-items:center; gap:3px; flex-wrap:wrap; margin-top:10px;
+}
+.campo-tgl{
+  font-family:var(--mono); font-size:10.5px; font-weight:500;
+  letter-spacing:.07em; text-transform:uppercase;
+  padding:5px 11px; border-radius:99px; color:var(--muted);
+  border:1px solid var(--line); background:var(--surface);
+  transition:background .14s ease, color .14s ease, border-color .14s ease, transform .12s ease;
+  white-space:nowrap;
+}
+.campo-tgl:hover{ border-color:var(--faint); color:var(--ink-2); }
+.campo-tgl[aria-pressed="true"]{ background:var(--accent-w); color:var(--accent); border-color:color-mix(in srgb,var(--accent) 35%,transparent); }
+.campo-tgl:active{ transform:scale(.95); }
+
+.btn-limpiar{
+  flex:0 0 auto; padding:0 12px; color:var(--faint); display:none; place-items:center;
+}
+.btn-limpiar.visible{ display:grid; }
+.btn-limpiar:hover{ color:var(--ink); }
+
+/* Fila de alcance temporal */
+.alcance{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:11px;
+}
+.etiqueta-alcance{
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--faint); font-weight:500;
+  margin-right:2px;
+}
+.chip{
+  font-size:12.5px; font-weight:500; letter-spacing:-.005em;
+  padding:5px 11px; border-radius:99px;
+  border:1px solid var(--line);
+  background:var(--surface); color:var(--ink-2);
+  transition:transform .12s ease, background .14s ease, border-color .14s ease, color .14s ease;
+}
+.chip:hover{ border-color:var(--faint); }
+.chip:active{ transform:scale(.96); }
+.chip[aria-pressed="true"]{
+  background:var(--ink); color:var(--paper); border-color:var(--ink);
+}
+.sep-v{ width:1px; height:20px; background:var(--line); margin:0 3px; }
+
+.fecha-campo{
+  display:inline-flex; align-items:center; gap:5px;
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r); padding:3px 8px;
+}
+.fecha-campo span{
+  font-family:var(--mono); font-size:10px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--faint);
+}
+.fecha-campo input{
+  border:none; outline:none; background:transparent;
+  font-family:var(--mono); font-size:12.5px; font-weight:500;
+  padding:2px 0; width:118px;
+}
+.fecha-campo:focus-within{ border-color:var(--accent); }
+
+.btn-buscar{
+  display:inline-flex; align-items:center; gap:7px;
+  background:var(--accent); color:var(--on-accent);
+  padding:7px 16px; border-radius:99px;
+  font-size:13px; font-weight:600; letter-spacing:-.005em;
+  box-shadow:var(--shadow-1);
+  transition:transform .12s ease, filter .14s ease;
+}
+.btn-buscar:hover{ filter:brightness(1.07); }
+.btn-buscar:active{ transform:scale(.965); }
+.btn-buscar[disabled]{ opacity:.5; pointer-events:none; }
+.btn-buscar kbd{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.05em;
+  background:rgba(255,255,255,.22); padding:1px 5px; border-radius:3px;
+}
+
+.btn-fantasma{
+  font-size:12.5px; font-weight:500; color:var(--muted);
+  padding:6px 10px; border-radius:var(--r);
+  transition:background .14s ease, color .14s ease;
+}
+.btn-fantasma:hover{ background:var(--line-2); color:var(--ink); }
+.btn-fantasma:active{ transform:scale(.97); }
+
+/* Filtros secundarios */
+.filtros-2{
+  display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:10px;
+  padding-top:10px; border-top:1px dashed var(--line);
+}
+.select-mini{
+  appearance:none; -webkit-appearance:none;
+  background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2377756A' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 9px center;
+  border:1px solid var(--line); border-radius:var(--r);
+  padding:5px 26px 5px 9px;
+  font-size:12.5px; font-weight:500; color:var(--ink-2);
+  outline:none; max-width:190px;
+  transition:border-color .14s ease;
+}
+.select-mini:focus{ border-color:var(--accent); }
+.select-mini.activo{ border-color:var(--accent); color:var(--accent); background-color:var(--accent-w); }
+
+/* ───────────────────────── Resultados ───────────────────────── */
+
+main.resultados{
+  overflow:auto; position:relative;
+  scroll-padding-top:34px;
+}
+
+.aviso{
+  margin:14px 20px 0; padding:10px 14px;
+  border:1px solid var(--line); border-left:3px solid var(--warn);
+  background:var(--warn-w); border-radius:var(--r);
+  font-size:12.5px; color:var(--ink-2);
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+}
+.aviso.err{ border-left-color:var(--danger); background:color-mix(in srgb,var(--danger) 9%,transparent); }
+.aviso b{ font-weight:600; }
+.aviso .crece{ flex:1 1 auto; }
+
+/* Tabla */
+.tabla-marco{ padding:14px 20px 28px; }
+table.pedidos{
+  width:100%; border-collapse:separate; border-spacing:0;
+  background:var(--surface);
+  border:1px solid var(--line); border-radius:var(--r);
+  overflow:hidden;
+}
+table.pedidos thead th{
+  position:sticky; top:0; z-index:3;
+  background:color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  text-align:left; padding:8px 12px;
+  font-family:var(--mono); font-size:9.5px; font-weight:600;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--muted);
+  border-bottom:1px solid var(--line);
+  white-space:nowrap; user-select:none; cursor:pointer;
+}
+table.pedidos thead th:hover{ color:var(--ink); }
+table.pedidos thead th .orden{ color:var(--accent); font-size:8px; margin-left:3px; }
+table.pedidos tbody td{
+  padding:9px 12px; border-bottom:1px solid var(--line-2);
+  vertical-align:top;
+}
+table.pedidos tbody tr:last-child td{ border-bottom:none; }
+table.pedidos tbody tr{
+  cursor:pointer;
+  transition:background .1s ease;
+}
+table.pedidos tbody tr:hover{ background:var(--line-2); }
+table.pedidos tbody tr[aria-selected="true"]{
+  background:var(--accent-w);
+  box-shadow:inset 3px 0 0 var(--accent);
+}
+.num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.c-fecha{ white-space:nowrap; font-size:12px; }
+.c-fecha .hora{ color:var(--faint); font-size:11px; }
+.c-cliente{ font-weight:500; letter-spacing:-.008em; min-width:150px; }
+.c-cliente .sin{ color:var(--faint); font-weight:400; font-style:italic; }
+.c-nota{ color:var(--muted); font-size:12.5px; max-width:280px; }
+.c-total{ text-align:right; white-space:nowrap; font-weight:600; font-size:13px; }
+.c-id{ font-size:11px; color:var(--faint); white-space:nowrap; }
+mark{ background:var(--sel); color:inherit; border-radius:2px; padding:0 1px; box-shadow:0 1px 0 color-mix(in srgb,var(--warn) 40%,transparent); }
+
+.badge{
+  display:inline-block; padding:2px 7px; border-radius:99px;
+  font-family:var(--mono); font-size:9.5px; font-weight:600;
+  letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+  border:1px solid transparent;
+}
+.badge.ok{ background:var(--ok-w); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 25%,transparent); }
+.badge.warn{ background:var(--warn-w); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 25%,transparent); }
+.badge.bad{ background:color-mix(in srgb,var(--danger) 10%,transparent); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 25%,transparent); }
+.badge.neutro{ background:var(--line-2); color:var(--muted); border-color:var(--line); }
+
+/* Estados vacíos */
+.vacio{
+  padding:70px 24px; text-align:center; color:var(--muted);
+}
+.vacio .glifo{
+  font-family:var(--mono); font-size:34px; color:var(--line);
+  letter-spacing:-.06em; margin-bottom:10px;
+}
+.vacio h3{ margin:0 0 6px; font-size:16px; font-weight:600; letter-spacing:-.02em; color:var(--ink); }
+.vacio p{ margin:0 auto 16px; max-width:440px; font-size:13px; line-height:1.55; }
+
+/* Paginación */
+.paginacion{
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  padding:16px 0 4px; flex-wrap:wrap;
+}
+.pg{
+  min-width:30px; height:30px; padding:0 8px; border-radius:var(--r-sm);
+  border:1px solid transparent;
+  font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums;
+  color:var(--muted);
+  transition:background .12s ease, color .12s ease;
+}
+.pg:hover{ background:var(--line-2); color:var(--ink); }
+.pg[aria-current="true"]{ background:var(--ink); color:var(--paper); font-weight:600; }
+.pg[disabled]{ opacity:.3; pointer-events:none; }
+.pg-info{ font-family:var(--mono); font-size:11px; color:var(--faint); padding:0 8px; }
+
+/* ───────────────────────── Barra de estado ───────────────────────── */
+
+footer.barra{
+  display:flex; align-items:center; gap:0;
+  background:var(--surface); border-top:1px solid var(--line);
+  padding:0 14px; overflow-x:auto; white-space:nowrap;
+}
+footer.barra .m{
+  display:inline-flex; align-items:baseline; gap:5px;
+  padding:0 12px; height:100%; border-right:1px solid var(--line-2);
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.04em;
+}
+footer.barra .m:last-of-type{ border-right:none; }
+footer.barra .m i{ font-style:normal; color:var(--faint); text-transform:uppercase; letter-spacing:.09em; font-size:9.5px; }
+footer.barra .m b{ font-weight:600; font-variant-numeric:tabular-nums; }
+footer.barra .crece{ flex:1 1 auto; }
+footer.barra .m.destacado b{ color:var(--accent); }
+
+/* Barra de progreso de la descarga */
+.progreso{
+  position:absolute; left:0; right:0; top:0; height:2px;
+  background:transparent; overflow:hidden; z-index:20; pointer-events:none;
+}
+.progreso::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform:translateX(-100%);
+}
+.progreso.activa::after{ animation:barrido 1.05s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes barrido{ to{ transform:translateX(100%); } }
+
+/* ───────────────────────── Hoja de detalle ───────────────────────── */
+
+.scrim{
+  position:fixed; inset:0; z-index:40;
+  background:rgba(21,22,15,.34);
+  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+  opacity:0; pointer-events:none;
+}
+.scrim.viva{ pointer-events:auto; }
+
+.hoja{
+  position:fixed; top:0; right:0; bottom:0; z-index:41;
+  width:min(620px, 100vw);
+  background:var(--raised);
+  box-shadow:var(--shadow-3);
+  display:flex; flex-direction:column;
+  transform:translate3d(100%,0,0);
+  visibility:hidden;
+  will-change:transform;
+}
+.hoja.viva{ visibility:visible; }
+
+.hoja-asa{
+  position:absolute; left:0; top:0; bottom:0; width:16px;
+  cursor:grab; touch-action:none; z-index:2;
+  display:grid; place-items:center;
+}
+.hoja-asa::after{
+  content:''; width:3px; height:40px; border-radius:99px;
+  background:var(--line); transition:background .16s ease, height .16s ease;
+}
+.hoja-asa:hover::after{ background:var(--faint); height:64px; }
+.hoja-asa:active{ cursor:grabbing; }
+
+.hoja-cab{
+  padding:16px 18px 13px 26px;
+  border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--raised) 86%, transparent);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  touch-action:none;
+  flex:0 0 auto;
+}
+.hoja-cab .fila1{ display:flex; align-items:flex-start; gap:12px; }
+.hoja-cab h2{
+  margin:0; font-size:19px; font-weight:700; letter-spacing:-.03em;
+  line-height:1.2; flex:1 1 auto; min-width:0;
+  overflow-wrap:anywhere;
+}
+.hoja-cab h2 .sin{ color:var(--faint); font-weight:500; font-style:italic; }
+.hoja-cab .idp{
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  margin-top:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+}
+.hoja-cab .badges{ display:flex; gap:5px; flex-wrap:wrap; margin-top:9px; }
+.cerrar{
+  flex:0 0 auto; width:30px; height:30px; border-radius:99px;
+  display:grid; place-items:center; color:var(--muted);
+  transition:background .14s ease, color .14s ease;
+}
+.cerrar:hover{ background:var(--line-2); color:var(--ink); }
+.cerrar:active{ transform:scale(.92); }
+
+.hoja-cuerpo{
+  flex:1 1 auto; overflow:auto; padding:0 18px 90px 26px;
+  overscroll-behavior:contain;
+}
+
+.bloque{ margin-top:20px; }
+.bloque > h3{
+  margin:0 0 9px; font-family:var(--mono);
+  font-size:9.5px; font-weight:600; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--accent);
+  display:flex; align-items:center; gap:8px;
+}
+.bloque > h3::after{ content:''; flex:1 1 auto; height:1px; background:var(--line); }
+
+dl.datos{ margin:0; display:grid; grid-template-columns:minmax(110px,auto) 1fr; gap:0; }
+dl.datos dt{
+  padding:6px 14px 6px 0; border-bottom:1px solid var(--line-2);
+  font-size:12px; color:var(--muted);
+}
+dl.datos dd{
+  margin:0; padding:6px 0; border-bottom:1px solid var(--line-2);
+  font-size:13px; font-weight:500; overflow-wrap:anywhere;
+}
+dl.datos dd.mono{ font-family:var(--mono); font-size:12.5px; font-variant-numeric:tabular-nums; }
+dl.datos dd .sin{ color:var(--faint); font-weight:400; }
+
+table.items{
+  width:100%; border-collapse:separate; border-spacing:0;
+  border:1px solid var(--line); border-radius:var(--r); overflow:hidden;
+  font-size:12.5px;
+}
+table.items th{
+  text-align:left; padding:7px 9px; background:var(--surface);
+  font-family:var(--mono); font-size:9px; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  border-bottom:1px solid var(--line);
+}
+table.items td{ padding:7px 9px; border-bottom:1px solid var(--line-2); vertical-align:top; }
+table.items tr:last-child td{ border-bottom:none; }
+table.items .r{ text-align:right; white-space:nowrap; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+table.items .cod{ font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap; }
+table.items .cat{ display:block; font-size:10.5px; color:var(--faint); margin-top:1px; }
+table.items tr.total td{ background:var(--surface); font-weight:700; border-top:1px solid var(--line); }
+table.items tr.sel td{ background:var(--sel); }
+table.items tr.pega td{ background:var(--accent-w); box-shadow:inset 3px 0 0 var(--accent); }
+table.items tr.pega td:first-child{ color:var(--accent) !important; font-weight:600; }
+
+.cuenta{
+  border:1px solid var(--line); border-radius:var(--r);
+  overflow:hidden; background:var(--surface);
+}
+.cuenta .ln{
+  display:flex; justify-content:space-between; gap:12px;
+  padding:7px 12px; border-bottom:1px solid var(--line-2);
+  font-size:13px;
+}
+.cuenta .ln:last-child{ border-bottom:none; }
+.cuenta .ln span:first-child{ color:var(--muted); }
+.cuenta .ln span:last-child{ font-family:var(--mono); font-weight:500; font-variant-numeric:tabular-nums; }
+.cuenta .ln.resta span:last-child{ color:var(--danger); }
+.cuenta .ln.grande{
+  background:var(--ink); color:var(--paper);
+  padding:11px 12px; font-size:15px; font-weight:700;
+}
+.cuenta .ln.grande span:first-child{ color:color-mix(in srgb,var(--paper) 70%, transparent); font-weight:600; font-size:12px; letter-spacing:.04em; text-transform:uppercase; font-family:var(--mono); align-self:center; }
+.cuenta .ln.grande span:last-child{ font-weight:700; letter-spacing:-.02em; }
+
+.nota-caja{
+  border:1px solid var(--line); border-left:3px solid var(--warn);
+  background:var(--warn-w); border-radius:var(--r);
+  padding:10px 13px; font-size:13px; line-height:1.55;
+  white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.nota-caja .cuando{
+  display:block; margin-top:6px; font-family:var(--mono);
+  font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:var(--warn);
+}
+
+.hoja-pie{
+  position:absolute; left:16px; right:0; bottom:0;
+  display:flex; gap:8px; padding:12px 18px;
+  background:color-mix(in srgb,var(--raised) 85%, transparent);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);
+}
+.hoja-pie .crece{ flex:1 1 auto; }
+.btn-hoja{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:7px 13px; border-radius:var(--r);
+  border:1px solid var(--line); background:var(--surface);
+  font-size:12.5px; font-weight:500; color:var(--ink-2);
+  transition:transform .12s ease, background .14s ease, border-color .14s ease;
+  text-decoration:none;
+}
+.btn-hoja:hover{ background:var(--line-2); border-color:var(--faint); }
+.btn-hoja:active{ transform:scale(.97); }
+.btn-hoja.primario{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.btn-hoja.primario:hover{ filter:brightness(1.18); }
+
+/* Aparición de la tabla: un único fundido, barato, sin escalonar filas */
+.aparece{ animation:aparece .22s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes aparece{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
+
+/* ───────────────────────── Accesibilidad / preferencias ───────────────────────── */
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.01ms !important; animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+  .progreso.activa::after{ transform:none; opacity:.6; }
+}
+@media (prefers-reduced-transparency: reduce){
+  header.mando, .hoja-cab, .hoja-pie, table.pedidos thead th{
+    background:var(--surface); backdrop-filter:none; -webkit-backdrop-filter:none;
+  }
+  .scrim{ backdrop-filter:none; -webkit-backdrop-filter:none; background:rgba(21,22,15,.5); }
+}
+@media (prefers-contrast: more){
+  :root{ --line:#9A978A; --line-2:#B8B5A8; --muted:#4A483E; --faint:#6A685C; }
+}
+
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+
+/* ───────────────────────── Responsive ───────────────────────── */
+
+@media (max-width: 820px){
+  header.mando{ padding:12px 14px 10px; }
+  .tabla-marco{ padding:12px 14px 24px; }
+  .aviso{ margin-left:14px; margin-right:14px; }
+  .col-opc{ display:none; }
+  .hoja{ width:100vw; }
+  #q{ font-size:16px; }
+}
+@media (max-width: 560px){
+  .col-opc2{ display:none; }
+  .marca{ font-size:15px; }
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- ══════════════ MANDO ══════════════ -->
+  <header class="mando">
+    <div class="titulo-fila">
+      <h1 class="marca">Buscar pedido<span class="punto">.</span></h1>
+      <span class="subtitulo">Homepoint · Archivo</span>
+      <span class="crece"></span>
+      <span class="estado-conexion" id="cuenta" hidden>
+        <span id="cuentaMail"></span>
+        <button class="btn-salir" id="btnSalir" title="Cerrar sesion">Salir</button>
+      </span>
+      <span class="estado-conexion"><span class="pip" id="pip"></span><span id="pipTxt">conectando</span></span>
+      <div class="tema" id="tema" role="group" aria-label="Tema de la interfaz">
+        <button data-tema="claro" title="Tema claro" aria-label="Tema claro" aria-pressed="false">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <button data-tema="oscuro" title="Tema oscuro" aria-label="Tema oscuro" aria-pressed="false">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></svg>
+        </button>
+        <button data-tema="auto" title="Seguir al sistema" aria-label="Seguir al sistema" aria-pressed="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="buscador">
+      <span class="lupa" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      </span>
+      <input id="q" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Cliente, nota, artículo, código o ID del pedido…"
+             aria-label="Buscar por nombre, nota, artículo, código o ID">
+      <button class="btn-limpiar" id="btnLimpiarQ" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="campos" role="group" aria-label="Campos en los que buscar">
+      <span class="etiqueta-alcance">Buscar en</span>
+      <button class="campo-tgl" id="tglNombre" aria-pressed="true">Nombre</button>
+      <button class="campo-tgl" id="tglNota" aria-pressed="true">Nota</button>
+      <button class="campo-tgl" id="tglArticulo" aria-pressed="false">Artículo</button>
+      <button class="campo-tgl" id="tglCodigo" aria-pressed="false">Código</button>
+    </div>
+
+    <div class="alcance">
+      <span class="etiqueta-alcance">Período</span>
+      <button class="chip" data-rango="hoy">Hoy</button>
+      <button class="chip" data-rango="ayer">Ayer</button>
+      <button class="chip" data-rango="7">7 días</button>
+      <button class="chip" data-rango="30">30 días</button>
+      <button class="chip" data-rango="mes">Este mes</button>
+      <button class="chip" data-rango="mesant">Mes anterior</button>
+      <span class="sep-v"></span>
+      <label class="fecha-campo"><span>Desde</span><input type="date" id="desde"></label>
+      <label class="fecha-campo"><span>Hasta</span><input type="date" id="hasta"></label>
+      <button class="btn-buscar" id="btnBuscar">
+        Traer período <kbd>↵</kbd>
+      </button>
+      <span class="crece" style="flex:1 1 auto"></span>
+      <button class="btn-fantasma" id="btnCache" title="Espacio ocupado por el caché local">Caché…</button>
+    </div>
+
+    <div class="filtros-2">
+      <select class="select-mini" id="fEntrega" aria-label="Filtrar por entrega"><option value="">Entrega: todas</option></select>
+      <select class="select-mini" id="fMedio" aria-label="Filtrar por medio de pago"><option value="">Medio de pago: todos</option></select>
+      <select class="select-mini" id="fVendedor" aria-label="Filtrar por vendedor"><option value="">Vendedor: todos</option></select>
+      <button class="btn-fantasma" id="btnResetFiltros">Quitar filtros</button>
+      <span class="crece" style="flex:1 1 auto"></span>
+      <button class="btn-fantasma" id="btnExportar">Exportar CSV</button>
+    </div>
+  </header>
+
+  <!-- ══════════════ RESULTADOS ══════════════ -->
+  <main class="resultados" id="main">
+    <div class="progreso" id="progreso"></div>
+    <div id="avisos"></div>
+    <div class="tabla-marco" id="marco"></div>
+  </main>
+
+  <!-- ══════════════ BARRA DE ESTADO ══════════════ -->
+  <footer class="barra">
+    <span class="m"><i>Resultados</i><b id="mResultados">0</b></span>
+    <span class="m"><i>En memoria</i><b id="mMemoria">0</b></span>
+    <span class="m destacado"><i>Descargado</i><b id="mBytes">0 KB</b></span>
+    <span class="m"><i>Consultas</i><b id="mReq">0</b></span>
+    <span class="m"><i>Días de caché</i><b id="mDias">0</b></span>
+    <span class="m"><i>Filtrado</i><b id="mMs">0 ms</b></span>
+    <span class="crece"></span>
+    <span class="m" id="mPista"><i>Atajos</i><b>/ buscar · ↑↓ mover · ↵ abrir · Esc cerrar</b></span>
+  </footer>
+</div>
+
+<!-- ══════════════ HOJA DE DETALLE ══════════════ -->
+<div class="scrim" id="scrim"></div>
+<aside class="hoja" id="hoja" role="dialog" aria-modal="true" aria-label="Detalle del pedido" tabindex="-1">
+  <div class="hoja-asa" id="asa" title="Arrastrar para cerrar"></div>
+  <div class="hoja-cab" id="hojaCab"></div>
+  <div class="hoja-cuerpo" id="hojaCuerpo"></div>
+  <div class="hoja-pie" id="hojaPie"></div>
+</aside>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ESTRATEGIA DE CONSUMO DE FIREBASE
+   ─────────────────────────────────────────────────────────────────────────
+   El nodo `pedidos` es grande (≈160 KB por día). Nunca se descarga entero.
+   Cuatro mecanismos lo garantizan:
+
+   1. RECORTE EN EL SERVIDOR. Toda lectura usa un índice ya declarado en las
+      reglas (`fecha` y `timestamp`). El período se pide con
+      orderByChild('fecha').startAt(desde).endAt(hasta+''), así que el
+      servidor envía exclusivamente los pedidos de esas fechas.
+
+   2. CACHÉ PERSISTENTE POR DÍA (IndexedDB). Cada día se descarga como mucho
+      UNA vez en la vida del navegador. Al pedir un período se calcula qué
+      días faltan, se agrupan los faltantes en tramos contiguos y se lanza una
+      consulta por tramo. Volver a buscar sobre días ya traídos cuesta 0 bytes.
+      El día en curso se revalida con un TTL corto porque sigue cambiando.
+
+   3. BÚSQUEDA DE TEXTO 100 % LOCAL. Nombre y nota no están indexados en las
+      reglas: ordenar por ellos obligaría a Firebase a bajar el nodo completo.
+      Por eso el texto se filtra sobre lo ya traído, en memoria, sin red.
+
+   4. ACCESOS PUNTUALES. Un ID de pedido se lee por ruta directa
+      (`pedidos/<id>`): un solo nodo, ~1 KB. La "búsqueda profunda" recorre el
+      historial hacia atrás en lotes acotados por timestamp, con corte manual.
+
+   Se usa once() en vez de on(): ningún listener queda abierto consumiendo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────── Firebase ───────────────────────── */
+// `db` y la guardia de sesion se arman en el <head> (bloque Firebase Auth
+// Check), igual que en el resto del panel.
+
+const pip = document.getElementById('pip');
+const pipTxt = document.getElementById('pipTxt');
+db.ref('.info/connected').on('value', s => {
+  const on = s.val() === true;
+  pip.className = 'pip' + (on ? ' on' : '');
+  pipTxt.textContent = on ? 'en línea' : 'sin conexión';
+});
+
+/* ───────────────────────── Métrica de la sesión ───────────────────────── */
+const metrica = { bytes: 0, req: 0, ms: 0 };
+
+function fmtBytes(n){
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  return (n/1048576).toFixed(2) + ' MB';
+}
+function pintarMetrica(){
+  document.getElementById('mBytes').textContent = fmtBytes(metrica.bytes);
+  document.getElementById('mReq').textContent = metrica.req;
+  document.getElementById('mMs').textContent = metrica.ms.toFixed(0) + ' ms';
+  document.getElementById('mMemoria').textContent = memoria.size.toLocaleString('es-AR');
+  document.getElementById('mResultados').textContent = filtrados.length.toLocaleString('es-AR');
+  document.getElementById('mDias').textContent = diasEnCache.size;
+}
+
+/* ───────────────────────── IndexedDB: caché por día ───────────────────────── */
+
+const IDB_NOMBRE = 'homepoint-buscador';
+const IDB_VER = 1;
+let idb = null;
+
+function abrirIDB(){
+  return new Promise(res => {
+    let req;
+    try { req = indexedDB.open(IDB_NOMBRE, IDB_VER); }
+    catch(e){ return res(null); }
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains('pedidos')){
+        const st = d.createObjectStore('pedidos', { keyPath: 'id' });
+        st.createIndex('dia', 'dia', { unique:false });
+      }
+      if (!d.objectStoreNames.contains('dias')) d.createObjectStore('dias', { keyPath:'dia' });
+    };
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => res(null);           // sin IDB se sigue: caché sólo en memoria
+    req.onblocked = () => res(null);
+  });
+}
+
+function tx(stores, modo){
+  if (!idb) return null;
+  try { return idb.transaction(stores, modo); } catch(e){ return null; }
+}
+const prom = req => new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
+
+async function idbGuardarLote(registros, diasCompletos){
+  if (!idb || (!registros.length && !diasCompletos.length)) return;
+  const t = tx(['pedidos','dias'], 'readwrite');
+  if (!t) return;
+  const sp = t.objectStore('pedidos'), sd = t.objectStore('dias');
+  registros.forEach(r => { try{ sp.put(r); }catch(e){} });
+  diasCompletos.forEach(dia => { try{ sd.put({ dia, ts: Date.now() }); }catch(e){} });
+  return new Promise(res => { t.oncomplete = res; t.onerror = res; t.onabort = res; });
+}
+
+async function idbLeerRango(desde, hasta){
+  if (!idb) return [];
+  const t = tx(['pedidos'], 'readonly');
+  if (!t) return [];
+  const idx = t.objectStore('pedidos').index('dia');
+  try { return await prom(idx.getAll(IDBKeyRange.bound(desde, hasta))); }
+  catch(e){ return []; }
+}
+
+async function idbLeerDias(){
+  if (!idb) return [];
+  const t = tx(['dias'], 'readonly');
+  if (!t) return [];
+  try { return await prom(t.objectStore('dias').getAll()); } catch(e){ return []; }
+}
+
+async function idbVaciar(){
+  if (!idb) return;
+  const t = tx(['pedidos','dias'], 'readwrite');
+  if (!t) return;
+  t.objectStore('pedidos').clear();
+  t.objectStore('dias').clear();
+  return new Promise(res => { t.oncomplete = res; t.onerror = res; });
+}
+
+/* Días con descarga completa confirmada (dia → timestamp de la descarga) */
+const diasEnCache = new Map();
+const TTL_HOY = 60 * 1000;   // el día en curso se revalida cada minuto
+
+/* ───────────────────────── Estado en memoria ───────────────────────── */
+
+const memoria = new Map();    // id → registro normalizado
+let filtrados = [];           // resultado del filtro actual
+let pagina = 1;
+const POR_PAGINA = 60;
+let orden = { col:'fecha', dir:-1 };
+let seleccion = -1;           // índice dentro de la página visible
+let cargando = false;
+let escaneo = { activo:false, cancelar:false };
+
+/* ───────────────────────── Utilidades ───────────────────────── */
+
+const $ = id => document.getElementById(id);
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function norm(s){
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+/* El medio de pago se carga a mano y llega con mayúsculas, acentos y espacios
+   dispares ("TRANSFERENCIA", "transferencia ", "Transferencia"). Para el filtro
+   se agrupa por una clave normalizada y se muestra una etiqueta canónica. */
+function medioKey(v){ return norm(String(v == null ? '' : v).trim()).replace(/\s+/g,' '); }
+function medioLabel(v){
+  return String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g,' ')
+    .replace(/(^|[\s/-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+}
+
+const fmtARS = new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 });
+const fmtNum = new Intl.NumberFormat('es-AR');
+function ars(n){ const v = Number(n)||0; return fmtARS.format(v); }
+
+function hoyISO(){
+  // La operación trabaja en horario de Argentina (UTC-3), igual que el resto del sistema.
+  const d = new Date(Date.now() - 3*3600*1000);
+  return d.toISOString().slice(0,10);
+}
+function sumarDias(iso, n){
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0,10);
+}
+function diasEntre(a, b){
+  const out = [];
+  let c = a, guard = 0;
+  while (c <= b && guard++ < 1500){ out.push(c); c = sumarDias(c, 1); }
+  return out;
+}
+function fechaLinda(iso){
+  if (!iso) return '—';
+  const [f, h] = String(iso).split(' ');
+  const p = (f||'').split('-');
+  if (p.length !== 3) return esc(iso);
+  return p[2] + '/' + p[1] + '/' + p[0].slice(2) + (h ? ' <span class="hora">' + h.slice(0,5) + '</span>' : '');
+}
+function fechaLarga(iso){
+  if (!iso) return '—';
+  const [f, h] = String(iso).split(' ');
+  const p = (f||'').split('-');
+  if (p.length !== 3) return esc(iso);
+  return p[2] + '/' + p[1] + '/' + p[0] + (h ? ' · ' + h : '');
+}
+
+/* Convierte el pedido crudo de Firebase en el registro que usa la tabla.
+   Los campos normalizados de búsqueda se calculan UNA sola vez, al indexar:
+   así filtrar miles de filas por texto cuesta microsegundos. */
+/* Separador entre ítems dentro de los blobs de búsqueda: impide que una
+   coincidencia se forme pegando el final de un artículo con el siguiente. */
+const SEP = String.fromCharCode(10);
+
+function normalizar(id, p){
+  const items = Array.isArray(p.items) ? p.items : (p.items ? Object.values(p.items) : []);
+  const pagos = p.pagos || {};
+  const nombre = (p.cliente && p.cliente.nombre) || '';
+  const nota = p.nota || '';
+  // Un solo recorrido de los ítems: unidades + los dos blobs de búsqueda.
+  // Precalcularlos aquí hace que filtrar por artículo cueste un indexOf por
+  // pedido en vez de recorrer su lista de ítems en cada tecleo.
+  let unidades = 0, blobArt = '', blobCod = '';
+  for (const it of items){
+    if (!it) continue;
+    unidades += Number(it.cantidad) || 0;
+    if (it.nombre) blobArt += norm(it.nombre) + SEP;
+    if (it.codigo) blobCod += String(it.codigo).toLowerCase() + SEP;
+    if (it.codigoBarras) blobCod += String(it.codigoBarras).toLowerCase() + SEP;
+  }
+  const fecha = p.fecha || '';
+  return {
+    id,
+    dia: fecha.slice(0,10),
+    fecha,
+    ts: Number(p.timestamp) || 0,
+    nombre,
+    nota,
+    estado: p.status || '',
+    entrega: p.entrega || p.tipoEntrega || '',
+    medio: medioLabel(pagos.medioPago || p.medioPago || ''),
+    medioCrudo: pagos.medioPago || p.medioPago || '',
+    _mk: medioKey(pagos.medioPago || p.medioPago || ''),
+    vendedor: p.vendedor || '',
+    total: Number(pagos.totalFinal != null ? pagos.totalFinal : pagos.subtotal) || 0,
+    unidades,
+    lineas: items.length,
+    _n: norm(nombre),
+    _t: norm(nota),
+    _a: blobArt,                // nombres de los artículos, normalizados
+    _c: blobCod,                // código interno + código de barras
+    d: p                        // crudo completo, para el detalle
+  };
+}
+
+/* ───────────────────────── Avisos ───────────────────────── */
+
+function aviso(html, tipo){
+  $('avisos').innerHTML = html
+    ? '<div class="aviso' + (tipo === 'err' ? ' err' : '') + '">' + html + '</div>'
+    : '';
+}
+
+/* ───────────────────────── Descarga del período ───────────────────────── */
+
+/** Agrupa los días faltantes en tramos contiguos: menos viajes de red. */
+function agruparTramos(dias){
+  const tramos = [];
+  let ini = null, prev = null;
+  for (const d of dias){
+    if (ini === null){ ini = prev = d; continue; }
+    if (d === sumarDias(prev, 1)){ prev = d; continue; }
+    tramos.push([ini, prev]); ini = prev = d;
+  }
+  if (ini !== null) tramos.push([ini, prev]);
+  return tramos;
+}
+
+/** Una consulta por tramo, recortada en el servidor por el índice `fecha`. */
+async function traerTramo(desde, hasta){
+  const snap = await db.ref('pedidos')
+    .orderByChild('fecha')
+    .startAt(desde)
+    .endAt(hasta + '')
+    .once('value');
+
+  metrica.req++;
+  const val = snap.val();
+  if (!val) return [];
+  metrica.bytes += JSON.stringify(val).length;
+
+  const regs = [];
+  for (const id in val){
+    const r = normalizar(id, val[id]);
+    memoria.set(id, r);
+    regs.push(r);
+  }
+  return regs;
+}
+
+async function cargarPeriodo(desde, hasta, forzar){
+  if (cargando) return;
+  if (!desde || !hasta) { aviso('Elegí una fecha <b>Desde</b> y una <b>Hasta</b>.'); return; }
+  if (desde > hasta){ const t = desde; desde = hasta; hasta = t; $('desde').value = desde; $('hasta').value = hasta; }
+
+  const dias = diasEntre(desde, hasta);
+  const hoy = hoyISO();
+
+  // Qué días faltan realmente. El día de hoy se revalida por TTL.
+  const faltantes = dias.filter(d => {
+    if (forzar) return true;
+    const t = diasEnCache.get(d);
+    if (t == null) return true;
+    return (d === hoy) && (Date.now() - t > TTL_HOY);
+  });
+
+  if (faltantes.length > 45){
+    const ok = confirm(
+      'El período tiene ' + faltantes.length + ' días sin caché.\n' +
+      'Estimado de descarga: ~' + (faltantes.length * 0.16).toFixed(1) + ' MB.\n\n' +
+      '¿Traerlo igual?'
+    );
+    if (!ok) return;
+  }
+
+  cargando = true;
+  $('btnBuscar').disabled = true;
+  $('progreso').classList.add('activa');
+  const t0 = performance.now();
+
+  try{
+    if (faltantes.length){
+      const tramos = agruparTramos(faltantes);
+      const nuevos = [];
+      for (const [a, b] of tramos){
+        const regs = await traerTramo(a, b);
+        nuevos.push(...regs);
+        pintarMetrica();
+      }
+      faltantes.forEach(d => diasEnCache.set(d, Date.now()));
+      idbGuardarLote(nuevos.map(r => ({ id:r.id, dia:r.dia, d:r.d })), faltantes);
+    }
+
+    // Los días que ya estaban en caché persistente y aún no en memoria
+    const enMemoriaDia = new Set();
+    memoria.forEach(r => enMemoriaDia.add(r.dia));
+    const porHidratar = dias.filter(d => !faltantes.includes(d) && !enMemoriaDia.has(d));
+    if (porHidratar.length){
+      const filas = await idbLeerRango(porHidratar[0], porHidratar[porHidratar.length-1]);
+      for (const f of filas) if (!memoria.has(f.id)) memoria.set(f.id, normalizar(f.id, f.d));
+    }
+
+    const ahorro = dias.length - faltantes.length;
+    aviso(ahorro > 0
+      ? '<b>' + faltantes.length + '</b> día' + (faltantes.length===1?'':'s') + ' descargado' + (faltantes.length===1?'':'s') +
+        ' · <b>' + ahorro + '</b> servido' + (ahorro===1?'':'s') + ' desde el caché local, sin gastar red.' +
+        '<span class="crece"></span><button class="btn-fantasma" onclick="recargarForzado()">Actualizar de todas formas</button>'
+      : '');
+
+    filtrar(true);
+  } catch(e){
+    aviso('No se pudo consultar Firebase: <b>' + esc(e.message || e) + '</b>', 'err');
+  } finally{
+    metrica.ms = performance.now() - t0;
+    cargando = false;
+    $('btnBuscar').disabled = false;
+    $('progreso').classList.remove('activa');
+    pintarMetrica();
+  }
+}
+
+function recargarForzado(){
+  cargarPeriodo($('desde').value, $('hasta').value, true);
+}
+window.recargarForzado = recargarForzado;
+
+/* ───────────────────────── Acceso puntual por ID ───────────────────────── */
+
+const RE_ID = /^-[A-Za-z0-9_-]{15,25}$/;
+
+async function traerPorId(id){
+  cargando = true;
+  $('progreso').classList.add('activa');
+  try{
+    const snap = await db.ref('pedidos/' + id).once('value');
+    metrica.req++;
+    const v = snap.val();
+    if (!v){ aviso('No existe ningún pedido con el ID <b>' + esc(id) + '</b>.', 'err'); return null; }
+    metrica.bytes += JSON.stringify(v).length;
+    const r = normalizar(id, v);
+    memoria.set(id, r);
+    idbGuardarLote([{ id, dia:r.dia, d:v }], []);
+    return r;
+  } catch(e){
+    aviso('Error al leer el pedido: <b>' + esc(e.message || e) + '</b>', 'err');
+    return null;
+  } finally{
+    cargando = false;
+    $('progreso').classList.remove('activa');
+    pintarMetrica();
+  }
+}
+
+/* ───────────────────────── Búsqueda profunda (histórico) ─────────────────────────
+   Para cuando no se sabe la fecha. Recorre `pedidos` hacia atrás por el índice
+   `timestamp` en lotes de tamaño fijo, filtrando en cada lote. Nunca pide el
+   nodo entero y se puede detener en cualquier momento. */
+
+const LOTE = 400;
+const TOPE_ESCANEO = 12000;
+
+async function busquedaProfunda(){
+  const texto = norm($('q').value.trim());
+  if (!texto){ return; }
+  if (escaneo.activo){ escaneo.cancelar = true; return; }
+
+  escaneo = { activo:true, cancelar:false };
+  $('progreso').classList.add('activa');
+
+  let cursor = null, revisados = 0, hallados = 0, loteN = 0;
+  const campos = camposActivos();
+  const t0 = performance.now();
+
+  const pintarProgreso = () =>
+    aviso('Recorriendo el historial hacia atrás · <b>' + fmtNum.format(revisados) + '</b> pedidos revisados · ' +
+          '<b>' + hallados + '</b> coincidencia' + (hallados===1?'':'s') +
+          '<span class="crece"></span><button class="btn-fantasma" onclick="detenerEscaneo()">Detener</button>');
+
+  try{
+    while (!escaneo.cancelar && revisados < TOPE_ESCANEO){
+      let ref = db.ref('pedidos').orderByChild('timestamp');
+      if (cursor !== null) ref = ref.endAt(cursor - 1);
+      const snap = await ref.limitToLast(LOTE).once('value');
+      metrica.req++;
+
+      const val = snap.val();
+      if (!val) break;
+      metrica.bytes += JSON.stringify(val).length;
+
+      const ids = Object.keys(val);
+      if (!ids.length) break;
+
+      let minTs = Infinity;
+      const guardar = [];
+      for (const id of ids){
+        const p = val[id];
+        const ts = Number(p.timestamp) || 0;
+        if (ts && ts < minTs) minTs = ts;
+        const r = normalizar(id, p);
+        memoria.set(id, r);
+        guardar.push({ id, dia:r.dia, d:p });
+        if (coincide(r, texto, campos)) hallados++;
+      }
+      idbGuardarLote(guardar, []);
+      revisados += ids.length;
+      loteN++;
+
+      pintarProgreso();
+      pintarMetrica();
+      filtrar(false, true);
+
+      if (ids.length < LOTE || !isFinite(minTs)) break;
+      cursor = minTs;
+      await new Promise(r => setTimeout(r, 0));   // cede el hilo: la UI nunca se traba
+    }
+  } catch(e){
+    aviso('El recorrido se interrumpió: <b>' + esc(e.message || e) + '</b>', 'err');
+  } finally{
+    metrica.ms = performance.now() - t0;
+    escaneo.activo = false;
+    $('progreso').classList.remove('activa');
+    aviso('Recorrido terminado · <b>' + fmtNum.format(revisados) + '</b> pedidos revisados en ' + loteN + ' consulta' + (loteN===1?'':'s') +
+          ' · <b>' + hallados + '</b> coincidencia' + (hallados===1?'':'s') +
+          (revisados >= TOPE_ESCANEO ? ' · <b>tope alcanzado</b>, acotá con un período' : ''));
+    pintarMetrica();
+    filtrar(false);
+  }
+}
+function detenerEscaneo(){ escaneo.cancelar = true; }
+window.detenerEscaneo = detenerEscaneo;
+window.busquedaProfunda = busquedaProfunda;
+
+/* ───────────────────────── Filtrado (todo local, sin red) ───────────────────────── */
+
+function filtrar(recalcularSelects, silencioso){
+  const t0 = performance.now();
+
+  const texto = norm($('q').value.trim());
+  const c = camposActivos();
+  const desde = $('desde').value, hasta = $('hasta').value;
+  const fEntrega = $('fEntrega').value;
+  const fMedio = $('fMedio').value, fVendedor = $('fVendedor').value;
+
+  // El período recorta primero; el escaneo profundo trae pedidos fuera de él y
+  // por eso se marcan como "fuera de período" en vez de descartarse.
+  const enRango = r => !desde || !hasta || (r.dia >= desde && r.dia <= hasta);
+
+  const out = [];
+  memoria.forEach(r => {
+    if (texto){
+      if (!coincide(r, texto, c)) return;
+    } else if (!enRango(r)) return;
+
+    if (texto && !enRango(r)) r._fuera = true; else r._fuera = false;
+    if (fEntrega && r.entrega !== fEntrega) return;
+    if (fMedio && r._mk !== fMedio) return;
+    if (fVendedor && r.vendedor !== fVendedor) return;
+    out.push(r);
+  });
+
+  const col = orden.col, dir = orden.dir;
+  out.sort((a,b) => {
+    let x = a[col], y = b[col];
+    if (typeof x === 'string' || typeof y === 'string'){
+      x = norm(x); y = norm(y);
+      return x < y ? -dir : x > y ? dir : 0;
+    }
+    return ((x||0) - (y||0)) * dir;
+  });
+
+  filtrados = out;
+  if (recalcularSelects) poblarSelects();
+  if (!silencioso) pagina = 1;
+  metrica.ms = performance.now() - t0;
+  render();
+  pintarMetrica();
+}
+
+/* Qué campos están activos en el conmutador "Buscar en". */
+function camposActivos(){
+  return {
+    nombre:   $('tglNombre').getAttribute('aria-pressed') === 'true',
+    nota:     $('tglNota').getAttribute('aria-pressed') === 'true',
+    articulo: $('tglArticulo').getAttribute('aria-pressed') === 'true',
+    codigo:   $('tglCodigo').getAttribute('aria-pressed') === 'true'
+  };
+}
+
+/* Todo contra blobs precalculados: un indexOf por campo, sin recorrer ítems. */
+function coincide(r, texto, c){
+  if (c.nombre && r._n.includes(texto)) return true;
+  if (c.nota && r._t.includes(texto)) return true;
+  if (c.articulo && r._a.includes(texto)) return true;
+  if (c.codigo && r._c.includes(texto)) return true;
+  return r.id.toLowerCase() === texto;
+}
+
+function poblarSelects(){
+  const sets = { entrega:new Set(), vendedor:new Set() };
+  const medios = new Map();          // clave normalizada → etiqueta canónica
+  memoria.forEach(r => {
+    if (r.entrega) sets.entrega.add(r.entrega);
+    if (r.vendedor) sets.vendedor.add(r.vendedor);
+    if (r._mk && !medios.has(r._mk)) medios.set(r._mk, r.medio);
+  });
+
+  const llenar = (id, etiqueta, pares) => {
+    const el = $(id), prev = el.value;
+    pares.sort((a,b) => a[1].localeCompare(b[1], 'es'));
+    el.innerHTML = '<option value="">' + etiqueta + '</option>' +
+      pares.map(([v,t]) => '<option value="' + esc(v) + '">' + esc(t) + '</option>').join('');
+    if (prev && pares.some(x => x[0] === prev)) el.value = prev;
+    el.classList.toggle('activo', !!el.value);
+  };
+
+  llenar('fEntrega', 'Entrega: todas', [...sets.entrega].map(v => [v, v]));
+  llenar('fMedio', 'Medio de pago: todos', [...medios.entries()]);
+  llenar('fVendedor', 'Vendedor: todos', [...sets.vendedor].map(v => [v, v]));
+}
+
+/* ───────────────────────── Render de la tabla ───────────────────────── */
+
+function resaltar(texto, q){
+  if (!texto) return '<span class="sin">—</span>';
+  if (!q) return esc(texto);
+  const i = norm(texto).indexOf(q);
+  if (i === -1) return esc(texto);
+  return esc(texto.slice(0,i)) + '<mark>' + esc(texto.slice(i, i+q.length)) + '</mark>' + esc(texto.slice(i+q.length));
+}
+
+function claseEstado(e){
+  const n = norm(e);
+  if (n.includes('cancel')) return 'bad';
+  if (n.includes('entreg') || n.includes('despach')) return 'ok';
+  if (n.includes('pend') || n.includes('prepar') || n.includes('reserv')) return 'warn';
+  return 'neutro';
+}
+
+function render(){
+  const marco = $('marco');
+  const q = norm($('q').value.trim());
+  const total = filtrados.length;
+
+  // ── Vacíos
+  if (!total){
+    const hayTexto = !!$('q').value.trim();
+    marco.innerHTML = '<div class="vacio">' +
+      '<div class="glifo">[ · · · ]</div>' +
+      (memoria.size === 0
+        ? '<h3>Elegí un período para empezar</h3>' +
+          '<p>Traé un rango de fechas y después buscá por nombre o nota dentro de él. ' +
+          'Solo se descargan los días que pedís, y una sola vez: los que ya bajaste quedan en caché.</p>'
+        : hayTexto
+          ? '<h3>Sin coincidencias en lo descargado</h3>' +
+            '<p>No hay pedidos que contengan «<b>' + esc($('q').value.trim()) + '</b>» en los ' + fmtNum.format(memoria.size) + ' pedidos que hay en memoria. ' +
+            'Podés ampliar el período, o recorrer el historial hacia atrás por lotes.</p>' +
+            '<button class="btn-buscar" onclick="busquedaProfunda()">Recorrer el historial</button>'
+          : '<h3>El período no tiene pedidos</h3><p>No hay registros entre las fechas elegidas con los filtros aplicados.</p>') +
+      '</div>';
+    return;
+  }
+
+  // ── Página
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+  if (pagina > paginas) pagina = paginas;
+  const ini = (pagina - 1) * POR_PAGINA;
+  const vista = filtrados.slice(ini, ini + POR_PAGINA);
+
+  const flecha = c => orden.col === c ? '<span class="orden">' + (orden.dir === 1 ? '▲' : '▼') + '</span>' : '';
+
+  const filas = vista.map((r, i) =>
+    '<tr data-i="' + i + '" data-id="' + esc(r.id) + '"' + (i === seleccion ? ' aria-selected="true"' : '') + '>' +
+      '<td class="num c-fecha">' + fechaLinda(r.fecha) + (r._fuera ? ' <span class="badge neutro">fuera</span>' : '') + '</td>' +
+      '<td class="c-cliente">' + resaltar(r.nombre, q) + '</td>' +
+      '<td class="col-opc">' + (r.entrega ? esc(r.entrega) : '<span class="sin">—</span>') + '</td>' +
+      '<td class="col-opc2">' + (r.medio ? esc(r.medio) : '<span class="sin">—</span>') + '</td>' +
+      '<td class="col-opc2">' + (r.vendedor ? esc(r.vendedor) : '<span class="sin">—</span>') + '</td>' +
+      '<td class="c-nota col-opc">' + (r.nota ? resaltar(r.nota, q) : '<span class="sin">—</span>') + '</td>' +
+      '<td class="num c-total">' + ars(r.total) + '</td>' +
+    '</tr>'
+  ).join('');
+
+  marco.innerHTML =
+    '<table class="pedidos aparece"><thead><tr>' +
+      '<th data-col="fecha">Fecha' + flecha('fecha') + '</th>' +
+      '<th data-col="nombre">Cliente' + flecha('nombre') + '</th>' +
+      '<th data-col="entrega" class="col-opc">Entrega' + flecha('entrega') + '</th>' +
+      '<th data-col="medio" class="col-opc2">Pago' + flecha('medio') + '</th>' +
+      '<th data-col="vendedor" class="col-opc2">Vendedor' + flecha('vendedor') + '</th>' +
+      '<th data-col="nota" class="col-opc">Nota' + flecha('nota') + '</th>' +
+      '<th data-col="total" style="text-align:right">Total' + flecha('total') + '</th>' +
+    '</tr></thead><tbody>' + filas + '</tbody></table>' +
+    paginacion(paginas, total, ini, vista.length);
+}
+
+function paginacion(paginas, total, ini, n){
+  if (paginas <= 1) return '<div class="paginacion"><span class="pg-info">' + fmtNum.format(total) + ' pedido' + (total===1?'':'s') + '</span></div>';
+  let html = '<div class="paginacion">';
+  html += '<button class="pg" data-pg="' + (pagina-1) + '"' + (pagina===1?' disabled':'') + '>←</button>';
+  const ventana = 7;
+  let a = Math.max(1, pagina - 3), b = Math.min(paginas, a + ventana - 1);
+  if (b - a < ventana - 1) a = Math.max(1, b - ventana + 1);
+  if (a > 1){ html += '<button class="pg" data-pg="1">1</button>'; if (a > 2) html += '<span class="pg-info">…</span>'; }
+  for (let i = a; i <= b; i++) html += '<button class="pg" data-pg="' + i + '"' + (i===pagina?' aria-current="true"':'') + '>' + i + '</button>';
+  if (b < paginas){ if (b < paginas-1) html += '<span class="pg-info">…</span>'; html += '<button class="pg" data-pg="' + paginas + '">' + paginas + '</button>'; }
+  html += '<button class="pg" data-pg="' + (pagina+1) + '"' + (pagina===paginas?' disabled':'') + '>→</button>';
+  html += '<span class="pg-info">' + fmtNum.format(ini+1) + '–' + fmtNum.format(ini+n) + ' de ' + fmtNum.format(total) + '</span>';
+  return html + '</div>';
+}
+
+/* ───────────────────────── Detalle ───────────────────────── */
+
+let idAbierto = null;
+
+async function abrirDetalle(id){
+  let r = memoria.get(id);
+  if (!r) r = await traerPorId(id);
+  if (!r) return;
+  idAbierto = id;
+  pintarDetalle(r);
+  hoja.abrir();
+}
+
+function pintarDetalle(r){
+  const p = r.d || {};
+  const c = p.cliente || {};
+  const pagos = p.pagos || {};
+  const items = Array.isArray(p.items) ? p.items : (p.items ? Object.values(p.items) : []);
+
+  /* Cabecera */
+  $('hojaCab').innerHTML =
+    '<div class="fila1">' +
+      '<div style="flex:1 1 auto;min-width:0">' +
+        '<h2>' + (r.nombre ? esc(r.nombre) : '<span class="sin">Sin nombre de cliente</span>') + '</h2>' +
+        '<div class="idp"><span>' + fechaLarga(r.fecha) + '</span><span style="color:var(--line)">│</span><span>' + esc(r.id) + '</span></div>' +
+        '<div class="badges">' +
+          '<span class="badge ' + claseEstado(r.estado) + '">' + esc(r.estado || 'sin estado') + '</span>' +
+          (r.entrega ? '<span class="badge neutro">' + esc(r.entrega) + '</span>' : '') +
+          (r.medio ? '<span class="badge neutro">' + esc(r.medio) + '</span>' : '') +
+          (p.createdby ? '<span class="badge neutro">origen: ' + esc(p.createdby) + '</span>' : '') +
+          (p.locked ? '<span class="badge warn">bloqueado</span>' : '') +
+          (p.facturado ? '<span class="badge ok">facturado</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<button class="cerrar" id="btnCerrarHoja" aria-label="Cerrar">' +
+        '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+      '</button>' +
+    '</div>';
+  $('btnCerrarHoja').addEventListener('click', () => hoja.cerrar());
+
+  /* Cliente */
+  const filaDato = (k, v, mono) =>
+    '<dt>' + k + '</dt><dd' + (mono ? ' class="mono"' : '') + '>' + (v ? esc(v) : '<span class="sin">—</span>') + '</dd>';
+
+  let html = '<div class="bloque"><h3>Cliente</h3><dl class="datos">' +
+    filaDato('Nombre', c.nombre) +
+    filaDato('Tipo', c.tipoCliente) +
+    (c.telefono   ? filaDato('Teléfono', c.telefono, true) : '') +
+    (c.email      ? filaDato('Email', c.email) : '') +
+    (c.dni        ? filaDato('DNI / CUIT', c.dni, true) : '') +
+    (c.direccion  ? filaDato('Dirección', c.direccion) : '') +
+    (c.localidad  ? filaDato('Localidad', c.localidad) : '') +
+    (c.provincia  ? filaDato('Provincia', c.provincia) : '') +
+    (c.cp         ? filaDato('CP', c.cp, true) : '') +
+  '</dl></div>';
+
+  /* Nota */
+  if (p.nota){
+    html += '<div class="bloque"><h3>Nota</h3><div class="nota-caja">' + esc(p.nota) +
+      (p.notaFecha ? '<span class="cuando">anotada ' + esc(p.notaFecha) + '</span>' : '') + '</div></div>';
+  }
+
+  /* Artículos — si la búsqueda fue por artículo o código, se marca cuál coincide */
+  const qDet = norm($('q').value.trim());
+  const cDet = camposActivos();
+  const buscaItem = !!qDet && (cDet.articulo || cDet.codigo);
+
+  let subt = 0;
+  const filasItems = items.map((it, i) => {
+    const cant = Number(it.cantidad) || 0;
+    const vu = Number(it.valorU != null ? it.valorU : it.valorUSD) || 0;
+    const sub = cant * vu;
+    subt += sub;
+    const pegaNombre = buscaItem && cDet.articulo && norm(it.nombre).includes(qDet);
+    const pegaCodigo = buscaItem && cDet.codigo &&
+      ((String(it.codigo || '').toLowerCase().includes(qDet)) || (String(it.codigoBarras || '').toLowerCase().includes(qDet)));
+    const clases = [];
+    if (norm(it.seleccionado) === 'si') clases.push('sel');
+    if (pegaNombre || pegaCodigo) clases.push('pega');
+    return '<tr' + (clases.length ? ' class="' + clases.join(' ') + '"' : '') + '>' +
+      '<td class="r" style="color:var(--faint)">' + (i+1) + '</td>' +
+      '<td class="cod">' + (pegaCodigo ? resaltar(it.codigo || '—', qDet) : esc(it.codigo || '—')) + '</td>' +
+      '<td>' + (pegaNombre ? resaltar(it.nombre || '—', qDet) : esc(it.nombre || '—')) + (it.categoria ? '<span class="cat">' + esc(it.categoria) + '</span>' : '') + '</td>' +
+      '<td class="r">' + cant + '</td>' +
+      '<td class="r">' + ars(vu) + '</td>' +
+      '<td class="r"><b>' + ars(sub) + '</b></td>' +
+    '</tr>';
+  }).join('');
+
+  html += '<div class="bloque"><h3>Artículos · ' + items.length + ' línea' + (items.length===1?'':'s') + ' · ' + r.unidades + ' unidades</h3>' +
+    '<table class="items"><thead><tr>' +
+      '<th style="width:26px"></th><th>Código</th><th>Artículo</th>' +
+      '<th class="r" style="width:42px">Cant</th><th class="r" style="width:90px">Unit.</th><th class="r" style="width:100px">Subtotal</th>' +
+    '</tr></thead><tbody>' + (filasItems || '<tr><td colspan="6" style="color:var(--faint)">Sin artículos cargados</td></tr>') +
+    '<tr class="total"><td colspan="3" class="r">Total artículos</td><td class="r">' + r.unidades + '</td><td></td><td class="r">' + ars(subt) + '</td></tr>' +
+    '</tbody></table></div>';
+
+  /* Cuenta */
+  const ln = (k, v, resta) => '<div class="ln' + (resta ? ' resta' : '') + '"><span>' + k + '</span><span>' + v + '</span></div>';
+  html += '<div class="bloque"><h3>Cuenta</h3><div class="cuenta">' +
+    ln('Subtotal', ars(pagos.subtotal != null ? pagos.subtotal : subt)) +
+    (Number(pagos.descuento) ? ln('Descuento', '− ' + ars(pagos.descuento), true) : '') +
+    (Number(pagos.recargo)   ? ln('Recargo', ars(pagos.recargo)) : '') +
+    (Number(pagos.envio)     ? ln('Envío', ars(pagos.envio)) : '') +
+    ln('Medio de pago', esc(pagos.medioPago || '—')) +
+    (pagos.alias ? ln('Alias / cuenta', esc(pagos.alias)) : '') +
+    ln('Total final', ars(pagos.totalFinal != null ? pagos.totalFinal : subt)).replace('class="ln"','class="ln grande"') +
+  '</div></div>';
+
+  $('hojaCuerpo').innerHTML = html;
+  $('hojaCuerpo').scrollTop = 0;
+
+  /* Pie */
+  $('hojaPie').innerHTML =
+    '<a class="btn-hoja primario" href="ingresoPedidoV2.html?id=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">Abrir en el editor</a>' +
+    '<span class="crece"></span>' +
+    '<button class="btn-hoja" id="btnCerrar2">Cerrar</button>';
+  $('btnCerrar2').addEventListener('click', () => hoja.cerrar());
+}
+
+/* ───────────────────────── La hoja: resorte + arrastre ─────────────────────────
+   Nada de transiciones CSS: un resorte integrado por frame arranca siempre desde
+   el valor que hay en pantalla, así se puede agarrar y revertir a mitad de vuelo.
+   Al soltar se proyecta la inercia del dedo (misma curva que la deceleración de
+   scroll) y se entrega la velocidad al resorte: no hay costura entre gesto y
+   animación. */
+
+const hoja = (function(){
+  const el = $('hoja'), scrim = $('scrim'), asa = $('asa'), cab = $('hojaCab');
+  const reducido = matchMedia('(prefers-reduced-motion: reduce)');
+
+  let x = 0, objetivo = 0, v = 0, raf = null, ultimo = 0;
+  let ancho = 620, abierta = false;
+  let arrastrando = false, grabX = 0, historial = [];
+  const RESPUESTA = 0.38, AMORT_BASE = 1.0;
+  let amort = AMORT_BASE;
+
+  function medir(){ ancho = el.getBoundingClientRect().width || 620; }
+
+  function pintar(){
+    el.style.transform = 'translate3d(' + x.toFixed(2) + 'px,0,0)';
+    const p = 1 - Math.min(1, x / ancho);
+    scrim.style.opacity = (p * 0.95).toFixed(3);
+  }
+
+  function paso(t){
+    const dt = Math.min(0.064, (t - ultimo) / 1000) || 0.016;
+    ultimo = t;
+    const w = 2 * Math.PI / RESPUESTA;
+    // Subpasos fijos: estable aunque el frame se estire
+    const h = 1/360;
+    let resto = dt;
+    while (resto > 0){
+      const paso_h = Math.min(h, resto);
+      const a = -2 * amort * w * v - w * w * (x - objetivo);
+      v += a * paso_h;
+      x += v * paso_h;
+      resto -= paso_h;
+    }
+    pintar();
+    if (Math.abs(v) < 0.6 && Math.abs(x - objetivo) < 0.4){
+      x = objetivo; v = 0; pintar(); raf = null; asentar();
+      return;
+    }
+    raf = requestAnimationFrame(paso);
+  }
+
+  function correr(){ if (raf == null){ ultimo = performance.now(); raf = requestAnimationFrame(paso); } }
+  function parar(){ if (raf != null){ cancelAnimationFrame(raf); raf = null; } }
+
+  function asentar(){
+    if (x >= ancho - 0.5 && !abierta){
+      el.classList.remove('viva'); scrim.classList.remove('viva');
+    }
+  }
+
+  function ir(destino, v0, rebote){
+    objetivo = destino;
+    amort = rebote ? 0.82 : AMORT_BASE;
+    if (v0 != null) v = v0;
+    if (reducido.matches){ parar(); x = destino; v = 0; pintar(); asentar(); return; }
+    correr();
+  }
+
+  function abrir(){
+    medir();
+    el.classList.add('viva'); scrim.classList.add('viva');
+    if (!abierta){ x = ancho; pintar(); }
+    abierta = true;
+    ir(0, null, false);
+    el.focus({ preventScroll:true });
+  }
+
+  function cerrar(v0){
+    if (!abierta && x >= ancho) return;
+    abierta = false;
+    ir(ancho, v0, false);
+    idAbierto = null;
+  }
+
+  /* Proyección de inercia de Apple (decaimiento exponencial, no v²/2a) */
+  function proyectar(v0, d){ d = d || 0.998; return (v0/1000) * d / (1 - d); }
+
+  function iniciarArrastre(e){
+    if (e.button != null && e.button !== 0) return;
+    if (e.target.closest('button, a, input, select, summary')) return;
+    medir();
+    parar();
+    arrastrando = true;
+    grabX = e.clientX - x;                // respeta DÓNDE se agarró
+    historial = [{ x:e.clientX, t:performance.now() }];
+    e.currentTarget.setPointerCapture(e.pointerId);
+    el.style.willChange = 'transform';
+  }
+
+  function moverArrastre(e){
+    if (!arrastrando) return;
+    let nx = e.clientX - grabX;
+    if (nx < 0){
+      // Banda elástica: cuanto más se pasa del borde, menos sigue al dedo
+      const over = -nx;
+      nx = -(over * ancho * 0.55) / (ancho + 0.55 * over);
+    }
+    x = nx; pintar();
+    historial.push({ x:e.clientX, t:performance.now() });
+    if (historial.length > 6) historial.shift();
+  }
+
+  function soltarArrastre(e){
+    if (!arrastrando) return;
+    arrastrando = false;
+    el.style.willChange = '';
+
+    // Velocidad de los últimos ~80 ms
+    const ahora = performance.now();
+    const muestras = historial.filter(m => ahora - m.t < 90);
+    let vel = 0;
+    if (muestras.length >= 2){
+      const a = muestras[0], b = muestras[muestras.length-1];
+      const dt = (b.t - a.t) / 1000;
+      if (dt > 0) vel = (b.x - a.x) / dt;
+    }
+
+    const proyectado = x + proyectar(vel);
+    const cerrarlo = proyectado > ancho * 0.42;
+    if (cerrarlo) cerrar(vel);
+    else ir(0, vel, Math.abs(vel) > 350);   // rebote sólo si venía con impulso
+  }
+
+  asa.addEventListener('pointerdown', iniciarArrastre);
+  asa.addEventListener('pointermove', moverArrastre);
+  asa.addEventListener('pointerup', soltarArrastre);
+  asa.addEventListener('pointercancel', soltarArrastre);
+  cab.addEventListener('pointerdown', iniciarArrastre);
+  cab.addEventListener('pointermove', moverArrastre);
+  cab.addEventListener('pointerup', soltarArrastre);
+  cab.addEventListener('pointercancel', soltarArrastre);
+
+  scrim.addEventListener('click', () => cerrar());
+  addEventListener('resize', () => { medir(); if (!abierta){ x = ancho; pintar(); } });
+
+  // Estado inicial cerrado
+  requestAnimationFrame(() => { medir(); x = ancho; pintar(); });
+
+  return { abrir, cerrar, get abierta(){ return abierta; } };
+})();
+
+/* ───────────────────────── Eventos de la interfaz ───────────────────────── */
+
+/* ─────────────────────── Tema ───────────────────────
+   Tres estados: claro, oscuro y automático (sigue al sistema). La elección se
+   guarda en el navegador; el CSS resuelve el resto con [data-tema]. */
+
+const TEMA_CLAVE = 'homepoint-buscador-tema';
+
+function aplicarTema(modo){
+  const raiz = document.documentElement;
+  if (modo === 'auto') raiz.removeAttribute('data-tema');
+  else raiz.setAttribute('data-tema', modo);
+  document.querySelectorAll('#tema button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.tema === modo)));
+  try { localStorage.setItem(TEMA_CLAVE, modo); } catch(e){}
+}
+
+(function initTema(){
+  let guardado = 'auto';
+  try { guardado = localStorage.getItem(TEMA_CLAVE) || 'auto'; } catch(e){}
+  if (!['claro','oscuro','auto'].includes(guardado)) guardado = 'auto';
+  aplicarTema(guardado);
+  document.querySelectorAll('#tema button').forEach(b =>
+    b.addEventListener('click', () => aplicarTema(b.dataset.tema)));
+})();
+
+/* Atajos de período */
+document.querySelectorAll('.chip[data-rango]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const h = hoyISO();
+    let a = h, b = h;
+    switch (btn.dataset.rango){
+      case 'hoy':   a = b = h; break;
+      case 'ayer':  a = b = sumarDias(h, -1); break;
+      case '7':     a = sumarDias(h, -6); b = h; break;
+      case '30':    a = sumarDias(h, -29); b = h; break;
+      case 'mes':   a = h.slice(0,8) + '01'; b = h; break;
+      case 'mesant': {
+        const primeroEste = h.slice(0,8) + '01';
+        b = sumarDias(primeroEste, -1);
+        a = b.slice(0,8) + '01';
+        break;
+      }
+    }
+    $('desde').value = a; $('hasta').value = b;
+    marcarChipActivo();
+    cargarPeriodo(a, b, false);
+  });
+});
+
+function marcarChipActivo(){
+  const a = $('desde').value, b = $('hasta').value, h = hoyISO();
+  const equivale = {
+    hoy:  [h, h],
+    ayer: [sumarDias(h,-1), sumarDias(h,-1)],
+    '7':  [sumarDias(h,-6), h],
+    '30': [sumarDias(h,-29), h],
+    mes:  [h.slice(0,8)+'01', h]
+  };
+  const primeroEste = h.slice(0,8) + '01';
+  const finAnt = sumarDias(primeroEste, -1);
+  equivale.mesant = [finAnt.slice(0,8)+'01', finAnt];
+  document.querySelectorAll('.chip[data-rango]').forEach(c => {
+    const e = equivale[c.dataset.rango];
+    c.setAttribute('aria-pressed', String(!!e && e[0] === a && e[1] === b));
+  });
+}
+
+$('desde').addEventListener('change', marcarChipActivo);
+$('hasta').addEventListener('change', marcarChipActivo);
+$('btnBuscar').addEventListener('click', () => cargarPeriodo($('desde').value, $('hasta').value, false));
+
+/* Campo de texto: filtra en local, sin tocar la red */
+let tDebounce = null;
+$('q').addEventListener('input', () => {
+  $('btnLimpiarQ').classList.toggle('visible', !!$('q').value);
+  clearTimeout(tDebounce);
+  tDebounce = setTimeout(() => { seleccion = -1; filtrar(false); }, 90);
+});
+
+$('q').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const val = $('q').value.trim();
+  if (RE_ID.test(val)){            // ID exacto → lectura de un único nodo
+    e.preventDefault();
+    await abrirDetalle(val);
+    return;
+  }
+  e.preventDefault();
+  if (memoria.size === 0) cargarPeriodo($('desde').value, $('hasta').value, false);
+  else filtrar(false);
+});
+
+$('btnLimpiarQ').addEventListener('click', () => {
+  $('q').value = ''; $('btnLimpiarQ').classList.remove('visible');
+  $('q').focus(); seleccion = -1; filtrar(false);
+});
+
+const TOGGLES = ['tglNombre','tglNota','tglArticulo','tglCodigo'];
+TOGGLES.forEach(id => {
+  $(id).addEventListener('click', () => {
+    const on = $(id).getAttribute('aria-pressed') === 'true';
+    // Siempre tiene que quedar al menos un campo activo
+    const otros = TOGGLES.filter(x => x !== id).some(x => $(x).getAttribute('aria-pressed') === 'true');
+    if (on && !otros) return;
+    $(id).setAttribute('aria-pressed', String(!on));
+    seleccion = -1;
+    filtrar(false);
+  });
+});
+
+['fEntrega','fMedio','fVendedor'].forEach(id => {
+  $(id).addEventListener('change', () => {
+    $(id).classList.toggle('activo', !!$(id).value);
+    filtrar(false);
+  });
+});
+
+$('btnResetFiltros').addEventListener('click', () => {
+  ['fEntrega','fMedio','fVendedor'].forEach(id => { $(id).value = ''; $(id).classList.remove('activo'); });
+  $('q').value = ''; $('btnLimpiarQ').classList.remove('visible');
+  filtrar(false);
+});
+
+/* Delegación: filas, orden y paginación */
+$('marco').addEventListener('click', e => {
+  const th = e.target.closest('th[data-col]');
+  if (th){
+    const c = th.dataset.col;
+    orden = { col:c, dir: orden.col === c ? -orden.dir : (c === 'fecha' || c === 'total' || c === 'unidades' ? -1 : 1) };
+    filtrar(false, true); return;
+  }
+  const pg = e.target.closest('.pg[data-pg]');
+  if (pg){ pagina = Number(pg.dataset.pg); seleccion = -1; render(); $('main').scrollTop = 0; return; }
+  const tr = e.target.closest('tr[data-id]');
+  if (tr){
+    seleccion = Number(tr.dataset.i);
+    document.querySelectorAll('tr[aria-selected]').forEach(x => x.removeAttribute('aria-selected'));
+    tr.setAttribute('aria-selected','true');
+    abrirDetalle(tr.dataset.id);
+  }
+});
+
+/* Teclado global */
+addEventListener('keydown', e => {
+  const enCampo = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+
+  if (e.key === 'Escape'){
+    if (hoja.abierta){ hoja.cerrar(); e.preventDefault(); return; }
+    if (document.activeElement === $('q') && $('q').value){
+      $('q').value = ''; $('btnLimpiarQ').classList.remove('visible'); filtrar(false); e.preventDefault();
+    }
+    return;
+  }
+  if (e.key === '/' && !enCampo){ e.preventDefault(); $('q').focus(); $('q').select(); return; }
+  if (hoja.abierta || enCampo && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+
+  const filas = document.querySelectorAll('tr[data-id]');
+  if (!filas.length) return;
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    seleccion = Math.max(0, Math.min(filas.length - 1, seleccion + (e.key === 'ArrowDown' ? 1 : -1)));
+    filas.forEach(f => f.removeAttribute('aria-selected'));
+    const f = filas[seleccion];
+    f.setAttribute('aria-selected','true');
+    f.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'Enter' && seleccion >= 0){
+    e.preventDefault();
+    abrirDetalle(filas[seleccion].dataset.id);
+  }
+});
+
+/* Caché: tamaño y borrado */
+$('btnCache').addEventListener('click', async () => {
+  let txt = diasEnCache.size + ' día(s) en caché local · ' + memoria.size + ' pedido(s) en memoria';
+  if (navigator.storage && navigator.storage.estimate){
+    try{ const est = await navigator.storage.estimate(); txt += '\nEspacio usado: ' + fmtBytes(est.usage || 0); }catch(e){}
+  }
+  if (confirm(txt + '\n\n¿Vaciar el caché? Los próximos períodos se volverán a descargar.')){
+    await idbVaciar();
+    memoria.clear(); diasEnCache.clear(); filtrados = [];
+    aviso('Caché vaciado.');
+    render(); pintarMetrica();
+  }
+});
+
+/* Exportar lo filtrado */
+$('btnExportar').addEventListener('click', () => {
+  if (!filtrados.length){ aviso('No hay resultados para exportar.'); return; }
+  const cab = ['ID','Fecha','Cliente','Estado','Entrega','Medio de pago','Vendedor','Unidades','Lineas','Total','Nota'];
+  const csv = [cab.join(';')].concat(filtrados.map(r => [
+    r.id, r.fecha, r.nombre, r.estado, r.entrega, r.medio, r.vendedor, r.unidades, r.lineas, r.total, (r.nota||'').replace(/[\r\n;]+/g,' ')
+  ].map(v => '"' + String(v == null ? '' : v).replace(/"/g,'""') + '"').join(';'))).join('\r\n');
+
+  const blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pedidos_' + ($('desde').value || 'todo') + '_' + ($('hasta').value || '') + '.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* ───────────────────────── Arranque ───────────────────────── */
+
+(async function inicio(){
+  // Nada de red hasta que Firebase confirme la sesion.
+  const usuario = await sesionLista;
+  $('cuenta').hidden = false;
+  $('cuentaMail').textContent = usuario.email || 'sesion activa';
+  $('btnSalir').addEventListener('click', function(){
+    firebase.auth().signOut().then(function(){ window.location.href = 'login.html'; });
+  });
+
+  const h = hoyISO();
+  $('desde').value = h;
+  $('hasta').value = h;
+  marcarChipActivo();
+
+  idb = await abrirIDB();
+  const dias = await idbLeerDias();
+  dias.forEach(d => diasEnCache.set(d.dia, d.ts));
+  pintarMetrica();
+
+  // Al abrir: el día de hoy. Es la consulta más barata posible y suele ser
+  // lo que se necesita; el resto se pide a demanda.
+  await cargarPeriodo(h, h, false);
+
+  // Si la URL trae ?id= se abre ese pedido directamente (una sola lectura).
+  const urlId = new URLSearchParams(location.search).get('id');
+  if (urlId) abrirDetalle(urlId);
+
+  // En pantallas táctiles no se enfoca solo: evita que salte el teclado.
+  if (!matchMedia('(pointer: coarse)').matches) $('q').focus();
+})();
+</script>
+</body>
+</html>
