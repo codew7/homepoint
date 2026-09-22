@@ -676,25 +676,51 @@ const loadingOverlay = $('loadingOverlay');
 // Reemplazar con la URL de tu implementación en script.google.com
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzs8fJtVLkdUjOwx76miDSku6m-tVp371iqfxjepxgWydumKKHhd7w0zLHTMZxDo95Cw/exec';
 
+// El backup pesa ~60 MB y Apps Script lo sirve redirigiendo a una URL temporal
+// de script.googleusercontent.com que es de UN SOLO USO. Si la descarga se corta
+// a mitad, el navegador reintenta contra esa misma URL ya consumida y recibe 404.
+// Por eso cada intento arranca de cero con un parámetro anti-caché, que obliga a
+// Google a emitir un redirect (y una clave) nuevos.
+const MAX_INTENTOS = 3;
+
+async function fetchBackupText() {
+  const url = `${APPS_SCRIPT_URL}?t=${Date.now()}`;
+  const response = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+  if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
+  const text = await response.text();
+  if (text.trim().startsWith('<')) {
+    throw new Error('El script devolvió HTML en lugar de JSON. Verificá que esté bien implementado y con acceso "Cualquier persona".');
+  }
+  return text;
+}
+
 async function loadFromDrive() {
-  $('loadingText').textContent = 'Descargando desde Google Drive…';
   loadingOverlay.classList.add('visible');
   $('fileFallback').style.display = 'none';
+  let ultimoError = null;
+
   try {
-    const response = await fetch(APPS_SCRIPT_URL, { redirect: 'follow' });
-    if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
-    const text = await response.text();
-    if (text.trim().startsWith('<')) {
-      throw new Error('El script devolvió HTML en lugar de JSON. Verificá que esté bien implementado y con acceso "Cualquier persona".');
+    for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+      $('loadingText').textContent = intento === 1
+        ? 'Descargando desde Google Drive… (son ~60 MB, puede tardar un minuto)'
+        : `La descarga se cortó — reintentando (${intento} de ${MAX_INTENTOS})…`;
+      try {
+        const raw = JSON.parse(await fetchBackupText());
+        const pedidosObj = raw.pedidos || raw;
+        $('headerSubtitle').textContent = `Archivo cargado desde Google Drive — procesando…`;
+        parsePedidos(pedidosObj);
+        return;
+      } catch (err) {
+        ultimoError = err;
+        console.warn(`Intento ${intento}/${MAX_INTENTOS} falló:`, err);
+        if (intento < MAX_INTENTOS) await new Promise(r => setTimeout(r, 1500 * intento));
+      }
     }
-    const raw = JSON.parse(text);
-    const pedidosObj = raw.pedidos || raw;
-    $('headerSubtitle').textContent = `Archivo cargado desde Google Drive — procesando…`;
-    parsePedidos(pedidosObj);
-  } catch (err) {
-    console.error('Drive fetch error:', err);
+
+    console.error('Drive fetch error:', ultimoError);
     $('headerSubtitle').textContent = 'No se pudo conectar a Google Drive — cargá el archivo manualmente';
     $('fileFallback').style.display = 'block';
+    showFileError(`No se pudo descargar el backup tras ${MAX_INTENTOS} intentos: ${ultimoError.message}`);
   } finally {
     loadingOverlay.classList.remove('visible');
     $('loadingText').textContent = 'Procesando archivo JSON…';
