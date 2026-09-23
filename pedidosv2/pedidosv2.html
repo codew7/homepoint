@@ -10244,9 +10244,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // logica que tenia necesarios.html, ahora montada sobre el catalogo, el
     // lightbox, el confirm y el tema que ya viven en esta pantalla.
     //
-    // El tilde "verificado" se guarda en localStorage con las claves
-    // armado_verificado_<codigo>, las mismas que usaba necesarios.html, asi lo
-    // que se marco en uno se ve en el otro.
+    // El tilde "verificado" se guarda en Firebase, en el nodo propio
+    // armadoVerificados/<codigo>: true, asi todos los dispositivos ven lo mismo
+    // en tiempo real. Solo existen los articulos tildados; destildar borra la
+    // clave. No toca pedidos ni ningun otro nodo.
     (function setupNecesarios() {
       const panel = document.getElementById('necPanel');
       const lista = document.getElementById('necList');
@@ -10280,10 +10281,48 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let cargando = false;
       let cargado = false;
 
-      // ---------- Persistencia del tilde ----------
-      const claveVerif = (codigo) => 'armado_verificado_' + codigo;
-      const getVerificado = (codigo) => localStorage.getItem(claveVerif(codigo)) === 'true';
-      const setVerificado = (codigo, v) => localStorage.setItem(claveVerif(codigo), v ? 'true' : 'false');
+      // ---------- Persistencia del tilde (compartida en Firebase) ----------
+      const refVerif = db.ref('armadoVerificados');
+      let verificados = new Set();   // claves seguras de los articulos tildados
+      let escuchando = false;
+
+      // Firebase no admite . # $ / [ ] en las claves.
+      const claveSegura = (codigo) => String(codigo).replace(/[.#$\/\[\]]/g, '_');
+      const getVerificado = (codigo) => verificados.has(claveSegura(codigo));
+
+      // Se marca en memoria al instante y se escribe en segundo plano; si el
+      // servidor lo rechaza se vuelve atras.
+      function setVerificado(codigo, v) {
+        const k = claveSegura(codigo);
+        if (v) verificados.add(k); else verificados.delete(k);
+        const op = v ? refVerif.child(k).set(true) : refVerif.child(k).remove();
+        op.catch(err => {
+          console.error('Error guardando verificado:', err);
+          if (v) verificados.delete(k); else verificados.add(k);
+          if (cargado) render();
+          showToast('No se pudo guardar el tilde');
+        });
+      }
+
+      // Un solo listener sobre el nodo: trae todo una vez y despues solo los
+      // cambios. Queda activo para que el globo del boton siga al dia.
+      function escucharVerificados() {
+        if (escuchando) return;
+        escuchando = true;
+        refVerif.on('value', snap => {
+          const nuevos = new Set(Object.keys(snap.val() || {}));
+          // El eco de un tilde propio llega igual a lo que ya hay en memoria:
+          // no se redibuja, asi no se corta la animacion de salida de la fila.
+          const igual = nuevos.size === verificados.size && [...nuevos].every(k => verificados.has(k));
+          verificados = nuevos;
+          if (igual || !cargado) return;
+          if (panel.classList.contains('active')) render();
+          else actualizarStats(listaOrdenada());
+        }, err => {
+          console.error('Error escuchando verificados:', err);
+          escuchando = false;
+        });
+      }
 
       // ---------- Datos ----------
       async function cargar() {
@@ -10494,6 +10533,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // ---------- Abrir / cerrar ----------
       function abrir() {
         panel.classList.add('active');
+        escucharVerificados();
         if (!cargado) cargar();
         else render();
       }
@@ -10657,14 +10697,26 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           volver: 'Volver'
         });
         if (!ok) return;
-        // Se barren todas las claves, incluso las de articulos que ya no estan
-        // en la lista, para que no queden tildes viejos huerfanos.
-        const borrar = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && (k.startsWith('armado_verificado_') || k.startsWith('armado_preparado_'))) borrar.push(k);
-        }
-        borrar.forEach(k => localStorage.removeItem(k));
+        // Se borra el nodo entero, incluso los tildes de articulos que ya no
+        // estan en la lista, para que no queden huerfanos.
+        // Sin esperar al servidor: sin conexion queda encolado y se sube solo.
+        const previos = verificados;
+        verificados = new Set();
+        refVerif.remove().catch(err => {
+          console.error('Error limpiando verificados:', err);
+          verificados = previos;
+          render();
+          showToast('No se pudieron limpiar los verificados');
+        });
+        // Restos de cuando los tildes vivian en este dispositivo.
+        try {
+          const borrar = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && (k.startsWith('armado_verificado_') || k.startsWith('armado_preparado_'))) borrar.push(k);
+          }
+          borrar.forEach(k => localStorage.removeItem(k));
+        } catch (e) { /* modo privado */ }
         excluidos.clear();
         abierta = null;
         construir();
