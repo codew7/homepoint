@@ -1920,6 +1920,79 @@
     }
     .rotulo-qty-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
 
+    /* Rotulo manual. Los campos precargados pierden el placeholder, por eso
+       cada uno lleva su etiqueta chica encima. */
+    .rotman-ref {
+      margin: -8px 0 16px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-3);
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .rotman-ref b { font-family: var(--font-mono); font-weight: 700; color: var(--ink-2); }
+    .rotman-label {
+      display: block;
+      margin: 0 0 4px 2px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .rotman-fila {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 9px;
+    }
+    .rotman-salida {
+      display: flex;
+      gap: 9px;
+      margin-top: 8px;
+    }
+    .rotman-seg {
+      flex: 1;
+      display: flex;
+      padding: 3px;
+      border-radius: var(--r2);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+    .rotman-seg button {
+      flex: 1;
+      height: 38px;
+      border: 0;
+      border-radius: calc(var(--r2) - 3px);
+      background: transparent;
+      color: var(--ink-3);
+      font-size: 13px;
+      font-weight: 700;
+      transition: background .14s, color .14s;
+    }
+    .rotman-seg button[aria-checked="true"] {
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+    }
+    .rotman-qty {
+      width: 64px;
+      height: 46px;
+      text-align: center;
+      border-radius: var(--r2);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 17px;
+      font-weight: 700;
+      outline: none;
+      -moz-appearance: textfield;
+    }
+    .rotman-qty:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    @media (max-width: 380px) {
+      .rotman-fila { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    }
+
     /* =========================================
        PANELES (pedidos / historial / faltantes)
        ========================================= */
@@ -3844,6 +3917,7 @@
               <div class="print-menu-item" id="printConfigBT" style="display:none">Impresora Bluetooth</div>
               <div class="print-menu-item" id="printRotulo">Generar R&oacute;tulo PDF</div>
               <div class="print-menu-item" id="printFactura">Generar Pedido PDF</div>
+              <div class="print-menu-item" id="printRotuloManual">R&oacute;tulo manual</div>
             </div>
           </div>
 
@@ -4085,6 +4159,56 @@
       <div class="modal-btns">
         <button class="btn-cancel" id="rotuloCancel">Cancelar</button>
         <button class="btn-primary" id="rotuloConfirm">Imprimir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ROTULO MANUAL: mismo rotulo, otro destinatario. Lleva una
+       referencia chica al pedido de origen y no escribe nada en Firebase. -->
+  <div class="modal-backdrop" id="rotuloManualModal">
+    <div class="modal-box modal-box--form">
+      <p class="modal-titulo">R&oacute;tulo manual</p>
+      <div class="rotman-ref" id="rotmanRef"></div>
+
+      <label class="rotman-label" for="rotmanNombre">Nombre</label>
+      <input class="edit-client-field" id="rotmanNombre" type="text" placeholder="Nombre y Apellido" autocomplete="off">
+      <label class="rotman-label" for="rotmanDireccion">Direcci&oacute;n</label>
+      <input class="edit-client-field" id="rotmanDireccion" type="text" placeholder="Direccion Completa" autocomplete="off">
+      <div class="rotman-fila">
+        <div>
+          <label class="rotman-label" for="rotmanLocalidad">Localidad</label>
+          <input class="edit-client-field" id="rotmanLocalidad" type="text" placeholder="Localidad" autocomplete="off">
+        </div>
+        <div>
+          <label class="rotman-label" for="rotmanProvincia">Provincia</label>
+          <!-- Las opciones se copian de #editProvincia al abrir -->
+          <select class="edit-client-field" id="rotmanProvincia"></select>
+        </div>
+      </div>
+      <div class="rotman-fila">
+        <div>
+          <label class="rotman-label" for="rotmanTelefono">Tel&eacute;fono</label>
+          <input class="edit-client-field" id="rotmanTelefono" type="text" placeholder="Telefono" autocomplete="off">
+        </div>
+        <div>
+          <label class="rotman-label" for="rotmanDni">DNI</label>
+          <input class="edit-client-field" id="rotmanDni" type="text" placeholder="DNI" autocomplete="off">
+        </div>
+      </div>
+      <label class="rotman-label" for="rotmanEntrega">Entrega</label>
+      <input class="edit-client-field" id="rotmanEntrega" type="text" placeholder="Motomensajeria, Correo..." autocomplete="off">
+
+      <div class="rotman-salida">
+        <div class="rotman-seg" role="radiogroup" aria-label="Salida">
+          <button type="button" role="radio" data-destino="pos">Tira POS</button>
+          <button type="button" role="radio" data-destino="pdf">PDF A4</button>
+        </div>
+        <input type="number" id="rotmanCantidad" value="1" min="1" max="20" class="rotman-qty" aria-label="Cantidad">
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-cancel" id="rotmanCancel">Cancelar</button>
+        <button class="btn-primary" id="rotmanConfirm">Imprimir</button>
       </div>
     </div>
   </div>
@@ -7504,6 +7628,102 @@
       else generarRotuloPDF(cant);
     });
 
+    // ==========================================
+    // ROTULO MANUAL
+    // ==========================================
+    // Para los casos eventuales en que el paquete va a otra persona o a otra
+    // direccion. Sale con el mismo formato que el rotulo del pedido, mas una
+    // referencia chica al pedido de origen. No escribe nada en Firebase.
+    const rotmanModal = document.getElementById('rotuloManualModal');
+    const ROTMAN_DESTINO_KEY = 'rotuloManualDestino';
+    let rotmanDestino = 'pos';
+    try { if (localStorage.getItem(ROTMAN_DESTINO_KEY) === 'pdf') rotmanDestino = 'pdf'; } catch (e) { /* sin storage */ }
+
+    function rotmanPintarDestino() {
+      rotmanModal.querySelectorAll('.rotman-seg button').forEach(b => {
+        b.setAttribute('aria-checked', b.dataset.destino === rotmanDestino ? 'true' : 'false');
+      });
+    }
+
+    function rotmanCampo(id) { return document.getElementById('rotman' + id); }
+
+    function abrirRotuloManual() {
+      if (!pedidoActual || !pedidoId) return;
+      const c = pedidoActual.cliente || {};
+
+      // Las provincias salen del select del modal de cliente: una sola lista.
+      const prov = rotmanCampo('Provincia');
+      prov.innerHTML = document.getElementById('editProvincia').innerHTML;
+      if (c.provincia && !Array.from(prov.options).some(o => o.value === c.provincia)) {
+        const op = document.createElement('option');
+        op.value = op.textContent = c.provincia;
+        prov.appendChild(op);
+      }
+
+      rotmanCampo('Nombre').value = '';
+      rotmanCampo('Direccion').value = '';
+      rotmanCampo('Localidad').value = c.localidad || '';
+      prov.value = c.provincia || '';
+      rotmanCampo('Telefono').value = c.telefono || '';
+      rotmanCampo('Dni').value = '';
+      rotmanCampo('Entrega').value = pedidoActual.tipoEntrega || '';
+      rotmanCampo('Cantidad').value = 1;
+
+      const ref = rotmanCampo('Ref');
+      ref.textContent = 'Basado en pedido ';
+      const num = document.createElement('b');
+      num.textContent = String(pedidoId).slice(-8).toUpperCase();
+      ref.appendChild(num);
+      if (c.nombre) ref.appendChild(document.createTextNode(' · ' + c.nombre));
+
+      rotmanPintarDestino();
+      rotmanModal.classList.add('active');
+      setTimeout(() => rotmanCampo('Nombre').focus(), 60);
+    }
+
+    function cerrarRotuloManual() { rotmanModal.classList.remove('active'); }
+
+    function confirmarRotuloManual() {
+      const nombre = rotmanCampo('Nombre').value.trim();
+      if (!nombre) { showToast('El nombre es obligatorio'); rotmanCampo('Nombre').focus(); return; }
+      const cant = Math.max(1, Math.min(20, parseInt(rotmanCampo('Cantidad').value) || 1));
+      const d = {
+        nombre: nombre,
+        direccion: rotmanCampo('Direccion').value.trim(),
+        localidad: rotmanCampo('Localidad').value.trim(),
+        provincia: rotmanCampo('Provincia').value,
+        telefono: rotmanCampo('Telefono').value.trim(),
+        dni: rotmanCampo('Dni').value.trim(),
+        entrega: rotmanCampo('Entrega').value.trim(),
+        ref: {
+          id: String(pedidoId).slice(-8).toUpperCase(),
+          cliente: ((pedidoActual && pedidoActual.cliente) || {}).nombre || ''
+        }
+      };
+      cerrarRotuloManual();
+      if (rotmanDestino === 'pos') imprimirRotuloPOS(cant, d);
+      else generarRotuloPDF(cant, d);
+    }
+
+    document.getElementById('printRotuloManual').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      abrirRotuloManual();
+    });
+    rotmanModal.querySelectorAll('.rotman-seg button').forEach(b => {
+      b.addEventListener('click', () => {
+        rotmanDestino = b.dataset.destino;
+        try { localStorage.setItem(ROTMAN_DESTINO_KEY, rotmanDestino); } catch (e) { /* sin storage */ }
+        rotmanPintarDestino();
+      });
+    });
+    document.getElementById('rotmanCancel').addEventListener('click', cerrarRotuloManual);
+    document.getElementById('rotmanConfirm').addEventListener('click', confirmarRotuloManual);
+    rotmanModal.addEventListener('click', (e) => { if (e.target === rotmanModal) cerrarRotuloManual(); });
+    rotmanModal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') cerrarRotuloManual();
+      else if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); confirmarRotuloManual(); }
+    });
+
 
     // ==========================================
     // GENERACION Y COMPARTIDO DE PDF
@@ -7780,6 +8000,23 @@
       return Math.max(h, minDer);
     }
 
+    // Referencia al pedido de origen que llevan los rotulos manuales.
+    // Vacio en el rotulo normal, que no tiene d.ref.
+    function textoRefRotulo(d) {
+      if (!d || !d.ref) return '';
+      return 'Ref. pedido ' + d.ref.id + (d.ref.cliente ? ' · ' + d.ref.cliente : '');
+    }
+
+    // Recorta con '…' hasta que entre en 'ancho'. 'medir' viene de quien
+    // dibuja (jsPDF o canvas), con la fuente ya seteada.
+    function recortarTexto(texto, ancho, medir) {
+      if (ancho <= 0) return '';
+      if (medir(texto) <= ancho) return texto;
+      let t = texto;
+      while (t.length > 1 && medir(t + '…') > ancho) t = t.slice(0, -1);
+      return t.trimEnd() + '…';
+    }
+
     const ROTULO_CAMPOS = [
       ['Nombre', 'nombre'], ['Direccion', 'direccion'], ['Localidad', 'localidad'],
       ['Provincia', 'provincia'], ['Telefono', 'telefono'], ['DNI', 'dni']
@@ -7803,6 +8040,18 @@
       doc.setFontSize(7);
       doc.setTextColor(90);
       doc.text('DESTINATARIO', px, py + 2.5);
+
+      // Rotulo manual: referencia al pedido de origen, chica y a la derecha
+      // del titulo, en un hueco que ya existia (no cambia el alto).
+      const refTxt = textoRefRotulo(d);
+      if (refTxt) {
+        const libre = anchoDest - doc.getTextWidth('DESTINATARIO') - 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6);
+        doc.setTextColor(130);
+        doc.text(recortarTexto(refTxt, libre, t => doc.getTextWidth(t)), px + anchoDest, py + 2.5, { align: 'right' });
+      }
+
       doc.setDrawColor(40);
       doc.setLineWidth(0.5);
       doc.line(px, py + 4, px + anchoDest, py + 4);
@@ -8611,6 +8860,18 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
       ctx.font = 'bold ' + (22 * k) + 'px Arial, Helvetica, sans-serif';
       ctx.fillText('DESTINATARIO', x0, y);
+
+      // Rotulo manual: referencia al pedido de origen a la derecha del titulo.
+      // La termica es de 1 bit, asi que lo sutil es el tamano, no el gris.
+      const refTxt = textoRefRotulo(d);
+      if (refTxt) {
+        const libre = ancho - ctx.measureText('DESTINATARIO').width - 30 * k;
+        ctx.font = '600 ' + (17 * k) + 'px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(recortarTexto(refTxt, libre, t => ctx.measureText(t).width), x0 + ancho, y + 4 * k);
+        ctx.textAlign = 'left';
+      }
+
       y += 28 * k;
       ctx.fillRect(x0, y, ancho, regla);
       y += regla + 14 * k;
@@ -8833,33 +9094,38 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
     }
 
-    async function imprimirRotuloPOS(cantidad) {
+    // 'manual' trae los datos ya armados del Rotulo manual: en ese caso no
+    // hay nada que refrescar de Firebase.
+    async function imprimirRotuloPOS(cantidad, manual) {
       if (!pedidoActual || !pedidoId) return;
 
-      // Datos frescos de Firebase antes de imprimir, igual que las demas
-      let pedidoFresh;
-      try {
-        const snap = await conTimeout(() => db.ref('pedidos/' + pedidoId).once('value'));
-        pedidoFresh = snap.val();
-        if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
-        pedidoActual = pedidoFresh;
-        pedidoActual.id = pedidoId;
-      } catch (err) {
-        showToast('Error al cargar datos para imprimir');
-        console.error(err);
-        return;
-      }
+      let d = manual;
+      if (!d) {
+        // Datos frescos de Firebase antes de imprimir, igual que las demas
+        let pedidoFresh;
+        try {
+          const snap = await conTimeout(() => db.ref('pedidos/' + pedidoId).once('value'));
+          pedidoFresh = snap.val();
+          if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
+          pedidoActual = pedidoFresh;
+          pedidoActual.id = pedidoId;
+        } catch (err) {
+          showToast('Error al cargar datos para imprimir');
+          console.error(err);
+          return;
+        }
 
-      const cliente = pedidoFresh.cliente || {};
-      const d = {
-        nombre: cliente.nombre || '',
-        direccion: cliente.direccion || '',
-        localidad: cliente.localidad || '',
-        provincia: cliente.provincia || '',
-        telefono: cliente.telefono || '',
-        dni: cliente.dni || '',
-        entrega: pedidoFresh.tipoEntrega || ''
-      };
+        const cliente = pedidoFresh.cliente || {};
+        d = {
+          nombre: cliente.nombre || '',
+          direccion: cliente.direccion || '',
+          localidad: cliente.localidad || '',
+          provincia: cliente.provincia || '',
+          telefono: cliente.telefono || '',
+          dni: cliente.dni || '',
+          entrega: pedidoFresh.tipoEntrega || ''
+        };
+      }
 
       const qrImg = await rotCargarQR(pedidoId);
       if (!qrImg) console.warn('No se pudo cargar el QR; el rotulo sale sin el.');
@@ -8930,23 +9196,23 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // ==========================================
     // GENERAR ROTULO PDF
     // ==========================================
-    async function generarRotuloPDF(cantidad) {
+    async function generarRotuloPDF(cantidad, manual) {
       if (!pedidoActual) return;
       const cliente = pedidoActual.cliente || {};
+      const remitente = { remNombre: 'Javier Romero', remTelefono: '11-3130-8444' };
 
-      const d = {
+      const d = manual ? Object.assign({}, manual, remitente) : Object.assign({
         nombre: cliente.nombre || '', direccion: cliente.direccion || '',
         localidad: cliente.localidad || '', provincia: cliente.provincia || '',
         telefono: cliente.telefono || '', dni: cliente.dni || '',
-        entrega: pedidoActual.tipoEntrega || '',
-        remNombre: 'Javier Romero', remTelefono: '11-3130-8444'
-      };
+        entrega: pedidoActual.tipoEntrega || ''
+      }, remitente);
 
       try {
         showToast('Generando PDF...');
         await cargarLibsPDF();
         const qr = await qrParaPDF(pedidoId, 240);
-        const nombre = 'Rotulo-' + String(pedidoId).slice(-8).toUpperCase() + '.pdf';
+        const nombre = 'Rotulo-' + (manual ? 'manual-' : '') + String(pedidoId).slice(-8).toUpperCase() + '.pdf';
         ofrecerPDF(construirRotuloPDF(d, cantidad, qr), nombre);
       } catch (e) {
         console.error('No se pudo generar el PDF del rotulo:', e);
