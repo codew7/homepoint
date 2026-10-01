@@ -845,6 +845,22 @@
             opacity: 0;
         }
 
+        .winner-name:has(+ .winner-id) { margin-bottom: 14px; }
+
+        .winner-id {
+            display: inline-block;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(1.4rem, 4.5vw, 2.2rem);
+            letter-spacing: 0.15em;
+            color: var(--gold);
+            background: rgba(0, 0, 0, 0.35);
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            border-radius: 14px;
+            padding: 6px 20px;
+            margin-bottom: 32px;
+            text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+        }
+
         @keyframes winner-pop {
             0% { transform: scale(0.5); opacity: 0; }
             70% { transform: scale(1.1); }
@@ -1192,6 +1208,7 @@
             <div class="winner-trophy"><i class="bi bi-trophy-fill"></i></div>
             <div class="winner-label">¡GANADOR!</div>
             <div class="winner-name" id="winnerName">-</div>
+            <div class="winner-id">TICKET #<span id="winnerId">------</span></div>
             <div class="winner-actions">
                 <button class="btn primary" id="btnAgain"><i class="bi bi-arrow-clockwise"></i> Otro Sorteo</button>
             </div>
@@ -1420,10 +1437,6 @@
             document.getElementById('statusText').textContent = text;
         }
 
-        function titleCase(str) {
-            return str.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
-        }
-
         function getCondiciones() {
             const medios = [];
             document.querySelectorAll('.cond-check:checked').forEach(c => medios.push(c.value));
@@ -1463,7 +1476,8 @@
 
                 out.push({
                     id,
-                    cliente: titleCase(p.cliente?.nombre || 'Sin Nombre'),
+                    cliente: (p.cliente?.nombre || 'Sin Nombre').trim().toUpperCase(),
+                    idCorto: String(id).slice(-6).toUpperCase(),
                     fecha: fp,
                     total,
                     medioPago: p.pagos?.medioPago || 'Efectivo'
@@ -1555,6 +1569,7 @@
 
         function mostrarGanador(g) {
             winnerName.textContent = g.cliente;
+            document.getElementById('winnerId').textContent = g.idCorto;
             // retrigger name animation
             winnerName.style.animation = 'none';
             void winnerName.offsetWidth;
@@ -1586,7 +1601,7 @@
             historySection.style.display = 'block';
             historyList.innerHTML = historial.map(h => `
                 <div class="history-item">
-                    <span class="history-name">${escapeHTML(h.cliente)}</span>
+                    <span class="history-name">${escapeHTML(h.cliente)} · #${escapeHTML(h.idCorto)}</span>
                     <span class="history-num">${h.num}° Sorteo</span>
                 </div>
             `).join('');
