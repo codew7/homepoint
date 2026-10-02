@@ -33,6 +33,8 @@ $borrados = 0
 $acceso = Join-Path $escritorio 'Caja HomePoint.lnk'
 if (Test-Path $acceso) { Remove-Item $acceso -Force; $borrados++; Write-Host '  [OK] Acceso del Escritorio borrado' -ForegroundColor Green }
 if (Test-Path $menuInicio) { Remove-Item $menuInicio -Recurse -Force; $borrados++; Write-Host '  [OK] Carpeta del menú Inicio borrada' -ForegroundColor Green }
+$tarea = 'Caja HomePoint - Inicio automático'
+if (Get-ScheduledTask -TaskName $tarea) { Unregister-ScheduledTask -TaskName $tarea -Confirm:$false; $borrados++; Write-Host '  [OK] Inicio automático desactivado' -ForegroundColor Green }
 if ($borrados -eq 0) { Write-Host '  No había accesos directos instalados.' -ForegroundColor DarkGray }
 
 Write-Host ''

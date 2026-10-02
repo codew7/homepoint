@@ -165,6 +165,33 @@ Crear-Acceso -Ruta (Join-Path $menuInicio 'Detener Caja HomePoint.lnk') `
              -Descripcion 'Apaga el servidor local de la caja' -Icono ''
 Ok 'Acceso "Detener" en el menú Inicio (por si algo queda colgado)'
 
+# ------------------------------------------------- 4. barra de tareas ---
+Titulo '4. Anclar a la barra de tareas'
+
+# Windows 10/11 no permite que un programa se ancle solo a la barra de tareas:
+# Microsoft lo bloqueó a propósito. Lo que sí se puede es dejarlo a un clic:
+# se abre la carpeta con el acceso ya seleccionado y se explica qué tocar.
+# Se ancla el acceso del menú Inicio (y no la ventana abierta de la caja)
+# porque ese es el que enciende el servidor; la ventana sola no funcionaría.
+$accesoInicio = Join-Path $menuInicio 'Caja HomePoint.lnk'
+$anclar = Read-Host '  ¿Querés anclar la caja a la barra de tareas? (S/N)'
+if ($anclar -match '^[sSyY]') {
+  Start-Process -FilePath 'explorer.exe' -ArgumentList "/select,`"$accesoInicio`""
+  Write-Host ''
+  Write-Host '  Se abrió una carpeta con "Caja HomePoint" seleccionado. En esa carpeta:' -ForegroundColor Yellow
+  Write-Host ''
+  Write-Host '    1. Clic derecho sobre "Caja HomePoint".'
+  Write-Host '    2. Si no aparece la opción, clic en "Mostrar más opciones".'
+  Write-Host '    3. Clic en "Anclar a la barra de tareas".'
+  Write-Host ''
+  Nota 'Importante: anclar desde esa carpeta, NO desde la ventana de la caja abierta.'
+  Nota 'Si se ancla la ventana abierta, el ícono no enciende la caja.'
+  Write-Host ''
+  Read-Host '  Cuando termines, Enter para seguir'
+} else {
+  Nota 'Se puede hacer después desde Inicio > Todas las apps > HomePoint.'
+}
+
 # ------------------------------------------------------------- resultado ---
 Write-Host ''
 Write-Host '  ===============================================================' -ForegroundColor Green
