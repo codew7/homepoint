@@ -1013,6 +1013,26 @@ function tick() {
 }
 tick(); setInterval(tick, 15000);
 
+// Dentro de la app Android ya se ve a pantalla completa: el botón sobra
+const EN_APP = /HomePointKiosco/.test(navigator.userAgent);
+if (EN_APP) $('fsBtn').style.display = 'none';
+
+// Actualización automática de esta página: si se publica una versión nueva,
+// se recarga sola cuando nadie la está usando.
+let versionPagina = null;
+async function chequearPagina() {
+  try {
+    const r = await fetch(location.href.split('#')[0], { method: 'HEAD', cache: 'no-store' });
+    if (!r.ok) return;
+    const v = r.headers.get('etag') || r.headers.get('last-modified');
+    if (!v) return;
+    if (versionPagina === null) { versionPagina = v; return; }
+    if (v !== versionPagina && !sheetAbierta && !entrada) location.reload();
+  } catch (_) {}
+}
+chequearPagina();
+setInterval(chequearPagina, 5 * 60 * 1000);
+
 $('fsBtn').addEventListener('click', () => {
   const d = document;
   if (!d.fullscreenElement) d.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});

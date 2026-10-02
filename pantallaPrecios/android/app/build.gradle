@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+// La firma vive FUERA del repositorio (por defecto en ~/android-tools/firma/firma.properties).
+// Todas las versiones deben firmarse con la misma clave; si se pierde, la app instalada no podrá actualizarse.
+def firmaFile = file(System.getenv('HOMEPOINT_FIRMA') ?: "${System.getProperty('user.home')}/android-tools/firma/firma.properties")
+def firma = new Properties()
+if (firmaFile.exists()) firmaFile.withInputStream { firma.load(it) }
+
+android {
+    namespace 'ar.dev.homepoint.precios'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'ar.dev.homepoint.precios'
+        minSdk 24
+        targetSdk 34
+        // Al publicar una versión nueva del APK: subir versionCode (y versionName) y actualizar app/version.json.
+        versionCode 1
+        versionName '1.0'
+
+        buildConfigField 'String', 'KIOSK_URL', '"https://homepoint-admin.dev.ar/pantallaPrecios/"'
+        buildConfigField 'String', 'VERSION_URL', '"https://homepoint-admin.dev.ar/pantallaPrecios/app/version.json"'
+    }
+
+    signingConfigs {
+        release {
+            if (firmaFile.exists()) {
+                storeFile file(firma['storeFile'])
+                storePassword firma['storePassword']
+                keyAlias firma['keyAlias']
+                keyPassword firma['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
