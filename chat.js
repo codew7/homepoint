@@ -3,7 +3,8 @@
 // llamado urgente. Usa el `db` global que inicializa ingresoPedidoV2.html.
 //
 // Datos:
-//   chat/mensajes/{pushId}          { de, texto, tipo: 'texto'|'rapido'|'urgente', ts }
+//   chat/mensajes/{pushId}          { de, texto, tipo: 'texto'|'rapido'|'urgente', ts, para? }
+//     (`para` = nombre del equipo al que va el timbre; sólo en los 'urgente')
 //   chat/presencia/{clave}          { nombre, ultimaVez, conexiones: { {pushId}: true } }
 //
 // Regla de oro: el chat nunca roba el foco del buscador (#searchInput), que es
@@ -12,12 +13,14 @@
   'use strict';
 
   const MAX_MENSAJES = 100;
-  const DIAS_RETENCION = 15;
+  const DIAS_RETENCION = 7;
   const URGENTE_VIGENCIA_MS = 2 * 60 * 1000; // un llamado más viejo que esto ya no suena
   const TOAST_MS = 5000;
   const LS_NOMBRE = 'chatEquipoNombre';
   const LS_LEIDO = 'chatUltimoLeido';
-  const RAPIDOS = ['Venir a caja', 'Necesito cambio', 'Listo ✓', 'Esperá un momento', 'Cliente esperando', 'Voy'];
+  const LS_SONIDO = 'chatSonido';
+  const LS_LIMPIEZA = 'chatUltimaLimpieza';
+  const MAX_CARACTERES = 100;
 
   const refMensajes = db.ref('chat/mensajes');
   const refPresencia = db.ref('chat/presencia');
@@ -33,6 +36,7 @@
   let abierto = false;
   let alarmaTimer = null;
   let tituloOriginal = document.title;
+  let sonidoActivo = lsGet(LS_SONIDO) !== 'off';
 
   // ------------------------------------------------------------- helpers --
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
@@ -43,7 +47,7 @@
   // Las claves de RTDB no aceptan . $ # [ ] /
   function claveDe(nombre) {
     return nombre.trim().toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'equipo';
   }
 
@@ -67,16 +71,6 @@
     if (d.toDateString() === hoy.toDateString()) return 'Hoy';
     if (d.toDateString() === ayer.toDateString()) return 'Ayer';
     return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'short' });
-  }
-
-  function hace(ts) {
-    if (!ts) return '';
-    const min = Math.round((ahoraServidor() - ts) / 60000);
-    if (min < 1) return 'recién';
-    if (min < 60) return 'hace ' + min + ' min';
-    const h = Math.round(min / 60);
-    if (h < 24) return 'hace ' + h + ' h';
-    return 'hace ' + Math.round(h / 24) + ' d';
   }
 
   function devolverFocoAlBuscador() {
@@ -125,7 +119,9 @@
     o.stop(t0 + dur + 0.02);
   }
 
-  function sonarMensaje() { tono(880, 0, 0.18, 0.12); tono(1318.5, 0.09, 0.28, 0.1); }
+  // El silencio apaga sólo el aviso de mensajes. El timbre suena igual: va
+  // dirigido a este equipo y es justamente para cuando hace falta llamar.
+  function sonarMensaje() { if (!sonidoActivo) return; tono(880, 0, 0.18, 0.12); tono(1318.5, 0.09, 0.28, 0.1); }
   function sonarUrgente() {
     [0, 0.16, 0.32].forEach(t => { tono(1046.5, t, 0.13, 0.22); tono(1568, t + 0.06, 0.1, 0.14); });
   }
@@ -145,9 +141,12 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12Z"/></svg>
             Mensajes
           </h2>
+          <div class="chat-head-acciones">
+          <button type="button" id="chatSonidoBtn" class="chat-cerrar chat-sonido" aria-pressed="true"></button>
           <button type="button" class="chat-cerrar" data-cerrar title="Cerrar (Esc)" aria-label="Cerrar mensajes">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
+          </div>
         </div>
         <button type="button" id="chatYo" class="chat-yo" title="Cambiar el nombre de este equipo">
           Este equipo: <strong id="chatYoNombre"></strong>
@@ -159,14 +158,15 @@
       <div id="chatLista" class="chat-lista" aria-live="polite"></div>
 
       <footer class="chat-pie">
-        <div class="chat-rapidos" aria-label="Mensajes rápidos">
-          ${RAPIDOS.map(r => `<button type="button" class="chat-rapido" data-rapido="${esc(r)}">${esc(r)}</button>`).join('')}
+        <div id="chatTimbreMenu" class="chat-timbre-menu" role="menu" aria-label="Elegí a quién llamar" hidden>
+          <div class="chat-timbre-titulo">¿A quién llamás?</div>
+          <div id="chatTimbreLista" class="chat-timbre-lista"></div>
         </div>
         <div class="chat-compose">
-          <button type="button" id="chatUrgenteBtn" class="chat-btn-circ chat-urgente-btn" title="Llamado urgente a todos los equipos" aria-label="Llamado urgente">
+          <button type="button" id="chatUrgenteBtn" class="chat-btn-circ chat-urgente-btn" title="Tocar timbre a un equipo" aria-label="Tocar timbre a un equipo" aria-haspopup="menu" aria-expanded="false">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           </button>
-          <textarea id="chatInput" class="chat-input" rows="1" maxlength="500" placeholder="Escribí un mensaje…" aria-label="Mensaje"></textarea>
+          <textarea id="chatInput" class="chat-input" rows="1" maxlength="${MAX_CARACTERES}" placeholder="Escribí un mensaje…" aria-label="Mensaje"></textarea>
           <button type="button" id="chatEnviarBtn" class="chat-btn-circ chat-enviar" title="Enviar (Enter)" aria-label="Enviar" disabled>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </button>
@@ -217,6 +217,30 @@
   const nombreOverlay = $('chatNombreOverlay');
   const nombreInput = $('chatNombreInput');
   const nombreError = $('chatNombreError');
+  const sonidoBtn = $('chatSonidoBtn');
+  const timbreBtn = $('chatUrgenteBtn');
+  const timbreMenu = $('chatTimbreMenu');
+  const timbreLista = $('chatTimbreLista');
+
+  // -------------------------------------------------------------- silencio --
+  const ICONO_SONIDO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>';
+  const ICONO_MUDO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></svg>';
+
+  function pintarSonido() {
+    sonidoBtn.innerHTML = sonidoActivo ? ICONO_SONIDO : ICONO_MUDO;
+    sonidoBtn.classList.toggle('apagado', !sonidoActivo);
+    sonidoBtn.setAttribute('aria-pressed', String(sonidoActivo));
+    const txt = sonidoActivo ? 'Sonido de mensajes activado (clic para silenciar)' : 'Sonido de mensajes silenciado (clic para activar)';
+    sonidoBtn.title = txt;
+    sonidoBtn.setAttribute('aria-label', txt);
+  }
+  sonidoBtn.addEventListener('click', () => {
+    sonidoActivo = !sonidoActivo;
+    lsSet(LS_SONIDO, sonidoActivo ? 'on' : 'off');
+    pintarSonido();
+    if (sonidoActivo) sonarMensaje();
+  });
+  pintarSonido();
 
   // ----------------------------------------------------------- abrir/cerrar --
   function abrir() {
@@ -232,6 +256,7 @@
   function cerrar() {
     if (!abierto) return;
     abierto = false;
+    cerrarTimbreMenu();
     raiz.classList.remove('chat-abierto');
     navBtn.setAttribute('aria-expanded', 'false');
     devolverFocoAlBuscador();
@@ -244,6 +269,7 @@
     if (e.key === 'F2') { e.preventDefault(); abierto ? cerrar() : abrir(); return; }
     if (e.key === 'Escape') {
       if (alarma.classList.contains('visible')) { cerrarAlarma(); return; }
+      if (!timbreMenu.hidden) { cerrarTimbreMenu(); input.focus(); return; }
       if (nombreOverlay.style.display !== 'none') { cerrarNombre(); return; }
       if (abierto) cerrar();
     }
@@ -326,28 +352,32 @@
     ref.update({ nombre: miNombre, ultimaVez: firebase.database.ServerValue.TIMESTAMP });
   }
 
+  // Los otros equipos conectados ahora mismo. Este equipo no figura: ya se
+  // muestra en "Este equipo".
+  function otrosConectados() {
+    return Object.keys(presencias).map(k => presencias[k])
+      .filter(p => p && p.nombre && p.conexiones && claveDe(p.nombre) !== claveDe(miNombre))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }
+
   function renderEquipos() {
-    const arr = Object.keys(presencias).map(k => presencias[k]).filter(p => p && p.nombre);
-    arr.sort((a, b) => (!!b.conexiones - !!a.conexiones) || a.nombre.localeCompare(b.nombre, 'es'));
-    equiposEl.innerHTML = arr.map(p => {
-      const on = !!p.conexiones;
-      const yo = miNombre && claveDe(p.nombre) === claveDe(miNombre);
-      return `<span class="chat-equipo ${on ? 'online' : 'offline'}" title="${on ? 'Conectado' : 'Desconectado ' + esc(hace(p.ultimaVez))}">
-        <span class="chat-punto"></span>${esc(p.nombre)}${yo ? ' (vos)' : ''}${on ? '' : ` <span class="chat-hace">${esc(hace(p.ultimaVez))}</span>`}
-      </span>`;
-    }).join('') || '<span class="chat-equipo offline">Sin equipos registrados</span>';
+    equiposEl.innerHTML = otrosConectados().map(p =>
+      `<span class="chat-equipo online" title="Conectado"><span class="chat-punto"></span>${esc(p.nombre)}</span>`
+    ).join('') || '<span class="chat-equipo offline">No hay otros equipos conectados</span>';
   }
 
   // ------------------------------------------------------------- mensajes --
-  function enviar(texto, tipo) {
+  function enviar(texto, tipo, para) {
     texto = (texto || '').trim();
     if (!texto || !miNombre) return;
-    refMensajes.push({
+    const msg = {
       de: miNombre,
-      texto: texto.slice(0, 500),
+      texto: texto.slice(0, MAX_CARACTERES),
       tipo: tipo || 'texto',
       ts: firebase.database.ServerValue.TIMESTAMP
-    }).catch(err => {
+    };
+    if (para) msg.para = para;
+    refMensajes.push(msg).catch(err => {
       console.error('Chat: no se pudo enviar', err);
       mostrarToast({ de: 'Mensajes', texto: 'No se pudo enviar el mensaje. Revisá la conexión.' }, true);
     });
@@ -371,17 +401,55 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarDesdeInput(); }
   });
   enviarBtn.addEventListener('click', enviarDesdeInput);
-  raiz.querySelectorAll('[data-rapido]').forEach(b =>
-    b.addEventListener('click', () => enviar(b.dataset.rapido, 'rapido')));
-  $('chatUrgenteBtn').addEventListener('click', () => enviar('Llamado urgente', 'urgente'));
 
   function esMio(m) { return miNombre && m.de === miNombre; }
+
+  // Un timbre es para mí si me nombra; los viejos sin `para` eran para todos.
+  function esParaMi(m) {
+    return !m.para || (miNombre && claveDe(m.para) === claveDe(miNombre));
+  }
+
+  // ---------------------------------------------------------------- timbre --
+  function abrirTimbreMenu() {
+    const otros = otrosConectados();
+    timbreLista.innerHTML = otros.length ? otros.map(p =>
+      `<button type="button" class="chat-timbre-item online" role="menuitem" data-para="${esc(p.nombre)}">
+        <span class="chat-punto"></span>
+        <span class="chat-timbre-nombre">${esc(p.nombre)}</span>
+        <span class="chat-timbre-estado">Tocar timbre</span>
+      </button>`
+    ).join('') : '<div class="chat-timbre-vacio">No hay otros equipos conectados.</div>';
+    timbreMenu.hidden = false;
+    timbreBtn.setAttribute('aria-expanded', 'true');
+    const primero = timbreLista.querySelector('button');
+    if (primero) primero.focus();
+  }
+
+  function cerrarTimbreMenu() {
+    timbreMenu.hidden = true;
+    timbreBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  timbreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    timbreMenu.hidden ? abrirTimbreMenu() : cerrarTimbreMenu();
+  });
+  timbreLista.addEventListener('click', e => {
+    const b = e.target.closest('[data-para]');
+    if (!b || b.disabled) return;
+    enviar('Timbre', 'urgente', b.dataset.para);
+    cerrarTimbreMenu();
+    input.focus();
+  });
+  document.addEventListener('click', e => {
+    if (!timbreMenu.hidden && !timbreMenu.contains(e.target) && e.target !== timbreBtn) cerrarTimbreMenu();
+  });
 
   function renderMensajes() {
     if (!mensajes.length) {
       lista.innerHTML = `<div class="chat-vacio">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12Z"/></svg>
-        Todavía no hay mensajes.<br>Escribí algo o usá un mensaje rápido.</div>`;
+        Todavía no hay mensajes.<br>Escribí algo para empezar.</div>`;
       return;
     }
     let html = '';
@@ -399,11 +467,14 @@
       const tipo = m.tipo === 'urgente' ? 'urgente' : m.tipo === 'rapido' ? 'rapido' : '';
       // Mensajes seguidos del mismo equipo dentro de 3 min se agrupan.
       const agrupado = !tipo.includes('urgente') && m.de === autorPrevio && ts - tsPrevio < 180000;
-      const clases = ['chat-msg', esMio(m) ? 'mio' : '', tipo, agrupado ? 'agrupado' : ''].join(' ');
+      // Los timbres entre otros dos equipos se ven atenuados: quedan de
+      // registro pero no son con este equipo.
+      const ajeno = tipo === 'urgente' && !esMio(m) && !esParaMi(m);
+      const clases = ['chat-msg', esMio(m) ? 'mio' : '', tipo, agrupado ? 'agrupado' : '', ajeno ? 'ajeno' : ''].join(' ');
       let cuerpo;
       if (tipo === 'urgente') {
         cuerpo = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-          ${esMio(m) ? 'Hiciste un llamado urgente' : esc(m.de) + ' hizo un llamado urgente'}
+          <span>${textoTimbre(m)}</span>
           <span class="chat-hora">${horaCorta(ts)}</span>`;
       } else {
         cuerpo = `${tipo === 'rapido' ? '<span class="chat-rayo" aria-hidden="true">⚡</span>' : ''}${esc(m.texto)}<span class="chat-hora">${horaCorta(ts)}</span>`;
@@ -418,11 +489,18 @@
     lista.innerHTML = html;
   }
 
+  function textoTimbre(m) {
+    const de = esMio(m) ? 'Tocaste timbre' : esc(m.de) + ' tocó timbre';
+    if (!m.para) return de + ' a todos';
+    const aMi = !esMio(m) && esParaMi(m);
+    return de + ' a ' + (aMi ? '<strong>vos</strong>' : esc(m.para));
+  }
+
   function scrollAlFinal() { lista.scrollTop = lista.scrollHeight; }
 
   // ----------------------------------------------------------- no leídos --
   function noLeidos() {
-    return mensajes.filter(m => !esMio(m) && (m.ts || 0) > ultimoLeido);
+    return mensajes.filter(m => !esMio(m) && (m.ts || 0) > ultimoLeido && (m.tipo !== 'urgente' || esParaMi(m)));
   }
 
   function marcarLeido() {
@@ -502,7 +580,7 @@
     if (cargaInicial || esMio(m)) return;
     const reciente = !m.ts || ahoraServidor() - m.ts < URGENTE_VIGENCIA_MS;
     if (m.tipo === 'urgente') {
-      if (reciente) mostrarAlarma(m);
+      if (reciente && esParaMi(m)) mostrarAlarma(m);
       return;
     }
     const visible = abierto && document.visibilityState === 'visible';
@@ -517,7 +595,12 @@
   });
 
   // ------------------------------------------------------------- arranque --
+  // Sólo trae los mensajes vencidos (los que va a borrar), y cada equipo lo
+  // hace como mucho una vez cada 12 h para no consultar Firebase de más.
   function limpiarViejos() {
+    const ultima = Number(lsGet(LS_LIMPIEZA)) || 0;
+    if (Date.now() - ultima < 12 * 3600000) return;
+    lsSet(LS_LIMPIEZA, String(Date.now()));
     const corte = prefijoPushDe(ahoraServidor() - DIAS_RETENCION * 86400000);
     refMensajes.orderByKey().endAt(corte).limitToFirst(200).once('value').then(snap => {
       const borrar = {};
@@ -541,8 +624,6 @@
       presencias = snap.val() || {};
       renderEquipos();
     });
-    // Refresca los "hace X min" de los desconectados.
-    setInterval(() => { if (abierto) renderEquipos(); }, 60000);
 
     const consulta = refMensajes.limitToLast(MAX_MENSAJES);
     consulta.on('child_added', snap => {
