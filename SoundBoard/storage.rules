@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Reglas de Firebase Storage para SoundBoard Showroom.
+// El showroom funciona sin login, así que el acceso es público,
+// pero limitado a la carpeta audios/ y sólo a archivos de audio de hasta 20MB.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /audios/{fileName} {
+      // Dashboard descarga los audios para reproducirlos.
+      allow read: if true;
+
+      // Subida desde upload.html: sólo audio, no vacío, máximo 20MB
+      // (mismo límite que MAX_SIZE en js/upload.js).
+      allow create: if request.resource.size > 0
+                    && request.resource.size <= 20 * 1024 * 1024
+                    && request.resource.contentType.matches('audio/.*');
+
+      // Nadie puede pisar un archivo existente (cada subida usa un nombre nuevo).
+      allow update: if false;
+
+      // Botón "eliminar" del dashboard borra el archivo.
+      allow delete: if true;
+    }
+
+    // Todo lo que esté fuera de audios/ queda bloqueado.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

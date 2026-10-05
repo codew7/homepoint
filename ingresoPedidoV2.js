@@ -3211,7 +3211,8 @@ if (cargarClienteBtn) {
 // Las <option> que trae el HTML son sólo el respaldo para cuando la planilla no
 // responde: sin vendedor el pedido no se puede guardar, así que la caja nunca
 // puede quedarse con el desplegable vacío.
-const VENDEDORES_RANGO = 'Vendedores!A:A';
+// La consulta a la planilla la hace usuarioActivo.js (una sola por carga de
+// página, compartida con el selector de usuario).
 
 // Agrega el valor al desplegable si todavía no figura entre las opciones.
 // Un pedido viejo puede tener un vendedor que ya no está en la planilla: sin la
@@ -3228,25 +3229,8 @@ function asegurarOpcionVendedor(valor) {
 }
 
 function cargarVendedoresDesdeSheets() {
-  if (!form.vendedor || typeof GOOGLE_SHEETS_CONFIG === 'undefined') return;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(VENDEDORES_RANGO)}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
-  fetch(url)
-    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-    .then(data => {
-      const filas = data.values || [];
-      const vistos = new Set();
-      const nombres = [];
-      filas.forEach((fila, i) => {
-        const nombre = (fila && fila[0] ? String(fila[0]) : '').trim();
-        if (!nombre) return;
-        // El rango arranca en A1: si esa celda es el rótulo de la columna, no es un vendedor.
-        if (i === 0 && ['vendedor', 'vendedores', 'nombre'].includes(nombre.toLowerCase())) return;
-        const clave = nombre.toLowerCase();
-        if (vistos.has(clave)) return;
-        vistos.add(clave);
-        nombres.push(nombre);
-      });
-
+  if (!form.vendedor || !window.UsuarioActivo) return;
+  UsuarioActivo.cargarVendedores().then(nombres => {
       // Planilla vacía o ilegible: se conservan las opciones de respaldo del HTML.
       if (nombres.length === 0) return;
 
@@ -3266,12 +3250,42 @@ function cargarVendedoresDesdeSheets() {
         asegurarOpcionVendedor(seleccionado);
         form.vendedor.value = seleccionado;
       }
-    })
-    .catch(err => {
-      console.warn('No se pudo cargar la lista de vendedores desde Google Sheets:', err);
     });
 }
 cargarVendedoresDesdeSheets();
+
+// === USUARIO ACTIVO → VENDEDOR ===
+// Quien eligió su nombre al entrar (usuarioActivo.js) queda como vendedor de
+// los pedidos nuevos. Prioridades: el modo WhatsApp manda sobre el usuario, y
+// un pedido que se está editando conserva el vendedor con el que se guardó.
+function usuarioActivo() {
+  return window.UsuarioActivo ? UsuarioActivo.actual() : '';
+}
+
+function vendedorPorDefecto() {
+  return busquedaManualPersistente ? 'WhatsApp' : usuarioActivo();
+}
+
+// `anterior` es el usuario que estaba antes: si el campo todavía lo tenía, se
+// lo reemplaza; si alguien eligió otro vendedor a mano, se respeta.
+// Se mira la URL y no `pedidoId`: el botón Nuevo quita el ?id= sin recargar.
+function aplicarVendedorPorDefecto(anterior) {
+  if (!form.vendedor || new URLSearchParams(window.location.search).get('id')) return;
+  const actualCampo = form.vendedor.value;
+  const reemplazable = !actualCampo ||
+    (anterior && actualCampo.toLowerCase() === anterior.toLowerCase());
+  if (!reemplazable) return;
+  const valor = vendedorPorDefecto();
+  if (!valor) return;
+  asegurarOpcionVendedor(valor);
+  form.vendedor.value = valor;
+}
+
+document.addEventListener('usuarioactivo:cambio', e => {
+  aplicarVendedorPorDefecto(e.detail && e.detail.anterior);
+});
+// La pestaña puede venir con el usuario ya elegido (recarga tras guardar).
+aplicarVendedorPorDefecto();
 
 // === ALIAS: Autocompletar desde el nodo "alias" de Firebase RTDB (+ cache en localStorage) ===
 let aliasHistorial = [];      // cache offline en localStorage
@@ -4363,6 +4377,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // Limpiar URL para quitar parámetro ?id= si existe
     const newUrl = window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
+
+    // Recién sin ?id=: vendedor = usuario activo (o WhatsApp si ese modo sigue).
+    aplicarVendedorPorDefecto();
     
     // Enfocar en el campo de búsqueda de artículos
     if (searchInput) {
@@ -4372,12 +4389,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     if (window.desactivarModoAdmin) window.desactivarModoAdmin();
     if (window.contraerExtraCliente) window.contraerExtraCliente();
 
-    // El modo Whatsapp sobrevive al restablecimiento: reponer vendedor y búsqueda manual
+    // El modo Whatsapp sobrevive al restablecimiento: el vendedor ya lo repuso
+    // aplicarVendedorPorDefecto(); falta la búsqueda manual.
     if (busquedaManualPersistente) {
-      if (form.vendedor) {
-        asegurarOpcionVendedor('WhatsApp');
-        form.vendedor.value = 'WhatsApp';
-      }
       if (!busquedaManualHabilitada && typeof activarBusquedaManual === 'function') {
         activarBusquedaManual();
       }
@@ -4408,9 +4422,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     const btnConf = document.getElementById('adminPassConfirmBtn');
     const btnCanc = document.getElementById('adminPassCancelBtn');
     const adminBtn = document.getElementById('adminModeBtn');
-    const whatsappBtn = document.getElementById('whatsappModeBtn');
 
     let modoPass = 'admin';
+    // El modo WhatsApp se pide desde el botón "WhatsApp" del selector de
+    // usuario (usuarioActivo.js), que espera saber si la contraseña fue bien.
+    let alResolverWhatsapp = null;
 
     function abrirModal(modo) {
       modoPass = modo || 'admin';
@@ -4425,6 +4441,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     function cerrarModal() {
       overlay.style.display = 'none';
+      // Cerrar sin confirmar = cancelado.
+      if (alResolverWhatsapp) { const cb = alResolverWhatsapp; alResolverWhatsapp = null; cb(false); }
     }
 
     function activarModoAdmin() {
@@ -4439,19 +4457,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     function activarModoWhatsapp(persistir) {
       busquedaManualPersistente = true;
       if (typeof activarBusquedaManual === 'function') activarBusquedaManual();
-      if (whatsappBtn) {
-        whatsappBtn.style.background = '#25D366';
-        whatsappBtn.style.color = '#fff';
-        whatsappBtn.title = 'Desactivar modo WhatsApp';
-      }
       if (persistir !== false) {
         try { sessionStorage.setItem(WHATSAPP_MODE_KEY, '1'); } catch (e) {}
       }
-      // Preseleccionar el vendedor sólo si está vacío y no se está editando un pedido
-      if (!pedidoId && form.vendedor && !form.vendedor.value) {
-        asegurarOpcionVendedor('WhatsApp');
-        form.vendedor.value = 'WhatsApp';
-      }
+      // Preseleccionar WhatsApp si el vendedor está vacío o es el usuario
+      // activo (puesto solo); no si se está editando un pedido.
+      aplicarVendedorPorDefecto(usuarioActivo());
     }
 
     function desactivarModoWhatsapp() {
@@ -4459,20 +4470,20 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (busquedaManualHabilitada && typeof desactivarBusquedaManual === 'function') {
         desactivarBusquedaManual();
       }
-      if (whatsappBtn) {
-        whatsappBtn.style.background = '';
-        whatsappBtn.style.color = '';
-        whatsappBtn.title = '';
-      }
       try { sessionStorage.removeItem(WHATSAPP_MODE_KEY); } catch (e) {}
+      // Si el vendedor había quedado en WhatsApp por el modo, vuelve al usuario.
+      aplicarVendedorPorDefecto('WhatsApp');
     }
 
     function confirmar() {
       const passEsperada = modoPass === 'whatsapp' ? WHATSAPP_PASS : ADMIN_PASS;
       if (input.value === passEsperada) {
+        const cb = modoPass === 'whatsapp' ? alResolverWhatsapp : null;
+        alResolverWhatsapp = null;
         if (modoPass === 'whatsapp') activarModoWhatsapp(true);
         else activarModoAdmin();
         cerrarModal();
+        if (cb) cb(true);
       } else {
         errDiv.style.display = 'block';
         input.value = '';
@@ -4497,13 +4508,17 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     adminBtn.addEventListener('click', function() { abrirModal('admin'); });
 
-    if (whatsappBtn) {
-      whatsappBtn.addEventListener('click', function() {
-        // Toggle: si el modo ya está activo se apaga sin pedir contraseña
-        if (busquedaManualPersistente) desactivarModoWhatsapp();
-        else abrirModal('whatsapp');
-      });
-    }
+    // Lo usa el selector de usuario: elegir "WhatsApp" pide la contraseña y
+    // prende el modo; elegir a una persona lo apaga sin pedir nada.
+    window.modoWhatsapp = {
+      activo: () => busquedaManualPersistente,
+      pedir(cb) {
+        if (busquedaManualPersistente) { cb(true); return; }
+        abrirModal('whatsapp');
+        alResolverWhatsapp = cb;
+      },
+      desactivar() { if (busquedaManualPersistente) desactivarModoWhatsapp(); }
+    };
 
     btnConf.addEventListener('click', confirmar);
     btnCanc.addEventListener('click', cerrarModal);

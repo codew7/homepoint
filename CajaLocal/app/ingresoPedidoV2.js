@@ -45,36 +45,6 @@ window.homepointDesactivarCache = function () {
   });
 };
 
-// === VUELTA AL HISTORIAL DESPUÉS DE GUARDAR ===
-// Antes el pedido se abría desde el historial en una ventana aparte: al guardar
-// se recargaba la ventana madre y ésta se cerraba sola. Ahora todo pasa en la
-// misma ventana de la app, así que "cerrar" es navegar: se vuelve al historial
-// cuando se vino de ahí (marca que deja historialRecientes.html) y, si no, se
-// arranca un pedido nuevo. La rama window.opener se conserva por si alguna
-// pantalla vieja todavía abre la caja como popup.
-function volverDespuesDeGuardar() {
-  if (window.opener && !window.opener.closed) {
-    window.opener.location.reload();
-    window.close();
-    return;
-  }
-  let desdeHistorial = false;
-  try {
-    desdeHistorial = sessionStorage.getItem('cajaVolverAlHistorial') === '1';
-    sessionStorage.removeItem('cajaVolverAlHistorial');
-  } catch (e) {}
-  window.location.href = desdeHistorial ? 'historialRecientes.html' : 'ingresoPedidoV2.html';
-}
-
-// Si esta pantalla no está editando un pedido (no hay ?id= en la URL), la marca
-// de "volver al historial" no corresponde: quedó de una edición anterior que se
-// abandonó sin guardar.
-try {
-  if (!new URLSearchParams(location.search).get('id')) {
-    sessionStorage.removeItem('cajaVolverAlHistorial');
-  }
-} catch (e) {}
-
 // === TIPOS DE LÍNEA: VENTA / DEVOLUCION / GARANTIA ===
 // Una orden puede mezclar venta con la devolución de un artículo de un pedido anterior.
 // El signo económico y el tipo de movimiento de inventario se derivan del tipo de línea:
@@ -2485,7 +2455,6 @@ function getTipoCliente() {
             try {
               // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
               await guardarPedidoConMovimientos(pedidoId, pedidoObj, items);
-              pedidoRecienGuardado = true;
 
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
@@ -2493,7 +2462,14 @@ function getTipoCliente() {
 
               messageDiv.textContent = 'Pedido actualizado correctamente.';
               messageDiv.style.color = 'green';
-              setTimeout(volverDespuesDeGuardar, 1200);
+              setTimeout(() => {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.location.reload();
+                  window.close();
+                } else {
+                  window.location.href = 'ingresoPedidoV2.html';
+                }
+              }, 1200);
             } catch (err) {
               // DESBLOQUEAR INTERFAZ en caso de error
               desbloquearInterfaz();
@@ -2516,9 +2492,6 @@ function getTipoCliente() {
           // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
           guardarPedidoConMovimientos(pedidoRef.key, pedidoObj, items)
             .then(async () => {
-              // El pedido ya está en Firebase: si se cierra la ventana con el modal
-              // de impresión abierto, no hay que anotarlo como descartado.
-              pedidoRecienGuardado = true;
               // Guardar alias en localStorage si se usó uno
               if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
                 guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
@@ -2536,7 +2509,6 @@ function getTipoCliente() {
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
                   items = [];
-                  pedidoRecienGuardado = false;
                   limpiarEstadoCambios();
                   renderItems();
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2547,7 +2519,6 @@ function getTipoCliente() {
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
                   items = [];
-                  pedidoRecienGuardado = false;
                   limpiarEstadoCambios();
                   renderItems();
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2958,12 +2929,26 @@ function getTipoCliente() {
                     generarReciboYImprimir(pedidoId);
                     messageDiv.textContent = 'Pedido actualizado correctamente.';
                     messageDiv.style.color = 'green';
-                    setTimeout(volverDespuesDeGuardar, 1200);
+                    setTimeout(() => {
+                      if (window.opener && !window.opener.closed) {
+                        window.opener.location.reload();
+                        window.close();
+                      } else {
+                        window.location.href = 'ingresoPedidoV2.html';
+                      }
+                    }, 1200);
                   },
                   function() { // No imprimir
                     messageDiv.textContent = 'Pedido actualizado correctamente.';
                     messageDiv.style.color = 'green';
-                    setTimeout(volverDespuesDeGuardar, 1200);
+                    setTimeout(() => {
+                      if (window.opener && !window.opener.closed) {
+                        window.opener.location.reload();
+                        window.close();
+                      } else {
+                        window.location.href = 'ingresoPedidoV2.html';
+                      }
+                    }, 1200);
                   }
                 );
               })
@@ -3226,7 +3211,8 @@ if (cargarClienteBtn) {
 // Las <option> que trae el HTML son sólo el respaldo para cuando la planilla no
 // responde: sin vendedor el pedido no se puede guardar, así que la caja nunca
 // puede quedarse con el desplegable vacío.
-const VENDEDORES_RANGO = 'Vendedores!A:A';
+// La consulta a la planilla la hace usuarioActivo.js (una sola por carga de
+// página, compartida con el selector de usuario).
 
 // Agrega el valor al desplegable si todavía no figura entre las opciones.
 // Un pedido viejo puede tener un vendedor que ya no está en la planilla: sin la
@@ -3243,25 +3229,8 @@ function asegurarOpcionVendedor(valor) {
 }
 
 function cargarVendedoresDesdeSheets() {
-  if (!form.vendedor || typeof GOOGLE_SHEETS_CONFIG === 'undefined') return;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(VENDEDORES_RANGO)}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
-  fetch(url)
-    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-    .then(data => {
-      const filas = data.values || [];
-      const vistos = new Set();
-      const nombres = [];
-      filas.forEach((fila, i) => {
-        const nombre = (fila && fila[0] ? String(fila[0]) : '').trim();
-        if (!nombre) return;
-        // El rango arranca en A1: si esa celda es el rótulo de la columna, no es un vendedor.
-        if (i === 0 && ['vendedor', 'vendedores', 'nombre'].includes(nombre.toLowerCase())) return;
-        const clave = nombre.toLowerCase();
-        if (vistos.has(clave)) return;
-        vistos.add(clave);
-        nombres.push(nombre);
-      });
-
+  if (!form.vendedor || !window.UsuarioActivo) return;
+  UsuarioActivo.cargarVendedores().then(nombres => {
       // Planilla vacía o ilegible: se conservan las opciones de respaldo del HTML.
       if (nombres.length === 0) return;
 
@@ -3281,12 +3250,42 @@ function cargarVendedoresDesdeSheets() {
         asegurarOpcionVendedor(seleccionado);
         form.vendedor.value = seleccionado;
       }
-    })
-    .catch(err => {
-      console.warn('No se pudo cargar la lista de vendedores desde Google Sheets:', err);
     });
 }
 cargarVendedoresDesdeSheets();
+
+// === USUARIO ACTIVO → VENDEDOR ===
+// Quien eligió su nombre al entrar (usuarioActivo.js) queda como vendedor de
+// los pedidos nuevos. Prioridades: el modo WhatsApp manda sobre el usuario, y
+// un pedido que se está editando conserva el vendedor con el que se guardó.
+function usuarioActivo() {
+  return window.UsuarioActivo ? UsuarioActivo.actual() : '';
+}
+
+function vendedorPorDefecto() {
+  return busquedaManualPersistente ? 'WhatsApp' : usuarioActivo();
+}
+
+// `anterior` es el usuario que estaba antes: si el campo todavía lo tenía, se
+// lo reemplaza; si alguien eligió otro vendedor a mano, se respeta.
+// Se mira la URL y no `pedidoId`: el botón Nuevo quita el ?id= sin recargar.
+function aplicarVendedorPorDefecto(anterior) {
+  if (!form.vendedor || new URLSearchParams(window.location.search).get('id')) return;
+  const actualCampo = form.vendedor.value;
+  const reemplazable = !actualCampo ||
+    (anterior && actualCampo.toLowerCase() === anterior.toLowerCase());
+  if (!reemplazable) return;
+  const valor = vendedorPorDefecto();
+  if (!valor) return;
+  asegurarOpcionVendedor(valor);
+  form.vendedor.value = valor;
+}
+
+document.addEventListener('usuarioactivo:cambio', e => {
+  aplicarVendedorPorDefecto(e.detail && e.detail.anterior);
+});
+// La pestaña puede venir con el usuario ya elegido (recarga tras guardar).
+aplicarVendedorPorDefecto();
 
 // === ALIAS: Autocompletar desde el nodo "alias" de Firebase RTDB (+ cache en localStorage) ===
 let aliasHistorial = [];      // cache offline en localStorage
@@ -4322,61 +4321,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     return { exitosos, errores };
   }
 
-  // === REGISTRO LOCAL DE PEDIDOS DESCARTADOS ===
-  // Cada vez que se pierde un pedido con artículos cargados sin haberlo ingresado
-  // queda anotado en registro_nuevo.txt (carpeta raíz del paquete). Dos motivos:
-  //   'Nuevo'  -> el operador presionó el botón Nuevo y confirmó.
-  //   'Cierre' -> se cerró la ventana, se recargó o se navegó a otra pantalla.
-  // El archivo lo escribe el servidor local (sistema/servidor.ps1, endpoint
-  // POST /__log): desde el navegador no se puede escribir en disco. En la versión
-  // web no existe ese endpoint y la llamada falla en silencio.
-  //
-  // Un pedido que ya se guardó en Firebase no es un descarte: `pedidoRecienGuardado`
-  // cubre la ventana entre el guardado y el vaciado del carrito (el modal de
-  // impresión, o la navegación al historial tras editar).
-  let pedidoRecienGuardado = false;
-
-  function registrarDescarteEnLog(motivo) {
-    if (!items.length || pedidoRecienGuardado) return;
-    try {
-      const subtotal = items.reduce((acc, it) => acc + totalLinea(it), 0);
-      const datos = {
-        motivo: motivo || 'Nuevo',
-        articulos: items.map(it => ({
-          nombre: (it.nombre || '').trim(),
-          cantidad: parseInt(it.cantidad, 10) || 0,
-          tipo: it.tipoLinea || 'VENTA'
-        })),
-        subtotal: subtotal.toLocaleString('es-AR', { maximumFractionDigits: 0 }),
-        vendedor: form.vendedor ? form.vendedor.value.trim() : ''
-      };
-      const cuerpo = JSON.stringify(datos);
-      // Al cerrar la ventana un fetch común puede quedar cortado a mitad de camino;
-      // sendBeacon está pensado justamente para mandar datos durante la descarga.
-      if (motivo === 'Cierre' && navigator.sendBeacon) {
-        navigator.sendBeacon('/__log', new Blob([cuerpo], { type: 'application/json; charset=utf-8' }));
-        return;
-      }
-      fetch('/__log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: cuerpo,
-        keepalive: true
-      }).catch(() => {});
-    } catch (e) {
-      // El registro es secundario: nunca debe frenar al operador.
-    }
-  }
-
-  // Cierre de la ventana, recarga o navegación (por ejemplo al botón Historial):
-  // pagehide es el último evento confiable antes de que la página desaparezca.
-  // Al editar un pedido existente (?id=) los artículos ya están ingresados, así
-  // que cerrar sin guardar no es un pedido perdido y no se anota.
-  window.addEventListener('pagehide', function() {
-    if (pedidoId) return;
-    registrarDescarteEnLog('Cierre');
-  });
-
   // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===
   function restablecerFormulario() {
     // Confirmar con el usuario si hay datos
@@ -4390,10 +4334,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const confirmar = confirm('¿Está seguro de que desea crear un nuevo pedido? Se perderán los datos actuales.');
       if (!confirmar) return;
     }
-
-    // Se anota antes de limpiar: después de este punto los artículos ya no existen.
-    registrarDescarteEnLog('Nuevo');
-
+    
     // Limpiar campos del formulario
     form.nombre.value = '';
     form.telefono.value = '';
@@ -4436,6 +4377,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // Limpiar URL para quitar parámetro ?id= si existe
     const newUrl = window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
+
+    // Recién sin ?id=: vendedor = usuario activo (o WhatsApp si ese modo sigue).
+    aplicarVendedorPorDefecto();
     
     // Enfocar en el campo de búsqueda de artículos
     if (searchInput) {
@@ -4445,12 +4389,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     if (window.desactivarModoAdmin) window.desactivarModoAdmin();
     if (window.contraerExtraCliente) window.contraerExtraCliente();
 
-    // El modo Whatsapp sobrevive al restablecimiento: reponer vendedor y búsqueda manual
+    // El modo Whatsapp sobrevive al restablecimiento: el vendedor ya lo repuso
+    // aplicarVendedorPorDefecto(); falta la búsqueda manual.
     if (busquedaManualPersistente) {
-      if (form.vendedor) {
-        asegurarOpcionVendedor('WhatsApp');
-        form.vendedor.value = 'WhatsApp';
-      }
       if (!busquedaManualHabilitada && typeof activarBusquedaManual === 'function') {
         activarBusquedaManual();
       }
@@ -4481,9 +4422,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     const btnConf = document.getElementById('adminPassConfirmBtn');
     const btnCanc = document.getElementById('adminPassCancelBtn');
     const adminBtn = document.getElementById('adminModeBtn');
-    const whatsappBtn = document.getElementById('whatsappModeBtn');
 
     let modoPass = 'admin';
+    // El modo WhatsApp se pide desde el botón "WhatsApp" del selector de
+    // usuario (usuarioActivo.js), que espera saber si la contraseña fue bien.
+    let alResolverWhatsapp = null;
 
     function abrirModal(modo) {
       modoPass = modo || 'admin';
@@ -4498,6 +4441,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     function cerrarModal() {
       overlay.style.display = 'none';
+      // Cerrar sin confirmar = cancelado.
+      if (alResolverWhatsapp) { const cb = alResolverWhatsapp; alResolverWhatsapp = null; cb(false); }
     }
 
     function activarModoAdmin() {
@@ -4512,19 +4457,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     function activarModoWhatsapp(persistir) {
       busquedaManualPersistente = true;
       if (typeof activarBusquedaManual === 'function') activarBusquedaManual();
-      if (whatsappBtn) {
-        whatsappBtn.style.background = '#25D366';
-        whatsappBtn.style.color = '#fff';
-        whatsappBtn.title = 'Desactivar modo WhatsApp';
-      }
       if (persistir !== false) {
         try { sessionStorage.setItem(WHATSAPP_MODE_KEY, '1'); } catch (e) {}
       }
-      // Preseleccionar el vendedor sólo si está vacío y no se está editando un pedido
-      if (!pedidoId && form.vendedor && !form.vendedor.value) {
-        asegurarOpcionVendedor('WhatsApp');
-        form.vendedor.value = 'WhatsApp';
-      }
+      // Preseleccionar WhatsApp si el vendedor está vacío o es el usuario
+      // activo (puesto solo); no si se está editando un pedido.
+      aplicarVendedorPorDefecto(usuarioActivo());
     }
 
     function desactivarModoWhatsapp() {
@@ -4532,20 +4470,20 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (busquedaManualHabilitada && typeof desactivarBusquedaManual === 'function') {
         desactivarBusquedaManual();
       }
-      if (whatsappBtn) {
-        whatsappBtn.style.background = '';
-        whatsappBtn.style.color = '';
-        whatsappBtn.title = '';
-      }
       try { sessionStorage.removeItem(WHATSAPP_MODE_KEY); } catch (e) {}
+      // Si el vendedor había quedado en WhatsApp por el modo, vuelve al usuario.
+      aplicarVendedorPorDefecto('WhatsApp');
     }
 
     function confirmar() {
       const passEsperada = modoPass === 'whatsapp' ? WHATSAPP_PASS : ADMIN_PASS;
       if (input.value === passEsperada) {
+        const cb = modoPass === 'whatsapp' ? alResolverWhatsapp : null;
+        alResolverWhatsapp = null;
         if (modoPass === 'whatsapp') activarModoWhatsapp(true);
         else activarModoAdmin();
         cerrarModal();
+        if (cb) cb(true);
       } else {
         errDiv.style.display = 'block';
         input.value = '';
@@ -4570,13 +4508,17 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     adminBtn.addEventListener('click', function() { abrirModal('admin'); });
 
-    if (whatsappBtn) {
-      whatsappBtn.addEventListener('click', function() {
-        // Toggle: si el modo ya está activo se apaga sin pedir contraseña
-        if (busquedaManualPersistente) desactivarModoWhatsapp();
-        else abrirModal('whatsapp');
-      });
-    }
+    // Lo usa el selector de usuario: elegir "WhatsApp" pide la contraseña y
+    // prende el modo; elegir a una persona lo apaga sin pedir nada.
+    window.modoWhatsapp = {
+      activo: () => busquedaManualPersistente,
+      pedir(cb) {
+        if (busquedaManualPersistente) { cb(true); return; }
+        abrirModal('whatsapp');
+        alResolverWhatsapp = cb;
+      },
+      desactivar() { if (busquedaManualPersistente) desactivarModoWhatsapp(); }
+    };
 
     btnConf.addEventListener('click', confirmar);
     btnCanc.addEventListener('click', cerrarModal);

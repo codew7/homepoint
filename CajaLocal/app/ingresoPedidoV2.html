@@ -27,6 +27,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="config.js"></script>
+  <!-- Selector "¿Quién está en la caja?": va antes del script de login porque
+       mostrarPanel() le delega la apertura de la caja. -->
+  <script src="usuarioActivo.js"></script>
   <!-- Agregar jQuery y Select2 JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -50,9 +53,13 @@
       }, 100);
     }
 
+    // La caja se muestra recién con sesión; si esta pestaña todavía no eligió
+    // usuario, usuarioActivo.js abre el selector encima.
     function mostrarPanel() {
       document.getElementById('loginOverlay').style.display = 'none';
-      document.getElementById('mainContainer').style.display = '';
+      UsuarioActivo.alAutenticar(() => {
+        document.getElementById('mainContainer').style.display = '';
+      });
     }
 
     function iniciarSesion() {
@@ -154,6 +161,16 @@
            contenedor .actions — ingresoPedidoV2.js resuelve el botón Imprimir con
            el selector `.actions button.secondary`. -->
       <nav class="pos-nav" aria-label="Secciones">
+        <!-- Usuario activo (usuarioActivo.js lo completa). Tocarlo abre el selector. -->
+        <button type="button" id="usuarioActualBtn" class="usr-chip" hidden>
+          <span class="usr-chip-avatar" aria-hidden="true"></span>
+          <span class="usr-chip-texto">
+            <span class="usr-chip-label">Usuario</span>
+            <span class="usr-chip-nombre"></span>
+          </span>
+          <svg class="usr-chip-flecha" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+        </button>
+        <span class="pos-nav-sep" aria-hidden="true"></span>
         <button type="button" id="chatNavBtn" class="secondary chat-nav-btn" title="Mensajes entre equipos (F2)" aria-label="Mensajes" aria-expanded="false">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12Z"/></svg>
           Mensajes
@@ -163,11 +180,8 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
           Cambios
         </button>
-        <button type="button" id="whatsappModeBtn" class="secondary">Whatsapp</button>
         <button type="button" id="adminModeBtn" class="secondary">Admin</button>
-        <!-- Sin target="_blank": la caja corre como aplicacion (una sola ventana),
-             asi que el historial se abre navegando en esta misma ventana. -->
-        <a href="historialRecientes.html" id="historialBtn" class="secondary">Historial</a>
+        <a href="historialRecientes.html" id="historialBtn" class="secondary" target="_blank" rel="noopener">Historial</a>
         <a href="ingresoPedidoV2.html" id="nuevoBtn" class="secondary nav-destacado">Nuevo</a>
       </nav>
     </header>
@@ -426,7 +440,8 @@
           <!-- Nota, vendedor y alias -->
           <div class="cobro-extra">
             <!-- La lista de vendedores la reescribe ingresoPedidoV2.js con el rango
-                 Vendedores!A:A de la planilla. Estas opciones son sólo el respaldo
+                 Vendedores!A:A de la planilla (consulta compartida con el selector
+                 de usuario de usuarioActivo.js, que además lo completa solo). Estas opciones son sólo el respaldo
                  para cuando Google Sheets no responde: sin vendedor no se puede
                  guardar el pedido, así que el desplegable nunca puede quedar vacío. -->
             <div class="form-row">

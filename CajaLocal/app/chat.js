@@ -25,7 +25,10 @@
   const refMensajes = db.ref('chat/mensajes');
   const refPresencia = db.ref('chat/presencia');
 
-  let miNombre = lsGet(LS_NOMBRE) || '';
+  // Con el selector de usuario (usuarioActivo.js) el nombre del chat es el de
+  // quien está en la caja; sin él, el nombre del equipo que se guardó acá.
+  const conSelector = !!window.UsuarioActivo;
+  let miNombre = (conSelector ? UsuarioActivo.actual() : lsGet(LS_NOMBRE)) || '';
   let miConexionRef = null;
   let ultimoLeido = Number(lsGet(LS_LEIDO)) || 0;
   let offsetServidor = 0;
@@ -36,7 +39,8 @@
   let abierto = false;
   let alarmaTimer = null;
   let tituloOriginal = document.title;
-  let sonidoActivo = lsGet(LS_SONIDO) !== 'off';
+  // Arranca en silencio: sólo suena si alguien lo activó en este equipo.
+  let sonidoActivo = lsGet(LS_SONIDO) === 'on';
 
   // ------------------------------------------------------------- helpers --
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
@@ -148,8 +152,8 @@
           </button>
           </div>
         </div>
-        <button type="button" id="chatYo" class="chat-yo" title="Cambiar el nombre de este equipo">
-          Este equipo: <strong id="chatYoNombre"></strong>
+        <button type="button" id="chatYo" class="chat-yo" title="${conSelector ? 'Cambiar de usuario' : 'Cambiar el nombre de este equipo'}">
+          ${conSelector ? 'Usuario' : 'Este equipo'}: <strong id="chatYoNombre"></strong>
           <svg class="chat-yo-editar" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </button>
         <div id="chatEquipos" class="chat-equipos" aria-label="Equipos"></div>
@@ -277,6 +281,7 @@
 
   // ------------------------------------------------------- nombre equipo --
   function pedirNombre() {
+    if (conSelector) { cerrar(); UsuarioActivo.abrir(); return; }
     nombreInput.value = miNombre;
     nombreError.style.display = 'none';
     nombreOverlay.style.display = 'flex';
@@ -297,22 +302,34 @@
     if (otro && !esMio && otro.conexiones) {
       return errorNombre('"' + otro.nombre + '" ya está conectado en otro equipo. Elegí otro nombre.');
     }
+    usarNombre(nombre);
+    nombreOverlay.style.display = 'none';
+    abrir();
+  }
+
+  function usarNombre(nombre) {
     const anterior = miNombre;
     miNombre = nombre;
     lsSet(LS_NOMBRE, nombre);
     $('chatYoNombre').textContent = nombre;
     if (anterior !== nombre) {
-      conectarPresencia();
+      // Antes de iniciar(), la presencia la anota '.info/connected'.
+      if (iniciado) conectarPresencia();
       // Si el nombre viejo quedó sin pestañas abiertas, se borra de la lista
       // para que no figure para siempre como un equipo desconectado.
-      if (anterior && claveDe(anterior) !== clave) {
+      if (anterior && claveDe(anterior) !== claveDe(nombre)) {
         const viejo = refPresencia.child(claveDe(anterior));
         viejo.child('conexiones').once('value').then(s => { if (!s.exists()) viejo.remove(); });
       }
+      renderEquipos();
+      renderMensajes();
     }
-    nombreOverlay.style.display = 'none';
-    abrir();
   }
+
+  // Cada vez que alguien elige su nombre en el selector de la caja.
+  document.addEventListener('usuarioactivo:cambio', e => {
+    if (e.detail && e.detail.nombre) usarNombre(e.detail.nombre);
+  });
 
   function errorNombre(msg) {
     nombreError.textContent = msg;
@@ -658,7 +675,8 @@
       limpiarViejos();
     });
 
-    if (!miNombre) setTimeout(pedirNombre, 600);
+    // Con selector, el nombre lo pide usuarioActivo.js al entrar.
+    if (!miNombre && !conSelector) setTimeout(pedirNombre, 600);
   }
 
   window.addEventListener('beforeunload', () => {

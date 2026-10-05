@@ -2124,6 +2124,409 @@ select {
 }
 
 /* ==========================================================================
+   USUARIO ACTIVO — selector "¿Quién está en la caja?" y chip del encabezado
+   (usuarioActivo.js). Mismo grafito que el panel de cobro: la caja se ve
+   detrás, esmerilada, y el selector flota encima como una capa de material.
+   ========================================================================== */
+
+.usr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: grid;
+  place-items: center;
+  padding: var(--s8) var(--s5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--pos-ink);
+  background:
+    radial-gradient(900px 520px at 50% -8%, rgba(124, 95, 208, .30), transparent 62%),
+    radial-gradient(700px 420px at 100% 110%, rgba(63, 143, 230, .10), transparent 60%),
+    rgba(17, 18, 22, .86);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  opacity: 0;
+  transition: opacity 240ms cubic-bezier(.2, 0, .2, 1);
+}
+.usr-overlay[hidden] { display: none; }
+.usr-overlay.usr-visible { opacity: 1; }
+.usr-overlay.usr-saliendo { opacity: 0; transition-duration: 300ms; }
+
+/* Grano muy leve: le saca el aspecto de degradado plano de pantalla. */
+.usr-overlay::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+html.usr-abierto, html.usr-abierto body { overflow: hidden; }
+
+.usr-panel {
+  position: relative;
+  width: min(960px, 100%);
+  text-align: center;
+  transform: translateY(14px) scale(.985);
+  filter: blur(6px);
+  transition: transform 420ms cubic-bezier(.2, .8, .2, 1), filter 320ms cubic-bezier(.2, 0, .2, 1);
+}
+.usr-visible .usr-panel { transform: none; filter: none; }
+.usr-saliendo .usr-panel {
+  transform: scale(1.015);
+  filter: blur(8px);
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(.4, 0, 1, 1);
+}
+
+.usr-head { margin-bottom: var(--s7); }
+
+.usr-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  height: 28px;
+  padding: 0 var(--s3);
+  margin-bottom: var(--s5);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .08);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  color: var(--pos-ink-3);
+}
+.usr-eyebrow-punto {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #34c37a;
+  box-shadow: 0 0 0 3px rgba(52, 195, 122, .18);
+}
+
+.usr-titulo {
+  margin: 0;
+  font-size: clamp(30px, 4.2vw, 46px);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -.035em;
+  color: #fff;
+}
+
+.usr-sub {
+  max-width: 470px;
+  margin: var(--s3) auto 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--pos-ink-4);
+}
+
+.usr-grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 176px);
+  justify-content: center;
+  gap: 14px;
+}
+
+.usr-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 184px;
+  padding: var(--s4) var(--s3);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 14px 30px -20px rgba(0, 0, 0, .9);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  /* backwards y no both: con both la animación terminada pisaría el
+     transform del hover y del press. */
+  animation: usrTileIn 420ms cubic-bezier(.2, .8, .2, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms + 90ms);
+  transition: transform 220ms cubic-bezier(.2, .8, .2, 1), background 160ms, border-color 160ms,
+              box-shadow 200ms, opacity 240ms;
+}
+@keyframes usrTileIn {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@media (hover: hover) {
+  .usr-tile:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255, 255, 255, .18);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .045));
+  }
+}
+/* Respuesta en el press, no en el click. */
+.usr-tile:active:not(.usr-tile-fantasma) {
+  transform: scale(.965);
+  transition-duration: 90ms;
+}
+.usr-tile:focus-visible {
+  border-color: rgba(139, 111, 214, .7);
+  box-shadow: 0 0 0 4px rgba(139, 111, 214, .35), 0 14px 30px -20px rgba(0, 0, 0, .9);
+}
+
+.usr-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 68px; height: 68px;
+  border-radius: 50%;
+  background: var(--tono, var(--violeta));
+  background: radial-gradient(circle at 30% 25%,
+                color-mix(in srgb, var(--tono, #7c5fd0) 62%, #fff) 0%,
+                var(--tono, #7c5fd0) 52%,
+                color-mix(in srgb, var(--tono, #7c5fd0) 72%, #000) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28),
+              0 10px 22px -10px var(--tono, #7c5fd0);
+  color: #fff;
+}
+/* Ícono de animal (usuarioActivo.js). Una sombra mínima lo despega del
+   degradado sin ensuciar el trazo. */
+.usr-avatar svg {
+  width: 38px; height: 38px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .18));
+}
+
+.usr-tile-nombre {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.012em;
+}
+
+.usr-tile-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  height: 20px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(139, 111, 214, .2);
+  color: #cbbcf2;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.usr-tile.es-ultimo { border-color: rgba(139, 111, 214, .42); }
+
+/* Confirmación sobre el botón tocado: se rellena de violeta y aparece el
+   tilde; el resto se apaga. Dura lo justo antes de que el selector se vaya. */
+.usr-tile-check {
+  position: absolute;
+  top: calc(50% - 50px);
+  left: calc(50% + 18px);
+  display: grid;
+  place-items: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--violeta);
+  box-shadow: 0 4px 10px -2px rgba(0, 0, 0, .35);
+  opacity: 0;
+  transform: scale(.4);
+  transition: opacity 160ms, transform 300ms cubic-bezier(.2, .9, .3, 1.2);
+}
+.usr-tile.es-elegido {
+  background: linear-gradient(180deg, var(--violeta-claro), var(--violeta));
+  border-color: transparent;
+  box-shadow: 0 18px 40px -16px rgba(108, 78, 182, .9);
+}
+.usr-tile.es-elegido .usr-tile-check { opacity: 1; transform: none; }
+.usr-tile.es-elegido .usr-tile-tag { background: rgba(255, 255, 255, .2); color: #fff; }
+.usr-eligiendo .usr-tile:not(.es-elegido) { opacity: .28; }
+.usr-eligiendo .usr-tile { pointer-events: none; }
+
+/* Esqueleto mientras responde la planilla */
+.usr-tile-fantasma { cursor: default; pointer-events: none; }
+.usr-tile-fantasma .usr-avatar,
+.usr-tile-fantasma .usr-tile-nombre {
+  background: linear-gradient(90deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .13) 50%, rgba(255, 255, 255, .06) 100%);
+  background-size: 200% 100%;
+  box-shadow: none;
+  animation: usrBrillo 1.3s linear infinite;
+}
+.usr-tile-fantasma .usr-tile-nombre { width: 84px; height: 14px; border-radius: 7px; }
+@keyframes usrBrillo { to { background-position: -200% 0; } }
+
+.usr-estado {
+  min-height: 22px;
+  margin-top: var(--s5);
+  font-size: 14px;
+  color: var(--pos-ink-4);
+}
+.usr-estado:empty { min-height: 0; margin-top: 0; }
+.usr-reintentar {
+  margin-left: var(--s2);
+  height: 34px;
+  padding: 0 var(--s4);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.usr-reintentar:hover { background: rgba(255, 255, 255, .14); }
+
+.usr-pie {
+  margin-top: var(--s7);
+  font-size: 12.5px;
+  color: var(--pos-ink-5);
+}
+.usr-pie-tecla {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  margin: 0 2px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-bottom-width: 2px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--pos-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* La contraseña del modo se pide con el modal de Admin: con el selector
+   abierto tiene que quedar por encima de él. */
+html.usr-abierto #adminPassOverlay { z-index: 10070; }
+
+/* WhatsApp en la grilla: mismo borde que el resto; sólo cambia el verde
+   de la confirmación. */
+.usr-tile-whatsapp.es-elegido {
+  background: linear-gradient(180deg, #34d97a, #1fae55);
+  box-shadow: 0 18px 40px -16px rgba(37, 211, 102, .8);
+}
+.usr-tile-whatsapp.es-elegido .usr-tile-check { color: #1fae55; }
+
+.usr-cerrar {
+  position: fixed;
+  top: var(--s5);
+  right: var(--s5);
+  display: grid;
+  place-items: center;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .06);
+  color: var(--pos-ink-2);
+  cursor: pointer;
+}
+.usr-cerrar[hidden] { display: none; }
+.usr-cerrar:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+
+/* --- chip del encabezado --- */
+.usr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  height: var(--h-md);
+  padding: 0 var(--s3) 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.usr-chip[hidden] { display: none; }
+.usr-chip:hover { background: var(--surface-2); border-color: #cdd1d8; }
+
+.usr-chip-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--tono, var(--violeta));
+  background: radial-gradient(circle at 30% 25%,
+                color-mix(in srgb, var(--tono, #7c5fd0) 62%, #fff) 0%,
+                var(--tono, #7c5fd0) 55%,
+                color-mix(in srgb, var(--tono, #7c5fd0) 75%, #000) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+  color: #fff;
+}
+.usr-chip-avatar svg { width: 21px; height: 21px; }
+
+.usr-chip-texto {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.usr-chip-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.usr-chip-nombre {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.usr-chip-flecha { color: var(--ink-4); flex-shrink: 0; }
+
+.pos-nav-sep {
+  width: 1px;
+  height: 28px;
+  margin: 0 var(--s1);
+  flex-shrink: 0;
+  background: var(--line);
+}
+.usr-chip[hidden] + .pos-nav-sep { display: none; }
+
+@media (max-width: 1180px) {
+  .usr-chip-nombre { max-width: 96px; }
+}
+@media (max-width: 760px) {
+  .usr-grilla { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .usr-tile { height: 156px; border-radius: 18px; }
+  .usr-avatar { width: 58px; height: 58px; }
+  .usr-avatar svg { width: 32px; height: 32px; }
+  .usr-tile-check { top: calc(50% - 44px); left: calc(50% + 14px); }
+  .usr-pie { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .usr-panel, .usr-visible .usr-panel, .usr-saliendo .usr-panel { transform: none; filter: none; }
+  .usr-tile:hover, .usr-tile:active:not(.usr-tile-fantasma) { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .usr-overlay { background: #141518; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .usr-overlay::before { display: none; }
+}
+@media (prefers-contrast: more) {
+  .usr-tile { border: 2px solid rgba(255, 255, 255, .45); }
+  .usr-sub, .usr-pie { color: var(--pos-ink-2); }
+}
+
+/* ==========================================================================
    MENSAJES Y TOASTS
    ========================================================================== */
 
