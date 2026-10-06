@@ -1,5 +1,27 @@
 // Script para ingresoPedidoV2.html: manejo de formulario, artículos dinámicos y registro en Firebase
 
+// === VUELTA AL HISTORIAL (misma pestaña) ===
+// historialRecientes.html abre los pedidos en esta misma pestaña y deja la
+// marca 'cajaVolverAlHistorial' en sessionStorage. Al terminar de actualizar
+// el pedido se vuelve al historial; si no hay marca, a un pedido nuevo.
+// Entrar sin ?id (botón Nuevo, por ejemplo) borra la marca para que no quede
+// colgada; con ?id se conserva aunque se recargue la página.
+const VOLVER_HISTORIAL_KEY = 'cajaVolverAlHistorial';
+try {
+  if (!new URLSearchParams(window.location.search).has('id')) {
+    sessionStorage.removeItem(VOLVER_HISTORIAL_KEY);
+  }
+} catch (e) {}
+
+function salirTrasActualizarPedido() {
+  let volver = false;
+  try {
+    volver = sessionStorage.getItem(VOLVER_HISTORIAL_KEY) === '1';
+    sessionStorage.removeItem(VOLVER_HISTORIAL_KEY);
+  } catch (e) {}
+  window.location.href = volver ? 'historialRecientes.html' : 'ingresoPedidoV2.html';
+}
+
 // === CACHÉ LOCAL DE LAS FOTOS DE ARTÍCULOS (sw-imagenes.js) ===
 // Las fotos viven en un host externo y su política de caché la decide ese host:
 // si dice "no guardar", la caja las vuelve a bajar todos los días. El Service
@@ -2463,12 +2485,7 @@ function getTipoCliente() {
               messageDiv.textContent = 'Pedido actualizado correctamente.';
               messageDiv.style.color = 'green';
               setTimeout(() => {
-                if (window.opener && !window.opener.closed) {
-                  window.opener.location.reload();
-                  window.close();
-                } else {
-                  window.location.href = 'ingresoPedidoV2.html';
-                }
+                salirTrasActualizarPedido();
               }, 1200);
             } catch (err) {
               // DESBLOQUEAR INTERFAZ en caso de error
@@ -2930,24 +2947,14 @@ function getTipoCliente() {
                     messageDiv.textContent = 'Pedido actualizado correctamente.';
                     messageDiv.style.color = 'green';
                     setTimeout(() => {
-                      if (window.opener && !window.opener.closed) {
-                        window.opener.location.reload();
-                        window.close();
-                      } else {
-                        window.location.href = 'ingresoPedidoV2.html';
-                      }
+                      salirTrasActualizarPedido();
                     }, 1200);
                   },
                   function() { // No imprimir
                     messageDiv.textContent = 'Pedido actualizado correctamente.';
                     messageDiv.style.color = 'green';
                     setTimeout(() => {
-                      if (window.opener && !window.opener.closed) {
-                        window.opener.location.reload();
-                        window.close();
-                      } else {
-                        window.location.href = 'ingresoPedidoV2.html';
-                      }
+                      salirTrasActualizarPedido();
                     }, 1200);
                   }
                 );
