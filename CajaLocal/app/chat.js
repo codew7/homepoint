@@ -310,8 +310,8 @@
   function usarNombre(nombre) {
     const anterior = miNombre;
     miNombre = nombre;
-    lsSet(LS_NOMBRE, nombre);
-    $('chatYoNombre').textContent = nombre;
+    if (nombre) lsSet(LS_NOMBRE, nombre);
+    $('chatYoNombre').textContent = nombre || '—';
     if (anterior !== nombre) {
       // Antes de iniciar(), la presencia la anota '.info/connected'.
       if (iniciado) conectarPresencia();
@@ -326,9 +326,10 @@
     }
   }
 
-  // Cada vez que alguien elige su nombre en el selector de la caja.
+  // Cada vez que alguien elige su nombre en el selector de la caja. Con
+  // nombre vacío (se abrió el selector para cambiar) el equipo se desconecta.
   document.addEventListener('usuarioactivo:cambio', e => {
-    if (e.detail && e.detail.nombre) usarNombre(e.detail.nombre);
+    if (e.detail) usarNombre(e.detail.nombre || '');
   });
 
   function errorNombre(msg) {

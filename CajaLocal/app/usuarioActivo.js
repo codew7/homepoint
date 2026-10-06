@@ -13,6 +13,12 @@
 // página se recarga y no tiene sentido volver a preguntar. Una pestaña o
 // ventana nueva sí vuelve a preguntar.
 //
+// Un usuario no puede estar en dos equipos a la vez: el selector lee la
+// presencia que publica chat.js (chat/presencia) y marca como "Conectado"
+// —sin dejar elegirlo— a quien ya está en otra caja. Abrir el selector
+// desconecta al usuario de esta pestaña (queda libre para otro equipo) y no
+// se cierra sin elegir a alguien.
+//
 // Se carga en <head>, antes del script de login: el resto del archivo sólo
 // toca el DOM cuando hace falta.
 (function() {
@@ -24,6 +30,7 @@
   const LS_CACHE = 'hpVendedoresCache';
   const EVENTO = 'usuarioactivo:cambio';
   const NO_PERSONAS = ['whatsapp'];
+  const RUTA_PRESENCIA = 'chat/presencia';
 
   // Identidad de cada vendedor: un color y un animal. Se reparten por la
   // posición en la planilla, así dos personas nunca comparten color ni animal
@@ -102,6 +109,7 @@
   // ------------------------------------------------------------- helpers --
   function ssGet(k) { try { return sessionStorage.getItem(k); } catch (_) { return null; } }
   function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (_) {} }
+  function ssDel(k) { try { sessionStorage.removeItem(k); } catch (_) {} }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
 
@@ -174,7 +182,7 @@
   }
 
   // ------------------------------------------------------------- markup --
-  let overlay, grilla, estadoEl, cerrarBtn, headerBtn;
+  let overlay, grilla, estadoEl, headerBtn;
   let abierto = false;
   let ultimaTeclaImprimible = 0;
 
@@ -190,9 +198,6 @@
     overlay.setAttribute('aria-describedby', 'usrSub');
     overlay.innerHTML = `
       <div class="usr-panel">
-        <button type="button" class="usr-cerrar" id="usrCerrar" title="Seguir como estaba (Esc)" aria-label="Cerrar sin cambiar de usuario" hidden>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
         <header class="usr-head">
           <span class="usr-eyebrow"><span class="usr-eyebrow-punto" aria-hidden="true"></span><span id="usrFecha"></span></span>
           <h1 id="usrTitulo" class="usr-titulo">Selecciona Usuario</h1>
@@ -211,9 +216,6 @@
 
     grilla = overlay.querySelector('#usrGrilla');
     estadoEl = overlay.querySelector('#usrEstado');
-    cerrarBtn = overlay.querySelector('#usrCerrar');
-
-    cerrarBtn.addEventListener('click', () => cerrar());
     grilla.addEventListener('click', e => {
       const b = e.target.closest('.usr-tile');
       if (b) elegir(b.dataset.nombre, b);
@@ -240,7 +242,6 @@
         <button type="button" class="usr-tile${esUltimo ? ' es-ultimo' : ''}${id.whatsapp ? ' usr-tile-whatsapp' : ''}" role="option"
                 aria-selected="${esActual ? 'true' : 'false'}"
                 data-nombre="${esc(n)}" style="--tono:${id.tono}; --i:${i}">
-          ${esUltimo ? `<span class="usr-tile-tag">${esActual ? 'Activo' : 'Último'}</span>` : ''}
           <span class="usr-avatar" aria-hidden="true">${svgAvatar(id)}</span>
           <span class="usr-tile-nombre">${esc(n)}</span>
           <span class="usr-tile-check" aria-hidden="true">
@@ -249,6 +250,7 @@
         </button>`;
     }).join('');
     grilla.dataset.cantidad = String(nombres.length);
+    marcarOcupados();
   }
 
   function pintarCargando() {
@@ -312,10 +314,10 @@
       e.stopPropagation();
       return;
     }
+    // Sin salida: el selector sólo se cierra eligiendo a alguien.
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      if (actual) cerrar();
       return;
     }
     if (e.key === 'Tab') {
@@ -346,6 +348,63 @@
     lista[j].focus();
   }
 
+  // ----------------------------------------------------------- presencia --
+  // Misma clave que usa chat.js para cada nombre (las de RTDB no aceptan . $ # [ ] /).
+  function claveDe(nombre) {
+    return nombre.trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'equipo';
+  }
+
+  // Claves de los usuarios con alguna pestaña abierta en otro equipo. El
+  // usuario de esta misma pestaña no cuenta: su propia conexión no lo bloquea.
+  let ocupados = new Set();
+  let refPresencia = null;
+
+  function alCambiarPresencia(snap) {
+    const datos = snap.val() || {};
+    const propia = actual ? claveDe(actual) : '';
+    ocupados = new Set(Object.keys(datos).filter(k => {
+      const p = datos[k];
+      return k !== propia && p && p.conexiones && Object.keys(p.conexiones).length;
+    }));
+    marcarOcupados();
+  }
+
+  function escucharPresencia(si) {
+    if (typeof firebase === 'undefined' || !firebase.apps.length) return;
+    if (si && !refPresencia) {
+      refPresencia = firebase.database().ref(RUTA_PRESENCIA);
+      refPresencia.on('value', alCambiarPresencia, err => console.warn('Presencia de usuarios no disponible:', err));
+    } else if (!si && refPresencia) {
+      refPresencia.off('value', alCambiarPresencia);
+      refPresencia = null;
+    }
+  }
+
+  function estaOcupado(nombre) { return ocupados.has(claveDe(nombre)); }
+
+  // Actualiza los botones ya pintados sin rehacer la grilla (no mueve el foco).
+  function marcarOcupados() {
+    if (!grilla) return;
+    tiles().forEach(t => {
+      const ocupado = estaOcupado(t.dataset.nombre);
+      t.classList.toggle('usr-tile-ocupado', ocupado);
+      t.setAttribute('aria-disabled', ocupado ? 'true' : 'false');
+      t.title = ocupado ? t.dataset.nombre + ' ya está conectado en otro equipo' : '';
+      // El indicador va debajo del nombre.
+      let marca = t.querySelector('.usr-tile-conectado');
+      if (ocupado && !marca) {
+        marca = document.createElement('span');
+        marca.className = 'usr-tile-conectado';
+        marca.innerHTML = '<span class="usr-tile-conectado-punto" aria-hidden="true"></span>Conectado';
+        t.querySelector('.usr-tile-nombre').after(marca);
+      } else if (!ocupado && marca) {
+        marca.remove();
+      }
+    });
+  }
+
   // --------------------------------------------------------- abrir/cerrar --
   function bloquearPagina(si) {
     const main = document.getElementById('mainContainer');
@@ -360,7 +419,7 @@
     // Si un modal de la caja quedó abierto, el selector va por encima igual.
     const chatPanel = document.querySelector('.chat-abierto');
     if (chatPanel) chatPanel.classList.remove('chat-abierto');
-    cerrarBtn.hidden = !actual;
+    soltar();
     pintarFecha();
     overlay.classList.remove('usr-saliendo', 'usr-eligiendo');
     overlay.hidden = false;
@@ -368,12 +427,15 @@
     // Forzar el estilo inicial antes de animar la entrada.
     void overlay.offsetWidth;
     overlay.classList.add('usr-visible');
+    estadoEl.textContent = '';
+    escucharPresencia(true);
     poblar();
   }
 
   function cerrar() {
     if (!abierto) return;
     abierto = false;
+    escucharPresencia(false);
     overlay.classList.remove('usr-visible');
     overlay.classList.add('usr-saliendo');
     bloquearPagina(false);
@@ -396,12 +458,20 @@
 
   function elegir(nombre, tile) {
     if (!nombre || esperandoClave || overlay.classList.contains('usr-eligiendo')) return;
+    if (estaOcupado(nombre)) {
+      estadoEl.textContent = nombre + ' ya está conectado en otro equipo. Elegí otro usuario.';
+      return;
+    }
     const modo = window.modoWhatsapp;
     if (esWhatsapp(nombre) && modo) {
       esperandoClave = true;
       modo.pedir(ok => {
         esperandoClave = false;
-        if (ok) confirmarEleccion(WHATSAPP, tile);
+        // Pudo conectarse en otro equipo mientras se escribía la contraseña.
+        if (ok && estaOcupado(WHATSAPP)) {
+          estadoEl.textContent = WHATSAPP + ' ya está conectado en otro equipo. Elegí otro usuario.';
+          if (tile) tile.focus({ preventScroll: true });
+        } else if (ok) confirmarEleccion(WHATSAPP, tile);
         else if (tile) tile.focus({ preventScroll: true });
       });
       return;
@@ -420,8 +490,25 @@
   }
 
   // ------------------------------------------------------------- estado --
-  function establecer(nombre) {
+  // El último usuario que se soltó al abrir el selector: para el que elija
+  // después cuenta como "anterior" (así el campo Vendedor se reemplaza).
+  let soltado = '';
+
+  // Cambiar de usuario desconecta al actual: chat.js retira su presencia y
+  // ese nombre queda libre para otro equipo mientras acá se elige.
+  function soltar() {
+    if (!actual) return;
     const anterior = actual;
+    soltado = anterior;
+    actual = '';
+    ssDel(SS_ACTUAL);
+    pintarHeader();
+    document.dispatchEvent(new CustomEvent(EVENTO, { detail: { nombre: '', anterior } }));
+  }
+
+  function establecer(nombre) {
+    const anterior = actual || soltado;
+    soltado = '';
     actual = nombre;
     ssSet(SS_ACTUAL, nombre);
     lsSet(LS_ULTIMO, nombre);
