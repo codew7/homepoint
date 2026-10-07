@@ -8,8 +8,13 @@ import {
   renderStats,
   renderPlayLog,
   refreshAllCardStates,
-  showToast
+  showToast,
+  paintSlider
 } from './ui.js';
+
+// Puente con la app de escritorio (Electron, lo expone su preload.js).
+// En un navegador común no existe y las opciones de escritorio quedan ocultas.
+const desktop = window.soundboardDesktop || null;
 
 const state = {
   audios: [],
@@ -28,6 +33,7 @@ function init() {
   setupFilterTabs();
   setupSchedulerModal();
   setupDeleteModal();
+  setupAppModal();
 
   // Listen audios
   listenAudios(audios => {
@@ -86,9 +92,11 @@ function setupMasterVolume() {
   if (!slider || !display) return;
   const initial = Math.round(audioPlayer.getMasterVolume() * 100);
   slider.value = initial;
+  paintSlider(slider);
   display.textContent = `${initial}%`;
   slider.addEventListener('input', (e) => {
     const v = Number(e.target.value);
+    paintSlider(e.target);
     display.textContent = `${v}%`;
     audioPlayer.setMasterVolume(v / 100);
   });
@@ -108,6 +116,32 @@ function setupFilterTabs() {
     });
   });
 }
+
+/* ---- Overlays (modales y gate) ---- */
+
+// Muestra el overlay; si estaba saliendo, cancela la salida en el acto.
+function showOverlay(el) {
+  clearTimeout(el._closeTimer);
+  el.classList.remove('closing');
+  el.hidden = false;
+}
+
+// Anima la salida por el mismo camino de la entrada y recién después oculta.
+function hideOverlay(el, ms = 200) {
+  if (el.hidden || el.classList.contains('closing')) return;
+  el.classList.add('closing');
+  el._closeTimer = setTimeout(() => {
+    el.classList.remove('closing');
+    el.hidden = true;
+  }, ms);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('scheduler-modal').hidden) closeScheduler();
+  else if (!document.getElementById('confirm-modal').hidden) closeDeleteModal();
+  else if (!document.getElementById('app-modal').hidden) hideOverlay(document.getElementById('app-modal'));
+});
 
 /* ---- Scheduler Modal ---- */
 
@@ -164,12 +198,11 @@ function openSchedulerModal(audio) {
   renderFixedTimes();
   renderDays();
 
-  modal.hidden = false;
+  showOverlay(modal);
 }
 
 function closeScheduler() {
-  const modal = document.getElementById('scheduler-modal');
-  modal.hidden = true;
+  hideOverlay(document.getElementById('scheduler-modal'));
   state.schedulingAudio = null;
 }
 
@@ -250,11 +283,11 @@ function setupDeleteModal() {
 function openDeleteModal(audio) {
   state.pendingDelete = audio;
   document.getElementById('confirm-name').textContent = audio.name;
-  document.getElementById('confirm-modal').hidden = false;
+  showOverlay(document.getElementById('confirm-modal'));
 }
 
 function closeDeleteModal() {
-  document.getElementById('confirm-modal').hidden = true;
+  hideOverlay(document.getElementById('confirm-modal'));
   state.pendingDelete = null;
 }
 
@@ -283,11 +316,45 @@ async function confirmDelete() {
   }
 }
 
+/* ---- App de escritorio ---- */
+
+function setupAppModal() {
+  const modal = document.getElementById('app-modal');
+  if (!modal || !desktop) return;
+  modal.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', () => hideOverlay(modal)));
+
+  const openBtn = document.getElementById('open-app-modal');
+  openBtn.hidden = false;
+  openBtn.addEventListener('click', () => showOverlay(modal));
+
+  document.getElementById('desktop-version').textContent = `Versión ${desktop.version}`;
+
+  const toggle = document.getElementById('autostart-toggle');
+  const syncToggle = () => desktop.getAutoStart().then(on => { toggle.checked = on; });
+  syncToggle();
+  // También se puede cambiar desde el ícono junto al reloj: releer al abrir.
+  openBtn.addEventListener('click', syncToggle);
+
+  toggle.addEventListener('change', async () => {
+    try {
+      const on = await desktop.setAutoStart(toggle.checked);
+      toggle.checked = on;
+      showToast(on ? 'Se va a abrir sola al iniciar Windows' : 'Arranque automático desactivado', 'success');
+    } catch (err) {
+      toggle.checked = !toggle.checked;
+      showToast('No se pudo cambiar el arranque automático', 'error');
+    }
+  });
+}
+
 /* ---- Audio activation gate ---- */
 
 function setupAudioGate() {
   const gate = document.getElementById('audio-gate');
   if (!gate) return;
+  // Si el navegador ya permite sonido sin click (arranque automático), el
+  // gate sobra: los avisos tienen que sonar sin que nadie toque la PC.
+  audioPlayer.tryAutoUnlock().then(ok => { if (ok) hideAudioGate(); });
   // Clicking anywhere on the overlay is a genuine user gesture, enough to
   // unlock the AudioContext for the rest of the session.
   gate.addEventListener('click', async () => {
@@ -303,12 +370,12 @@ function setupAudioGate() {
 
 function showAudioGate() {
   const gate = document.getElementById('audio-gate');
-  if (gate) gate.hidden = false;
+  if (gate) showOverlay(gate);
 }
 
 function hideAudioGate() {
   const gate = document.getElementById('audio-gate');
-  if (gate) gate.hidden = true;
+  if (gate) hideOverlay(gate, 320);
 }
 
 init();

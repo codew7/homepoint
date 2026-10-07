@@ -47,6 +47,24 @@ class AudioPlayer {
     }
   }
 
+  // Sin gesto del usuario: sólo da true si el navegador ya permite autoplay
+  // (p. ej. lanzado por el arranque automático con
+  // --autoplay-policy=no-user-gesture-required). Nunca llama a resume().
+  tryAutoUnlock(timeoutMs = 1500) {
+    this._ensureContext();
+    if (this.ctx.state === 'running') return Promise.resolve(true);
+    return new Promise(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        this.ctx.removeEventListener('statechange', onChange);
+        resolve(this.ctx.state === 'running');
+      };
+      const onChange = () => { if (this.ctx.state === 'running') done(); };
+      const timer = setTimeout(done, timeoutMs);
+      this.ctx.addEventListener('statechange', onChange);
+    });
+  }
+
   _loadMasterVolume() {
     const stored = localStorage.getItem('sb_master_volume');
     if (stored !== null) {

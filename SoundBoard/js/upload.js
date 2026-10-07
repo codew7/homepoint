@@ -8,11 +8,16 @@ const state = {
   file: null,
   duration: 0,
   objectUrl: null,
-  color: '#6366F1',
+  color: '#F0B35B',
   uploading: false
 };
 
 function $(sel) { return document.querySelector(sel); }
+
+// Pinta el tramo recorrido del slider (la pista nativa no tiene relleno).
+function paintSlider(el) {
+  el.style.setProperty('--fill', `${el.value}%`);
+}
 
 function showToast(message, type = 'info', duration = 3500) {
   const container = document.getElementById('toast-container');
@@ -107,6 +112,7 @@ function clearFile() {
   $('#upload-zone').hidden = false;
   $('#file-input').value = '';
   $('#upload-form').reset();
+  paintSlider($('#initial-volume'));
   $('#progress-wrapper').hidden = true;
 }
 
@@ -124,8 +130,10 @@ function setupForm() {
 
   const volSlider = $('#initial-volume');
   const volDisplay = $('#volume-display');
+  paintSlider(volSlider);
   volSlider.addEventListener('input', (e) => {
     volDisplay.textContent = `${e.target.value}%`;
+    paintSlider(e.target);
   });
 
   $('#upload-form').addEventListener('submit', handleSubmit);

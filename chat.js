@@ -21,7 +21,7 @@
   const MAX_MENSAJES = 100;
   const DIAS_RETENCION = 7;
   const URGENTE_VIGENCIA_MS = 2 * 60 * 1000; // un llamado más viejo que esto ya no suena
-  const TOAST_MS = 5000;
+  const TOAST_MS = 10000;
   const LS_NOMBRE = 'chatEquipoNombre';
   const LS_LEIDO = 'chatUltimoLeido';
   const LS_SONIDO = 'chatSonido';

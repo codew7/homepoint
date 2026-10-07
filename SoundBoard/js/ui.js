@@ -2,6 +2,11 @@ import { audioPlayer } from './audio-player.js';
 import { scheduler } from './scheduler.js';
 import { updateAudio } from './realtime-db.js';
 
+// Pinta el tramo recorrido del slider (la pista nativa no tiene relleno).
+export function paintSlider(el) {
+  el.style.setProperty('--fill', `${el.value}%`);
+}
+
 export function showToast(message, type = 'info', duration = 3500) {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -106,7 +111,7 @@ function buildCard(audio, callbacks) {
   const card = document.createElement('article');
   card.className = 'audio-card';
   card.dataset.id = audio.id;
-  card.style.setProperty('--audio-color', audio.color || '#6366F1');
+  card.style.setProperty('--audio-color', audio.color || '#F0B35B');
 
   card.innerHTML = `
     <div class="card-header">
@@ -176,6 +181,7 @@ function buildCard(audio, callbacks) {
   volSlider.addEventListener('input', (e) => {
     const v = Number(e.target.value) / 100;
     card.querySelector('.vol-value').textContent = `${e.target.value}%`;
+    paintSlider(e.target);
     audioPlayer.setVolumeFor(audio.id, v);
   });
   volSlider.addEventListener('change', (e) => {
@@ -199,7 +205,7 @@ function buildCard(audio, callbacks) {
 }
 
 function updateCard(card, audio) {
-  card.style.setProperty('--audio-color', audio.color || '#6366F1');
+  card.style.setProperty('--audio-color', audio.color || '#F0B35B');
   card.classList.toggle('inactive', !audio.isActive);
 
   card.querySelector('.card-name').textContent = audio.name || 'Sin nombre';
@@ -219,6 +225,7 @@ function updateCard(card, audio) {
   const volValue = Math.round((audio.volume ?? 0.8) * 100);
   if (Number(volSlider.value) !== volValue) {
     volSlider.value = volValue;
+    paintSlider(volSlider);
     card.querySelector('.vol-value').textContent = `${volValue}%`;
   }
 
@@ -233,7 +240,7 @@ export function refreshCardState(card, audio) {
   statusEl.className = 'card-status';
   if (playing) {
     statusEl.classList.add('playing');
-    statusEl.innerHTML = '<span class="playing-indicator"><span></span><span></span><span></span><span></span></span> Reproduciendo';
+    statusEl.innerHTML = '<span class="playing-indicator"><span></span><span></span><span></span><span></span></span> Al aire';
   } else if (audio.isActive) {
     statusEl.classList.add('active');
     statusEl.textContent = 'Activo';
@@ -242,8 +249,9 @@ export function refreshCardState(card, audio) {
   }
 
   const playBtn = card.querySelector('.play-btn');
-  playBtn.querySelector('.icon-play').hidden = playing;
-  playBtn.querySelector('.icon-stop').hidden = !playing;
+  // SVGElement no tiene la propiedad .hidden: hay que tocar el atributo.
+  playBtn.querySelector('.icon-play').toggleAttribute('hidden', playing);
+  playBtn.querySelector('.icon-stop').toggleAttribute('hidden', !playing);
 
   // Next run
   const nextRunEl = card.querySelector('.next-play-text');
@@ -274,6 +282,7 @@ export function renderStats(audios) {
   setText('stat-total', total);
   setText('stat-active', active);
   setText('stat-playing', playing);
+  document.body.classList.toggle('is-playing', !!playing);
   const sa = document.getElementById('status-active-count');
   if (sa) sa.textContent = `${active} activo${active !== 1 ? 's' : ''}`;
 }
@@ -295,7 +304,7 @@ export function renderPlayLog(entries) {
     const dateText = time.toLocaleDateString('es', { day: '2-digit', month: 'short' });
     li.innerHTML = `
       <span class="log-name">
-        <span class="log-color" style="background:${e.color || '#6366F1'}"></span>
+        <span class="log-color" style="background:${e.color || '#F0B35B'}"></span>
         <span>${escapeHtml(e.audioName || 'Audio')}</span>
         <span class="muted">· ${e.triggeredBy === 'schedule' ? 'horario' : e.triggeredBy === 'cyclic' ? 'cíclico' : 'manual'}</span>
       </span>
