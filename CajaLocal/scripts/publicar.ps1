@@ -6,7 +6,8 @@
  Uso: doble clic en PUBLICAR VERSION.bat (o "npm run publicar").
 
  Que hace:
-   1. Revisa que este todo lo necesario (token de GitHub, config.js).
+   1. Copia a app\ los archivos de la web (scripts\sincronizar.js) y revisa
+      que este todo lo necesario (token de GitHub, config.js).
    2. Pregunta que tipo de cambio es y sube el numero de version.
    3. Arma el instalador y lo sube a GitHub Releases (codew7/homepoint).
 
@@ -42,6 +43,11 @@ if (-not (Test-Path 'node_modules')) {
   if ($LASTEXITCODE -ne 0) { Falla 'No se pudieron instalar las dependencias.' }
 }
 Ok 'Dependencias'
+
+# La web es el original: app\ se arma copiando de ahi (ver sincronizar.js).
+node scripts/sincronizar.js
+if ($LASTEXITCODE -ne 0) { Falla 'Los archivos de la app no se pudieron igualar con los de la web (ver arriba).' }
+Ok 'Archivos de la app iguales a los de la web'
 
 if (-not (Test-Path 'app\config.js')) { Falla 'Falta app\config.js (las claves de Firebase y de la planilla). Copialo de la carpeta raiz del sitio.' }
 Ok 'app\config.js'
