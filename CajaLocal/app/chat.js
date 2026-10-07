@@ -1,14 +1,20 @@
 // === MENSAJERÍA INTERNA ENTRE EQUIPOS ===
 // Canal general en Firebase RTDB, con presencia de equipos, mensajes rápidos y
-// llamado urgente. Usa el `db` global que inicializa ingresoPedidoV2.html.
+// llamado urgente. Usa el `db` global que inicializa cada pantalla de la caja
+// (ingresoPedidoV2.html, historialRecientes.html).
 //
 // Datos:
 //   chat/mensajes/{pushId}          { de, texto, tipo: 'texto'|'rapido'|'urgente', ts, para? }
 //     (`para` = nombre del equipo al que va el timbre; sólo en los 'urgente')
-//   chat/presencia/{clave}          { nombre, ultimaVez, conexiones: { {pushId}: true } }
+//   chat/presencia/{clave}          { nombre, ultimaVez, conexiones: { {pushId}: ts },
+//                                     expulsadas?: { {pushId}: ts } }
+//     (una conexión por pestaña abierta, con la hora en que se abrió;
+//      `expulsadas` = conexiones que otro equipo descartó con "Entrar igual",
+//      ver usuarioActivo.js)
 //
-// Regla de oro: el chat nunca roba el foco del buscador (#searchInput), que es
-// donde escribe la pistola. Sólo toma el foco cuando la persona abre el panel.
+// Regla de oro: el chat nunca roba el foco del campo principal de la pantalla
+// (el marcado con data-foco-principal: en la caja, el buscador donde escribe
+// la pistola). Sólo toma el foco cuando la persona abre el panel.
 (function() {
   'use strict';
 
@@ -21,6 +27,14 @@
   const LS_SONIDO = 'chatSonido';
   const LS_LIMPIEZA = 'chatUltimaLimpieza';
   const MAX_CARACTERES = 100;
+  // Firebase borra la conexión de una pestaña al cerrarse. Si la PC se apaga
+  // de golpe puede tardar unos minutos en enterarse: para ese caso está
+  // "Entrar igual" en el selector de usuario. No hay renovación periódica.
+  const LIMPIEZA_PRESENCIA_MS = 5 * 60 * 1000;
+  // Pasar de la caja al historial (o volver) suelta la conexión y la anota de
+  // nuevo al cargar. Un equipo que se fue hace menos que esto sigue en la tira,
+  // así no parpadea "desconectado" cada vez que alguien cambia de pantalla.
+  const GRACIA_NAVEGACION_MS = 8 * 1000;
 
   const refMensajes = db.ref('chat/mensajes');
   const refPresencia = db.ref('chat/presencia');
@@ -30,6 +44,10 @@
   const conSelector = !!window.UsuarioActivo;
   let miNombre = (conSelector ? UsuarioActivo.actual() : lsGet(LS_NOMBRE)) || '';
   let miConexionRef = null;
+  // Todas las conexiones que abrió esta pestaña con el nombre actual: una
+  // expulsión puede llegar tarde (equipo sin internet) y apuntar a una vieja.
+  let misConexiones = new Set();
+  let ultimaLimpiezaPresencia = 0;
   let ultimoLeido = Number(lsGet(LS_LEIDO)) || 0;
   let offsetServidor = 0;
   let cargaInicial = true;
@@ -78,8 +96,10 @@
   }
 
   function devolverFocoAlBuscador() {
-    const s = document.getElementById('searchInput');
-    if (s && document.getElementById('mainContainer').style.display !== 'none') s.focus();
+    const main = document.getElementById('mainContainer');
+    if (main && main.style.display === 'none') return;
+    const s = document.querySelector('[data-foco-principal]');
+    if (s && !s.disabled) s.focus();
   }
 
   // Los push IDs de Firebase arrancan con el timestamp codificado en 8
@@ -152,10 +172,6 @@
           </button>
           </div>
         </div>
-        <button type="button" id="chatYo" class="chat-yo" title="${conSelector ? 'Cambiar de usuario' : 'Cambiar el nombre de este equipo'}">
-          ${conSelector ? 'Usuario' : 'Este equipo'}: <strong id="chatYoNombre"></strong>
-          <svg class="chat-yo-editar" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        </button>
         <div id="chatEquipos" class="chat-equipos" aria-label="Equipos"></div>
       </header>
 
@@ -299,7 +315,7 @@
     const clave = claveDe(nombre);
     const otro = presencias[clave];
     const esMio = miNombre && claveDe(miNombre) === clave;
-    if (otro && !esMio && otro.conexiones) {
+    if (otro && !esMio && conexionesVivas(otro).length) {
       return errorNombre('"' + otro.nombre + '" ya está conectado en otro equipo. Elegí otro nombre.');
     }
     usarNombre(nombre);
@@ -311,15 +327,18 @@
     const anterior = miNombre;
     miNombre = nombre;
     if (nombre) lsSet(LS_NOMBRE, nombre);
-    $('chatYoNombre').textContent = nombre || '—';
     if (anterior !== nombre) {
+      misConexiones.clear();
       // Antes de iniciar(), la presencia la anota '.info/connected'.
       if (iniciado) conectarPresencia();
       // Si el nombre viejo quedó sin pestañas abiertas, se borra de la lista
-      // para que no figure para siempre como un equipo desconectado.
+      // para que no figure para siempre como un equipo desconectado. Va en
+      // una transacción: si en el mismo instante otro equipo entró con ese
+      // nombre ("Entrar igual"), su conexión nueva no se borra.
       if (anterior && claveDe(anterior) !== claveDe(nombre)) {
-        const viejo = refPresencia.child(claveDe(anterior));
-        viejo.child('conexiones').once('value').then(s => { if (!s.exists()) viejo.remove(); });
+        refPresencia.child(claveDe(anterior)).transaction(actual =>
+          actual && actual.conexiones ? undefined : null
+        ).catch(() => {});
       }
       renderEquipos();
       renderMensajes();
@@ -337,7 +356,6 @@
     nombreError.style.display = 'block';
   }
 
-  $('chatYo').addEventListener('click', pedirNombre);
   $('chatNombreOk').addEventListener('click', guardarNombre);
   $('chatNombreCancelar').addEventListener('click', cerrarNombre);
   nombreInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardarNombre(); } });
@@ -357,30 +375,119 @@
   // así dos pestañas en la misma PC no se pisan.
   function conectarPresencia() {
     if (miConexionRef) {
-      miConexionRef.onDisconnect().cancel();
-      miConexionRef.remove();
+      // Se suelta antes de borrarla: el aviso de presencia que dispara el
+      // borrado no tiene que volver a anotarla (ver asegurarMiConexion).
+      const vieja = miConexionRef;
       miConexionRef = null;
+      vieja.onDisconnect().cancel();
+      vieja.remove();
     }
     if (!miNombre) return;
     const ref = refPresencia.child(claveDe(miNombre));
     miConexionRef = ref.child('conexiones').push();
+    misConexiones.add(miConexionRef.key);
     ref.child('ultimaVez').onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);
     miConexionRef.onDisconnect().remove();
-    miConexionRef.set(true);
+    miConexionRef.set(firebase.database.ServerValue.TIMESTAMP);
     ref.update({ nombre: miNombre, ultimaVez: firebase.database.ServerValue.TIMESTAMP });
   }
 
-  // Los otros equipos conectados ahora mismo. Este equipo no figura: ya se
-  // muestra en "Este equipo".
+  // Una conexión cuenta mientras exista: Firebase la borra al cerrarse la
+  // pestaña, y "Entrar igual" la descarta a mano.
+  function conexionesVivas(p) {
+    if (!p || !p.conexiones) return [];
+    return Object.keys(p.conexiones);
+  }
+
+  // Si otra pestaña borró la conexión de esta (por ejemplo, al limpiar el
+  // nombre que acababa de soltar justo cuando este equipo entraba con él),
+  // se vuelve a anotar. Sin esto el equipo figuraría libre hasta recargar.
+  let saliendo = false;
+
+  function asegurarMiConexion() {
+    if (saliendo || !miConexionRef || !miNombre) return;
+    if (miConexionRef.parent.parent.key !== claveDe(miNombre)) return;
+    const p = presencias[claveDe(miNombre)];
+    if (p && p.conexiones && p.conexiones[miConexionRef.key] !== undefined && p.nombre) return;
+    miConexionRef.set(firebase.database.ServerValue.TIMESTAMP);
+    refPresencia.child(claveDe(miNombre)).update({ nombre: miNombre });
+  }
+
+  // Otro equipo eligió este mismo usuario con "Entrar igual": esta pestaña lo
+  // suelta y vuelve al selector, en vez de quedar los dos con el mismo nombre.
+  function revisarExpulsion() {
+    if (!miNombre) return;
+    const clave = claveDe(miNombre);
+    const exp = presencias[clave] && presencias[clave].expulsadas;
+    if (!exp) return;
+    const mias = Object.keys(exp).filter(k => misConexiones.has(k));
+    if (!mias.length) return;
+    const cambios = {};
+    mias.forEach(k => { cambios['expulsadas/' + k] = null; });
+    if (miConexionRef) {
+      miConexionRef.onDisconnect().cancel();
+      cambios['conexiones/' + miConexionRef.key] = null;
+      miConexionRef = null;
+    }
+    misConexiones.clear();
+    refPresencia.child(clave).update(cambios).catch(() => {});
+    const nombre = miNombre;
+    if (conSelector) {
+      UsuarioActivo.expulsado(nombre);
+    } else {
+      usarNombre('');
+      pedirNombre();
+    }
+  }
+
+  // Borra las marcas de expulsión de más de un día (las que nunca leyó una
+  // caja que ya estaba apagada). La hace cualquier pestaña, como mucho cada
+  // 5 minutos.
+  function limpiarPresencia() {
+    const ahora = ahoraServidor();
+    if (ahora - ultimaLimpiezaPresencia < LIMPIEZA_PRESENCIA_MS) return;
+    ultimaLimpiezaPresencia = ahora;
+    const cambios = {};
+    Object.keys(presencias).forEach(clave => {
+      const p = presencias[clave] || {};
+      Object.keys(p.expulsadas || {}).forEach(k => {
+        const v = p.expulsadas[k];
+        if (typeof v !== 'number' || ahora - v > 86400000) cambios[clave + '/expulsadas/' + k] = null;
+      });
+    });
+    if (Object.keys(cambios).length) refPresencia.update(cambios).catch(() => {});
+  }
+
+  function recienSalido(p) {
+    return typeof p.ultimaVez === 'number' && ahoraServidor() - p.ultimaVez < GRACIA_NAVEGACION_MS;
+  }
+
+  // Los otros equipos conectados ahora mismo (o que acaban de cambiar de
+  // pantalla). Este equipo no figura: su usuario ya se ve en el encabezado.
   function otrosConectados() {
     return Object.keys(presencias).map(k => presencias[k])
-      .filter(p => p && p.nombre && p.conexiones && claveDe(p.nombre) !== claveDe(miNombre))
+      .filter(p => p && p.nombre && claveDe(p.nombre) !== claveDe(miNombre) &&
+        (conexionesVivas(p).length || recienSalido(p)))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }
 
+  // En la tira de conectados va sólo el comienzo de cada nombre (3 letras) para
+  // que entren más; el nombre completo queda en el tooltip.
+  function nombreCorto(nombre) {
+    return nombre.trim().split(/\s+/).map(n => n.slice(0, 3)).join(' ');
+  }
+
+  let revisionGracia = null;
+
   function renderEquipos() {
+    // Si alguien quedó en la tira sólo por la gracia, se vuelve a mirar cuando
+    // vence, aunque nadie más escriba en la presencia.
+    clearTimeout(revisionGracia);
+    if (Object.keys(presencias).some(k => presencias[k] && !conexionesVivas(presencias[k]).length && recienSalido(presencias[k]))) {
+      revisionGracia = setTimeout(renderEquipos, 2000);
+    }
     equiposEl.innerHTML = otrosConectados().map(p =>
-      `<span class="chat-equipo online" title="Conectado"><span class="chat-punto"></span>${esc(p.nombre)}</span>`
+      `<span class="chat-equipo online" title="${esc(p.nombre)} · Conectado"><span class="chat-punto"></span>${esc(nombreCorto(p.nombre))}</span>`
     ).join('') || '<span class="chat-equipo offline">No hay otros equipos conectados</span>';
   }
 
@@ -612,6 +719,15 @@
     if (document.visibilityState === 'visible' && abierto) marcarLeido();
   });
 
+  // Un timbre que llegó mientras se cambiaba de pantalla (caja ↔ historial)
+  // entra con la carga inicial, que no suena. Si es para este equipo, no se
+  // atendió todavía y sigue vigente, se muestra igual.
+  function sonarTimbrePendiente() {
+    const pendientes = mensajes.filter(m => m.tipo === 'urgente' && !esMio(m) && esParaMi(m) &&
+      (m.ts || 0) > ultimoLeido && ahoraServidor() - (m.ts || 0) < URGENTE_VIGENCIA_MS);
+    if (pendientes.length) mostrarAlarma(pendientes[pendientes.length - 1]);
+  }
+
   // ------------------------------------------------------------- arranque --
   // Sólo trae los mensajes vencidos (los que va a borrar), y cada equipo lo
   // hace como mucho una vez cada 12 h para no consultar Firebase de más.
@@ -631,7 +747,6 @@
     if (iniciado) return;
     iniciado = true;
 
-    $('chatYoNombre').textContent = miNombre || '—';
 
     db.ref('.info/serverTimeOffset').on('value', s => { offsetServidor = s.val() || 0; });
 
@@ -640,7 +755,10 @@
 
     refPresencia.on('value', snap => {
       presencias = snap.val() || {};
+      revisarExpulsion();
+      asegurarMiConexion();
       renderEquipos();
+      limpiarPresencia();
     });
 
     const consulta = refMensajes.limitToLast(MAX_MENSAJES);
@@ -674,14 +792,24 @@
       scrollAlFinal();
       actualizarBadge();
       limpiarViejos();
+      sonarTimbrePendiente();
     });
 
     // Con selector, el nombre lo pide usuarioActivo.js al entrar.
     if (!miNombre && !conSelector) setTimeout(pedirNombre, 600);
   }
 
-  window.addEventListener('beforeunload', () => {
-    if (miConexionRef) miConexionRef.remove();
+  // Al irse (o al pasar a la otra pantalla) se retira la conexión y se anota
+  // la hora en la misma escritura: con eso los demás aplican la gracia.
+  // pagehide y no beforeunload: la caja puede cancelar la salida mientras
+  // guarda un pedido, y entonces el equipo tiene que seguir conectado.
+  window.addEventListener('pagehide', () => {
+    saliendo = true;
+    if (!miConexionRef || !miNombre) return;
+    refPresencia.child(claveDe(miNombre)).update({
+      ['conexiones/' + miConexionRef.key]: null,
+      ultimaVez: firebase.database.ServerValue.TIMESTAMP
+    });
   });
 
   renderMensajes();

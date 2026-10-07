@@ -18,10 +18,21 @@
   <!-- El ?v= de los archivos propios NO hace falta cambiarlo: sólo sirvió una
        vez para saltear copias viejas que había guardado la CDN de Hostinger.
        Que no vuelva a pasar lo resuelve .htaccess (Cache-Control: no-cache). -->
+  <!-- Tokens compartidos con historialRecientes.html: siempre primero. -->
+  <link rel="stylesheet" href="caja-tokens.css">
   <link rel="stylesheet" href="ingresoPedidoV2.css?v=20261005a">
-  <!-- Mensajería interna entre equipos (chat.js). Va después de la hoja
-       principal porque usa sus tokens. -->
+  <!-- Selector de usuario y chip del encabezado (usuarioActivo.js) y
+       mensajería entre equipos (chat.js): las mismas hojas en todas las
+       pantallas de la caja. -->
+  <link rel="stylesheet" href="usuarioActivo.css">
   <link rel="stylesheet" href="chat.css?v=20261005a">
+  <!-- Paso entre pantallas: el navegador trae de antemano la otra página al
+       apoyar el puntero sobre su enlace, así el clic abre al instante. Sólo
+       se descarga (prefetch), no se ejecuta: la caja abre conexiones a
+       Firebase y al chat que no deben arrancar en segundo plano. -->
+  <script type="speculationrules">
+  { "prefetch": [{ "where": { "href_matches": "historialRecientes.html", "relative_to": "document" }, "eagerness": "moderate" }] }
+  </script>
   <!-- Agregar Select2 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
   <!-- Firebase SDKs (solo una vez, última versión) -->
@@ -107,8 +118,13 @@
       if (!authResolved) mostrarLogin();
     }, 5000);
 
+    // Marca de pestaña: ya hubo sesión. Ver el script al abrir #mainContainer.
     firebase.auth().onAuthStateChanged(function(user) {
       authResolved = true;
+      try {
+        if (user) sessionStorage.setItem('hpSesionCaja', '1');
+        else sessionStorage.removeItem('hpSesionCaja');
+      } catch (e) {}
       if (user) {
         mostrarPanel();
       } else {
@@ -143,6 +159,17 @@
   </div>
 
   <main id="mainContainer" class="container" style="display:none;">
+    <script>
+      // Si esta pestaña ya tenía sesión (viene del historial o de guardar un
+      // pedido), la caja se pinta de entrada en vez de esperar a Firebase:
+      // el paso entre pantallas no muestra un fondo vacío. Si la sesión ya no
+      // vale, mostrarLogin() la vuelve a ocultar.
+      try {
+        if (sessionStorage.getItem('hpSesionCaja') === '1') {
+          document.getElementById('mainContainer').style.display = '';
+        }
+      } catch (e) {}
+    </script>
 
     <!-- ================= Cabecera ================= -->
     <header class="pos-header">
@@ -218,6 +245,7 @@
                   type="text"
                   id="searchInput"
                   class="scan-input"
+                  data-foco-principal
                   placeholder="Escanee o ingrese el código de barras..."
                   autocomplete="off"
                   aria-label="Escanear o buscar artículo"

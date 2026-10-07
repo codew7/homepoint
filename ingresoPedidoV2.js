@@ -747,6 +747,16 @@ function getTipoCliente() {
     return id ? String(id).slice(-8).toUpperCase() : '';
   }
 
+  // Código del pie del ticket: iniciales del vendedor + ID corto, ej. "SA - HVO45923".
+  // Sin vendedor queda sólo el ID. Sin tildes: la impresora térmica usa CP437.
+  function codigoTicket(id, vendedor) {
+    const corto = idCortoPedido(id);
+    if (!corto) return '';
+    const ini = String(vendedor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase();
+    return ini ? ini + ' - ' + corto : corto;
+  }
+
   // Texto de la columna "Valor Total" según el tipo de línea.
   function textoTotalLinea(item) {
     if (item.tipoLinea === 'GARANTIA') return 'SIN CARGO';
@@ -2184,7 +2194,13 @@ function getTipoCliente() {
   });
 
   // --- MODAL DE CONFIRMACIÓN PARA IMPRIMIR ---
+  // Impresión del ticket al ingresar/actualizar un pedido: desactivada por ahora.
+  // Con false el modal no aparece y se sigue como si se hubiera elegido "No".
+  // Para volver a habilitarla, poner true.
+  const IMPRIMIR_AL_INGRESAR = false;
+
   function mostrarModalImprimirOrden(onSi, onNo) {
+    if (!IMPRIMIR_AL_INGRESAR) { onNo(); return; }
     // Eliminar modal previo si existe
     const old = document.getElementById('modalImprimirOrden');
     if (old) old.remove();
@@ -2525,6 +2541,8 @@ function getTipoCliente() {
                   if (window.desactivarModoAdmin) window.desactivarModoAdmin();
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
+                  // reset() deja el Vendedor vacío: se repone el usuario activo.
+                  aplicarVendedorPorDefecto();
                   items = [];
                   limpiarEstadoCambios();
                   renderItems();
@@ -2535,6 +2553,8 @@ function getTipoCliente() {
                   if (window.desactivarModoAdmin) window.desactivarModoAdmin();
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
+                  // reset() deja el Vendedor vacío: se repone el usuario activo.
+                  aplicarVendedorPorDefecto();
                   items = [];
                   limpiarEstadoCambios();
                   renderItems();
@@ -3288,8 +3308,16 @@ function aplicarVendedorPorDefecto(anterior) {
   form.vendedor.value = valor;
 }
 
+// El selector decide el modo WhatsApp (pide la contraseña y deja la marca
+// en sessionStorage); acá sólo se prende o apaga lo que el modo cambia en la
+// caja. Con nombre vacío (selector abierto para cambiar) no se toca nada.
 document.addEventListener('usuarioactivo:cambio', e => {
-  aplicarVendedorPorDefecto(e.detail && e.detail.anterior);
+  const d = e.detail || {};
+  if (d.nombre && window.modoWhatsapp) {
+    if (d.nombre.toLowerCase() === 'whatsapp') window.modoWhatsapp.activar();
+    else window.modoWhatsapp.desactivar();
+  }
+  aplicarVendedorPorDefecto(d.anterior);
 });
 // La pestaña puede venir con el usuario ya elegido (recarga tras guardar).
 aplicarVendedorPorDefecto();
@@ -3755,10 +3783,10 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     data.push(escTxt(posWrap('- DOCUMENTO NO VALIDO COMO FACTURA -')));
     data.push(escCmd('1B4500'));
 
-    // ID de pedido (últimos 8 caracteres en mayúscula), discreto y centrado al pie del ticket
+    // Vendedor + ID de pedido (ver codigoTicket), discreto y centrado al pie del ticket
     if (d.pedidoId) {
       data.push(escTxt('\n'));
-      data.push(escTxt(posWrap(String(d.pedidoId).slice(-8).toUpperCase())));
+      data.push(escTxt(posWrap(codigoTicket(d.pedidoId, d.vendedor))));
     }
 
     data.push(escTxt('\n\n\n'));
@@ -3954,7 +3982,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           </div>
           <hr class="sep">
           <div class="legend">POR FAVOR, RECUERDE REVISAR EL ESTADO DE LA MERCADERIA ANTES DE RETIRARSE</div>
-          ${d.pedidoId ? `<div class="pedido-id">${String(d.pedidoId).slice(-8).toUpperCase()}</div>` : ''}
+          ${d.pedidoId ? `<div class="pedido-id">${codigoTicket(d.pedidoId, d.vendedor)}</div>` : ''}
         </div>
         <script>window.onload = function(){ window.print(); }<\/script>
       </body>
@@ -3988,6 +4016,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       envio: form.envio.value,
       totalFinal: form.totalFinal.value,
       pedidoId: pedidoId || '',
+      vendedor: form.vendedor ? form.vendedor.value : '',
       fecha: new Date().toLocaleString('es-AR', { hour12: false }),
       esCambio: items.some(esLineaCambio),
       pedidosOrigen: [...new Set(items.filter(esLineaCambio).map(it => it.pedidoOrigenId).filter(Boolean))],
@@ -4416,30 +4445,20 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     });
   }
 
-  // === MODAL CONTRASEÑA ADMIN / WHATSAPP ===
-  // Un mismo modal (#adminPassOverlay) atiende ambos accesos; `modoPass` decide
-  // qué contraseña se valida y qué se activa al confirmar.
+  // === MODAL CONTRASEÑA ADMIN Y MODO WHATSAPP ===
+  // El modal (#adminPassOverlay) atiende sólo el acceso Admin. La contraseña
+  // del modo WhatsApp la pide el selector de usuario (usuarioActivo.js), que
+  // funciona igual en el historial; acá sólo se aplica el modo.
   (function() {
     const ADMIN_PASS    = '47623212';
-    const WHATSAPP_PASS = '2381';
     const overlay = document.getElementById('adminPassOverlay');
     const input   = document.getElementById('adminPassInput');
     const errDiv  = document.getElementById('adminPassError');
-    const titulo  = document.getElementById('adminPassTitle');
     const btnConf = document.getElementById('adminPassConfirmBtn');
     const btnCanc = document.getElementById('adminPassCancelBtn');
     const adminBtn = document.getElementById('adminModeBtn');
 
-    let modoPass = 'admin';
-    // El modo WhatsApp se pide desde el botón "WhatsApp" del selector de
-    // usuario (usuarioActivo.js), que espera saber si la contraseña fue bien.
-    let alResolverWhatsapp = null;
-
-    function abrirModal(modo) {
-      modoPass = modo || 'admin';
-      if (titulo) {
-        titulo.textContent = modoPass === 'whatsapp' ? 'Modo WhatsApp' : 'Acceso Administrador';
-      }
+    function abrirModal() {
       input.value = '';
       errDiv.style.display = 'none';
       overlay.style.display = 'flex';
@@ -4448,8 +4467,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     function cerrarModal() {
       overlay.style.display = 'none';
-      // Cerrar sin confirmar = cancelado.
-      if (alResolverWhatsapp) { const cb = alResolverWhatsapp; alResolverWhatsapp = null; cb(false); }
     }
 
     function activarModoAdmin() {
@@ -4483,14 +4500,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     function confirmar() {
-      const passEsperada = modoPass === 'whatsapp' ? WHATSAPP_PASS : ADMIN_PASS;
-      if (input.value === passEsperada) {
-        const cb = modoPass === 'whatsapp' ? alResolverWhatsapp : null;
-        alResolverWhatsapp = null;
-        if (modoPass === 'whatsapp') activarModoWhatsapp(true);
-        else activarModoAdmin();
+      if (input.value === ADMIN_PASS) {
+        activarModoAdmin();
         cerrarModal();
-        if (cb) cb(true);
       } else {
         errDiv.style.display = 'block';
         input.value = '';
@@ -4513,17 +4525,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (guardado === '1') activarModoWhatsapp(false);
     };
 
-    adminBtn.addEventListener('click', function() { abrirModal('admin'); });
+    adminBtn.addEventListener('click', function() { abrirModal(); });
 
-    // Lo usa el selector de usuario: elegir "WhatsApp" pide la contraseña y
-    // prende el modo; elegir a una persona lo apaga sin pedir nada.
+    // Lo usa el aviso de cambio de usuario (más arriba): elegir "WhatsApp" en
+    // el selector prende el modo; elegir a una persona lo apaga.
     window.modoWhatsapp = {
       activo: () => busquedaManualPersistente,
-      pedir(cb) {
-        if (busquedaManualPersistente) { cb(true); return; }
-        abrirModal('whatsapp');
-        alResolverWhatsapp = cb;
-      },
+      activar() { if (!busquedaManualPersistente) activarModoWhatsapp(true); },
       desactivar() { if (busquedaManualPersistente) desactivarModoWhatsapp(); }
     };
 
@@ -4724,7 +4732,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     async function buscar(termino, completa) {
-      const term = String(termino || '').trim().toUpperCase();
+      // El ticket imprime "SA - HVO45923": si lo copian entero, el prefijo del
+      // vendedor no forma parte del ID y se descarta.
+      const term = String(termino || '').trim().toUpperCase().replace(/^[A-Z0-9]{1,2}\s*-\s*/, '');
       if (term.length < 3) { ocultarResultados(); return; }
 
       ultimoTerminoBuscado = termino.trim();

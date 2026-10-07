@@ -48,7 +48,8 @@ function hayPedidoEnCurso() {
 function avisarVentanas() {
   estado.bloqueado = hayPedidoEnCurso();
   for (const ventana of BrowserWindow.getAllWindows()) {
-    if (!ventana.isDestroyed()) ventana.webContents.send('actualizacion:estado', { ...estado });
+    // Al cerrar, la ventana puede seguir viva con su contenido ya destruido.
+    if (!ventana.isDestroyed() && !ventana.webContents.isDestroyed()) ventana.webContents.send('actualizacion:estado', { ...estado });
   }
 }
 

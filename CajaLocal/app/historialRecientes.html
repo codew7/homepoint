@@ -16,11 +16,23 @@
   <!-- Esta pantalla NO carga styles.css: comparte lenguaje visual con
        ingresoPedidoV2.css (mismos tokens, tipografía y gestos) y esa hoja
        compartida no debe moverse por el rediseño de la caja. -->
+  <!-- Tokens de la caja: van primero, la hoja propia de abajo los completa. -->
+  <link rel="stylesheet" href="caja-tokens.css">
+  <!-- Paso entre pantallas: el navegador trae de antemano la otra página al
+       apoyar el puntero sobre su enlace, así el clic abre al instante. Sólo
+       se descarga (prefetch), no se ejecuta: la caja abre conexiones a
+       Firebase y al chat que no deben arrancar en segundo plano. -->
+  <script type="speculationrules">
+  { "prefetch": [{ "where": { "href_matches": "ingresoPedidoV2.html", "relative_to": "document" }, "eagerness": "moderate" }] }
+  </script>
   <!-- Firebase Auth Check -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="config.js"></script>
+  <!-- Mismo usuario de la caja: la pestaña lo recuerda al venir desde Nuevo
+       pedido. Va antes del chequeo de sesión, que le delega el selector. -->
+  <script src="usuarioActivo.js"></script>
   <script>
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
@@ -28,7 +40,11 @@
     firebase.auth().onAuthStateChanged(function(user) {
       if (!user) {
         window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        return;
       }
+      // Si esta pestaña todavía no eligió usuario (se abrió directo en el
+      // historial), se pregunta acá igual que en la caja.
+      UsuarioActivo.alAutenticar(function() {});
     });
     const db = firebase.database();
   </script>
@@ -675,10 +691,10 @@
       data.push(escTxt(posWrap('- DOCUMENTO NO VALIDO COMO FACTURA -')));
       data.push(escCmd('1B4500'));
 
-      // ID de pedido (últimos 8 caracteres en mayúscula), discreto y centrado al pie del ticket
+      // Vendedor + ID de pedido (ver codigoTicket), discreto y centrado al pie del ticket
       if (id) {
         data.push(escTxt('\n'));
-        data.push(escTxt(posWrap(String(id).slice(-8).toUpperCase())));
+        data.push(escTxt(posWrap(codigoTicket(id, pedido.vendedor))));
       }
 
       data.push(escTxt('\n\n\n'));
@@ -824,6 +840,17 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
     }
     
+    // Código del pie del ticket: iniciales del vendedor + ID corto, ej. "SA - HVO45923".
+    // Mismo formato que ingresoPedidoV2.js. Sin vendedor queda sólo el ID. Sin
+    // tildes: la impresora térmica usa CP437.
+    function codigoTicket(id, vendedor) {
+      if (!id) return '';
+      const corto = String(id).slice(-8).toUpperCase();
+      const ini = String(vendedor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase();
+      return ini ? ini + ' - ' + corto : corto;
+    }
+
     function generarReciboYImprimir(pedido, id) {
       // Obtener datos del pedido
       const cliente = pedido.cliente || {};
@@ -954,7 +981,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             </div>
             <hr class="sep">
             <div class="legend">- DOCUMENTO NO VALIDO COMO FACTURA -</div>
-            ${id ? `<div class="pedido-id">${String(id).slice(-8).toUpperCase()}</div>` : ''}
+            ${id ? `<div class="pedido-id">${codigoTicket(id, pedido.vendedor)}</div>` : ''}
           </div>
           <script>window.onload = function(){ window.print(); }<\/script>
         </body>
@@ -1069,32 +1096,16 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
        historialRecientes.html — hoja autónoma, alineada a ingresoPedidoV2.css
        ----------------------------------------------------------------------
        Historial y terminal de cobro se usan en la misma sesión de caja: mismos
-       tokens, misma tipografía, mismos gestos. Cualquier cambio de paleta acá
-       tiene que espejarse en ingresoPedidoV2.css y viceversa.
+       tokens (caja-tokens.css), misma tipografía, mismos gestos. El selector
+       de usuario y los Mensajes traen sus propias hojas (usuarioActivo.css,
+       chat.css), las mismas que usa la terminal de cobro.
        ====================================================================== */
 
     /* ------------------------------------------------------------ tokens -- */
+    /* Los tokens comunes (superficies, tinta, espaciados, radios, tiempos)
+       vienen de caja-tokens.css. Acá quedan sólo los propios del historial
+       y los que esta pantalla pinta distinto que la terminal de cobro. */
     :root {
-      --bg:        #f4f5f7;
-      --surface:   #ffffff;
-      --surface-2: #fafbfc;
-      --line:      #dde0e5;
-      --line-2:    #e7e9ed;
-      --line-3:    #f0f1f4;
-
-      --ink:   #1a1c20;
-      --ink-2: #43464e;
-      --ink-3: #6e7178;
-      --ink-4: #8a8d95;
-      --ink-5: #a3a6ae;
-
-      --pos:   #17181c;
-      --pos-2: #202228;
-
-      --violeta:       #6c4eb6;
-      --violeta-2:     #5a3da0;
-      --violeta-soft:  rgba(108, 78, 182, .12);
-      --violeta-ring:  rgba(108, 78, 182, .28);
       --violeta-line:  #cdc0ea;
       --verde:         #16803d;
       --verde-bg:      #ecfdf3;
@@ -1108,27 +1119,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       --ambar:         #b45309;
       --ambar-bg:      #fffbeb;
       --ambar-line:    #fde4b0;
-      --rojo:          #dc2626;
-      --rojo-bg:       #fef2f2;
       --rojo-line:     #f6c6c6;
-
-      --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
-      --s5: 20px; --s6: 24px; --s7: 32px;
-
-      --r1: 7px; --r2: 10px; --r3: 14px;
-      --h-sm: 38px; --h-md: 44px; --h-lg: 52px;
-      --header-h: 70px;
-
-      --font: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system,
-              'Segoe UI', Roboto, sans-serif;
-
-      --shadow-2: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .04);
-      --shadow-modal: 0 24px 48px rgba(15, 23, 42, .22);
-
-      /* Springs cortos, sin rebote: es una herramienta de trabajo. */
-      --t-fast: 100ms cubic-bezier(.2, 0, .2, 1);
-      --t-base: 160ms cubic-bezier(.2, 0, .2, 1);
-      --t-slow: 220ms cubic-bezier(.2, 0, .2, 1);
     }
 
     /* -------------------------------------------------------------- base -- */
@@ -1704,8 +1695,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       button:active:not(:disabled), a.secondary:active, .icon-btn:active:not(:disabled) { transform: none; }
     }
   </style>
+  <!-- Selector de usuario y Mensajes: las mismas hojas que la terminal de
+       cobro. Van después de la hoja propia para que ella no las pise. -->
+  <link rel="stylesheet" href="usuarioActivo.css">
+  <link rel="stylesheet" href="chat.css">
 </head>
 <body>
+  <!-- #mainContainer: el selector de usuario lo deja inerte mientras está
+       abierto (mismo id que en la caja). -->
+  <div id="mainContainer">
   <header class="pos-header">
     <div class="pos-brand">
       <img src="logo.png" alt="HomePoint" class="pos-logo">
@@ -1729,7 +1727,23 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       </div>
     </div>
 
+    <!-- Mismo usuario y mismos Mensajes que la caja (usuarioActivo.js y
+         chat.js completan estos botones). -->
     <nav class="pos-nav" aria-label="Secciones">
+      <button type="button" id="usuarioActualBtn" class="usr-chip" hidden>
+        <span class="usr-chip-avatar" aria-hidden="true"></span>
+        <span class="usr-chip-texto">
+          <span class="usr-chip-label">Usuario</span>
+          <span class="usr-chip-nombre"></span>
+        </span>
+        <svg class="usr-chip-flecha" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+      </button>
+      <span class="pos-nav-sep" aria-hidden="true"></span>
+      <button type="button" id="chatNavBtn" class="secondary chat-nav-btn" title="Mensajes entre equipos (F2)" aria-label="Mensajes" aria-expanded="false">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12Z"/></svg>
+        Mensajes
+        <span id="chatBadge" class="chat-badge" aria-hidden="true">0</span>
+      </button>
       <a href="ingresoPedidoV2.html" class="secondary nav-destacado">Nuevo pedido</a>
     </nav>
   </header>
@@ -1741,7 +1755,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
         </svg>
         <label for="filtroNombre" class="sr-only">Filtrar por nombre</label>
-        <input type="text" id="filtroNombre" class="toolbar-input" placeholder="Filtrar por nombre del cliente" autocomplete="off">
+        <input type="text" id="filtroNombre" class="toolbar-input" data-foco-principal placeholder="Filtrar por nombre del cliente" autocomplete="off">
       </div>
       <button type="button" class="primary" onclick="aplicarFiltros()">Filtrar</button>
       <button type="button" class="secondary" onclick="limpiarFiltros()">Limpiar</button>
@@ -1776,6 +1790,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     <div id="paginacion" class="paginacion"></div>
   </main>
+  </div>
 
   <!-- Modal WhatsApp Alias -->
   <div id="waModal" class="modal-overlay">
@@ -1951,5 +1966,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       window.cerrarCalcCobro = cerrarCalcCobro;
     })();
   </script>
+  <!-- Mensajería entre equipos: la misma que en la caja. -->
+  <script src="chat.js"></script>
 </body>
 </html>

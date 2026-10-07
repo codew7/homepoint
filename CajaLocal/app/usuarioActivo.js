@@ -14,10 +14,20 @@
 // ventana nueva sí vuelve a preguntar.
 //
 // Un usuario no puede estar en dos equipos a la vez: el selector lee la
-// presencia que publica chat.js (chat/presencia) y marca como "Conectado"
-// —sin dejar elegirlo— a quien ya está en otra caja. Abrir el selector
-// desconecta al usuario de esta pestaña (queda libre para otro equipo) y no
-// se cierra sin elegir a alguien.
+// presencia que publica chat.js (chat/presencia) y marca como "Conectado" a
+// quien ya está en otra caja. Abrir el selector desconecta al usuario de esta
+// pestaña (queda libre para otro equipo) y no se cierra sin elegir a alguien.
+//
+// Si una caja se cerró de golpe (corte de luz, PC apagada, internet caído),
+// Firebase puede tardar unos minutos en darla por desconectada. Para no
+// quedar trabado, tocar a alguien "Conectado" ofrece "Entrar igual", que pide
+// confirmación: esa conexión se descarta y, si el otro equipo en verdad
+// seguía abierto, chat.js lo devuelve a este selector con un aviso.
+//
+// "WhatsApp" no es una persona sino un modo con contraseña. La pide este
+// archivo (no la página), así funciona igual en la caja y en el historial; la
+// marca 'hpModoWhatsapp' de sessionStorage la lee ingresoPedidoV2.js para
+// prender la búsqueda manual y el vendedor WhatsApp.
 //
 // Se carga en <head>, antes del script de login: el resto del archivo sólo
 // toca el DOM cuando hace falta.
@@ -31,6 +41,12 @@
   const EVENTO = 'usuarioactivo:cambio';
   const NO_PERSONAS = ['whatsapp'];
   const RUTA_PRESENCIA = 'chat/presencia';
+  // Al pasar de una pantalla a otra la pestaña suelta su conexión y la vuelve
+  // a anotar al cargar: durante ese instante el usuario no cuenta como libre.
+  const GRACIA_NAVEGACION_MS = 8 * 1000;
+  // Modo WhatsApp de esta pestaña (lo lee ingresoPedidoV2.js) y su contraseña.
+  const SS_MODO_WHATSAPP = 'hpModoWhatsapp';
+  const CLAVE_WHATSAPP = '2381';
 
   // Identidad de cada vendedor: un color y un animal. Se reparten por la
   // posición en la planilla, así dos personas nunca comparten color ni animal
@@ -184,6 +200,11 @@
   // ------------------------------------------------------------- markup --
   let overlay, grilla, estadoEl, headerBtn;
   let abierto = false;
+  // Mensaje que queda fijo en el selector mientras está abierto (por ejemplo,
+  // "tu usuario se abrió en otro equipo"); se borra al elegir a alguien.
+  let aviso = '';
+
+  function limpiarEstado() { estadoEl.textContent = aviso; }
   let ultimaTeclaImprimible = 0;
 
   function construir() {
@@ -216,11 +237,135 @@
 
     grilla = overlay.querySelector('#usrGrilla');
     estadoEl = overlay.querySelector('#usrEstado');
+    construirClave();
     grilla.addEventListener('click', e => {
       const b = e.target.closest('.usr-tile');
       if (b) elegir(b.dataset.nombre, b);
     });
     overlay.addEventListener('keydown', teclado, true);
+  }
+
+  // --------------------------------------------------- clave WhatsApp --
+  // Va fuera del overlay: el teclado del selector descarta las teclas
+  // imprimibles (por la pistola) y acá hay que poder escribir.
+  let claveEl, claveInput, claveError, alResolverClave = null;
+
+  function construirClave() {
+    claveEl = document.createElement('div');
+    claveEl.id = 'usrClave';
+    claveEl.className = 'usr-clave';
+    claveEl.hidden = true;
+    claveEl.setAttribute('role', 'dialog');
+    claveEl.setAttribute('aria-modal', 'true');
+    claveEl.setAttribute('aria-labelledby', 'usrClaveTitulo');
+    claveEl.innerHTML = `
+      <form class="usr-clave-card" novalidate>
+        <span class="usr-avatar usr-clave-avatar" style="--tono:${TONO_WHATSAPP}" aria-hidden="true">${svgAvatar({ whatsapp: true })}</span>
+        <h2 id="usrClaveTitulo" class="usr-clave-titulo">Modo WhatsApp</h2>
+        <p class="usr-clave-sub">Ingresá la contraseña para atender los pedidos de WhatsApp.</p>
+        <input type="password" class="usr-clave-input" autocomplete="off" aria-label="Contraseña" aria-describedby="usrClaveError">
+        <div id="usrClaveError" class="usr-clave-error" role="alert"></div>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar">Cancelar</button>
+          <button type="submit" class="usr-clave-btn usr-clave-ok">Entrar</button>
+        </div>
+      </form>`;
+    document.body.appendChild(claveEl);
+    claveInput = claveEl.querySelector('.usr-clave-input');
+    claveError = claveEl.querySelector('.usr-clave-error');
+    const card = claveEl.querySelector('.usr-clave-card');
+    card.addEventListener('submit', e => {
+      e.preventDefault();
+      if (claveInput.value === CLAVE_WHATSAPP) { resolverClave(true); return; }
+      claveError.textContent = 'Contraseña incorrecta';
+      claveInput.value = '';
+      claveInput.focus();
+      // Sacudida corta: el error se siente sin tener que leerlo.
+      card.classList.remove('usr-clave-mal');
+      void card.offsetWidth;
+      card.classList.add('usr-clave-mal');
+    });
+    claveEl.querySelector('.usr-clave-cancelar').addEventListener('click', () => resolverClave(false));
+    claveEl.addEventListener('click', e => { if (e.target === claveEl) resolverClave(false); });
+    claveEl.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); resolverClave(false); }
+    });
+  }
+
+  function pedirClave(cb) {
+    alResolverClave = cb;
+    claveInput.value = '';
+    claveError.textContent = '';
+    claveEl.querySelector('.usr-clave-card').classList.remove('usr-clave-mal');
+    claveEl.hidden = false;
+    setTimeout(() => claveInput.focus(), 60);
+  }
+
+  function resolverClave(ok) {
+    if (claveEl.hidden) return;
+    claveEl.hidden = true;
+    const cb = alResolverClave;
+    alResolverClave = null;
+    if (cb) cb(ok);
+  }
+
+  function modoWhatsappActivo() { return ssGet(SS_MODO_WHATSAPP) === '1'; }
+
+  // ------------------------------------------- confirmar "Entrar igual" --
+  // Misma tarjeta que la contraseña: entrar igual cierra la sesión del otro
+  // equipo, así que se explica antes de hacerlo.
+  let confirmarEl, alResolverConfirmar = null;
+
+  function construirConfirmar() {
+    confirmarEl = document.createElement('div');
+    confirmarEl.id = 'usrConfirmar';
+    confirmarEl.className = 'usr-clave';
+    confirmarEl.hidden = true;
+    confirmarEl.setAttribute('role', 'alertdialog');
+    confirmarEl.setAttribute('aria-modal', 'true');
+    confirmarEl.setAttribute('aria-labelledby', 'usrConfirmarTitulo');
+    confirmarEl.setAttribute('aria-describedby', 'usrConfirmarSub');
+    confirmarEl.innerHTML = `
+      <div class="usr-clave-card">
+        <span class="usr-avatar usr-clave-avatar" aria-hidden="true"></span>
+        <h2 id="usrConfirmarTitulo" class="usr-clave-titulo"></h2>
+        <p id="usrConfirmarSub" class="usr-clave-sub usr-confirmar-sub"></p>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar">Cancelar</button>
+          <button type="button" class="usr-clave-btn usr-confirmar-ok">Entrar igual</button>
+        </div>
+      </div>`;
+    document.body.appendChild(confirmarEl);
+    confirmarEl.querySelector('.usr-clave-cancelar').addEventListener('click', () => resolverConfirmar(false));
+    confirmarEl.querySelector('.usr-confirmar-ok').addEventListener('click', () => resolverConfirmar(true));
+    confirmarEl.addEventListener('click', e => { if (e.target === confirmarEl) resolverConfirmar(false); });
+    confirmarEl.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); resolverConfirmar(false); }
+    });
+  }
+
+  function pedirConfirmacion(nombre, cb) {
+    if (!confirmarEl) construirConfirmar();
+    alResolverConfirmar = cb;
+    const id = identidad(nombre);
+    const av = confirmarEl.querySelector('.usr-avatar');
+    av.style.setProperty('--tono', id.tono);
+    av.innerHTML = svgAvatar(id);
+    confirmarEl.querySelector('.usr-clave-titulo').textContent = '¿Entrar como ' + nombre + '?';
+    confirmarEl.querySelector('.usr-confirmar-sub').innerHTML =
+      `<strong>${esc(nombre)}</strong> figura conectado en otro equipo. Al confirmar, esa caja se cierra ` +
+      'y vuelve a la pantalla de selección de usuario. Usalo sólo si esa caja quedó cerrada o colgada.';
+    confirmarEl.hidden = false;
+    // El foco arranca en Cancelar: un Enter apurado no cierra otra caja.
+    setTimeout(() => confirmarEl.querySelector('.usr-clave-cancelar').focus(), 60);
+  }
+
+  function resolverConfirmar(ok) {
+    if (!confirmarEl || confirmarEl.hidden) return;
+    confirmarEl.hidden = true;
+    const cb = alResolverConfirmar;
+    alResolverConfirmar = null;
+    if (cb) cb(ok);
   }
 
   function pintarFecha() {
@@ -274,7 +419,7 @@
   // la planilla, sin mover el foco si la persona ya estaba navegando.
   function poblar() {
     const inmediato = soloPersonas(cacheVendedores());
-    if (inmediato.length) { pintarTiles(inmediato); estadoEl.textContent = ''; enfocarInicial(); }
+    if (inmediato.length) { pintarTiles(inmediato); limpiarEstado(); enfocarInicial(); }
     else pintarCargando();
 
     cargarVendedores().then(nombres => {
@@ -287,7 +432,7 @@
       const foco = document.activeElement && document.activeElement.closest && document.activeElement.closest('.usr-tile');
       const nombreFoco = foco ? foco.dataset.nombre : null;
       pintarTiles(lista);
-      estadoEl.textContent = '';
+      limpiarEstado();
       const reenfocar = nombreFoco && grilla.querySelector(`.usr-tile[data-nombre="${CSS.escape(nombreFoco)}"]`);
       if (reenfocar) reenfocar.focus({ preventScroll: true }); else enfocarInicial();
     });
@@ -360,26 +505,83 @@
   // usuario de esta misma pestaña no cuenta: su propia conexión no lo bloquea.
   let ocupados = new Set();
   let refPresencia = null;
+  let refOffset = null;
+  let offsetServidor = 0;
+  let presencias = {};
 
-  function alCambiarPresencia(snap) {
-    const datos = snap.val() || {};
+  function alOffset(s) { offsetServidor = s.val() || 0; }
+
+  // Igual que en chat.js: una conexión cuenta mientras exista. Firebase la
+  // borra al cerrarse la pestaña; si la caja se apagó de golpe, para eso está
+  // "Entrar igual".
+  function conexionesVivas(p) {
+    if (!p || !p.conexiones) return [];
+    return Object.keys(p.conexiones);
+  }
+
+  // Quien se acaba de ir (sin conexiones, pero con `ultimaVez` de hace unos
+  // segundos) probablemente sólo cambió de pantalla: sigue contando como
+  // ocupado un momento, para que nadie tome su usuario en ese hueco.
+  function recienSalido(p) {
+    return !!p && typeof p.ultimaVez === 'number' &&
+      Date.now() + offsetServidor - p.ultimaVez < GRACIA_NAVEGACION_MS;
+  }
+
+  let revisionGracia = null;
+
+  function recalcularOcupados() {
     const propia = actual ? claveDe(actual) : '';
-    ocupados = new Set(Object.keys(datos).filter(k => {
-      const p = datos[k];
-      return k !== propia && p && p.conexiones && Object.keys(p.conexiones).length;
+    let enGracia = false;
+    ocupados = new Set(Object.keys(presencias).filter(k => {
+      if (k === propia) return false;
+      if (conexionesVivas(presencias[k]).length) return true;
+      if (recienSalido(presencias[k])) { enGracia = true; return true; }
+      return false;
     }));
     marcarOcupados();
+    // Al vencer la gracia se vuelve a mirar, aunque nadie escriba nada.
+    clearTimeout(revisionGracia);
+    if (enGracia && refPresencia) revisionGracia = setTimeout(recalcularOcupados, 2000);
+  }
+
+  function alCambiarPresencia(snap) {
+    presencias = snap.val() || {};
+    recalcularOcupados();
   }
 
   function escucharPresencia(si) {
     if (typeof firebase === 'undefined' || !firebase.apps.length) return;
     if (si && !refPresencia) {
+      refOffset = firebase.database().ref('.info/serverTimeOffset');
+      refOffset.on('value', alOffset);
       refPresencia = firebase.database().ref(RUTA_PRESENCIA);
       refPresencia.on('value', alCambiarPresencia, err => console.warn('Presencia de usuarios no disponible:', err));
+      // Una caja que se apagó no avisa: el "Conectado" se cae solo cuando su
+      // conexión vence, aunque nadie más escriba en la presencia.
     } else if (!si && refPresencia) {
       refPresencia.off('value', alCambiarPresencia);
       refPresencia = null;
+      refOffset.off('value', alOffset);
+      refOffset = null;
+      clearTimeout(revisionGracia);
     }
+  }
+
+  // "Entrar igual": se borran las conexiones del otro equipo y se le deja la
+  // marca de expulsión que revisa chat.js. Si ese equipo estaba apagado, la
+  // marca nunca se lee y chat.js la limpia con el tiempo.
+  function expulsarConexiones(nombre) {
+    if (!refPresencia) return;
+    const clave = claveDe(nombre);
+    const p = presencias[clave];
+    if (!p || !p.conexiones) return;
+    const cambios = {};
+    Object.keys(p.conexiones).forEach(k => {
+      cambios['conexiones/' + k] = null;
+      cambios['expulsadas/' + k] = firebase.database.ServerValue.TIMESTAMP;
+    });
+    refPresencia.child(clave).update(cambios)
+      .catch(err => console.warn('No se pudo liberar el usuario en el otro equipo:', err));
   }
 
   function estaOcupado(nombre) { return ocupados.has(claveDe(nombre)); }
@@ -391,7 +593,7 @@
       const ocupado = estaOcupado(t.dataset.nombre);
       t.classList.toggle('usr-tile-ocupado', ocupado);
       t.setAttribute('aria-disabled', ocupado ? 'true' : 'false');
-      t.title = ocupado ? t.dataset.nombre + ' ya está conectado en otro equipo' : '';
+      t.title = ocupado ? t.dataset.nombre + ' figura conectado en otro equipo. Tocalo si querés entrar igual.' : '';
       // El indicador va debajo del nombre.
       let marca = t.querySelector('.usr-tile-conectado');
       if (ocupado && !marca) {
@@ -427,7 +629,7 @@
     // Forzar el estilo inicial antes de animar la entrada.
     void overlay.offsetWidth;
     overlay.classList.add('usr-visible');
-    estadoEl.textContent = '';
+    limpiarEstado();
     escucharPresencia(true);
     poblar();
   }
@@ -445,42 +647,58 @@
     };
     if (reduceMovimiento()) fin();
     else setTimeout(fin, 320);
-    // El foco vuelve a donde escribe la pistola.
+    // El foco vuelve al campo principal de la pantalla (en la caja, donde
+    // escribe la pistola).
     setTimeout(() => {
-      const s = document.getElementById('searchInput');
+      const s = document.querySelector('[data-foco-principal]');
       if (s && !s.disabled) s.focus();
     }, 60);
   }
 
-  // WhatsApp pide la contraseña de siempre (el modal de ingresoPedidoV2.js) y
-  // prende el modo; cualquier persona lo apaga, como lo hacía el botón viejo.
+  // WhatsApp pide su contraseña y prende el modo; cualquier persona lo apaga.
   let esperandoClave = false;
 
-  function elegir(nombre, tile) {
+  // `forzar` = se confirmó "Entrar igual" sobre alguien que figuraba conectado.
+  function elegir(nombre, tile, forzar) {
     if (!nombre || esperandoClave || overlay.classList.contains('usr-eligiendo')) return;
-    if (estaOcupado(nombre)) {
-      estadoEl.textContent = nombre + ' ya está conectado en otro equipo. Elegí otro usuario.';
+    if (estaOcupado(nombre) && !forzar) {
+      ofrecerEntrarIgual(nombre, tile);
       return;
     }
-    const modo = window.modoWhatsapp;
-    if (esWhatsapp(nombre) && modo) {
+    if (esWhatsapp(nombre)) {
+      // Con el modo ya prendido en esta pestaña no se vuelve a pedir.
+      if (modoWhatsappActivo()) { confirmarEleccion(WHATSAPP, tile, forzar); return; }
       esperandoClave = true;
-      modo.pedir(ok => {
+      pedirClave(ok => {
         esperandoClave = false;
+        if (ok) ssSet(SS_MODO_WHATSAPP, '1');
         // Pudo conectarse en otro equipo mientras se escribía la contraseña.
-        if (ok && estaOcupado(WHATSAPP)) {
-          estadoEl.textContent = WHATSAPP + ' ya está conectado en otro equipo. Elegí otro usuario.';
+        if (ok && estaOcupado(WHATSAPP) && !forzar) {
+          ofrecerEntrarIgual(WHATSAPP, tile);
           if (tile) tile.focus({ preventScroll: true });
-        } else if (ok) confirmarEleccion(WHATSAPP, tile);
+        } else if (ok) confirmarEleccion(WHATSAPP, tile, forzar);
         else if (tile) tile.focus({ preventScroll: true });
       });
       return;
     }
-    if (modo) modo.desactivar();
-    confirmarEleccion(nombre, tile);
+    // Cualquier persona apaga el modo WhatsApp.
+    ssDel(SS_MODO_WHATSAPP);
+    confirmarEleccion(nombre, tile, forzar);
   }
 
-  function confirmarEleccion(nombre, tile) {
+  function ofrecerEntrarIgual(nombre, tile) {
+    estadoEl.innerHTML = `${esc(nombre)} figura conectado en otro equipo. Si esa caja ya está cerrada, podés entrar igual.
+      <button type="button" class="usr-reintentar">Entrar igual</button>`;
+    const btn = estadoEl.querySelector('.usr-reintentar');
+    btn.addEventListener('click', () => pedirConfirmacion(nombre, ok => {
+      if (ok) elegir(nombre, tile, true);
+      else btn.focus({ preventScroll: true });
+    }));
+  }
+
+  function confirmarEleccion(nombre, tile, forzar) {
+    if (forzar) expulsarConexiones(nombre);
+    aviso = '';
     overlay.classList.add('usr-eligiendo');
     tiles().forEach(t => t.setAttribute('aria-selected', t === tile ? 'true' : 'false'));
     if (tile) tile.classList.add('es-elegido');
@@ -558,6 +776,14 @@
     actual: () => actual,
     cargarVendedores,
     abrir: () => cuandoListo(() => abrir()),
+    // Lo llama chat.js cuando otro equipo entró con el usuario de esta pestaña
+    // ("Entrar igual"): se suelta el usuario y se vuelve a preguntar.
+    expulsado(nombre) {
+      cuandoListo(() => {
+        aviso = (nombre || 'Tu usuario') + ' se abrió en otro equipo. Elegí con qué usuario seguir en esta caja.';
+        if (abierto) limpiarEstado(); else abrir();
+      });
+    },
     // Lo llama el script de login cuando hay sesión. Si esta pestaña ya eligió
     // usuario sigue de largo; si no, muestra el selector sobre la caja.
     alAutenticar(mostrarCaja) {
