@@ -99,10 +99,15 @@
         }
 
         /* Navigation Grid */
+        /* Flex en vez de grid: la cantidad de tarjetas cambia según el punto de
+           venta (Envíos sólo en el 1) y la última fila queda centrada. */
         .nav-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 1.5rem;
+            --cols: 5;
+            --gap: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: var(--gap);
             width: 100%;
             max-width: 1200px;
             margin-bottom: 2rem;
@@ -126,6 +131,23 @@
             text-align: center;
             min-height: 160px;
             justify-content: center;
+        }
+
+        .nav-grid > .nav-card {
+            flex: 0 0 calc((100% - (var(--cols) - 1) * var(--gap)) / var(--cols));
+        }
+
+        /* Sin Envíos (puntos de venta que no son el 1) quedan 8 tarjetas: dos
+           filas de 4 en vez de 5 + 3. */
+        @media (min-width: 1025px) {
+            .nav-grid:has(#enviosCard[hidden]) {
+                --cols: 4;
+                max-width: 1000px;
+            }
+        }
+
+        .nav-card[hidden] {
+            display: none;
         }
 
         .nav-card:before {
@@ -538,7 +560,7 @@
         /* Responsive Design */
         @media (max-width: 1024px) {
             .nav-grid {
-                grid-template-columns: repeat(2, 1fr);
+                --cols: 2;
                 max-width: 640px;
             }
         }
@@ -550,8 +572,8 @@
             }
 
             .nav-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
+                --cols: 2;
+                --gap: 1rem;
                 max-width: 480px;
             }
 
@@ -877,6 +899,63 @@
             display: flex;
         }
 
+        /* Punto de venta del equipo (puntoVenta.js) */
+        .login-pv {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: -1.25rem 0 1.5rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+        .login-pv[hidden] { display: none; }
+        .login-pv-nombre { font-weight: 600; color: var(--gray-700); }
+        .login-pv-sep { color: var(--gray-300); }
+        .login-pv-cambiar,
+        .session-pv {
+            font-family: var(--font-family);
+            cursor: pointer;
+        }
+        .login-pv-cambiar {
+            padding: 2px 4px;
+            border: none;
+            border-radius: 6px;
+            background: none;
+            color: var(--gray-600);
+            font-size: inherit;
+            text-decoration: underline;
+            text-decoration-color: var(--gray-300);
+            text-underline-offset: 3px;
+        }
+        .login-pv-cambiar:hover { color: var(--primary); text-decoration-color: currentColor; }
+        .login-pv-cambiar:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+        .session-pv {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            height: 36px;
+            padding: 0 0.875rem;
+            border: 1px solid var(--gray-200);
+            border-radius: 999px;
+            background: var(--gray-100);
+            color: var(--gray-700);
+            font-size: 0.8rem;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+        .session-pv[hidden] { display: none; }
+        .session-pv i { color: var(--primary); }
+        .session-pv:hover {
+            border-color: var(--primary);
+            background: rgba(108, 78, 182, 0.06);
+            transform: translateY(-1px);
+        }
+        .session-pv:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
         .session-logout {
             flex-shrink: 0;
             width: 36px;
@@ -926,7 +1005,10 @@
 </head>
 <body>
     <!-- Firebase Auth Check -->
-    <script src="config.js"></script>
+    <!-- Punto de venta del equipo (puntoVenta.js): carga el config (Firebase)
+         que le toca, o frena la página y pide elegirlo si es la primera vez.
+         Consulta de Pedidos y Pedidos WhatsApp usan el mismo. -->
+    <script src="puntoVenta.js"></script>
     <script>
         // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
@@ -1150,6 +1232,12 @@
             <img src="logo.png" alt="HomePoint Logo" class="login-logo">
             <h1 class="login-title">Panel de Control</h1>
             <p class="login-subtitle">Inicia sesión para continuar</p>
+            <!-- Punto de venta del equipo. "Cambiar" pide la contraseña de Admin. -->
+            <p id="loginPuntoVenta" class="login-pv" hidden>
+                <span class="login-pv-nombre"></span>
+                <span class="login-pv-sep" aria-hidden="true">·</span>
+                <button type="button" class="login-pv-cambiar">Cambiar</button>
+            </p>
             <div id="loginError" class="login-error"></div>
             <div class="login-form">
                 <input type="email" id="loginEmail" class="login-input" placeholder="Correo electrónico" autocomplete="email">
@@ -1190,7 +1278,8 @@
                 <p class="nav-card-description">Gestión de pedidos por WhatsApp</p>
             </a>
 
-            <a href="#" class="nav-card secondary" tabindex="0" onclick="abrirModal('envios', 'envios'); return false;">
+            <!-- Envíos: sólo en el punto de venta 1 (se muestra al cargar la página). -->
+            <a href="#" id="enviosCard" class="nav-card secondary" tabindex="0" hidden onclick="abrirModal('envios', 'envios'); return false;">
                 <span class="nav-card-icon">🚚</span>
                 <h2 class="nav-card-title">Envíos</h2>
                 <p class="nav-card-description">Gestión de pedidos y envíos web</p>
@@ -1213,12 +1302,6 @@
                 <span class="nav-card-icon">🏷️</span>
                 <h2 class="nav-card-title">Etiquetas</h2>
                 <p class="nav-card-description">Impresión y gestión de etiquetas</p>
-            </a>
-
-            <a href="https://home-point-admin.dev.ar/SoundBoard/" class="nav-card indigo" tabindex="0" target="_blank">
-                <span class="nav-card-icon"><i class="bi bi-soundwave"></i></span>
-                <h2 class="nav-card-title">SoundBoard</h2>
-                <p class="nav-card-description">Sonidos y anuncios del local</p>
             </a>
 
             <a href="https://signhp.dev.ar/admin#cartelera" class="nav-card slate" tabindex="0" target="_blank">
@@ -1245,6 +1328,11 @@
                     <span id="sessionName" class="session-name"></span>
                     <span id="sessionRole" class="session-role"></span>
                 </span>
+                <!-- Punto de venta del equipo: tocarlo permite cambiarlo (con contraseña). -->
+                <button id="sessionPuntoVenta" class="session-pv" type="button" hidden>
+                    <i class="bi bi-shop" aria-hidden="true"></i>
+                    <span class="session-pv-nombre"></span>
+                </button>
                 <button id="logoutBtn" class="session-logout" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">
                     <i class="bi bi-box-arrow-right"></i>
                 </button>
@@ -1654,6 +1742,28 @@
             const adminModal = document.getElementById('adminModal');
             const enviosModal = document.getElementById('enviosModal');
             
+            // Envíos es sólo del punto de venta 1.
+            if (!window.PuntoVenta || PuntoVenta.actual() === '1') {
+                document.getElementById('enviosCard').hidden = false;
+            }
+
+            // Punto de venta: en el login y en la barra de sesión, sólo si hay
+            // más de uno para elegir.
+            if (window.PuntoVenta && PuntoVenta.multiple()) {
+                const loginPv = document.getElementById('loginPuntoVenta');
+                loginPv.querySelector('.login-pv-nombre').textContent = PuntoVenta.nombre();
+                const loginPvBtn = loginPv.querySelector('.login-pv-cambiar');
+                loginPvBtn.addEventListener('click', () => PuntoVenta.pedirCambio(() => loginPvBtn.focus()));
+                loginPv.hidden = false;
+
+                const sesionPv = document.getElementById('sessionPuntoVenta');
+                sesionPv.querySelector('.session-pv-nombre').textContent = PuntoVenta.nombre();
+                sesionPv.title = PuntoVenta.nombre() + ' · Cambiar punto de venta';
+                sesionPv.setAttribute('aria-label', 'Punto de venta: ' + PuntoVenta.nombre() + '. Cambiar punto de venta');
+                sesionPv.addEventListener('click', () => PuntoVenta.pedirCambio(() => sesionPv.focus()));
+                sesionPv.hidden = false;
+            }
+
             // Event listener del botón de cerrar sesión
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {

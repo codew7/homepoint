@@ -133,7 +133,7 @@ function buildCard(audio, callbacks) {
       </svg>
       <span class="next-play-text">—</span>
     </div>
-    <div class="card-row card-volume">
+    <div class="card-row card-volume" hidden>
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
       </svg>
@@ -149,6 +149,11 @@ function buildCard(audio, callbacks) {
         <button class="icon-btn schedule-btn" title="Programar">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </button>
+        <button class="icon-btn volume-btn" title="Volumen" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
           </svg>
         </button>
         <button class="icon-btn delete-btn danger" title="Eliminar">
@@ -196,8 +201,17 @@ function buildCard(audio, callbacks) {
     callbacks.onDelete && callbacks.onDelete(audio);
   });
   card.querySelector('.active-toggle').addEventListener('change', (e) => {
-    updateAudio(audio.id, { isActive: e.target.checked })
-      .catch(() => showToast('No se pudo actualizar el estado', 'error'));
+    callbacks.onToggleActive && callbacks.onToggleActive(audio, e.target.checked);
+  });
+
+  // La barra de volumen arranca oculta; se despliega sólo a pedido.
+  const volumeBtn = card.querySelector('.volume-btn');
+  const volumeRow = card.querySelector('.card-volume');
+  volumeBtn.addEventListener('click', () => {
+    const open = volumeRow.hidden;
+    volumeRow.hidden = !open;
+    volumeBtn.classList.toggle('active', open);
+    volumeBtn.setAttribute('aria-expanded', String(open));
   });
 
   updateCard(card, audio);

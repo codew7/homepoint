@@ -35,12 +35,15 @@
   </script>
   <!-- Agregar Select2 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <!-- Punto de venta del equipo: carga el config (Firebase) que le toca, o
+       frena la página y pide elegirlo si es la primera vez. Va después de
+       las hojas CSS y antes de los SDK de Firebase. -->
+  <script src="puntoVenta.js"></script>
   <!-- Firebase SDKs (solo una vez, última versión) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="config.js?v=20261005a"></script>
   <!-- Selector "¿Quién está en la caja?": va antes del script de login porque
        mostrarPanel() le delega la apertura de la caja. -->
   <script src="usuarioActivo.js?v=20261005a"></script>
@@ -138,6 +141,15 @@
         const el = document.getElementById(id);
         if (el) el.addEventListener('keypress', e => { if (e.key === 'Enter') iniciarSesion(); });
       });
+
+      // Punto de venta en el login: sólo si hay más de uno para elegir.
+      const pv = document.getElementById('loginPuntoVenta');
+      if (pv && window.PuntoVenta && PuntoVenta.multiple()) {
+        pv.querySelector('.login-pv-nombre').textContent = PuntoVenta.nombre();
+        const btn = pv.querySelector('.login-pv-cambiar');
+        btn.addEventListener('click', () => PuntoVenta.pedirCambio(() => btn.focus()));
+        pv.hidden = false;
+      }
     });
   </script>
 </head>
@@ -149,6 +161,14 @@
       <img src="logo.png" alt="HomePoint Logo" class="login-logo">
       <h1 class="login-title">Panel de Control</h1>
       <p class="login-subtitle">Inicia sesión para continuar</p>
+      <!-- Punto de venta del equipo (puntoVenta.js). "Cambiar" es la salida
+           si el equipo quedó en un punto sin usuario conocido: pide la
+           contraseña de Admin. -->
+      <p id="loginPuntoVenta" class="login-pv" hidden>
+        <span class="login-pv-nombre"></span>
+        <span class="login-pv-sep" aria-hidden="true">·</span>
+        <button type="button" class="login-pv-cambiar">Cambiar</button>
+      </p>
       <div id="loginError" class="login-error"></div>
       <div class="login-form">
         <input type="email" id="loginEmail" class="login-input" placeholder="Correo electrónico" autocomplete="email">
@@ -471,8 +491,9 @@
           <!-- Nota, vendedor y alias -->
           <div class="cobro-extra">
             <!-- La lista de vendedores la reescribe ingresoPedidoV2.js con el rango
-                 Vendedores!A:A de la planilla (consulta compartida con el selector
-                 de usuario de usuarioActivo.js, que además lo completa solo). Estas opciones son sólo el respaldo
+                 Usuarios!A:B de la planilla, sólo con los del punto de venta del
+                 equipo (consulta compartida con el selector de usuario de
+                 usuarioActivo.js, que además lo completa solo). Estas opciones son sólo el respaldo
                  para cuando Google Sheets no responde: sin vendedor no se puede
                  guardar el pedido, así que el desplegable nunca puede quedar vacío. -->
             <div class="form-row">

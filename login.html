@@ -15,7 +15,27 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="config.js"></script>
+  <script>
+    // Si se vuelve a una pantalla que trabaja por punto de venta (caja,
+    // historial, panel, consulta de pedidos, pedidos WhatsApp), se entra al
+    // proyecto del punto de venta del equipo (puntoVenta.js). El resto del
+    // panel, y el login sin ?redirect=, siguen con config.js.
+    (function() {
+      const PAGINAS_POR_PUNTO = ['index.html', 'ingresoPedidoV2.html', 'historialRecientes.html',
+                                 'buscarPedidos.html', 'pedidosWhatsapp.html'];
+      let porPunto = false;
+      try {
+        const destino = new URLSearchParams(location.search).get('redirect');
+        if (destino) {
+          // Sólo las de esta misma carpeta (no, por ejemplo, pantallaPrecios/index.html).
+          const ruta = new URL(destino, location.href).pathname;
+          const carpeta = location.pathname.replace(/[^/]*$/, '');
+          porPunto = ruta.startsWith(carpeta) && PAGINAS_POR_PUNTO.includes(ruta.slice(carpeta.length));
+        }
+      } catch (e) {}
+      document.write('<script src="' + (porPunto ? 'puntoVenta.js' : 'config.js') + '"><\/script>');
+    })();
+  </script>
   <script>
     firebase.initializeApp(firebaseConfig);
   </script>

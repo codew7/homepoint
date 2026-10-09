@@ -14,10 +14,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
 <!-- Firebase Auth Check -->
+<!-- Punto de venta del equipo (puntoVenta.js): carga el config (Firebase) que le toca. -->
+<script src="puntoVenta.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="config.js"></script>
 <!-- QZ Tray: impresión ESC-POS del ticket (igual que historialRecientes.html) -->
 <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <script>
@@ -812,7 +813,10 @@ function pintarMetrica(){
 
 /* ───────────────────────── IndexedDB: caché por día ───────────────────────── */
 
-const IDB_NOMBRE = 'homepoint-buscador';
+// Una caché por punto de venta: cada uno tiene su propia base de pedidos.
+// El punto 1 conserva el nombre de siempre (y lo ya descargado).
+const IDB_PUNTO = window.PuntoVenta ? PuntoVenta.actual() : null;
+const IDB_NOMBRE = 'homepoint-buscador' + (IDB_PUNTO && IDB_PUNTO !== '1' ? '-pv' + IDB_PUNTO : '');
 const IDB_VER = 1;
 let idb = null;
 
@@ -2318,9 +2322,11 @@ $('btnExportar').addEventListener('click', () => {
   // Nada de red hasta que Firebase confirme la sesion.
   const usuario = await sesionLista;
   $('cuenta').hidden = false;
-  $('cuentaMail').textContent = usuario.email || 'sesion activa';
+  $('cuentaMail').textContent = (usuario.email || 'sesion activa') +
+    (window.PuntoVenta && PuntoVenta.multiple() ? ' · ' + PuntoVenta.nombre() : '');
   $('btnSalir').addEventListener('click', function(){
-    firebase.auth().signOut().then(function(){ window.location.href = 'login.html'; });
+    // Con ?redirect= el login entra al proyecto del punto de venta del equipo.
+    firebase.auth().signOut().then(function(){ window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.pathname); });
   });
 
   // Sólo se abre el caché local para saber qué días ya están guardados:

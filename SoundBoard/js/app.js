@@ -3,6 +3,7 @@ import { listenPlayLog, logPlay } from './play-log.js';
 import { storage } from './firebase-init.js';
 import { audioPlayer } from './audio-player.js';
 import { scheduler } from './scheduler.js';
+import { applyActiveStates, setActiveState, forgetActiveState } from './active-state.js';
 import {
   renderAudioGrid,
   renderStats,
@@ -17,7 +18,8 @@ import {
 const desktop = window.soundboardDesktop || null;
 
 const state = {
-  audios: [],
+  rawAudios: [], // tal cual vienen de la DB
+  audios: [],    // con el activo/inactivo local aplicado
   filter: 'all',
   schedulingAudio: null,
   pendingDelete: null,
@@ -37,19 +39,8 @@ function init() {
 
   // Listen audios
   listenAudios(audios => {
-    state.audios = audios;
-    scheduler.syncAudios(audios);
-    renderAudioGrid(audios, state.filter, {
-      onPlay: (audio) => {
-        audioPlayer.play(audio, {
-          trigger: 'manual',
-          onPlayed: () => logPlay(audio, 'manual')
-        });
-      },
-      onSchedule: (audio) => openSchedulerModal(audio),
-      onDelete: (audio) => openDeleteModal(audio)
-    });
-    renderStats(audios);
+    state.rawAudios = audios;
+    applyAudios();
   });
 
   listenPlayLog(entries => renderPlayLog(entries));
@@ -73,6 +64,30 @@ function init() {
   scheduler.start();
 
   setupAudioGate();
+}
+
+const gridCallbacks = {
+  onPlay: (audio) => {
+    audioPlayer.play(audio, {
+      trigger: 'manual',
+      onPlayed: () => logPlay(audio, 'manual')
+    });
+  },
+  onSchedule: (audio) => openSchedulerModal(audio),
+  onDelete: (audio) => openDeleteModal(audio),
+  onToggleActive: (audio, isActive) => {
+    setActiveState(audio.id, isActive);
+    applyAudios();
+  }
+};
+
+// Combina lo que llega de la DB con el activo/inactivo guardado en este
+// navegador y redistribuye el resultado al scheduler y a la UI.
+function applyAudios() {
+  state.audios = applyActiveStates(state.rawAudios);
+  scheduler.syncAudios(state.audios);
+  renderAudioGrid(state.audios, state.filter, gridCallbacks);
+  renderStats(state.audios);
 }
 
 function setupClock() {
@@ -108,11 +123,7 @@ function setupFilterTabs() {
       document.querySelectorAll('.filter-tabs .tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       state.filter = tab.dataset.filter;
-      renderAudioGrid(state.audios, state.filter, {
-        onPlay: (audio) => audioPlayer.play(audio, { trigger: 'manual', onPlayed: () => logPlay(audio, 'manual') }),
-        onSchedule: openSchedulerModal,
-        onDelete: openDeleteModal
-      });
+      renderAudioGrid(state.audios, state.filter, gridCallbacks);
     });
   });
 }
@@ -307,6 +318,7 @@ async function confirmDelete() {
       }
     }
     await deleteAudioNode(audio.id);
+    forgetActiveState(audio.id);
     showToast('Audio eliminado', 'success');
     closeDeleteModal();
   } catch (err) {
