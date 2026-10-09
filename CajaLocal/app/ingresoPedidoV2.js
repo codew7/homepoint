@@ -3234,7 +3234,7 @@ if (cargarClienteBtn) {
   });
 }
 
-// === VENDEDORES: el desplegable se arma desde la planilla (Vendedores!A:A) ===
+// === VENDEDORES: el desplegable se arma desde la planilla (Usuarios!A:B, filtrada por punto de venta) ===
 // Las <option> que trae el HTML son sólo el respaldo para cuando la planilla no
 // responde: sin vendedor el pedido no se puede guardar, así que la caja nunca
 // puede quedarse con el desplegable vacío.

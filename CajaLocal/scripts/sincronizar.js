@@ -40,18 +40,23 @@ const ARCHIVOS = [
   'chat.css',
   'chat.js',
   'sw-imagenes.js',
+  // Punto de venta del equipo: elige cuál config de Firebase carga la caja.
+  'puntoVenta.js',
   'config.js',
+  'config2.js',
   'logo.png',
   'faviconnegro.png'
 ];
 
-// Tiene las claves de Firebase y no esta en GitHub: si en esta PC no esta en
-// la web, se conserva la copia que ya tenga la app.
-const SECRETOS = ['config.js'];
+// Tienen las claves de Firebase (una por punto de venta) y pueden no estar en
+// GitHub: si en esta PC no estan en la web, se conserva la copia de la app.
+const SECRETOS = ['config.js', 'config2.js'];
 
 // Nombres que aparecen en el codigo pero la app no necesita.
 const IGNORAR = {
   'index.html': 'panel de la web; login.html lo usa sólo si no le pasan ?redirect=',
+  'buscarPedidos.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
+  'pedidosWhatsapp.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
   'no-disponible.png': 'ingresoPedidoV2.js sólo compara el nombre, no carga la imagen'
 };
 

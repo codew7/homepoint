@@ -5,8 +5,10 @@
 //   · es el nombre con el que este equipo aparece en Mensajes (chat.js),
 //   · queda visible en el encabezado (#usuarioActualBtn), que permite cambiarlo.
 //
-// La lista sale de la planilla (Vendedores!A:A), la misma que arma el
-// desplegable de vendedores. "WhatsApp" no es una persona sino un modo, así
+// La lista sale de la planilla (Usuarios!A:B), la misma que arma el
+// desplegable de vendedores. La columna B dice en qué punto de venta trabaja
+// cada uno (puntoVenta.js): "1", "2"… o vacía si trabaja en todos. Se
+// muestran sólo los del punto de venta de este equipo. "WhatsApp" no es una persona sino un modo, así
 // que no aparece como botón.
 //
 // Se recuerda por pestaña (sessionStorage): después de guardar un pedido la
@@ -34,10 +36,12 @@
 (function() {
   'use strict';
 
-  const RANGO = 'Vendedores!A:A';
+  const RANGO = 'Usuarios!A:B';
   const SS_ACTUAL = 'hpUsuarioActivo';
   const LS_ULTIMO = 'hpUsuarioUltimo';
-  const LS_CACHE = 'hpVendedoresCache';
+  // La caché es por punto de venta: cada uno tiene su propia lista.
+  const PUNTO_VENTA = window.PuntoVenta ? PuntoVenta.actual() : null;
+  const LS_CACHE = 'hpVendedoresCache' + (PUNTO_VENTA && PUNTO_VENTA !== '1' ? '_' + PUNTO_VENTA : '');
   const EVENTO = 'usuarioactivo:cambio';
   const NO_PERSONAS = ['whatsapp'];
   const RUTA_PRESENCIA = 'chat/presencia';
@@ -162,7 +166,8 @@
           const nombre = (fila && fila[0] ? String(fila[0]) : '').trim();
           if (!nombre) return;
           // El rango arranca en A1: si esa celda es el rótulo de la columna, no es un vendedor.
-          if (i === 0 && ['vendedor', 'vendedores', 'nombre'].includes(nombre.toLowerCase())) return;
+          if (i === 0 && ['vendedor', 'vendedores', 'usuario', 'usuarios', 'nombre'].includes(nombre.toLowerCase())) return;
+          if (!trabajaEnEstePunto(fila[1])) return;
           const clave = nombre.toLowerCase();
           if (vistos.has(clave)) return;
           vistos.add(clave);
@@ -176,6 +181,14 @@
         return [];
       });
     return promesaVendedores;
+  }
+
+  // Columna B vacía = trabaja en todos los puntos de venta. Admite varios
+  // separados por coma ("1, 2"). Sin punto de venta definido no se filtra.
+  function trabajaEnEstePunto(celda) {
+    const valor = (celda == null ? '' : String(celda)).trim();
+    if (!valor || !PUNTO_VENTA) return true;
+    return valor.split(/[\s,;\/]+/).filter(Boolean).includes(PUNTO_VENTA);
   }
 
   function soloPersonas(nombres) {
@@ -232,12 +245,26 @@
           <span class="usr-pie-tecla" aria-hidden="true">Enter</span>
           para elegir · Podés cambiar de usuario desde el encabezado
         </footer>
+        <div class="usr-pv" hidden>
+          <span class="usr-pv-nombre"></span>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="usr-pv-cambiar">Cambiar punto de venta</button>
+        </div>
       </div>`;
     document.body.appendChild(overlay);
 
     grilla = overlay.querySelector('#usrGrilla');
     estadoEl = overlay.querySelector('#usrEstado');
     construirClave();
+    // Punto de venta del equipo (puntoVenta.js): discreto, al pie. Cambiarlo
+    // pide la contraseña de Admin y recarga la página en el otro proyecto.
+    const pv = overlay.querySelector('.usr-pv');
+    if (window.PuntoVenta && PuntoVenta.multiple()) {
+      pv.querySelector('.usr-pv-nombre').textContent = PuntoVenta.nombre();
+      const btn = pv.querySelector('.usr-pv-cambiar');
+      btn.addEventListener('click', () => PuntoVenta.pedirCambio(() => btn.focus({ preventScroll: true })));
+      pv.hidden = false;
+    }
     grilla.addEventListener('click', e => {
       const b = e.target.closest('.usr-tile');
       if (b) elegir(b.dataset.nombre, b);
@@ -371,7 +398,9 @@
   function pintarFecha() {
     const el = overlay.querySelector('#usrFecha');
     const txt = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
-    el.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+    const fecha = txt.charAt(0).toUpperCase() + txt.slice(1);
+    const pv = window.PuntoVenta && PuntoVenta.multiple() ? PuntoVenta.nombre() : '';
+    el.textContent = pv ? pv + ' · ' + fecha : fecha;
   }
 
   function pintarTiles(personas) {
