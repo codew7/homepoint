@@ -1,0 +1,1952 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<!-- Fuera de los buscadores (igual que el resto del panel). -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#EEF1F4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Traspasos">
+<title>Traspasos · HomePoint</title>
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<!-- Lector de códigos de barras -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<!-- Config propia de esta carpeta (pedidos-87064). No usa archivos de afuera. -->
+<script src="config.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --fog:#EEF1F4;
+  --fog-2:#E4E8EE;
+  --paper:#FFFFFF;
+  --ink:#14213D;
+  --ink-2:#3D4A66;
+  --muted:#7A8499;
+  --faint:#AEB5C4;
+  --line:#DDE2EA;
+  --line-2:#CDD3DE;
+  --munro:#7cb342;
+  --caseros:#3f8fe6;
+  --amber:#F2A007;
+  --amber-soft:#FDF1D6;
+  --red:#E5484D;
+  --red-soft:#FCE5E6;
+  --mine:var(--ink);       /* color de la sucursal de este teléfono (lo pisa JS) */
+  --other:var(--ink-2);
+
+  --f-display:'Archivo',system-ui,sans-serif;
+  --f-body:'Instrument Sans',system-ui,-apple-system,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+
+  --r-lg:22px;
+  --r:16px;
+  --r-sm:12px;
+  --sh:0 1px 2px rgba(20,33,61,.06),0 6px 18px -8px rgba(20,33,61,.16);
+  --sh-lg:0 24px 60px -20px rgba(20,33,61,.38);
+  --tab-h:64px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+
+html,body{background:var(--fog);color:var(--ink);font-family:var(--f-body);font-size:16px}
+body{min-height:100dvh;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+:focus-visible{outline:2.5px solid var(--ink);outline-offset:2px;border-radius:8px}
+img{display:block}
+[hidden]{display:none!important}
+
+.app{max-width:540px;margin:0 auto;min-height:100dvh;position:relative}
+
+/* ====== tipografía ====== */
+.display{font-family:var(--f-display);font-stretch:125%;font-weight:800;letter-spacing:.01em;text-transform:uppercase}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-display);font-stretch:112%;font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* ====== RUTA (firma) ====== */
+.ruta{display:flex;align-items:center;gap:10px;min-width:0}
+.ruta-n{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ruta-n b{font-family:var(--f-display);font-stretch:125%;font-weight:850;text-transform:uppercase;letter-spacing:.01em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ruta-n small{font-family:var(--f-display);font-stretch:112%;font-size:.58rem;font-weight:700;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.ruta-n.d{text-align:right;align-items:flex-end}
+.ruta-line{flex:1;min-width:28px;height:2px;position:relative;background:linear-gradient(90deg,var(--o),var(--d));border-radius:2px}
+.ruta-line::before,.ruta-line::after{content:"";position:absolute;top:50%;width:8px;height:8px;border-radius:50%;transform:translateY(-50%)}
+.ruta-line::before{left:-2px;background:var(--o)}
+.ruta-line::after{right:-3px;width:0;height:0;border-radius:0;border-left:8px solid var(--d);border-top:5px solid transparent;border-bottom:5px solid transparent}
+/* En viaje: un paquete recorre la línea */
+.ruta-line i{position:absolute;top:50%;left:0;width:10px;height:10px;margin-top:-5px;border-radius:3px;background:var(--ink);box-shadow:0 0 0 3px var(--paper);opacity:0}
+.ruta.viaje .ruta-line i{opacity:1;animation:viaje 2.6s var(--ease) infinite}
+@keyframes viaje{0%{left:0;opacity:0}12%{opacity:1}85%{opacity:1}100%{left:calc(100% - 10px);opacity:0}}
+.ruta.lg .ruta-n b{font-size:1.55rem}
+.ruta.md .ruta-n b{font-size:1rem}
+.ruta.sm{gap:7px}
+.ruta.sm .ruta-n b{font-size:.78rem}
+.ruta.sm .ruta-line::before{width:6px;height:6px}
+.ruta.sm .ruta-line::after{border-left-width:6px;border-top-width:4px;border-bottom-width:4px}
+
+/* ====== HEADER ====== */
+.top{position:sticky;top:0;z-index:50;padding:calc(10px + var(--safe-t)) 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:color-mix(in srgb,var(--fog) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:9px}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:var(--ink);display:grid;place-items:center}
+.brand-mark svg{width:17px;height:17px}
+.brand b{font-family:var(--f-display);font-stretch:125%;font-weight:850;font-size:.86rem;letter-spacing:.06em}
+.suc-pill{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 8px 0 13px;border-radius:999px;background:var(--paper);box-shadow:var(--sh);font-weight:700;font-size:.84rem}
+.suc-pill .dot{width:9px;height:9px;border-radius:50%;background:var(--mine);box-shadow:0 0 0 3px color-mix(in srgb,var(--mine) 22%,transparent)}
+.suc-pill .net{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--fog)}
+.suc-pill .net::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--munro)}
+.suc-pill.offline .net::before{background:var(--red)}
+
+/* ====== VISTAS ====== */
+.view{display:none;padding:6px 16px calc(var(--tab-h) + var(--safe-b) + 110px)}
+.view.on{display:block;animation:entra .32s var(--ease)}
+@keyframes entra{from{opacity:0;transform:translateY(8px)}}
+
+.hero{padding:14px 2px 20px}
+.hero .eyebrow{margin-bottom:12px}
+.hero-sub{margin-top:12px;font-size:.88rem;color:var(--ink-2);line-height:1.45}
+.hero-sub b{font-weight:700;color:var(--ink)}
+
+.seg{display:flex;padding:4px;gap:4px;background:var(--fog-2);border-radius:14px;margin:4px 0 16px}
+.seg button{flex:1;height:38px;border-radius:10px;font-weight:700;font-size:.84rem;color:var(--muted);transition:background .2s,color .2s,box-shadow .2s;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.seg button.on{background:var(--paper);color:var(--ink);box-shadow:var(--sh)}
+.seg .n{font-family:var(--f-mono);font-size:.72rem;color:var(--faint)}
+.seg button.on .n{color:var(--muted)}
+
+/* buscador */
+.search{position:relative;display:flex;gap:8px;position:sticky;top:calc(58px + var(--safe-t));z-index:20;padding:6px 0 10px;background:var(--fog)}
+.search-box{flex:1;position:relative}
+.search-box svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted);pointer-events:none}
+.search input{width:100%;height:52px;border-radius:var(--r);border:1.5px solid transparent;background:var(--paper);box-shadow:var(--sh);padding:0 42px 0 44px;font-size:1rem;font-weight:500;outline:none;transition:border-color .2s}
+.search input:focus{border-color:var(--ink)}
+.search input::placeholder{color:var(--faint)}
+.search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.btn-scan{flex:0 0 52px;height:52px;border-radius:var(--r);background:var(--ink);color:#fff;display:grid;place-items:center;box-shadow:var(--sh)}
+.btn-scan svg{width:22px;height:22px}
+.btn-scan:active{transform:scale(.96)}
+
+/* resultados */
+.results{display:flex;flex-direction:column;gap:8px}
+.art{display:flex;align-items:center;gap:12px;padding:10px;background:var(--paper);border-radius:var(--r);box-shadow:var(--sh);min-height:72px;transition:box-shadow .2s}
+.art.in{box-shadow:inset 0 0 0 1.5px var(--ink),var(--sh)}
+.thumb{width:52px;height:52px;flex-shrink:0;border-radius:11px;background:var(--fog);overflow:hidden;display:grid;place-items:center;font-family:var(--f-display);font-stretch:125%;font-weight:800;font-size:.8rem;color:var(--faint)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.art-info{flex:1;min-width:0}
+.art-name{font-weight:700;font-size:.9rem;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.art-meta{margin-top:4px;font-family:var(--f-mono);font-size:.7rem;color:var(--muted);display:flex;gap:8px;align-items:center}
+.tag{font-family:var(--f-body);font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--fog-2);color:var(--muted)}
+.btn-add{flex:0 0 48px;height:48px;border-radius:13px;background:var(--fog);color:var(--ink);display:grid;place-items:center;transition:background .15s,transform .1s}
+.btn-add svg{width:20px;height:20px}
+.btn-add:active{transform:scale(.93);background:var(--fog-2)}
+
+.empty{text-align:center;padding:42px 20px;color:var(--muted)}
+.empty svg{width:46px;height:46px;color:var(--faint);margin-bottom:14px}
+.empty b{display:block;color:var(--ink);font-size:1rem;margin-bottom:6px}
+.empty p{font-size:.86rem;line-height:1.5;max-width:300px;margin:0 auto}
+.more{text-align:center;font-size:.78rem;color:var(--muted);padding:12px}
+
+/* stepper */
+.stp{display:flex;align-items:center;gap:4px;background:var(--fog);border-radius:14px;padding:3px}
+.stp-btn{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;color:var(--ink);background:var(--paper);box-shadow:0 1px 2px rgba(20,33,61,.08);touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform .08s,opacity .15s}
+.stp-btn svg{width:16px;height:16px}
+.stp-btn:active:not(:disabled){transform:scale(.92)}
+.stp-btn:disabled{opacity:.35;cursor:not-allowed}
+.stp-btn.plus{background:var(--ink);color:#fff}
+.stp-val{width:48px;flex:none;min-width:0;height:42px;text-align:center;font-family:var(--f-mono);font-weight:600;font-size:1.05rem;border:none;background:transparent;outline:none;-moz-appearance:textfield}
+.stp-val::-webkit-outer-spin-button,.stp-val::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* barra de acción fija (sobre la tab bar) */
+.dock{position:fixed;left:0;right:0;bottom:calc(var(--tab-h) + var(--safe-b));z-index:60;padding:10px 16px 12px;max-width:540px;margin:0 auto;pointer-events:none}
+.dock.pick-dock{bottom:0;padding-bottom:calc(12px + var(--safe-b))}
+.cta{pointer-events:auto;width:100%;min-height:58px;border-radius:18px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 10px 0 20px;box-shadow:var(--sh-lg);font-weight:700;font-size:.98rem;transition:transform .12s,opacity .2s,background .2s}
+.cta:active:not(:disabled){transform:scale(.985)}
+.cta:disabled{opacity:.55;cursor:not-allowed}
+.cta .cta-k{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 13px;border-radius:12px;background:rgba(255,255,255,.12);font-family:var(--f-mono);font-size:.84rem}
+.cta.warn{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line-2),var(--sh-lg)}
+.cta.warn .cta-k{background:var(--amber-soft);color:#8A5A00}
+.cta.danger{background:var(--red)}
+.cta.center{justify-content:center;padding:0 20px}
+.dock-enter{animation:dockIn .34s var(--ease)}
+@keyframes dockIn{from{transform:translateY(20px);opacity:0}}
+
+/* ====== TAB BAR ====== */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:70;max-width:540px;margin:0 auto;height:calc(var(--tab-h) + var(--safe-b));padding:0 10px var(--safe-b);display:flex;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:.7rem;font-weight:700;color:var(--muted);position:relative;transition:color .2s}
+.tab svg{width:23px;height:23px}
+.tab.on{color:var(--ink)}
+.tab.on::before{content:"";position:absolute;top:0;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--mine)}
+.badge{position:absolute;top:7px;left:calc(50% + 6px);min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--amber);color:var(--ink);font-family:var(--f-mono);font-size:.66rem;font-weight:600;display:grid;place-items:center;box-shadow:0 0 0 2.5px var(--paper)}
+.badge.pop{animation:pop .4s var(--ease)}
+@keyframes pop{40%{transform:scale(1.3)}}
+
+/* ====== REMITO ====== */
+.remitos{display:flex;flex-direction:column;gap:14px}
+.remito{position:relative;width:100%;text-align:left;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);transition:transform .12s}
+.remito:active{transform:scale(.99)}
+.remito-top{padding:15px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.remito-num{font-family:var(--f-mono);font-size:.74rem;font-weight:600;color:var(--muted);flex-shrink:0}
+.remito-body{padding:0 16px 14px}
+.remito-sum{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.remito-sum b{font-family:var(--f-mono);font-size:1.35rem;font-weight:600;letter-spacing:-.02em}
+.remito-sum span{font-size:.8rem;color:var(--muted);font-weight:600}
+.remito-items{font-size:.8rem;color:var(--ink-2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* perforación: línea punteada con muescas a los lados */
+.remito-stub{position:relative;border-top:2px dashed var(--line);padding:11px 16px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.remito-stub::before,.remito-stub::after{content:"";position:absolute;top:-10px;width:18px;height:18px;border-radius:50%;background:var(--fog)}
+.remito-stub::before{left:-9px}
+.remito-stub::after{right:-9px}
+.remito-meta{font-size:.74rem;color:var(--muted);font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.remito-go{display:inline-flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--ink);flex-shrink:0}
+.remito-go svg{width:16px;height:16px}
+.remito.nuevo{animation:nuevo 1.4s var(--ease)}
+@keyframes nuevo{0%{box-shadow:0 0 0 0 var(--amber),var(--sh)}30%{box-shadow:0 0 0 5px color-mix(in srgb,var(--amber) 60%,transparent),var(--sh)}}
+
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.PENDIENTE{background:var(--amber-soft);color:#8A5A00}
+.chip.PREPARANDO{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.chip.PREPARANDO::before{animation:late 1.2s ease-in-out infinite}
+@keyframes late{50%{opacity:.25}}
+.chip.ENVIADO{background:var(--ink);color:#fff}
+.chip.RECIBIDO{background:var(--fog-2);color:var(--ink-2)}
+.chip.CANCELADO{background:var(--red-soft);color:#A3262B}
+
+/* ====== CAPAS (sheets y pantallas) ====== */
+.scrim{position:fixed;inset:0;z-index:90;background:rgba(20,33,61,.42);opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:100;max-width:540px;margin:0 auto;max-height:92dvh;display:flex;flex-direction:column;background:var(--paper);border-radius:26px 26px 0 0;box-shadow:var(--sh-lg);transform:translateY(105%);transition:transform .34s var(--ease);visibility:hidden}
+.sheet.open{transform:none;visibility:visible}
+.sheet-grip{width:40px;height:5px;border-radius:5px;background:var(--line-2);margin:10px auto 2px;flex-shrink:0}
+.sheet-head{padding:12px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0}
+.sheet-head h2{font-size:1.15rem;font-weight:700;letter-spacing:-.01em}
+.sheet-head p{font-size:.82rem;color:var(--muted);margin-top:3px}
+.sheet-x{width:38px;height:38px;border-radius:50%;background:var(--fog);display:grid;place-items:center;flex-shrink:0}
+.sheet-x svg{width:18px;height:18px}
+.sheet-body{flex:1;overflow-y:auto;padding:0 20px 16px;overscroll-behavior:contain}
+.sheet-foot{flex-shrink:0;padding:12px 20px calc(14px + var(--safe-b));border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.btn{height:54px;border-radius:16px;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 18px;transition:transform .1s,opacity .2s}
+.btn:active:not(:disabled){transform:scale(.985)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-ink{background:var(--ink);color:#fff}
+.btn-ghost{background:var(--fog);color:var(--ink)}
+.btn-red{background:var(--red-soft);color:#A3262B}
+.btn-row{display:flex;gap:8px}
+.btn-row .btn{flex:1}
+
+.screen{position:fixed;inset:0;z-index:80;background:var(--fog);overflow-y:auto;transform:translateX(100%);transition:transform .36s var(--ease);visibility:hidden}
+.screen.open{transform:none;visibility:visible}
+.screen-inner{max-width:540px;margin:0 auto;padding:0 16px calc(120px + var(--safe-b))}
+
+/* carrito */
+.cart-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.cart-row:last-child{border-bottom:none}
+.cart-row .thumb{width:44px;height:44px;border-radius:10px}
+.cart-row .art-name{font-size:.86rem}
+.cart-row .stp-btn{width:38px;height:38px}
+.cart-row .stp-val{width:40px;height:38px;font-size:.95rem}
+.nota{width:100%;min-height:76px;resize:vertical;border-radius:var(--r-sm);border:1.5px solid var(--line);background:var(--fog);padding:12px 14px;font-size:.9rem;outline:none;margin-top:14px}
+.nota:focus{border-color:var(--ink);background:var(--paper)}
+.lbl{display:block;font-size:.74rem;font-weight:700;color:var(--muted);margin:18px 0 0}
+
+/* ====== DETALLE ====== */
+.det-route{padding:6px 0 18px;border-bottom:2px dashed var(--line);margin-bottom:16px}
+.det-route .remito-num{display:block;margin-bottom:12px}
+.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:4px 0 20px;position:relative}
+.tl{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;position:relative}
+.tl::before{content:"";position:absolute;top:8px;left:-50%;right:50%;height:2px;background:var(--line)}
+.tl:first-child::before{display:none}
+.tl.done::before{background:var(--ink)}
+.tl-dot{width:18px;height:18px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 2px var(--line-2);position:relative;z-index:1;display:grid;place-items:center}
+.tl.done .tl-dot{background:var(--ink);box-shadow:none}
+.tl.done .tl-dot::after{content:"";width:6px;height:6px;border-radius:50%;background:#fff}
+.tl.cur .tl-dot{box-shadow:inset 0 0 0 2px var(--ink),0 0 0 4px color-mix(in srgb,var(--ink) 12%,transparent)}
+.tl b{font-size:.68rem;font-weight:700}
+.tl small{font-family:var(--f-mono);font-size:.6rem;color:var(--muted);min-height:1em}
+.det-meta{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:.82rem;margin-bottom:18px}
+.det-meta dt{color:var(--muted);font-weight:600}
+.det-meta dd{font-weight:600;text-align:right;word-break:break-word}
+.det-nota{background:var(--fog);border-radius:var(--r-sm);padding:12px 14px;font-size:.86rem;line-height:1.45;margin-bottom:18px;color:var(--ink-2)}
+.det-nota b{display:block;font-size:.7rem;color:var(--muted);margin-bottom:4px}
+.det-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.det-row:last-child{border-bottom:none}
+.det-row .thumb{width:44px;height:44px;border-radius:10px}
+.det-q{text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.det-q .q{font-family:var(--f-mono);font-weight:600;font-size:1rem}
+.det-q s{color:var(--faint);font-size:.82rem;margin-right:6px;font-weight:500}
+.motivo{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:6px}
+.motivo.PARCIAL{background:var(--amber-soft);color:#8A5A00}
+.motivo.SIN_STOCK,.motivo.QUITADO{background:var(--red-soft);color:#A3262B}
+.det-row.cero .art-name{color:var(--muted)}
+.diff-note{display:flex;gap:10px;align-items:flex-start;background:var(--amber-soft);color:#6B4600;border-radius:var(--r-sm);padding:12px 14px;font-size:.82rem;line-height:1.4;margin-bottom:14px}
+.diff-note svg{width:18px;height:18px;flex-shrink:0;margin-top:1px}
+
+/* ====== PICKING ====== */
+.pick-top{position:sticky;top:0;z-index:5;background:var(--fog);padding:calc(10px + var(--safe-t)) 0 12px;margin:0 -16px;padding-left:16px;padding-right:16px}
+.pick-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.back{width:42px;height:42px;border-radius:50%;background:var(--paper);box-shadow:var(--sh);display:grid;place-items:center;flex-shrink:0}
+.back svg{width:20px;height:20px}
+.pick-bar .remito-num{margin-left:auto}
+.pick-route{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);padding:16px}
+.pick-who{margin-top:12px;font-size:.78rem;color:var(--muted);font-weight:500}
+.pick-who b{color:var(--ink-2);font-weight:700}
+.progress{margin-top:14px;display:flex;align-items:center;gap:12px}
+.progress-bar{flex:1;height:6px;border-radius:6px;background:var(--fog-2);overflow:hidden}
+.progress-bar i{display:block;height:100%;background:var(--ink);border-radius:6px;transition:width .35s var(--ease)}
+.progress span{font-family:var(--f-mono);font-size:.74rem;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.pick-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.pk{background:var(--paper);border-radius:var(--r);box-shadow:var(--sh);padding:12px;transition:box-shadow .2s,opacity .2s}
+.pk.ok{box-shadow:inset 4px 0 0 var(--ink),var(--sh)}
+.pk.cero.ok{box-shadow:inset 4px 0 0 var(--red),var(--sh)}
+.pk-head{display:flex;gap:12px;align-items:flex-start}
+.pk-head .thumb{width:56px;height:56px}
+.pk-req{margin-top:5px;font-size:.74rem;color:var(--muted);font-weight:600}
+.pk-req b{font-family:var(--f-mono);color:var(--ink);font-size:.84rem}
+.pk-check{width:46px;height:46px;flex-shrink:0;border-radius:14px;border:2px solid var(--line-2);display:grid;place-items:center;color:transparent;transition:all .18s}
+.pk-check svg{width:22px;height:22px}
+.pk.ok .pk-check{background:var(--ink);border-color:var(--ink);color:#fff}
+.pk.cero.ok .pk-check{background:var(--red);border-color:var(--red)}
+.pk-ctrl{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap}
+.pk-acts{display:flex;gap:6px}
+.pk-act{height:42px;padding:0 13px;border-radius:12px;font-size:.78rem;font-weight:700;background:var(--fog);color:var(--ink-2);transition:background .15s,color .15s}
+.pk-act.on{background:var(--red-soft);color:#A3262B}
+.pk-diff{margin-top:9px;font-size:.74rem;font-weight:600;color:#8A5A00}
+.pk-diff.red{color:#A3262B}
+.pk.quitado{display:flex;align-items:center;gap:12px;padding:12px 14px;box-shadow:inset 0 0 0 1.5px var(--line-2);background:transparent}
+.pk.quitado .art-name{color:var(--muted);text-decoration:line-through;font-size:.84rem;flex:1}
+.pk.quitado .pk-act{background:var(--paper)}
+.pick-lock{margin-top:12px;display:flex;gap:10px;align-items:center;background:var(--amber-soft);border-radius:var(--r-sm);padding:12px 14px;font-size:.82rem;color:#6B4600;line-height:1.4}
+.pick-lock .btn{height:40px;font-size:.8rem;padding:0 12px;margin-left:auto;flex-shrink:0;background:var(--paper)}
+.pick-start{margin-top:18px}
+.pick-start p{font-size:.84rem;color:var(--muted);text-align:center;margin-top:10px;line-height:1.45}
+
+/* confirmación de despacho */
+.conf-sum{display:flex;gap:10px;margin-bottom:16px}
+.conf-sum div{flex:1;background:var(--fog);border-radius:var(--r-sm);padding:12px 14px}
+.conf-sum b{display:block;font-family:var(--f-mono);font-size:1.4rem;font-weight:600}
+.conf-sum span{font-size:.72rem;color:var(--muted);font-weight:600}
+.conf-mov{font-size:.78rem;color:var(--muted);line-height:1.5;margin-top:4px}
+.conf-mov b{color:var(--ink-2);font-family:var(--f-mono)}
+
+/* ====== ÉXITO ====== */
+.done-wrap{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:22px;padding:30px 4px calc(30px + var(--safe-b))}
+.done-mark{width:84px;height:84px;border-radius:26px;background:var(--ink);color:#fff;display:grid;place-items:center;animation:stamp .5s var(--ease)}
+.done-mark svg{width:42px;height:42px}
+@keyframes stamp{0%{transform:scale(1.4) rotate(-8deg);opacity:0}100%{transform:none;opacity:1}}
+.done-wrap h1{font-size:1.7rem;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.done-wrap .done-sub{font-size:.95rem;color:var(--ink-2);line-height:1.5;margin-top:8px}
+.done-card{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);padding:18px}
+.done-card .remito-num{display:block;margin-bottom:12px}
+
+/* ====== LOGIN / SUCURSAL ====== */
+.gate{position:fixed;inset:0;z-index:200;background:var(--fog);overflow-y:auto;display:none}
+.gate.on{display:block}
+.gate-inner{max-width:440px;margin:0 auto;min-height:100dvh;padding:calc(36px + var(--safe-t)) 22px calc(28px + var(--safe-b));display:flex;flex-direction:column}
+.gate-route{margin:26px 0 30px;padding:20px;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh)}
+.gate h1{font-size:1.9rem;font-weight:700;letter-spacing:-.025em;line-height:1.12}
+.gate .lead{margin-top:10px;font-size:.95rem;color:var(--ink-2);line-height:1.5}
+.field{display:flex;flex-direction:column;gap:7px;margin-top:14px}
+.field label{font-size:.76rem;font-weight:700;color:var(--ink-2)}
+.field input{height:54px;border-radius:var(--r);border:1.5px solid var(--line);background:var(--paper);padding:0 16px;font-size:1rem;outline:none;transition:border-color .2s}
+.field input:focus{border-color:var(--ink)}
+.gate-err{min-height:22px;margin-top:12px;font-size:.84rem;font-weight:600;color:#A3262B}
+.gate .btn{width:100%;margin-top:6px}
+.suc-opts{display:flex;flex-direction:column;gap:12px;margin-top:28px}
+.suc-opt{display:flex;align-items:center;gap:16px;padding:20px;border-radius:var(--r-lg);background:var(--paper);box-shadow:var(--sh);text-align:left;border:2px solid transparent;transition:border-color .2s,transform .12s}
+.suc-opt:active{transform:scale(.99)}
+.suc-opt.on{border-color:var(--t)}
+.suc-opt .sw{width:52px;height:52px;border-radius:16px;background:var(--t);display:grid;place-items:center;color:#fff;flex-shrink:0}
+.suc-opt .sw svg{width:26px;height:26px}
+.suc-opt b{display:block;font-family:var(--f-display);font-stretch:125%;font-weight:850;font-size:1.25rem;text-transform:uppercase}
+.suc-opt small{font-size:.78rem;color:var(--muted);font-weight:600}
+.suc-opt .actual{margin-left:auto;font-size:.68rem;font-weight:700;color:var(--muted);background:var(--fog);padding:4px 9px;border-radius:999px}
+
+/* menú */
+.menu-user{display:flex;align-items:center;gap:12px;padding:4px 0 18px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--fog-2);display:grid;place-items:center;font-weight:700;color:var(--ink-2)}
+.menu-user b{display:block;font-size:.92rem}
+.menu-user span{font-size:.78rem;color:var(--muted)}
+.menu-item{width:100%;display:flex;align-items:center;gap:14px;padding:15px 2px;font-weight:600;font-size:.94rem;border-bottom:1px solid var(--line);text-align:left}
+.menu-item:last-child{border-bottom:none}
+.menu-item svg{width:20px;height:20px;color:var(--muted)}
+.menu-item.red{color:#A3262B}
+.menu-item.red svg{color:#A3262B}
+
+/* ====== ESCÁNER ====== */
+.scan{position:fixed;inset:0;z-index:300;background:#0B1222;display:none;flex-direction:column}
+.scan.on{display:flex}
+.scan-top{padding:calc(14px + var(--safe-t)) 18px 12px;display:flex;align-items:center;justify-content:space-between;color:#fff}
+.scan-top b{font-family:var(--f-display);font-stretch:125%;font-weight:800;font-size:.86rem;letter-spacing:.06em}
+.scan-done{height:42px;padding:0 18px;border-radius:999px;background:#fff;color:var(--ink);font-weight:700;font-size:.88rem}
+.scan-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 18px;gap:18px}
+#reader{width:100%;max-width:460px;border-radius:22px;overflow:hidden}
+#reader video{border-radius:22px;object-fit:cover}
+#reader img[alt="Info icon"],#reader span{display:none!important}
+.scan-feed{min-height:64px;width:100%;max-width:460px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.scan-hint{color:rgba(255,255,255,.6);font-size:.86rem}
+.scan-last{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.1);color:#fff;border-radius:14px;padding:10px 14px;font-size:.86rem;font-weight:600;max-width:100%;animation:entra .25s var(--ease)}
+.scan-last b{font-family:var(--f-mono);color:var(--munro)}
+.scan-last.err b{color:var(--red)}
+.scan-last span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scan-count{font-family:var(--f-mono);font-size:.76rem;color:rgba(255,255,255,.55)}
+
+/* ====== BLOQUEO + TOAST ====== */
+.block{position:fixed;inset:0;z-index:400;background:rgba(238,241,244,.82);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.block.on{display:flex}
+.spin{width:38px;height:38px;border-radius:50%;border:3px solid var(--line-2);border-top-color:var(--ink);animation:gira .8s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+.block p{font-weight:700;font-size:.9rem}
+.toast{position:fixed;left:50%;top:calc(14px + var(--safe-t));z-index:500;transform:translate(-50%,-120px);opacity:0;max-width:calc(100% - 32px);width:max-content;padding:13px 18px;border-radius:16px;background:var(--ink);color:#fff;font-size:.86rem;font-weight:600;box-shadow:var(--sh-lg);transition:transform .32s var(--ease),opacity .2s;display:flex;align-items:center;gap:10px}
+.toast.on{transform:translate(-50%,0);opacity:1}
+.toast.err{background:var(--red)}
+.toast.aviso{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 2px var(--amber),var(--sh-lg)}
+
+.skeleton{height:150px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--fog-2),#F4F6F9,var(--fog-2));background-size:200% 100%;animation:shimmer 1.3s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .ruta.viaje .ruta-line i{opacity:1;left:calc(50% - 5px)}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div class="gate" id="login">
+  <div class="gate-inner">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><b>TRASPASOS</b></div>
+    <div class="gate-route" id="loginRoute"></div>
+    <h1>Mercadería entre sucursales, sin papeles.</h1>
+    <p class="lead">Pedí lo que falta en tu local y prepará lo que te piden desde el otro.</p>
+    <form id="loginForm" novalidate>
+      <div class="field"><label for="loginEmail">Email</label><input type="email" id="loginEmail" autocomplete="username" inputmode="email" required></div>
+      <div class="field"><label for="loginPass">Contraseña</label><input type="password" id="loginPass" autocomplete="current-password" required></div>
+      <div class="gate-err" id="loginErr" role="alert"></div>
+      <button type="submit" class="btn btn-ink" id="loginBtn">Iniciar sesión</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== ELECCIÓN DE SUCURSAL ===================== -->
+<div class="gate" id="sucGate">
+  <div class="gate-inner">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><b>TRASPASOS</b></div>
+    <h1 style="margin-top:34px" id="sucGateTitle">¿En qué sucursal está este teléfono?</h1>
+    <p class="lead" id="sucGateLead">Desde acá vas a pedir mercadería para esa sucursal y preparar lo que te pidan desde la otra. El teléfono lo recuerda.</p>
+    <div class="suc-opts" id="sucOpts" role="listbox" aria-labelledby="sucGateTitle"></div>
+    <button type="button" class="btn btn-ghost" id="sucGateCancel" style="margin-top:16px" hidden>Cancelar</button>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div class="app" id="app" hidden>
+  <header class="top">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><b>TRASPASOS</b></div>
+    <button type="button" class="suc-pill" id="menuBtn" aria-label="Menú y sucursal del equipo">
+      <span class="dot"></span><span id="sucPillName">—</span><span class="net" title="Conexión"></span>
+    </button>
+  </header>
+
+  <!-- PEDIR -->
+  <section class="view on" id="v-pedir" aria-label="Pedir mercadería">
+    <div class="hero">
+      <div class="eyebrow">Nuevo pedido</div>
+      <div id="pedirRoute"></div>
+      <p class="hero-sub" id="pedirSub"></p>
+    </div>
+    <div class="search">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" id="q" placeholder="Nombre, código o código de barras" autocomplete="off" enterkeyhint="search" aria-label="Buscar artículo">
+        <button type="button" class="search-clear" id="qClear" aria-label="Borrar búsqueda" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <button type="button" class="btn-scan" id="scanBtn" aria-label="Escanear código de barras">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M8 9v6M11 9v6M14 9v6M17 9v6"/></svg>
+      </button>
+    </div>
+    <div class="results" id="results"></div>
+  </section>
+
+  <!-- MIS PEDIDOS -->
+  <section class="view" id="v-pedidos" aria-label="Mis pedidos">
+    <div class="hero">
+      <div class="eyebrow">Mis pedidos</div>
+      <p class="hero-sub" id="pedidosSub" style="margin-top:0"></p>
+    </div>
+    <div class="seg" role="tablist" id="segPedidos">
+      <button type="button" class="on" data-f="curso" role="tab">En curso <span class="n" id="nCurso">0</span></button>
+      <button type="button" data-f="hist" role="tab">Historial <span class="n" id="nHist">0</span></button>
+    </div>
+    <div class="remitos" id="listPedidos"></div>
+  </section>
+
+  <!-- PREPARAR -->
+  <section class="view" id="v-preparar" aria-label="Preparar pedidos">
+    <div class="hero">
+      <div class="eyebrow">Para preparar</div>
+      <p class="hero-sub" id="prepSub" style="margin-top:0"></p>
+    </div>
+    <div class="seg" role="tablist" id="segPrep">
+      <button type="button" class="on" data-f="pend" role="tab">Por preparar <span class="n" id="nPend">0</span></button>
+      <button type="button" data-f="desp" role="tab">Despachados <span class="n" id="nDesp">0</span></button>
+    </div>
+    <div class="remitos" id="listPrep"></div>
+  </section>
+
+  <div class="dock" id="cartDock" hidden>
+    <button type="button" class="cta" id="cartCta"></button>
+  </div>
+
+  <nav class="tabs" aria-label="Secciones">
+    <button type="button" class="tab on" data-v="pedir">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="5"/></svg>
+      Pedir
+    </button>
+    <button type="button" class="tab" data-v="pedidos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+      Mis pedidos
+      <span class="badge" id="badgePedidos" hidden></span>
+    </button>
+    <button type="button" class="tab" data-v="preparar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>
+      Preparar
+      <span class="badge" id="badgePrep" hidden></span>
+    </button>
+  </nav>
+</div>
+
+<!-- ===================== CAPAS ===================== -->
+<div class="scrim" id="scrim"></div>
+
+<!-- Carrito -->
+<div class="sheet" id="cartSheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <div><h2 id="cartTitle">Tu pedido</h2><p id="cartSub"></p></div>
+    <button type="button" class="sheet-x" data-close aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="sheet-body">
+    <div id="cartList"></div>
+    <label class="lbl" for="cartNota">Nota para quien prepara <span style="font-weight:500">(opcional)</span></label>
+    <textarea class="nota" id="cartNota" placeholder="Ej.: Lo necesitamos para el sábado" maxlength="300"></textarea>
+  </div>
+  <div class="sheet-foot">
+    <button type="button" class="btn btn-ink" id="sendBtn"></button>
+    <button type="button" class="btn btn-ghost" id="clearCartBtn">Vaciar pedido</button>
+  </div>
+</div>
+
+<!-- Detalle de un pedido -->
+<div class="sheet" id="detSheet" role="dialog" aria-modal="true" aria-labelledby="detTitle">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <div><h2 id="detTitle">Pedido</h2><p id="detSub"></p></div>
+    <button type="button" class="sheet-x" data-close aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="detBody"></div>
+  <div class="sheet-foot" id="detFoot" hidden></div>
+</div>
+
+<!-- Confirmación de despacho -->
+<div class="sheet" id="confSheet" role="dialog" aria-modal="true" aria-labelledby="confTitle">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <div><h2 id="confTitle">Confirmar despacho</h2><p id="confSub"></p></div>
+    <button type="button" class="sheet-x" data-close aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="confBody"></div>
+  <div class="sheet-foot">
+    <button type="button" class="btn btn-ink" id="confBtn"></button>
+  </div>
+</div>
+
+<!-- Menú -->
+<div class="sheet" id="menuSheet" role="dialog" aria-modal="true" aria-label="Menú">
+  <div class="sheet-grip"></div>
+  <div class="sheet-body" style="padding-top:14px;padding-bottom:calc(16px + var(--safe-b))">
+    <div class="menu-user"><span class="avatar" id="menuAvatar"></span><div><b id="menuEmail"></b><span id="menuSuc"></span></div></div>
+    <button type="button" class="menu-item" id="menuCambiar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Cambiar la sucursal de este teléfono
+    </button>
+    <button type="button" class="menu-item red" id="menuSalir">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/></svg>Cerrar sesión
+    </button>
+  </div>
+</div>
+
+<!-- Pantalla de preparación (picking) -->
+<div class="screen" id="pickScreen" role="dialog" aria-modal="true" aria-label="Preparar pedido">
+  <div class="screen-inner" id="pickInner"></div>
+  <div class="dock pick-dock" id="pickDock" hidden><button type="button" class="cta" id="pickCta"></button></div>
+</div>
+
+<!-- Pantalla de éxito -->
+<div class="screen" id="doneScreen" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+  <div class="screen-inner"><div class="done-wrap" id="doneWrap"></div></div>
+</div>
+
+<!-- Escáner -->
+<div class="scan" id="scan" role="dialog" aria-modal="true" aria-label="Escanear artículos">
+  <div class="scan-top"><b>ESCANEAR</b><button type="button" class="scan-done" id="scanDone">Listo</button></div>
+  <div class="scan-body">
+    <div id="reader"></div>
+    <div class="scan-feed" id="scanFeed"><div class="scan-hint">Apuntá al código de barras. Cada lectura suma una unidad.</div></div>
+  </div>
+</div>
+
+<div class="block" id="block"><div class="spin"></div><p id="blockTxt">Guardando…</p></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ============================================================
+//  Traspasos — pedidos y despachos de mercadería entre sucursales.
+//  Independiente del resto del panel: solo usa config.js de esta carpeta.
+//
+//  Flujo: la sucursal que necesita mercadería (destino) arma un pedido; la otra
+//  (origen) lo prepara, corrige cantidades o quita artículos y lo despacha. Al
+//  despachar se escriben, en un único update atómico, los movimientos SI
+//  (salida interna, sucursal origen) y EI (entrada interna, sucursal destino).
+// ============================================================
+
+// Mismos ids que puntoVenta.js y que el campo `sucursal` de las ENTRADAS de articulos.html.
+const SUCURSALES = [
+  { id: '1', nombre: 'Munro',   tono: '#7cb342' },
+  { id: '2', nombre: 'Caseros', tono: '#3f8fe6' }
+];
+const LS_SUC = 'hpTraspasoSucursal';
+const LS_CART = 'hpTraspasoCarrito';
+const LS_PICK = 'hpTraspasoPick_';      // + id del traspaso: avance de la preparación
+const LIMITE_TRASPASOS = 300;
+const MAX_RESULTADOS = 40;
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+// ============================================================
+//  Helpers
+// ============================================================
+const $ = id => document.getElementById(id);
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function lsGet(k){ try { const v = localStorage.getItem(k); if (v != null) return v; } catch(_){} try { return sessionStorage.getItem(k); } catch(_){ return null; } }
+function lsSet(k, v){ let ok = false; try { localStorage.setItem(k, v); ok = true; } catch(_){} if (!ok){ try { sessionStorage.setItem(k, v); } catch(_){} } }
+function lsDel(k){ try { localStorage.removeItem(k); } catch(_){} try { sessionStorage.removeItem(k); } catch(_){} }
+function suc(id){ return SUCURSALES.find(s => s.id === id) || { id, nombre: 'Sucursal ' + id, tono: '#7A8499' }; }
+function quien(u){ return u && u.email ? String(u.email).split('@')[0] : '—'; }
+function unid(n){ return n + ' u.'; }
+function plural(n, s, p){ return n + ' ' + (n === 1 ? s : p); }
+// Las claves de Firebase no admiten . # $ [ ] /
+function keySegura(s){ return String(s).replace(/[.#$\[\]\/]/g, '_'); }
+function fotoDe(a){ return (a && (a.Foto || a.Img || a.foto)) || ''; }
+function iniciales(nombre){ return escapeHtml(String(nombre || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('')); }
+function thumbHtml(foto, nombre){
+  return `<span class="thumb">${foto ? `<img src="${escapeHtml(foto)}" alt="" loading="lazy" onerror="this.remove()">` : ''}${foto ? '' : iniciales(nombre)}</span>`;
+}
+
+function fmtHora(ts){
+  if (!ts) return '';
+  const d = new Date(ts), hoy = new Date();
+  const hh = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  if (d.toDateString() === hoy.toDateString()) return hh;
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === ayer.toDateString()) return 'ayer ' + hh;
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + hh;
+}
+function fmtHace(ts){
+  if (!ts) return '';
+  const min = Math.round((Date.now() - ts) / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return 'hace ' + min + ' min';
+  const h = Math.round(min / 60);
+  if (h < 24) return 'hace ' + h + ' h';
+  return fmtHora(ts);
+}
+
+const ICON = {
+  logo: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>',
+  trash: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+  local: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5 5 4.5h14l1.5 5"/><path d="M3.5 9.5a2.8 2.8 0 0 0 5.6 0 2.9 2.9 0 0 0 5.8 0 2.8 2.8 0 0 0 5.6 0"/><path d="M5 12v7.5h14V12"/><path d="M10 19.5v-4.5h4v4.5"/></svg>',
+  box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'
+};
+document.querySelectorAll('.brand-mark').forEach(el => { el.innerHTML = ICON.logo; });
+
+// Componente de ruta (la firma visual): ORIGEN ——▸ DESTINO con los colores de cada sucursal.
+function rutaHtml(origen, destino, tam, viaje){
+  const o = suc(origen), d = suc(destino);
+  return `<div class="ruta ${tam || 'md'}${viaje ? ' viaje' : ''}" style="--o:${o.tono};--d:${d.tono}">
+    <span class="ruta-n o"><small>Desde</small><b>${escapeHtml(o.nombre)}</b></span>
+    <span class="ruta-line" aria-hidden="true"><i></i></span>
+    <span class="ruta-n d"><small>Hacia</small><b>${escapeHtml(d.nombre)}</b></span>
+  </div>`;
+}
+
+let toastTimer = null;
+function toast(msg, tipo){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast on' + (tipo ? ' ' + tipo : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), tipo === 'err' ? 4200 : 2600);
+}
+function showBlock(txt){ $('blockTxt').textContent = txt || 'Guardando…'; $('block').classList.add('on'); }
+function hideBlock(){ $('block').classList.remove('on'); }
+function vibrar(p){ try { if (navigator.vibrate) navigator.vibrate(p); } catch(_){} }
+
+// ============================================================
+//  Conexión (mismo patrón que articulos.html)
+// ============================================================
+let firebaseConectado = false;
+db.ref('.info/connected').on('value', snap => {
+  firebaseConectado = snap.val() === true;
+  $('menuBtn').classList.toggle('offline', !firebaseConectado);
+});
+function verificarConexionFirebase(timeoutMs = 5000){
+  if (firebaseConectado) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const ref = db.ref('.info/connected');
+    const timer = setTimeout(() => { ref.off('value', cb); resolve(false); }, timeoutMs);
+    const cb = snap => { if (snap.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); } };
+    ref.on('value', cb);
+  });
+}
+function conTimeout(promise, ms, msg){
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))]);
+}
+let procesoCritico = false;
+window.addEventListener('beforeunload', e => {
+  if (procesoCritico){ e.preventDefault(); e.returnValue = 'Hay un guardado en curso.'; return e.returnValue; }
+});
+
+// ============================================================
+//  Capas (sheets / pantallas) con soporte del botón Atrás
+// ============================================================
+const capas = [];
+function mostrarCapa(el){
+  el.classList.add('open');
+  if (el.classList.contains('sheet')) $('scrim').classList.add('on');
+  const foco = el.querySelector('[data-autofocus]');
+  if (foco) setTimeout(() => foco.focus(), 320);
+}
+function ocultarCapa(el){
+  el.classList.remove('open');
+  if (!capas.some(c => c.classList.contains('sheet'))) $('scrim').classList.remove('on');
+  if (el.id === 'pickScreen') alCerrarPick();
+}
+function abrirCapa(el){
+  if (capas.includes(el)) return;
+  capas.push(el);
+  history.pushState({ capa: capas.length }, '');
+  mostrarCapa(el);
+}
+function cerrarCapa(){ if (capas.length) history.back(); }
+// Igual que cerrarCapa, pero espera a que el popstate la cierre (para encadenar otra capa después).
+function cerrarCapaAsync(){
+  return new Promise(resolve => {
+    if (!capas.length) return resolve();
+    window.addEventListener('popstate', () => setTimeout(resolve, 0), { once: true });
+    history.back();
+  });
+}
+// Reemplaza la capa superior sin tocar el historial (ej. picking → éxito).
+function cambiarCapa(el){
+  const top = capas.pop();
+  if (top) ocultarCapa(top);
+  capas.push(el);
+  mostrarCapa(el);
+}
+window.addEventListener('popstate', () => {
+  const el = capas.pop();
+  if (el) ocultarCapa(el);
+});
+$('scrim').addEventListener('click', cerrarCapa);
+document.addEventListener('click', e => { if (e.target.closest('[data-close]')) cerrarCapa(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('scan').classList.contains('on')) { cerrarScanner(); return; }
+  if (capas.length) cerrarCapa();
+});
+
+// ============================================================
+//  Estado
+// ============================================================
+let usuario = null;
+let miSuc = null;                  // id de la sucursal de este teléfono
+let articulos = [];                // [{codigo, nombre, foto, barras[], disponible, idx}]
+let articulosPorCodigo = new Map();
+let traspasos = {};                // id -> traspaso
+let traspasosCargados = false;
+let vistosPendientes = new Set();  // ids pendientes ya notificados
+let vistaActual = 'pedir';
+let filtroPedidos = 'curso';
+let filtroPrep = 'pend';
+let carrito = {};                  // codigo -> {codigo, nombre, foto, cant}
+let pick = null;                   // {id, items:{cod:{enviar, ok, quitado}}}
+let detalleId = null;
+
+function otraSuc(){ return (SUCURSALES.find(s => s.id !== miSuc) || SUCURSALES[0]).id; }
+
+// ============================================================
+//  Login
+// ============================================================
+$('loginRoute').innerHTML = rutaHtml('2', '1', 'md', true);
+$('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = $('loginEmail').value.trim(), pass = $('loginPass').value;
+  $('loginErr').textContent = '';
+  if (!email || !pass){ $('loginErr').textContent = 'Completá email y contraseña.'; return; }
+  $('loginBtn').disabled = true;
+  $('loginBtn').textContent = 'Ingresando…';
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch (err){
+    const m = {
+      'auth/invalid-email': 'El email no tiene un formato válido.',
+      'auth/user-not-found': 'Email o contraseña incorrectos.',
+      'auth/wrong-password': 'Email o contraseña incorrectos.',
+      'auth/invalid-credential': 'Email o contraseña incorrectos.',
+      'auth/invalid-login-credentials': 'Email o contraseña incorrectos.',
+      'auth/too-many-requests': 'Demasiados intentos. Esperá unos minutos y probá de nuevo.',
+      'auth/network-request-failed': 'Sin conexión. Revisá internet y probá de nuevo.'
+    };
+    $('loginErr').textContent = m[err.code] || 'No se pudo iniciar sesión (' + (err.code || err.message) + ').';
+  } finally {
+    $('loginBtn').disabled = false;
+    $('loginBtn').textContent = 'Iniciar sesión';
+  }
+});
+
+auth.onAuthStateChanged(u => {
+  usuario = u;
+  if (!u){
+    $('app').hidden = true;
+    $('sucGate').classList.remove('on');
+    $('login').classList.add('on');
+    detenerListeners();
+    return;
+  }
+  $('login').classList.remove('on');
+  const guardada = lsGet(LS_SUC);
+  if (SUCURSALES.some(s => s.id === guardada)) iniciarApp(guardada);
+  else pedirSucursal(false);
+});
+
+// ============================================================
+//  Sucursal del equipo
+// ============================================================
+function pedirSucursal(cambio){
+  $('app').hidden = !cambio;
+  $('sucGateTitle').textContent = cambio ? 'Cambiar la sucursal de este teléfono' : '¿En qué sucursal está este teléfono?';
+  $('sucGateLead').textContent = cambio
+    ? 'Los pedidos que hagas desde ahora van a ser para la sucursal que elijas.'
+    : 'Desde acá vas a pedir mercadería para esa sucursal y preparar lo que te pidan desde la otra. El teléfono lo recuerda.';
+  $('sucGateCancel').hidden = !cambio;
+  $('sucOpts').innerHTML = SUCURSALES.map(s => `
+    <button type="button" class="suc-opt${s.id === miSuc ? ' on' : ''}" role="option" data-suc="${s.id}" style="--t:${s.tono}" aria-selected="${s.id === miSuc}">
+      <span class="sw">${ICON.local}</span>
+      <span><b>${escapeHtml(s.nombre)}</b><small>Sucursal ${escapeHtml(s.id)}</small></span>
+      ${s.id === miSuc ? '<span class="actual">Actual</span>' : ''}
+    </button>`).join('');
+  $('sucGate').classList.add('on');
+}
+$('sucOpts').addEventListener('click', e => {
+  const b = e.target.closest('.suc-opt');
+  if (!b) return;
+  const id = b.dataset.suc;
+  lsSet(LS_SUC, id);
+  $('sucGate').classList.remove('on');
+  if (id !== miSuc){
+    // El carrito era para la sucursal anterior.
+    carrito = {}; guardarCarrito();
+    iniciarApp(id);
+    toast('Este teléfono ahora es ' + suc(id).nombre);
+  }
+});
+$('sucGateCancel').addEventListener('click', () => $('sucGate').classList.remove('on'));
+
+// ============================================================
+//  Arranque
+// ============================================================
+let traspasosRef = null;
+function detenerListeners(){
+  if (traspasosRef){ traspasosRef.off(); traspasosRef = null; }
+}
+
+function iniciarApp(sucId){
+  miSuc = sucId;
+  const s = suc(miSuc), o = suc(otraSuc());
+  document.documentElement.style.setProperty('--mine', s.tono);
+  document.documentElement.style.setProperty('--other', o.tono);
+  $('sucPillName').textContent = s.nombre;
+  $('pedirRoute').innerHTML = rutaHtml(o.id, s.id, 'lg');
+  $('pedirSub').innerHTML = `Pedís a <b>${escapeHtml(o.nombre)}</b> lo que falta en <b>${escapeHtml(s.nombre)}</b>. Lo preparan y te lo mandan.`;
+  $('pedidosSub').innerHTML = `Lo que <b>${escapeHtml(s.nombre)}</b> le pidió a ${escapeHtml(o.nombre)}.`;
+  $('prepSub').innerHTML = `Lo que ${escapeHtml(o.nombre)} le pide a <b>${escapeHtml(s.nombre)}</b>. Juntá la mercadería, corregí lo que falte y despachá.`;
+  $('app').hidden = false;
+  cargarCarrito();
+  traspasosCargados = false;
+  vistosPendientes = new Set();
+  renderTodo();
+  cargarArticulos();
+  escucharTraspasos();
+}
+
+async function cargarArticulos(){
+  if (articulos.length) { renderResultados(); return; }
+  $('results').innerHTML = '<div class="skeleton" style="height:72px"></div><div class="skeleton" style="height:72px"></div><div class="skeleton" style="height:72px"></div>';
+  try {
+    const snap = await conTimeout(db.ref('articulos').once('value'), 20000, 'El catálogo tardó demasiado en cargar.');
+    const lista = [];
+    snap.forEach(ch => {
+      const a = ch.val() || {};
+      const codigo = String(a.Codigo || ch.key);
+      const barras = String(a.CodigoBarras || '').split(',').map(x => x.trim()).filter(Boolean);
+      const nombre = String(a.Nombre || '').trim();
+      lista.push({
+        codigo, nombre, foto: fotoDe(a), barras,
+        disponible: a.Disponible !== false,
+        idx: (nombre + ' ' + (a.Keywords || '') + ' ' + codigo + ' ' + barras.join(' ')).toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      });
+    });
+    lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    articulos = lista;
+    articulosPorCodigo = new Map(lista.map(a => [a.codigo, a]));
+  } catch (err){
+    console.error('Error cargando artículos:', err);
+    $('results').innerHTML = `<div class="empty">${ICON.alert}<b>No se pudo cargar el catálogo</b><p>${escapeHtml(err.message)} Revisá la conexión.</p><button type="button" class="btn btn-ghost" style="margin-top:16px" id="retryArt">Reintentar</button></div>`;
+    $('retryArt').addEventListener('click', cargarArticulos);
+    return;
+  }
+  renderResultados();
+}
+
+function escucharTraspasos(){
+  detenerListeners();
+  traspasosRef = db.ref('traspasos').limitToLast(LIMITE_TRASPASOS);
+  traspasosRef.on('value', snap => {
+    const nuevo = {};
+    snap.forEach(ch => { nuevo[ch.key] = Object.assign({ id: ch.key }, ch.val()); });
+    const primeraCarga = !traspasosCargados;
+    traspasos = nuevo;
+    traspasosCargados = true;
+    avisarNuevos(primeraCarga);
+    renderTodo();
+    sincronizarPickAbierto();
+    if (detalleId && $('detSheet').classList.contains('open')) renderDetalle(detalleId);
+  }, err => {
+    console.error('Error escuchando traspasos:', err);
+    toast('No se pudieron leer los pedidos: ' + err.message, 'err');
+  });
+}
+
+// Pedido nuevo para preparar en esta sucursal → vibración + aviso (no en la carga inicial).
+function avisarNuevos(primeraCarga){
+  Object.values(traspasos).forEach(t => {
+    if (t.origen !== miSuc || t.estado !== 'PENDIENTE' || vistosPendientes.has(t.id)) return;
+    vistosPendientes.add(t.id);
+    if (primeraCarga) return;
+    vibrar([90, 60, 90]);
+    toast('Nuevo pedido de ' + suc(t.destino).nombre + ' · ' + (t.numero || ''), 'aviso');
+    const b = $('badgePrep');
+    b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  });
+}
+
+// ============================================================
+//  Navegación
+// ============================================================
+document.querySelector('.tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (t) irA(t.dataset.v);
+});
+function irA(v){
+  vistaActual = v;
+  $('segPedidos').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.f === filtroPedidos));
+  $('segPrep').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.f === filtroPrep));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.v === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  window.scrollTo({ top: 0 });
+  renderDock();
+}
+$('segPedidos').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filtroPedidos = b.dataset.f;
+  $('segPedidos').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  renderPedidos();
+});
+$('segPrep').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filtroPrep = b.dataset.f;
+  $('segPrep').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  renderPreparar();
+});
+$('menuBtn').addEventListener('click', () => {
+  $('menuEmail').textContent = usuario ? usuario.email : '';
+  $('menuAvatar').textContent = usuario ? quien(usuario).slice(0, 1).toUpperCase() : '?';
+  $('menuSuc').textContent = 'Este teléfono: ' + suc(miSuc).nombre;
+  abrirCapa($('menuSheet'));
+});
+$('menuCambiar').addEventListener('click', () => { cerrarCapa(); setTimeout(() => pedirSucursal(true), 200); });
+$('menuSalir').addEventListener('click', async () => {
+  cerrarCapa();
+  try { await auth.signOut(); } catch(_){}
+});
+
+function renderTodo(){
+  renderResultados();
+  renderPedidos();
+  renderPreparar();
+  renderDock();
+}
+
+// ============================================================
+//  PEDIR — búsqueda y carrito
+// ============================================================
+function normalizar(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+function buscar(q){
+  const n = normalizar(q);
+  if (!n) return [];
+  // Coincidencia exacta de código o de código de barras primero.
+  const exactos = articulos.filter(a => a.codigo === q.trim() || a.barras.includes(q.trim()));
+  const tokens = n.split(/\s+/).filter(Boolean);
+  const resto = articulos.filter(a => !exactos.includes(a) && tokens.every(t => a.idx.includes(t)));
+  return exactos.concat(resto);
+}
+
+$('q').addEventListener('input', () => { $('qClear').hidden = !$('q').value; renderResultados(); });
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('q').blur(); } });
+$('qClear').addEventListener('click', () => { $('q').value = ''; $('qClear').hidden = true; renderResultados(); $('q').focus(); });
+
+function stepperHtml(scope, cod, val, min, max){
+  return `<div class="stp">
+    <button type="button" class="stp-btn" data-scope="${scope}" data-cod="${escapeHtml(cod)}" data-d="-1" aria-label="Restar una unidad" ${val <= (min || 0) ? 'disabled' : ''}>${ICON.minus}</button>
+    <input class="stp-val" type="number" inputmode="numeric" min="0" step="1" value="${val}" data-scope="${scope}" data-cod="${escapeHtml(cod)}" aria-label="Cantidad">
+    <button type="button" class="stp-btn plus" data-scope="${scope}" data-cod="${escapeHtml(cod)}" data-d="1" aria-label="Sumar una unidad" ${max != null && val >= max ? 'disabled' : ''}>${ICON.plus}</button>
+  </div>`;
+}
+
+function renderResultados(){
+  const cont = $('results');
+  if (!articulos.length) return;
+  const q = $('q').value;
+  if (!q.trim()){
+    const enCarrito = Object.values(carrito);
+    if (enCarrito.length){
+      cont.innerHTML = `<div class="eyebrow" style="margin:6px 2px 4px">En tu pedido</div>` + enCarrito.map(c => artHtml(articulosPorCodigo.get(c.codigo) || c)).join('');
+    } else {
+      cont.innerHTML = `<div class="empty">${ICON.search}<b>Buscá lo que necesitás</b><p>Escribí el nombre o el código, o escaneá el código de barras para sumar unidades más rápido.</p></div>`;
+    }
+    return;
+  }
+  const res = buscar(q);
+  if (!res.length){
+    cont.innerHTML = `<div class="empty">${ICON.search}<b>Sin resultados para “${escapeHtml(q.trim())}”</b><p>Probá con otra palabra o con el código del artículo.</p></div>`;
+    return;
+  }
+  cont.innerHTML = res.slice(0, MAX_RESULTADOS).map(artHtml).join('') +
+    (res.length > MAX_RESULTADOS ? `<div class="more">Mostrando ${MAX_RESULTADOS} de ${res.length}. Afiná la búsqueda para ver el resto.</div>` : '');
+}
+
+function artHtml(a){
+  const c = carrito[a.codigo];
+  return `<div class="art${c ? ' in' : ''}">
+    ${thumbHtml(a.foto, a.nombre)}
+    <div class="art-info">
+      <div class="art-name">${escapeHtml(a.nombre || 'Sin nombre')}</div>
+      <div class="art-meta">#${escapeHtml(a.codigo)}${a.disponible === false ? '<span class="tag">No disponible</span>' : ''}</div>
+    </div>
+    ${c ? stepperHtml('cart', a.codigo, c.cant, 0)
+        : `<button type="button" class="btn-add" data-add="${escapeHtml(a.codigo)}" aria-label="Agregar ${escapeHtml(a.nombre)}">${ICON.plus}</button>`}
+  </div>`;
+}
+
+$('results').addEventListener('click', e => {
+  const b = e.target.closest('[data-add]');
+  if (!b) return;
+  agregarAlCarrito(b.dataset.add, 1);
+  vibrar(15);
+});
+
+function agregarAlCarrito(cod, n){
+  const a = articulosPorCodigo.get(cod);
+  if (!a) return false;
+  const c = carrito[cod] || { codigo: cod, nombre: a.nombre, foto: a.foto, cant: 0 };
+  c.cant = Math.max(0, c.cant + n);
+  if (c.cant > 0) carrito[cod] = c; else delete carrito[cod];
+  guardarCarrito();
+  renderResultados();
+  renderDock();
+  if ($('cartSheet').classList.contains('open')) renderCarrito();
+  return true;
+}
+function setCantCarrito(cod, n){
+  const c = carrito[cod];
+  if (!c) return;
+  n = Math.max(0, Math.floor(Number(n) || 0));
+  if (n > 0) c.cant = n; else delete carrito[cod];
+  guardarCarrito();
+  renderResultados();
+  renderDock();
+  if ($('cartSheet').classList.contains('open')) renderCarrito();
+}
+function guardarCarrito(){
+  if (!miSuc) return;
+  lsSet(LS_CART, JSON.stringify({ suc: miSuc, items: carrito, nota: $('cartNota').value }));
+}
+function cargarCarrito(){
+  carrito = {};
+  $('cartNota').value = '';
+  try {
+    const d = JSON.parse(lsGet(LS_CART) || 'null');
+    if (d && d.suc === miSuc){ carrito = d.items || {}; $('cartNota').value = d.nota || ''; }
+  } catch(_){}
+}
+$('cartNota').addEventListener('input', guardarCarrito);
+
+function totalesCarrito(){
+  const items = Object.values(carrito);
+  return { arts: items.length, unidades: items.reduce((s, c) => s + c.cant, 0) };
+}
+
+function renderDock(){
+  const dock = $('cartDock');
+  const { arts, unidades } = totalesCarrito();
+  const ver = vistaActual === 'pedir' && arts > 0;
+  if (ver && dock.hidden){ dock.hidden = false; dock.classList.remove('dock-enter'); void dock.offsetWidth; dock.classList.add('dock-enter'); }
+  if (!ver) dock.hidden = true;
+  $('cartCta').innerHTML = `<span>Revisar pedido</span><span class="cta-k">${plural(arts, 'artículo', 'artículos')} · ${unid(unidades)}</span>`;
+}
+$('cartCta').addEventListener('click', () => { renderCarrito(); abrirCapa($('cartSheet')); });
+
+function renderCarrito(){
+  const items = Object.values(carrito);
+  const { arts, unidades } = totalesCarrito();
+  const o = suc(otraSuc());
+  $('cartSub').textContent = arts ? plural(arts, 'artículo', 'artículos') + ' · ' + unid(unidades) : 'Todavía no agregaste artículos';
+  $('cartList').innerHTML = items.length ? items.map(c => `
+    <div class="cart-row">
+      ${thumbHtml(c.foto, c.nombre)}
+      <div class="art-info"><div class="art-name">${escapeHtml(c.nombre)}</div><div class="art-meta">#${escapeHtml(c.codigo)}</div></div>
+      ${stepperHtml('cart', c.codigo, c.cant, 0)}
+    </div>`).join('')
+    : `<div class="empty" style="padding:24px 10px"><p>Buscá artículos y tocá + para sumarlos.</p></div>`;
+  $('sendBtn').textContent = unidades ? `Pedir ${unid(unidades)} a ${o.nombre}` : 'Pedir';
+  $('sendBtn').disabled = !unidades;
+  $('clearCartBtn').hidden = !unidades;
+  if (!items.length && capas[capas.length - 1] === $('cartSheet')) cerrarCapa();
+}
+$('clearCartBtn').addEventListener('click', () => {
+  carrito = {}; $('cartNota').value = ''; guardarCarrito();
+  renderResultados(); renderDock(); cerrarCapa();
+  toast('Pedido vaciado');
+});
+
+$('sendBtn').addEventListener('click', enviarPedido);
+async function enviarPedido(){
+  const items = Object.values(carrito);
+  if (!items.length || $('sendBtn').disabled) return;
+  $('sendBtn').disabled = true;
+  procesoCritico = true;
+  showBlock('Enviando pedido…');
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase. Revisá internet.');
+    // Número correlativo de remito. Si después falla el guardado queda un número salteado: es inocuo.
+    const tx = await conTimeout(db.ref('traspasosMeta/ultimoNumero').transaction(n => (Number(n) || 0) + 1), 10000, 'No se pudo numerar el pedido.');
+    if (!tx.committed) throw new Error('No se pudo numerar el pedido.');
+    const numero = 'TR-' + String(tx.snapshot.val()).padStart(4, '0');
+    const id = db.ref('traspasos').push().key;
+    const itemsObj = {};
+    items.forEach(c => {
+      itemsObj[keySegura(c.codigo)] = { codigo: c.codigo, nombre: c.nombre, foto: c.foto || '', solicitada: c.cant };
+    });
+    const obj = {
+      numero,
+      origen: otraSuc(),
+      destino: miSuc,
+      estado: 'PENDIENTE',
+      nota: $('cartNota').value.trim(),
+      creadoPor: { uid: usuario.uid, email: usuario.email || '' },
+      creadoEn: firebase.database.ServerValue.TIMESTAMP,
+      items: itemsObj
+    };
+    await conTimeout(db.ref('traspasos/' + id).set(obj), 15000, 'El envío tardó demasiado.');
+    const check = await conTimeout(db.ref('traspasos/' + id + '/numero').once('value'), 10000, 'No se pudo verificar el envío.');
+    if (check.val() !== numero) throw new Error('La verificación del envío falló.');
+
+    const unidades = items.reduce((s, c) => s + c.cant, 0);
+    carrito = {}; $('cartNota').value = ''; guardarCarrito();
+    $('q').value = ''; $('qClear').hidden = true;
+    renderResultados(); renderDock();
+    hideBlock();
+    mostrarExito({
+      titulo: 'Pedido enviado',
+      sub: `${suc(obj.origen).nombre} ya lo ve para preparar. Te avisamos acá cuando lo despachen.`,
+      numero, origen: obj.origen, destino: obj.destino, viaje: false,
+      detalle: `${plural(items.length, 'artículo', 'artículos')} · ${unid(unidades)}`,
+      boton: 'Ver mis pedidos', accion: () => { filtroPedidos = 'curso'; irA('pedidos'); }
+    }, $('cartSheet'));
+  } catch (err){
+    console.error('Error enviando pedido:', err);
+    hideBlock();
+    toast('No se envió el pedido: ' + err.message, 'err');
+  } finally {
+    procesoCritico = false;
+    $('sendBtn').disabled = false;
+  }
+}
+
+// ============================================================
+//  Steppers (carrito y picking): toque = ±1, mantener = repite y acelera
+// ============================================================
+function aplicarPaso(scope, cod, d){
+  if (scope === 'cart'){ const c = carrito[cod]; setCantCarrito(cod, (c ? c.cant : 0) + d); }
+  else if (scope === 'pick') setEnviar(cod, pickItem(cod).enviar + d);
+}
+let repTimer = null;
+function pararRep(){ if (repTimer){ clearTimeout(repTimer); repTimer = null; } }
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.stp-btn');
+  if (!b || b.disabled || e.button > 0) return;
+  e.preventDefault();
+  const { scope, cod } = b.dataset, d = Number(b.dataset.d);
+  aplicarPaso(scope, cod, d);
+  vibrar(8);
+  let n = 0;
+  const tick = () => {
+    // El render reemplaza el botón: se busca el actual para saber si sigue habilitado.
+    const actual = document.querySelector(`.stp-btn[data-scope="${scope}"][data-cod="${CSS.escape(cod)}"][data-d="${d}"]`);
+    if (!actual || actual.disabled) return pararRep();
+    aplicarPaso(scope, cod, d);
+    n++;
+    repTimer = setTimeout(tick, n > 18 ? 35 : n > 6 ? 70 : 120);
+  };
+  pararRep();
+  repTimer = setTimeout(tick, 400);
+});
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, pararRep));
+window.addEventListener('blur', pararRep);
+document.addEventListener('click', e => {
+  // Teclado (Enter/Espacio) llega como click con detail 0.
+  const b = e.target.closest('.stp-btn');
+  if (b && e.detail === 0 && !b.disabled) aplicarPaso(b.dataset.scope, b.dataset.cod, Number(b.dataset.d));
+});
+document.addEventListener('change', e => {
+  const i = e.target.closest('.stp-val');
+  if (!i) return;
+  if (i.dataset.scope === 'cart') setCantCarrito(i.dataset.cod, i.value);
+  else if (i.dataset.scope === 'pick') setEnviar(i.dataset.cod, i.value);
+});
+document.addEventListener('keydown', e => {
+  const i = e.target.closest && e.target.closest('.stp-val');
+  if (i && e.key === 'Enter'){ e.preventDefault(); i.blur(); }
+});
+document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('stp-val')) e.target.select(); });
+
+// ============================================================
+//  Remitos (tarjetas de lista)
+// ============================================================
+function totalesTraspaso(t){
+  const items = Object.values(t.items || {});
+  const enviado = t.estado === 'ENVIADO' || t.estado === 'RECIBIDO';
+  return {
+    arts: items.length,
+    solicitadas: items.reduce((s, i) => s + (Number(i.solicitada) || 0), 0),
+    enviadas: items.reduce((s, i) => s + (Number(i.enviada) || 0), 0),
+    conDif: enviado ? items.filter(i => (Number(i.enviada) || 0) !== (Number(i.solicitada) || 0)).length : 0
+  };
+}
+const ESTADO_TXT = { PENDIENTE: 'Pendiente', PREPARANDO: 'Preparando', ENVIADO: 'Enviado', RECIBIDO: 'Recibido', CANCELADO: 'Cancelado' };
+
+function remitoHtml(t, modo){
+  const tot = totalesTraspaso(t);
+  const enviado = t.estado === 'ENVIADO' || t.estado === 'RECIBIDO';
+  const n = enviado ? tot.enviadas : tot.solicitadas;
+  const nombres = Object.values(t.items || {}).map(i => i.nombre).filter(Boolean);
+  let meta, go;
+  if (modo === 'prep'){
+    meta = t.estado === 'PREPARANDO' ? 'Preparando: ' + quien(t.preparadoPor) : 'Pidió ' + quien(t.creadoPor) + ' · ' + fmtHace(t.creadoEn);
+    if (enviado) meta = 'Despachado ' + fmtHora(t.enviadoEn);
+    go = (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO') ? 'Preparar' : 'Ver';
+  } else {
+    meta = enviado ? 'Despachado ' + fmtHora(t.enviadoEn) : t.estado === 'CANCELADO' ? 'Cancelado ' + fmtHora(t.canceladoEn) : 'Pedido ' + fmtHace(t.creadoEn);
+    if (tot.conDif) meta += ' · ' + plural(tot.conDif, 'diferencia', 'diferencias');
+    go = 'Ver';
+  }
+  return `<button type="button" class="remito" data-tr="${escapeHtml(t.id)}" data-modo="${modo}">
+    <div class="remito-top">${rutaHtml(t.origen, t.destino, 'sm', t.estado === 'ENVIADO')}<span class="remito-num">${escapeHtml(t.numero || '')}</span></div>
+    <div class="remito-body">
+      <div class="remito-sum"><b>${n}</b><span>${n === 1 ? 'unidad' : 'unidades'} · ${plural(tot.arts, 'artículo', 'artículos')}${enviado && tot.enviadas !== tot.solicitadas ? ' · pedidas ' + tot.solicitadas : ''}</span></div>
+      <div class="remito-items">${escapeHtml(nombres.join(' · '))}</div>
+    </div>
+    <div class="remito-stub"><span class="chip ${t.estado}">${ESTADO_TXT[t.estado] || t.estado}</span><span class="remito-meta">${escapeHtml(meta)}</span><span class="remito-go">${go}${ICON.chev}</span></div>
+  </button>`;
+}
+const porFechaDesc = (a, b) => (b.creadoEn || 0) - (a.creadoEn || 0);
+const skeletons = '<div class="skeleton"></div><div class="skeleton"></div>';
+
+function renderPedidos(){
+  if (!miSuc) return;
+  const mios = Object.values(traspasos).filter(t => t.destino === miSuc).sort(porFechaDesc);
+  const curso = mios.filter(t => ['PENDIENTE', 'PREPARANDO', 'ENVIADO'].includes(t.estado));
+  const hist = mios.filter(t => ['RECIBIDO', 'CANCELADO'].includes(t.estado));
+  $('nCurso').textContent = curso.length;
+  $('nHist').textContent = hist.length;
+  // Badge: despachados que todavía no se confirmaron como recibidos.
+  const porRecibir = curso.filter(t => t.estado === 'ENVIADO').length;
+  $('badgePedidos').hidden = !porRecibir;
+  $('badgePedidos').textContent = porRecibir;
+  const lista = filtroPedidos === 'curso' ? curso : hist;
+  if (!traspasosCargados){ $('listPedidos').innerHTML = skeletons; return; }
+  $('listPedidos').innerHTML = lista.length ? lista.map(t => remitoHtml(t, 'mio')).join('')
+    : filtroPedidos === 'curso'
+      ? `<div class="empty">${ICON.box}<b>No hay pedidos en curso</b><p>Cuando pidas mercadería a ${escapeHtml(suc(otraSuc()).nombre)}, vas a seguir su estado acá.</p><button type="button" class="btn btn-ink" style="margin-top:18px" data-ir="pedir">Hacer un pedido</button></div>`
+      : `<div class="empty">${ICON.box}<b>Sin historial todavía</b><p>Acá quedan los pedidos recibidos y los cancelados.</p></div>`;
+}
+
+function renderPreparar(){
+  if (!miSuc) return;
+  const paraMi = Object.values(traspasos).filter(t => t.origen === miSuc);
+  const pend = paraMi.filter(t => t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO').sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
+  const desp = paraMi.filter(t => !['PENDIENTE', 'PREPARANDO'].includes(t.estado)).sort((a, b) => (b.enviadoEn || b.canceladoEn || b.creadoEn || 0) - (a.enviadoEn || a.canceladoEn || a.creadoEn || 0));
+  $('nPend').textContent = pend.length;
+  $('nDesp').textContent = desp.length;
+  $('badgePrep').hidden = !pend.length;
+  $('badgePrep').textContent = pend.length;
+  if (!traspasosCargados){ $('listPrep').innerHTML = skeletons; return; }
+  const lista = filtroPrep === 'pend' ? pend : desp;
+  $('listPrep').innerHTML = lista.length ? lista.map(t => remitoHtml(t, 'prep')).join('')
+    : filtroPrep === 'pend'
+      ? `<div class="empty">${ICON.box}<b>Nada para preparar</b><p>Cuando ${escapeHtml(suc(otraSuc()).nombre)} te pida mercadería, el teléfono vibra y el pedido aparece acá.</p></div>`
+      : `<div class="empty">${ICON.box}<b>Todavía no despachaste pedidos</b></div>`;
+}
+
+document.addEventListener('click', e => {
+  const ir = e.target.closest('[data-ir]');
+  if (ir){ irA(ir.dataset.ir); return; }
+  const r = e.target.closest('.remito');
+  if (!r) return;
+  const t = traspasos[r.dataset.tr];
+  if (!t) return;
+  if (r.dataset.modo === 'prep' && (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO')) abrirPick(t.id);
+  else abrirDetalle(t.id);
+});
+
+// ============================================================
+//  Detalle (solicitante y despachados)
+// ============================================================
+function abrirDetalle(id){
+  detalleId = id;
+  renderDetalle(id);
+  abrirCapa($('detSheet'));
+}
+
+function timelineHtml(t){
+  if (t.estado === 'CANCELADO'){
+    return `<div class="diff-note" style="background:var(--red-soft);color:#7A1C20">${ICON.alert}<div><b>Pedido cancelado</b> ${fmtHora(t.canceladoEn)}${t.canceladoPor ? ' por ' + escapeHtml(quien(t.canceladoPor)) : ''}${t.motivoCancelacion ? '. ' + escapeHtml(t.motivoCancelacion) : ''}</div></div>`;
+  }
+  const pasos = [
+    ['Pedido', t.creadoEn], ['Preparando', t.tomadoEn], ['Enviado', t.enviadoEn], ['Recibido', t.recibidoEn]
+  ];
+  const nivel = { PENDIENTE: 0, PREPARANDO: 1, ENVIADO: 2, RECIBIDO: 3 }[t.estado] || 0;
+  return `<div class="timeline">${pasos.map(([lbl, ts], i) =>
+    `<div class="tl${i <= nivel ? ' done' : ''}${i === nivel + 1 ? ' cur' : ''}"><span class="tl-dot"></span><b>${lbl}</b><small>${i <= nivel && ts ? fmtHora(ts) : ''}</small></div>`).join('')}</div>`;
+}
+
+const MOTIVO_TXT = { PARCIAL: 'Parcial', SIN_STOCK: 'Sin stock', QUITADO: 'Quitado' };
+
+function renderDetalle(id){
+  const t = traspasos[id];
+  if (!t){ $('detBody').innerHTML = '<div class="empty"><b>El pedido ya no está disponible</b></div>'; $('detFoot').hidden = true; return; }
+  const enviado = t.estado === 'ENVIADO' || t.estado === 'RECIBIDO';
+  const tot = totalesTraspaso(t);
+  $('detTitle').textContent = 'Pedido ' + (t.numero || '');
+  $('detSub').innerHTML = `<span class="chip ${t.estado}" style="height:22px;margin-top:4px">${ESTADO_TXT[t.estado] || t.estado}</span>`;
+  const items = Object.values(t.items || {}).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+  const filas = items.map(i => {
+    const sol = Number(i.solicitada) || 0, env = Number(i.enviada) || 0;
+    const dif = enviado && env !== sol;
+    return `<div class="det-row${enviado && env === 0 ? ' cero' : ''}">
+      ${thumbHtml(i.foto, i.nombre)}
+      <div class="art-info"><div class="art-name">${escapeHtml(i.nombre)}</div><div class="art-meta">#${escapeHtml(i.codigo)}</div></div>
+      <div class="det-q">
+        <span class="q">${dif ? `<s>${sol}</s>${env}` : (enviado ? env : sol)}</span>
+        ${dif && i.motivo ? `<span class="motivo ${i.motivo}">${MOTIVO_TXT[i.motivo] || i.motivo}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  const meta = [
+    ['Pidió', quien(t.creadoPor)],
+    t.preparadoPor ? ['Preparó', quien(t.preparadoPor)] : null,
+    ['Unidades', enviado ? `${tot.enviadas} enviadas de ${tot.solicitadas}` : `${tot.solicitadas} pedidas`],
+    t.recibidoPor ? ['Recibió', quien(t.recibidoPor)] : null
+  ].filter(Boolean);
+  $('detBody').innerHTML = `
+    <div class="det-route">${rutaHtml(t.origen, t.destino, 'md', t.estado === 'ENVIADO')}</div>
+    ${timelineHtml(t)}
+    ${enviado && tot.conDif ? `<div class="diff-note">${ICON.alert}<div>${escapeHtml(suc(t.origen).nombre)} envió distinto a lo pedido en ${plural(tot.conDif, 'artículo', 'artículos')}. Las cantidades tachadas son las que se pidieron.</div></div>` : ''}
+    ${t.nota ? `<div class="det-nota"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
+    <dl class="det-meta">${meta.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>
+    <div class="eyebrow" style="margin-bottom:2px">Artículos</div>
+    ${filas}`;
+
+  // Acciones: solo quien pidió (sucursal destino) cancela un pendiente o confirma la llegada.
+  const foot = $('detFoot');
+  foot.innerHTML = '';
+  if (t.destino === miSuc && t.estado === 'ENVIADO'){
+    foot.innerHTML = `<button type="button" class="btn btn-ink" id="recibirBtn">${ICON.check.replace('<svg', '<svg width="20" height="20"')} Confirmar que llegó</button>`;
+    $('recibirBtn').addEventListener('click', () => confirmarRecibido(t.id));
+  } else if (t.destino === miSuc && t.estado === 'PENDIENTE'){
+    foot.innerHTML = `<button type="button" class="btn btn-red" id="cancelarBtn">Cancelar pedido</button>`;
+    $('cancelarBtn').addEventListener('click', () => cancelarPedido(t.id));
+  }
+  foot.hidden = !foot.innerHTML;
+}
+
+async function confirmarRecibido(id){
+  const btn = $('recibirBtn');
+  btn.disabled = true;
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase.');
+    // Solo seguimiento: no escribe movimientos (SI/EI ya se registraron al despachar).
+    await conTimeout(db.ref('traspasos/' + id).update({
+      estado: 'RECIBIDO',
+      recibidoEn: firebase.database.ServerValue.TIMESTAMP,
+      recibidoPor: { uid: usuario.uid, email: usuario.email || '' }
+    }), 10000, 'La confirmación tardó demasiado.');
+    vibrar(30);
+    toast('Recepción confirmada');
+  } catch (err){
+    toast('No se confirmó la recepción: ' + err.message, 'err');
+    btn.disabled = false;
+  }
+}
+
+async function cancelarPedido(id){
+  const btn = $('cancelarBtn');
+  if (btn.dataset.armed !== '1'){
+    // Doble toque para confirmar: evita cancelar por accidente sin otro modal encima.
+    btn.dataset.armed = '1';
+    btn.textContent = 'Tocá de nuevo para cancelar';
+    setTimeout(() => { if (btn.isConnected){ btn.dataset.armed = ''; btn.textContent = 'Cancelar pedido'; } }, 3500);
+    return;
+  }
+  btn.disabled = true;
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase.');
+    // Transacción: solo se cancela si sigue PENDIENTE (si ya lo tomaron, no).
+    const res = await conTimeout(db.ref('traspasos/' + id).transaction(t => {
+      if (!t) return t;
+      if (t.estado !== 'PENDIENTE') return;   // aborta
+      t.estado = 'CANCELADO';
+      t.canceladoEn = Date.now();
+      t.canceladoPor = { uid: usuario.uid, email: usuario.email || '' };
+      return t;
+    }), 10000, 'La cancelación tardó demasiado.');
+    if (!res.committed) throw new Error('ya lo están preparando. Pedí a ' + suc(otraSuc()).nombre + ' que lo cierre sin envío.');
+    toast('Pedido cancelado');
+    cerrarCapa();
+  } catch (err){
+    toast('No se canceló: ' + err.message, 'err');
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+//  PREPARAR (picking)
+// ============================================================
+function pickItem(cod){ return pick && pick.items[cod]; }
+function guardarPick(){ if (pick) lsSet(LS_PICK + pick.id, JSON.stringify(pick.items)); }
+
+function abrirPick(id){
+  const t = traspasos[id];
+  if (!t) return;
+  let guardado = null;
+  try { guardado = JSON.parse(lsGet(LS_PICK + id) || 'null'); } catch(_){}
+  const items = {};
+  Object.entries(t.items || {}).forEach(([k, i]) => {
+    const sol = Number(i.solicitada) || 0;
+    const g = guardado && guardado[k];
+    items[k] = g ? { enviar: Math.min(sol, Math.max(0, Number(g.enviar) || 0)), ok: !!g.ok, quitado: !!g.quitado }
+                 : { enviar: sol, ok: false, quitado: false };
+  });
+  pick = { id, items };
+  renderPick();
+  abrirCapa($('pickScreen'));
+  $('pickScreen').scrollTop = 0;
+}
+function alCerrarPick(){ pick = null; $('pickDock').hidden = true; }
+
+// Si el pedido cambia mientras está abierto (lo despacharon desde otro teléfono, se canceló), se refleja.
+function sincronizarPickAbierto(){
+  if (!pick || !$('pickScreen').classList.contains('open')) return;
+  const t = traspasos[pick.id];
+  if (!t || !['PENDIENTE', 'PREPARANDO'].includes(t.estado)){
+    if (!procesoCritico){
+      toast(t && t.estado === 'CANCELADO' ? 'El pedido fue cancelado' : 'Este pedido ya fue despachado', 'aviso');
+      lsDel(LS_PICK + pick.id);
+      cerrarCapa();
+    }
+    return;
+  }
+  renderPick();
+}
+
+function estadoPick(t){
+  const keys = Object.keys(t.items || {});
+  const revisados = keys.filter(k => pick.items[k].ok || pick.items[k].quitado).length;
+  const unidades = keys.reduce((s, k) => s + (pick.items[k].quitado ? 0 : pick.items[k].enviar), 0);
+  return { total: keys.length, revisados, unidades, faltan: keys.length - revisados };
+}
+
+function renderPick(){
+  const t = traspasos[pick.id];
+  if (!t) return;
+  const mio = t.preparadoPor && usuario && t.preparadoPor.uid === usuario.uid;
+  const tomado = t.estado === 'PREPARANDO';
+  const st = estadoPick(t);
+  const keys = Object.keys(t.items || {}).sort((a, b) => String(t.items[a].nombre).localeCompare(String(t.items[b].nombre), 'es'));
+
+  let cuerpo = '';
+  if (!tomado){
+    cuerpo = `<div class="pick-start"><button type="button" class="btn btn-ink" style="width:100%" id="tomarBtn">Empezar a preparar</button>
+      <p>Así ${escapeHtml(suc(t.destino).nombre)} ve que su pedido está en marcha y nadie más lo prepara a la vez.</p></div>`;
+  } else if (!mio){
+    cuerpo = `<div class="pick-lock">${ICON.alert.replace('<svg', '<svg width="20" height="20" style="flex-shrink:0"')}<span>Lo está preparando <b>${escapeHtml(quien(t.preparadoPor))}</b> desde ${fmtHora(t.tomadoEn)}.</span><button type="button" class="btn" id="tomarBtn">Tomar igual</button></div>`;
+  }
+
+  const lista = keys.map(k => {
+    const i = t.items[k], p = pick.items[k], sol = Number(i.solicitada) || 0;
+    if (p.quitado){
+      return `<div class="pk quitado" data-k="${escapeHtml(k)}"><div class="art-name">${escapeHtml(i.nombre)}</div><button type="button" class="pk-act" data-act="restaurar" ${mio ? '' : 'disabled'}>Deshacer</button></div>`;
+    }
+    const cero = p.enviar === 0;
+    const dif = p.enviar < sol;
+    return `<div class="pk${p.ok ? ' ok' : ''}${cero ? ' cero' : ''}" data-k="${escapeHtml(k)}">
+      <div class="pk-head">
+        ${thumbHtml(i.foto, i.nombre)}
+        <div class="art-info">
+          <div class="art-name">${escapeHtml(i.nombre)}</div>
+          <div class="pk-req">#${escapeHtml(i.codigo)} · Pedido <b>${sol}</b></div>
+        </div>
+        <button type="button" class="pk-check" data-act="ok" aria-pressed="${p.ok}" aria-label="Marcar como revisado" ${mio ? '' : 'disabled'}>${ICON.check}</button>
+      </div>
+      ${mio ? `<div class="pk-ctrl">
+        ${stepperHtml('pick', k, p.enviar, 0, sol)}
+        <div class="pk-acts">
+          <button type="button" class="pk-act${cero ? ' on' : ''}" data-act="sinstock" aria-pressed="${cero}">Sin stock</button>
+          <button type="button" class="pk-act" data-act="quitar" aria-label="Quitar del pedido">${ICON.trash}</button>
+        </div>
+      </div>
+      ${dif ? `<div class="pk-diff${cero ? ' red' : ''}">${cero ? 'No se envía' : `Se envían ${p.enviar} de ${sol}`}</div>` : ''}` : ''}
+    </div>`;
+  }).join('');
+
+  $('pickInner').innerHTML = `
+    <div class="pick-top">
+      <div class="pick-bar">
+        <button type="button" class="back" data-close aria-label="Volver">${ICON.back}</button>
+        <span class="chip ${t.estado}">${ESTADO_TXT[t.estado]}</span>
+        <span class="remito-num">${escapeHtml(t.numero || '')}</span>
+      </div>
+      <div class="pick-route">
+        ${rutaHtml(t.origen, t.destino, 'md')}
+        <div class="pick-who">Pidió <b>${escapeHtml(quien(t.creadoPor))}</b> · ${fmtHace(t.creadoEn)}</div>
+        ${mio ? `<div class="progress"><div class="progress-bar"><i style="width:${st.total ? st.revisados / st.total * 100 : 0}%"></i></div><span>${st.revisados} de ${st.total} revisados</span></div>` : ''}
+      </div>
+    </div>
+    ${t.nota ? `<div class="det-nota" style="margin-top:4px"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
+    ${cuerpo}
+    <div class="pick-list" style="margin-top:12px">${lista}</div>`;
+
+  const tb = $('tomarBtn');
+  if (tb) tb.addEventListener('click', () => tomarPedido(t.id, tomado));
+
+  const dock = $('pickDock'), cta = $('pickCta');
+  dock.hidden = !mio;
+  cta.className = 'cta';
+  if (st.faltan > 0){
+    cta.classList.add('warn');
+    cta.innerHTML = `<span>Revisá cada artículo</span><span class="cta-k">faltan ${st.faltan}</span>`;
+  } else if (st.unidades > 0){
+    cta.innerHTML = `<span>Despachar a ${escapeHtml(suc(t.destino).nombre)}</span><span class="cta-k">${unid(st.unidades)}</span>`;
+  } else {
+    cta.classList.add('danger', 'center');
+    cta.innerHTML = `<span>Cerrar sin envío</span>`;
+  }
+}
+
+async function tomarPedido(id, forzar){
+  const btn = $('tomarBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase.');
+    const yo = { uid: usuario.uid, email: usuario.email || '' };
+    // Transacción: pasa a PREPARANDO solo si sigue abierto (y, sin forzar, si nadie lo tomó).
+    const res = await conTimeout(db.ref('traspasos/' + id).transaction(t => {
+      if (!t) return t;
+      if (t.estado === 'PENDIENTE' || (forzar && t.estado === 'PREPARANDO')){
+        t.estado = 'PREPARANDO';
+        t.preparadoPor = yo;
+        t.tomadoEn = Date.now();
+        return t;
+      }
+      return;   // aborta
+    }), 10000, 'No se pudo tomar el pedido.');
+    if (!res.committed){
+      const actual = res.snapshot.val();
+      throw new Error(actual && actual.estado === 'PREPARANDO' ? 'ya lo tomó ' + quien(actual.preparadoPor) + '.' : 'el pedido ya no está pendiente.');
+    }
+    vibrar(20);
+  } catch (err){
+    toast('No se pudo tomar: ' + err.message, 'err');
+    if (btn) btn.disabled = false;
+  }
+}
+
+function setEnviar(k, n){
+  const p = pickItem(k);
+  const t = pick && traspasos[pick.id];
+  if (!p || !t) return;
+  const sol = Number(t.items[k].solicitada) || 0;
+  // Se puede bajar hasta 0, nunca enviar más de lo pedido.
+  p.enviar = Math.min(sol, Math.max(0, Math.floor(Number(n) || 0)));
+  p.ok = true;
+  guardarPick();
+  renderPick();
+}
+
+$('pickInner').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled || !pick) return;
+  const k = b.closest('[data-k]').dataset.k;
+  const p = pickItem(k), t = traspasos[pick.id];
+  const sol = Number(t.items[k].solicitada) || 0;
+  switch (b.dataset.act){
+    case 'ok': p.ok = !p.ok; vibrar(p.ok ? 12 : 0); break;
+    case 'sinstock': if (p.enviar === 0) { p.enviar = sol; } else { p.enviar = 0; } p.ok = true; break;
+    case 'quitar': p.quitado = true; p.ok = true; toast('Artículo quitado del pedido'); break;
+    case 'restaurar': p.quitado = false; p.ok = false; p.enviar = sol; break;
+  }
+  guardarPick();
+  renderPick();
+});
+
+$('pickCta').addEventListener('click', () => {
+  const t = pick && traspasos[pick.id];
+  if (!t) return;
+  const st = estadoPick(t);
+  if (st.faltan > 0){
+    // Lleva al primer artículo sin revisar.
+    const k = Object.keys(t.items).sort((a, b) => String(t.items[a].nombre).localeCompare(String(t.items[b].nombre), 'es'))
+      .find(k => !pick.items[k].ok && !pick.items[k].quitado);
+    const el = k && $('pickInner').querySelector(`[data-k="${CSS.escape(k)}"]`);
+    if (el){ el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }], { duration: 300 }); }
+    return;
+  }
+  abrirConfirmacion(t);
+});
+
+function motivoDe(p, sol){
+  if (p.quitado) return 'QUITADO';
+  if (p.enviar === 0) return 'SIN_STOCK';
+  if (p.enviar < sol) return 'PARCIAL';
+  return null;
+}
+
+function abrirConfirmacion(t){
+  const st = estadoPick(t);
+  const o = suc(t.origen), d = suc(t.destino);
+  const difs = Object.keys(t.items).map(k => {
+    const i = t.items[k], p = pick.items[k], sol = Number(i.solicitada) || 0;
+    const m = motivoDe(p, sol);
+    return m ? { i, env: p.quitado ? 0 : p.enviar, sol, m } : null;
+  }).filter(Boolean);
+  const arts = Object.keys(t.items).filter(k => !pick.items[k].quitado && pick.items[k].enviar > 0).length;
+  if (st.unidades > 0){
+    $('confTitle').textContent = 'Confirmar despacho';
+    $('confSub').textContent = (t.numero || '') + ' · de ' + o.nombre + ' a ' + d.nombre;
+    $('confBody').innerHTML = `
+      <div class="conf-sum"><div><b>${st.unidades}</b><span>${st.unidades === 1 ? 'unidad sale' : 'unidades salen'}</span></div><div><b>${arts}</b><span>${arts === 1 ? 'artículo' : 'artículos'}</span></div></div>
+      ${difs.length ? `<div class="eyebrow" style="margin:4px 0 2px">Cambios sobre lo pedido</div>` + difs.map(x => `
+        <div class="det-row${x.env === 0 ? ' cero' : ''}">${thumbHtml(x.i.foto, x.i.nombre)}
+          <div class="art-info"><div class="art-name">${escapeHtml(x.i.nombre)}</div></div>
+          <div class="det-q"><span class="q"><s>${x.sol}</s>${x.env}</span><span class="motivo ${x.m}">${MOTIVO_TXT[x.m]}</span></div></div>`).join('')
+        : `<div class="det-nota" style="margin-bottom:0">Se envía todo tal cual se pidió.</div>`}
+      <p class="conf-mov" style="margin-top:16px">Se registra la salida (<b>SI</b>) de ${escapeHtml(o.nombre)} y la entrada (<b>EI</b>) en ${escapeHtml(d.nombre)} de cada artículo enviado.</p>`;
+    $('confBtn').className = 'btn btn-ink';
+    $('confBtn').textContent = `Despachar ${unid(st.unidades)}`;
+  } else {
+    $('confTitle').textContent = 'Cerrar sin envío';
+    $('confSub').textContent = (t.numero || '') + ' · no hay unidades para enviar';
+    $('confBody').innerHTML = `<div class="det-nota" style="margin-bottom:0">Ningún artículo tiene unidades para enviar. El pedido se cierra como cancelado, ${escapeHtml(d.nombre)} lo ve en su historial y no se registran movimientos de stock.</div>`;
+    $('confBtn').className = 'btn btn-red';
+    $('confBtn').textContent = 'Cerrar pedido sin envío';
+  }
+  $('confBtn').disabled = false;
+  abrirCapa($('confSheet'));
+}
+
+$('confBtn').addEventListener('click', despachar);
+
+async function despachar(){
+  const btn = $('confBtn');
+  if (btn.disabled || !pick) return;
+  const id = pick.id;
+  const t = traspasos[id];
+  if (!t) return;
+  btn.disabled = true;
+  procesoCritico = true;
+  showBlock('Despachando…');
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase. Revisá internet.');
+    // Lectura fresca: si ya se despachó o canceló desde otro teléfono, no se pisa.
+    const actual = (await conTimeout(db.ref('traspasos/' + id).once('value'), 10000, 'No se pudo leer el pedido.')).val();
+    if (!actual) throw new Error('El pedido ya no existe.');
+    if (!['PENDIENTE', 'PREPARANDO'].includes(actual.estado)) throw new Error('El pedido ya está ' + (ESTADO_TXT[actual.estado] || actual.estado).toLowerCase() + '.');
+
+    const yo = { uid: usuario.uid, email: usuario.email || '' };
+    const o = suc(actual.origen), d = suc(actual.destino);
+    const updates = {};
+    const base = 'traspasos/' + id + '/';
+    const movKeys = [];
+    const ts = Date.now();
+    let unidades = 0;
+
+    Object.keys(actual.items || {}).forEach(k => {
+      const i = actual.items[k];
+      const p = pick.items[k] || { enviar: 0, quitado: true };
+      const sol = Number(i.solicitada) || 0;
+      const env = p.quitado ? 0 : Math.min(sol, Math.max(0, p.enviar));
+      updates[base + 'items/' + k + '/enviada'] = env;
+      updates[base + 'items/' + k + '/motivo'] = motivoDe({ quitado: p.quitado, enviar: env }, sol);
+      if (env <= 0) return;
+      unidades += env;
+      // Claves determinísticas: un reintento o doble despacho pisa las mismas claves (no duplica stock).
+      const comun = {
+        timestamp: ts, codigo: i.codigo, nombre: i.nombre, cantidad: env,
+        traspasoId: id, traspasoNumero: actual.numero || ''
+      };
+      const kSI = 'tr_' + id + '_' + k + '_SI', kEI = 'tr_' + id + '_' + k + '_EI';
+      updates['movimientos/' + kSI] = Object.assign({}, comun, { tipo: 'SI', sucursal: o.id, sucursalNombre: o.nombre });
+      updates['movimientos/' + kEI] = Object.assign({}, comun, { tipo: 'EI', sucursal: d.id, sucursalNombre: d.nombre });
+      movKeys.push(kSI, kEI);
+    });
+
+    if (unidades > 0){
+      updates[base + 'estado'] = 'ENVIADO';
+      updates[base + 'enviadoEn'] = firebase.database.ServerValue.TIMESTAMP;
+    } else {
+      updates[base + 'estado'] = 'CANCELADO';
+      updates[base + 'canceladoEn'] = firebase.database.ServerValue.TIMESTAMP;
+      updates[base + 'canceladoPor'] = yo;
+      updates[base + 'motivoCancelacion'] = 'Sin stock para enviar';
+    }
+    updates[base + 'preparadoPor'] = yo;
+    if (!actual.tomadoEn) updates[base + 'tomadoEn'] = firebase.database.ServerValue.TIMESTAMP;
+
+    // Todo o nada: estado del pedido + cantidades finales + movimientos SI/EI.
+    await conTimeout(db.ref().update(updates), 15000, 'El despacho tardó demasiado.');
+
+    const check = await conTimeout(db.ref(base + 'estado').once('value'), 10000, 'No se pudo verificar el despacho.');
+    if (check.val() !== updates[base + 'estado']) throw new Error('La verificación del despacho falló.');
+    for (const k of movKeys){
+      const m = await conTimeout(db.ref('movimientos/' + k).once('value'), 10000, 'No se pudo verificar el movimiento de stock.');
+      if (!m.exists()) throw new Error('La verificación de los movimientos falló.');
+    }
+
+    lsDel(LS_PICK + id);
+    // Sin pick, el eco del listener (estado ENVIADO) no dispara el aviso de "ya fue despachado".
+    pick = null;
+    hideBlock();
+    procesoCritico = false;
+    vibrar([40, 50, 40]);
+    const numero = actual.numero || '';
+    // La hoja de confirmación se cierra y el picking se reemplaza por la pantalla de éxito.
+    await cerrarCapaAsync();
+    mostrarExito(unidades > 0 ? {
+      titulo: 'Despachado',
+      sub: `${unid(unidades)} salen de ${o.nombre} hacia ${d.nombre}. Ya quedó registrado el stock de las dos sucursales.`,
+      numero, origen: o.id, destino: d.id, viaje: true,
+      detalle: `${movKeys.length / 2} ${movKeys.length / 2 === 1 ? 'artículo' : 'artículos'} · SI ${o.nombre} · EI ${d.nombre}`,
+      boton: 'Volver a pedidos para preparar', accion: () => irA('preparar')
+    } : {
+      titulo: 'Pedido cerrado',
+      sub: `No había unidades para enviar. ${d.nombre} lo ve como cancelado y no se registraron movimientos.`,
+      numero, origen: o.id, destino: d.id, viaje: false, detalle: 'Sin envío',
+      boton: 'Volver a pedidos para preparar', accion: () => irA('preparar')
+    }, $('pickScreen'));
+  } catch (err){
+    console.error('Error despachando:', err);
+    hideBlock();
+    toast('No se despachó: ' + err.message, 'err');
+    btn.disabled = false;
+  } finally {
+    procesoCritico = false;
+  }
+}
+
+// ============================================================
+//  Pantalla de éxito
+// ============================================================
+let accionExito = null;
+function mostrarExito(o, reemplaza){
+  accionExito = o.accion || null;
+  $('doneWrap').innerHTML = `
+    <div class="done-mark">${ICON.check}</div>
+    <div><h1 id="doneTitle">${escapeHtml(o.titulo)}</h1><p class="done-sub">${escapeHtml(o.sub)}</p></div>
+    <div class="done-card"><span class="remito-num">${escapeHtml(o.numero)}</span>${rutaHtml(o.origen, o.destino, 'md', o.viaje)}
+      <p class="pick-who" style="margin-top:14px">${escapeHtml(o.detalle)}</p></div>
+    <button type="button" class="btn btn-ink" id="doneBtn">${escapeHtml(o.boton)}</button>`;
+  $('doneBtn').addEventListener('click', () => { cerrarCapa(); if (accionExito) accionExito(); });
+  if (reemplaza && capas[capas.length - 1] === reemplaza) cambiarCapa($('doneScreen'));
+  else abrirCapa($('doneScreen'));
+  $('doneScreen').scrollTop = 0;
+}
+
+// ============================================================
+//  Escáner (html5-qrcode) — escaneo continuo: cada lectura suma 1 al pedido
+// ============================================================
+const SCAN_CONSENSO = 2;       // lecturas idénticas seguidas para aceptar
+const SCAN_REPETIR_MS = 1800;  // el mismo código vuelve a sumar recién si se dejó de ver este tiempo
+const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let html5Qr = null, scanLast = '', scanCount = 0, scanVisto = {}, scanSumados = 0;
+
+function gtinCheckOk(code){
+  if (!/^\d+$/.test(code)) return false;
+  const d = code.split('').map(Number), check = d.pop();
+  let sum = 0;
+  for (let i = d.length - 1, w = 3; i >= 0; i--, w = (w === 3 ? 1 : 3)) sum += d[i] * w;
+  return ((10 - (sum % 10)) % 10) === check;
+}
+function codigoEscaneadoValido(code, fmt){
+  if (!code) return false;
+  switch (fmt){
+    case 'EAN_13': return code.length === 13 && gtinCheckOk(code);
+    case 'EAN_8':  return code.length === 8 && gtinCheckOk(code);
+    case 'UPC_A':  return code.length === 12 && gtinCheckOk(code);
+    case 'UPC_E':  return code.length === 8 && /^\d+$/.test(code);
+    case 'ITF':    return /^\d+$/.test(code) && code.length >= 6 && code.length % 2 === 0 && (code.length !== 14 || gtinCheckOk(code));
+    case 'CODE_39':
+    case 'CODABAR': return code.length >= 4;
+    default:        return code.length >= 3;
+  }
+}
+const SCAN_FORMATS = () => [
+  Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.QR_CODE
+];
+function scanQrbox(vw){ const w = Math.min(vw.width, vw.height); return { width: Math.floor(w * 0.8), height: Math.floor(w * 0.5) }; }
+
+$('scanBtn').addEventListener('click', abrirScanner);
+$('scanDone').addEventListener('click', cerrarScanner);
+
+async function abrirScanner(){
+  if (typeof Html5Qrcode === 'undefined'){ toast('El escáner no está disponible', 'err'); return; }
+  if (!articulos.length){ toast('Esperá a que cargue el catálogo', 'err'); return; }
+  $('scan').classList.add('on');
+  scanLast = ''; scanCount = 0; scanVisto = {}; scanSumados = 0;
+  $('scanFeed').innerHTML = '<div class="scan-hint">Apuntá al código de barras. Cada lectura suma una unidad.</div>';
+  const baseConfig = { fps: 10, qrbox: scanQrbox };
+  // iOS necesita alta resolución + enfoque continuo para leer códigos 1D (ver articulos.html).
+  const iosConfig = Object.assign({}, baseConfig, { videoConstraints: {
+    facingMode: { ideal: 'environment' },
+    width: { min: 640, ideal: 1920, max: 2560 }, height: { min: 480, ideal: 1080, max: 1440 },
+    advanced: [{ focusMode: 'continuous' }]
+  }});
+  try {
+    html5Qr = new Html5Qrcode('reader', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, ES_IOS ? iosConfig : baseConfig, onScan, () => {});
+    return;
+  } catch (err){
+    console.warn('Escáner: reintento con config básica', err);
+    if (html5Qr){ try { await html5Qr.stop(); } catch(_){} try { html5Qr.clear(); } catch(_){} html5Qr = null; }
+  }
+  try {
+    html5Qr = new Html5Qrcode('reader', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await html5Qr.start({ facingMode: 'environment' }, baseConfig, onScan, () => {});
+  } catch (err){
+    console.error('Scanner error:', err);
+    toast('No se pudo abrir la cámara. Revisá el permiso de cámara del navegador.', 'err');
+    cerrarScanner();
+  }
+}
+
+function onScan(text, result){
+  const code = String(text).trim();
+  const fmt = (result && result.result && result.result.format && result.result.format.formatName) || '';
+  if (!codigoEscaneadoValido(code, fmt)){ scanLast = ''; scanCount = 0; return; }
+  const ahora = Date.now();
+  // Mientras el mismo código siga a la vista no vuelve a sumar.
+  const ultimaVez = scanVisto[code] || 0;
+  scanVisto[code] = ahora;
+  if (ahora - ultimaVez < SCAN_REPETIR_MS) return;
+  if (code === scanLast) scanCount++; else { scanLast = code; scanCount = 1; }
+  if (scanCount < SCAN_CONSENSO){ scanVisto[code] = ultimaVez; return; }
+  scanLast = ''; scanCount = 0;
+
+  const matches = articulos.filter(a => a.barras.includes(code) || a.codigo === code);
+  const feed = $('scanFeed');
+  if (matches.length === 1){
+    agregarAlCarrito(matches[0].codigo, 1);
+    scanSumados++;
+    vibrar(50);
+    const c = carrito[matches[0].codigo];
+    feed.innerHTML = `<div class="scan-last"><b>+1</b><span>${escapeHtml(matches[0].nombre)}</span><b>${c ? c.cant : 1}</b></div><div class="scan-count">${plural(scanSumados, 'lectura', 'lecturas')} en esta tanda</div>`;
+  } else if (matches.length > 1){
+    // Código compartido por varios artículos: se elige en la lista.
+    vibrar(30);
+    cerrarScanner().then(() => {
+      $('q').value = code; $('qClear').hidden = false; renderResultados();
+      toast('Ese código está en ' + matches.length + ' artículos. Elegí cuál.', 'aviso');
+    });
+  } else {
+    vibrar([30, 40, 30]);
+    feed.innerHTML = `<div class="scan-last err"><b>?</b><span>Ningún artículo tiene el código ${escapeHtml(code)}</span></div><div class="scan-count">${plural(scanSumados, 'lectura', 'lecturas')} en esta tanda</div>`;
+  }
+}
+
+function cerrarScanner(){
+  $('scan').classList.remove('on');
+  if (scanSumados){ toast(plural(scanSumados, 'unidad sumada', 'unidades sumadas') + ' al pedido'); scanSumados = 0; }
+  if (html5Qr){
+    const q = html5Qr; html5Qr = null;
+    return q.stop().then(() => q.clear()).catch(() => {});
+  }
+  return Promise.resolve();
+}
+
+// Refresca los "hace X min" sin esperar cambios de datos.
+setInterval(() => { if (miSuc && traspasosCargados && !document.hidden) { renderPedidos(); renderPreparar(); } }, 60000);
+</script>
+</body>
+</html>
