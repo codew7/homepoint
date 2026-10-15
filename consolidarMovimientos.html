@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+    <!-- Fuera de los buscadores: noindex impide que Google indexe la pagina y
+         nofollow que siga sus enlaces. Debe quedar rastreable en robots.txt,
+         porque si se bloquea el crawleo Google nunca lee esta etiqueta. -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consolidar Movimientos</title>
+  <link rel="icon" href="faviconnegro.png" type="image/png">
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="config.js"></script>
+
+  <style>
+    :root {
+      --bg: #f5f5f3;
+      --surface: #ffffff;
+      --surface-2: #fafaf8;
+      --border: #e6e4df;
+      --border-strong: #d6d3cc;
+      --text: #1d1c1a;
+      --muted: #6e6a62;
+      --accent: #b68900;
+      --accent-soft: #fbf4dc;
+      --success: #2e7d32;
+      --success-soft: #edf6ee;
+      --danger: #c62f26;
+      --danger-soft: #fcefee;
+      --warning: #a35f00;
+      --warning-soft: #fdf5e7;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    code {
+      font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+      font-size: 0.85em;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 0 5px;
+      border-radius: 4px;
+    }
+
+    /* ---------- Barra superior ---------- */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+    }
+
+    .back-link {
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .back-link:hover { background: var(--surface-2); }
+
+    .titulo h1 { margin: 0; font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; }
+    .titulo p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+    #userIndicator {
+      margin-left: auto;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .logout-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .logout-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* ---------- Contenedor ---------- */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.25rem 1rem 3rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    /* ---------- Ayuda ---------- */
+    .ayuda { margin-bottom: 1rem; }
+
+    .ayuda summary {
+      cursor: pointer;
+      padding: 0.7rem 1rem;
+      font-weight: 500;
+      color: var(--muted);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+
+    .ayuda summary::-webkit-details-marker { display: none; }
+    .ayuda summary .bi-chevron-down { margin-left: auto; transition: transform 0.2s ease; }
+    .ayuda[open] summary .bi-chevron-down { transform: rotate(180deg); }
+    .ayuda summary:hover { color: var(--text); }
+
+    .ayuda-cuerpo {
+      padding: 0 1rem 1rem;
+      color: #45423d;
+      font-size: 0.88rem;
+    }
+
+    .ayuda-cuerpo ul { margin: 0; padding-left: 1.1rem; }
+    .ayuda-cuerpo li { margin: 0.25rem 0; }
+
+    .formula {
+      display: block;
+      margin: 0 0 0.6rem;
+      padding: 0.55rem 0.75rem;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    /* ---------- Pasos ---------- */
+    .pasos {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.6rem;
+    }
+
+    .paso {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      text-align: left;
+      padding: 0.8rem 0.9rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font: inherit;
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+    }
+
+    .paso:hover:not(:disabled) { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); }
+    .paso:active:not(:disabled) { transform: scale(0.99); }
+    .paso:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .paso-n {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .paso strong { display: block; font-weight: 600; font-size: 0.9rem; }
+    .paso small { display: block; color: var(--muted); font-size: 0.76rem; }
+
+    .paso-principal .paso-n { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .paso-peligro .paso-n { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .paso-peligro:hover:not(:disabled) { border-color: var(--danger); }
+
+    .acciones-sec {
+      display: flex;
+      justify-content: flex-end;
+      margin: 0.5rem 0 1.25rem;
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      font: inherit;
+      font-size: 0.8rem;
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+    }
+
+    .link-btn:hover { color: var(--danger); background: var(--danger-soft); }
+
+    /* ---------- Botones (modal) ---------- */
+    .btn {
+      padding: 9px 16px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--text); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #3a3833; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #a8261f; }
+    .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+
+    /* ---------- Mensajes ---------- */
+    .feedback {
+      display: none;
+      padding: 0.75rem 1rem 0.75rem 2.6rem;
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      position: relative;
+      border: 1px solid;
+      white-space: pre-line;
+    }
+
+    .feedback::before {
+      font-family: 'bootstrap-icons';
+      position: absolute;
+      left: 1rem;
+      top: 0.75rem;
+    }
+
+    .feedback.visible { display: block; }
+    .feedback.success { background: var(--success-soft); border-color: #cfe5d0; color: #1f5a22; }
+    .feedback.success::before { content: '\F26B'; }
+    .feedback.error { background: var(--danger-soft); border-color: #f2cfcc; color: #8f1f19; }
+    .feedback.error::before { content: '\F623'; }
+    .feedback.warning { background: var(--warning-soft); border-color: #f1dcb5; color: #7a4800; }
+    .feedback.warning::before { content: '\F33B'; }
+
+    /* ---------- Resumen ---------- */
+    .stats { display: none; margin-bottom: 1rem; }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .kpi { padding: 0.9rem 1rem; border-right: 1px solid var(--border); }
+    .kpi:last-child { border-right: none; }
+    .kpi .lbl { font-size: 0.75rem; color: var(--muted); }
+    .kpi .val { font-size: 1.45rem; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+    .kpis-sec {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem 1.2rem;
+      padding: 0.55rem 0.2rem 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .kpis-sec b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    .avisos {
+      display: none;
+      background: var(--warning-soft);
+      border: 1px solid #f1dcb5;
+      border-radius: var(--radius);
+      padding: 0.65rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.82rem;
+      color: #7a4800;
+    }
+
+    .avisos ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+
+    /* ---------- Secciones ---------- */
+    .seccion { margin-top: 1.25rem; }
+
+    .seccion-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.6rem;
+    }
+
+    .seccion-titulo { margin: 0; font-size: 0.95rem; font-weight: 600; }
+    .alcance { font-size: 0.8rem; color: var(--muted); }
+    .alcance b { color: var(--text); }
+
+    .filtros { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; }
+
+    .buscador { position: relative; flex: 1; }
+    .buscador .bi { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+
+    .filtros input, .filtros select {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      font: inherit;
+      color: var(--text);
+    }
+
+    .filtros input { padding-left: 32px; }
+    .filtros select { width: auto; min-width: 180px; }
+    .filtros input:focus, .filtros select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    /* ---------- Tablas ---------- */
+    .tabla-wrap {
+      overflow: auto;
+      max-height: 65vh;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+
+    th, td {
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #f0eee9;
+      white-space: nowrap;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:hover td { background: #fcfbf8; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.nombre { white-space: normal; min-width: 220px; }
+    td.consol { font-weight: 600; }
+    td.cod { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 0.78rem; color: var(--muted); }
+    td.cero { color: #c2beb6; }
+    .neg { color: var(--danger); }
+    .pos { color: var(--success); }
+    tr.fila-total td { background: var(--surface-2); font-weight: 600; border-bottom: 1px solid var(--border); }
+    tr.fila-total td.nombre { color: var(--muted); font-weight: 500; }
+
+    .tag-sinentrada {
+      font-size: 0.68rem;
+      font-weight: 500;
+      background: var(--warning-soft);
+      color: var(--warning);
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-left: 6px;
+    }
+
+    .paginacion {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.6rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .paginacion button {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    .paginacion button:hover:not(:disabled) { background: var(--surface-2); }
+    .paginacion button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .pag-ctrl { display: inline-flex; align-items: center; gap: 8px; }
+
+    .vacio { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
+
+    .resultado-verif {
+      border-radius: var(--radius);
+      padding: 0.8rem 1rem;
+      margin-bottom: 0.6rem;
+      border: 1px solid;
+      font-size: 0.85rem;
+    }
+
+    .resultado-verif .rv-titulo { font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; margin-bottom: 0.3rem; }
+    .resultado-verif .rv-datos { color: #45423d; }
+    .resultado-verif .rv-nota { margin-top: 0.4rem; font-size: 0.8rem; color: var(--muted); }
+    .resultado-verif.ok { background: var(--success-soft); border-color: #cfe5d0; }
+    .resultado-verif.ok .rv-titulo { color: var(--success); }
+    .resultado-verif.error { background: var(--danger-soft); border-color: #f2cfcc; }
+    .resultado-verif.error .rv-titulo { color: var(--danger); }
+
+    .estado-difiere { color: var(--danger); font-weight: 600; }
+
+    /* ---------- Carga ---------- */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(245, 245, 243, 0.85);
+      backdrop-filter: blur(2px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .loading-overlay.visible { display: flex; }
+
+    .loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { color: var(--text); font-size: 0.9rem; font-weight: 500; text-align: center; padding: 0 1rem; }
+
+    /* ---------- Modal ---------- */
+    .confirm-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(20, 19, 17, 0.45);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      padding: 1rem;
+    }
+
+    .confirm-modal.visible { display: flex; }
+
+    .confirm-box {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 1.4rem;
+      max-width: 460px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+      animation: entrar 0.18s ease-out;
+    }
+
+    @keyframes entrar { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+
+    .confirm-box h3 { margin: 0 0 0.6rem; font-size: 1.05rem; font-weight: 600; }
+    .confirm-box .cuerpo { margin: 0 0 1.1rem; color: #45423d; font-size: 0.88rem; }
+    .confirm-box input {
+      width: 100%;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      font: inherit;
+      margin-bottom: 1.1rem;
+      letter-spacing: 0.05em;
+    }
+
+    .confirm-box input:focus { outline: none; border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+
+    .confirm-buttons { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+    .sin-acceso { text-align: center; padding: 4rem 1rem; color: var(--muted); }
+    .sin-acceso .bi { display: block; font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--danger); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .confirm-box { animation: none; }
+      .paso, .ayuda summary .bi-chevron-down { transition: none; }
+    }
+
+    @media (max-width: 900px) {
+      .pasos { grid-template-columns: repeat(2, 1fr); }
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .kpi:nth-child(2) { border-right: none; }
+      .kpi:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+    }
+
+    @media (max-width: 600px) {
+      .pasos { grid-template-columns: 1fr; }
+      #userEmail { display: none; }
+      .filtros { flex-direction: column; }
+      .filtros select { width: 100%; }
+      .confirm-buttons .btn { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="inventario.html" class="back-link" title="Volver a Inventario"><i class="bi bi-arrow-left"></i></a>
+      <div class="titulo">
+        <h1>Consolidar movimientos</h1>
+        <p>Inventario · Administración</p>
+      </div>
+      <div id="userIndicator">
+        <span id="userEmail"></span>
+        <button class="logout-btn" onclick="cerrarSesion()" title="Cerrar sesión">
+          <i class="bi bi-box-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" id="app" style="display:none;">
+    <details class="ayuda card">
+      <summary><i class="bi bi-info-circle"></i> Cómo funciona <i class="bi bi-chevron-down"></i></summary>
+      <div class="ayuda-cuerpo">
+        <span class="formula">CONSOLIDADO anterior + ENTRADA + ENTRADA-INT − SALIDA − SALIDA-INT − RETIRO = CONSOLIDADO</span>
+        <ul>
+          <li>Reemplaza los movimientos de <code>movimientos</code> por un único registro <code>CONSOLIDADO</code> por <strong>artículo y sucursal</strong>.</li>
+          <li>Si el resultado da negativo, se guarda <strong>0</strong>.</li>
+          <li>La fecha es la de la última ENTRADA del grupo. Los movimientos sin sucursal cuentan como <strong>Munro</strong>.</li>
+          <li>Solo se consolidan los artículos <strong>visibles con el filtro</strong> de la vista previa (ideal para probar con uno primero).</li>
+          <li>Lo que no esté en el respaldo <code>movimientos2</code> (o haya cambiado) se copia ahí antes de consolidar.</li>
+        </ul>
+      </div>
+    </details>
+
+    <div id="feedback" class="feedback"></div>
+
+    <section class="pasos">
+      <button class="paso" id="btnRespaldar" onclick="respaldar()">
+        <span class="paso-n">1</span>
+        <span><strong>Respaldar</strong><small>Copia a movimientos2</small></span>
+      </button>
+      <button class="paso paso-principal" id="btnCalcular" onclick="calcular()">
+        <span class="paso-n">2</span>
+        <span><strong>Calcular vista previa</strong><small>No modifica nada</small></span>
+      </button>
+      <button class="paso paso-peligro" id="btnConsolidar" onclick="consolidar()" disabled>
+        <span class="paso-n">3</span>
+        <span><strong>Consolidar</strong><small>Reemplaza los movimientos</small></span>
+      </button>
+      <button class="paso" id="btnVerificar" onclick="verificar()">
+        <span class="paso-n">4</span>
+        <span><strong>Verificar</strong><small>Compara con el respaldo</small></span>
+      </button>
+    </section>
+
+    <div class="acciones-sec">
+      <button class="link-btn" id="btnRestaurar" onclick="restaurar()" title="Reemplaza todo el contenido de movimientos por el de movimientos2">
+        <i class="bi bi-arrow-counterclockwise"></i> Deshacer: restaurar desde movimientos2
+      </button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+    <div class="avisos" id="avisos"></div>
+
+    <!-- Resultado de verificación -->
+    <section class="seccion" id="seccionVerificacion" style="display:none;">
+      <div class="seccion-head"><h2 class="seccion-titulo">Verificación</h2></div>
+      <div id="resultadoVerif"></div>
+      <div class="tabla-wrap" id="tablaVerifWrap"></div>
+    </section>
+
+    <!-- Vista previa -->
+    <section class="seccion" id="seccionPreview" style="display:none;">
+      <div class="seccion-head">
+        <h2 class="seccion-titulo">Vista previa</h2>
+        <span class="alcance" id="alcancePreview"></span>
+      </div>
+      <div class="filtros">
+        <div class="buscador">
+          <i class="bi bi-search"></i>
+          <input type="text" id="filtroTexto" placeholder="Buscar por código o nombre">
+        </div>
+        <select id="filtroSucursal">
+          <option value="">Todas las sucursales</option>
+        </select>
+      </div>
+      <div class="tabla-wrap" id="tablaPreview"></div>
+      <div class="paginacion" id="paginacion"></div>
+    </section>
+  </main>
+
+  <div class="container sin-acceso" id="sinAcceso" style="display:none;">
+    <i class="bi bi-lock"></i> Esta herramienta es solo para administradores.
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingText">Procesando...</div>
+  </div>
+
+  <!-- Modal de confirmación genérico -->
+  <div id="confirmModal" class="confirm-modal">
+    <div class="confirm-box">
+      <h3 id="confirmTitulo"></h3>
+      <div class="cuerpo" id="confirmCuerpo"></div>
+      <input type="text" id="confirmInput" style="display:none;" autocomplete="off">
+      <div class="confirm-buttons">
+        <button class="btn btn-secondary" id="confirmCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="confirmAceptar">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== CONFIGURACIÓN ==========
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const adminEmails = ["distribuidorahomepoint@gmail.com"];
+
+    const NODO_ORIGEN = 'movimientos';
+    // Copia de seguridad de `movimientos`. Consolidar solo elimina movimientos que estén
+    // copiados idénticos acá, así que siempre se pueden recuperar.
+    const NODO_RESPALDO = 'movimientos2';
+    // Prefijo de la clave del registro CONSOLIDADO dentro de `movimientos`: cons_{codigo}__{sucursal}.
+    // Es determinística para que reconsolidar pise el mismo registro y nunca duplique.
+    const PREFIJO_CONSOLIDADO = 'cons_';
+
+    // Tipo de movimiento -> campo del detalle y signo en la fórmula:
+    //   CONSOLIDADO + ENTRADA + ENTRADA-INT − SALIDA − SALIDA-INT − RETIRO = CONSOLIDADO
+    // CONSOLIDADO es el saldo de una consolidación anterior que ya reemplazó su detalle dentro
+    // de `movimientos`; hoy no hay ninguno y suma 0.
+    const TIPOS = {
+      'CONSOLIDADO': { campo: 'CONSOLIDADO', signo: +1 },
+      'ENTRADA':     { campo: 'ENTRADA',     signo: +1 },
+      'ENTRADA-INT': { campo: 'ENTRADA_INT', signo: +1 },
+      'SALIDA':      { campo: 'SALIDA',      signo: -1 },
+      'SALIDA-INT':  { campo: 'SALIDA_INT',  signo: -1 },
+      'RETIRO':      { campo: 'RETIRO',      signo: -1 }
+    };
+    const CAMPOS_DETALLE = ['CONSOLIDADO', 'ENTRADA', 'ENTRADA_INT', 'SALIDA', 'SALIDA_INT', 'RETIRO'];
+    // Tipos que existen pero no participan de la fórmula (RESET siempre tiene cantidad 0).
+    const TIPOS_IGNORADOS = ['RESET'];
+
+    const SUCURSALES = { '1': 'Munro', '2': 'Caseros' };
+
+    const FILAS_POR_PAGINA = 100;
+    const PATHS_POR_LOTE = 500;
+
+    // Estado
+    let calculo = null;          // resultado de calcularConsolidado() para la vista previa
+    let paginaActual = 1;
+    let authResolved = false;
+
+    // ========== AUTENTICACIÓN ==========
+    function redirigirALogin() {
+      window.location.href = `login.html?redirect=${encodeURIComponent(window.location.href)}`;
+    }
+
+    setTimeout(() => {
+      if (!authResolved) redirigirALogin();
+    }, 5000);
+
+    firebase.auth().onAuthStateChanged(user => {
+      authResolved = true;
+      if (!user) {
+        redirigirALogin();
+        return;
+      }
+      document.getElementById('userEmail').textContent = user.email;
+      document.getElementById('userIndicator').style.display = 'flex';
+
+      if (!adminEmails.includes(user.email)) {
+        document.getElementById('sinAcceso').style.display = 'block';
+        return;
+      }
+      document.getElementById('app').style.display = 'block';
+      inicializarApp();
+    });
+
+    function cerrarSesion() {
+      if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        firebase.auth().signOut().catch(e => alert('Error al cerrar sesión: ' + e.message));
+      }
+    }
+
+    function inicializarApp() {
+      document.getElementById('filtroTexto').addEventListener('input', () => { paginaActual = 1; renderPreview(); });
+      document.getElementById('filtroSucursal').addEventListener('change', () => { paginaActual = 1; renderPreview(); });
+    }
+
+    // ========== UTILIDADES ==========
+    function conTimeout(promesa, ms, mensaje) {
+      let t;
+      return Promise.race([
+        promesa,
+        new Promise((_, reject) => { t = setTimeout(() => reject(new Error(mensaje)), ms); })
+      ]).finally(() => clearTimeout(t));
+    }
+
+    async function verificarConexion(ms = 5000) {
+      return new Promise(resolve => {
+        const ref = db.ref('.info/connected');
+        const timer = setTimeout(() => { ref.off('value', cb); resolve(false); }, ms);
+        const cb = snap => {
+          if (snap.val() === true) {
+            clearTimeout(timer);
+            ref.off('value', cb);
+            resolve(true);
+          }
+        };
+        ref.on('value', cb);
+      });
+    }
+
+    function escHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function formatearFecha(ts) {
+      if (!ts) return '-';
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return '-';
+      const pad = n => n.toString().padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function fmtNum(n) {
+      return Number(n || 0).toLocaleString('es-AR');
+    }
+
+    function nombreSucursal(suc) {
+      return SUCURSALES[suc] || ('Sucursal ' + suc);
+    }
+
+    // Sucursal a la que se asignan los movimientos que no tienen el campo (los anteriores al
+    // stock por sucursal y las ventas de la caja): Munro.
+    const SUCURSAL_POR_DEFECTO = '1';
+
+    // Normaliza el campo sucursal: '1', '2', ...; sin sucursal cuenta como Munro.
+    function normalizarSucursal(valor) {
+      const v = String(valor ?? '').trim();
+      return v === '' ? SUCURSAL_POR_DEFECTO : v;
+    }
+
+    // Clave de RTDB para el registro consolidado. Los caracteres prohibidos en claves
+    // (. # $ [ ] /) se reemplazan; el código original se guarda intacto en el campo `codigo`.
+    function claveConsolidado(codigo, suc) {
+      const seguro = String(codigo).replace(/[.#$\[\]\/]/g, '_');
+      return `${seguro}__${String(suc).replace(/[.#$\[\]\/]/g, '_')}`;
+    }
+
+    function mostrarLoading(texto) {
+      document.getElementById('loadingText').textContent = texto;
+      document.getElementById('loadingOverlay').classList.add('visible');
+    }
+
+    function ocultarLoading() {
+      document.getElementById('loadingOverlay').classList.remove('visible');
+    }
+
+    function mostrarFeedback(mensaje, tipo) {
+      const fb = document.getElementById('feedback');
+      fb.textContent = mensaje;
+      fb.className = 'feedback visible ' + tipo;
+      fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Modal de confirmación. Si `textoRequerido` viene, el usuario debe escribirlo para confirmar.
+    function confirmar({ titulo, cuerpoHtml, textoAceptar = 'Confirmar', claseAceptar = 'btn-primary', textoRequerido = null }) {
+      return new Promise(resolve => {
+        const modal = document.getElementById('confirmModal');
+        const input = document.getElementById('confirmInput');
+        const btnOk = document.getElementById('confirmAceptar');
+        const btnNo = document.getElementById('confirmCancelar');
+
+        document.getElementById('confirmTitulo').textContent = titulo;
+        document.getElementById('confirmCuerpo').innerHTML = cuerpoHtml;
+        btnOk.className = 'btn ' + claseAceptar;
+        btnOk.innerHTML = `<i class="bi bi-check-lg"></i> ${escHtml(textoAceptar)}`;
+
+        input.value = '';
+        input.style.display = textoRequerido ? 'block' : 'none';
+        input.placeholder = textoRequerido ? `Escribí ${textoRequerido}` : '';
+        btnOk.disabled = !!textoRequerido;
+        input.oninput = () => { btnOk.disabled = input.value.trim() !== textoRequerido; };
+
+        const cerrar = valor => {
+          modal.classList.remove('visible');
+          document.removeEventListener('keydown', onKey);
+          btnOk.onclick = btnNo.onclick = null;
+          resolve(valor);
+        };
+        const onKey = e => {
+          if (e.key === 'Escape') cerrar(false);
+          if (e.key === 'Enter' && !btnOk.disabled) { e.preventDefault(); cerrar(true); }
+        };
+        btnOk.onclick = () => cerrar(true);
+        btnNo.onclick = () => cerrar(false);
+        document.addEventListener('keydown', onKey);
+
+        modal.classList.add('visible');
+        setTimeout(() => (textoRequerido ? input : btnOk).focus(), 50);
+      });
+    }
+
+    // ========== LECTURA ==========
+    async function leerNodo(nodo) {
+      const snap = await conTimeout(
+        db.ref(nodo).once('value'),
+        120000,
+        `Tiempo de espera agotado al leer "${nodo}". Verificá tu conexión.`
+      );
+      const lista = [];
+      snap.forEach(child => { lista.push({ _id: child.key, ...child.val() }); });
+      return lista;
+    }
+
+    // ========== CÁLCULO (función pura) ==========
+    // Agrupa los movimientos por código + sucursal y aplica la fórmula.
+    // `corte(mov, clave)` decide si el movimiento entra al cálculo (por defecto, todos).
+    function calcularConsolidado(movs, corte = () => true) {
+      const grupos = new Map();
+      const avisos = { tiposDesconocidos: {}, sinCodigo: 0, ignorados: {}, excluidosPorCorte: 0 };
+      let totalLeidos = 0;
+
+      for (const mov of movs) {
+        totalLeidos++;
+        const codigo = String(mov.codigo ?? '').trim();
+        if (!codigo) { avisos.sinCodigo++; continue; }
+
+        const tipo = String(mov.tipo ?? '').trim().toUpperCase();
+        if (TIPOS_IGNORADOS.includes(tipo)) {
+          avisos.ignorados[tipo] = (avisos.ignorados[tipo] || 0) + 1;
+          continue;
+        }
+        const def = TIPOS[tipo];
+        if (!def) {
+          const t = tipo || '(vacío)';
+          avisos.tiposDesconocidos[t] = (avisos.tiposDesconocidos[t] || 0) + 1;
+          continue;
+        }
+
+        const suc = normalizarSucursal(mov.sucursal);
+        const clave = claveConsolidado(codigo, suc);
+        if (!corte(mov, clave)) { avisos.excluidosPorCorte++; continue; }
+
+        let g = grupos.get(clave);
+        if (!g) {
+          g = {
+            clave, codigo, suc,
+            nombre: '', tsNombre: -1,
+            detalle: Object.fromEntries(CAMPOS_DETALLE.map(c => [c, 0])),
+            cantidad: 0,
+            registros: 0,
+            ultimaEntrada: null,
+            ultimoMovimiento: null,
+            ids: []
+          };
+          grupos.set(clave, g);
+        }
+
+        const cant = Number(mov.cantidad) || 0;
+        const ts = Number(mov.timestamp) || 0;
+
+        g.detalle[def.campo] += cant;
+        g.cantidad += def.signo * cant;
+        g.registros++;
+        g.ids.push(mov._id);
+
+        if (ts && (g.ultimoMovimiento === null || ts > g.ultimoMovimiento)) g.ultimoMovimiento = ts;
+        // Un CONSOLIDADO previo ya lleva la fecha de su última ENTRADA, así que también cuenta.
+        if ((tipo === 'ENTRADA' || tipo === 'CONSOLIDADO') && ts && (g.ultimaEntrada === null || ts > g.ultimaEntrada)) g.ultimaEntrada = ts;
+        // El nombre se toma del movimiento más reciente del grupo.
+        if (mov.nombre && ts >= g.tsNombre) { g.nombre = String(mov.nombre); g.tsNombre = ts; }
+      }
+
+      for (const g of grupos.values()) {
+        g.sinEntrada = g.ultimaEntrada === null;
+        g.timestamp = g.sinEntrada ? g.ultimoMovimiento : g.ultimaEntrada;
+        // `cantidad` es el resultado exacto de la fórmula; `cantidadFinal` es lo que se guarda
+        // en el CONSOLIDADO: un resultado negativo se reemplaza por 0.
+        g.cantidadFinal = Math.max(0, g.cantidad);
+        g.ajustadoACero = g.cantidad < 0;
+      }
+
+      const lista = Array.from(grupos.values()).sort((a, b) =>
+        a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.suc.localeCompare(b.suc)
+      );
+
+      return { grupos: lista, mapa: grupos, avisos, totalLeidos };
+    }
+
+    // ========== 1. CALCULAR VISTA PREVIA ==========
+    async function calcular() {
+      mostrarLoading('Leyendo movimientos de Firebase...');
+      try {
+        const movs = await leerNodo(NODO_ORIGEN);
+        mostrarLoading(`Consolidando ${fmtNum(movs.length)} movimientos...`);
+
+        // Se cede el hilo para que el overlay se pinte antes del cálculo.
+        await new Promise(r => setTimeout(r, 30));
+        calculo = calcularConsolidado(movs);
+
+        renderStats();
+        renderAvisos(calculo.avisos);
+        poblarFiltroSucursal();
+        paginaActual = 1;
+        document.getElementById('seccionPreview').style.display = 'block';
+        renderPreview();
+
+        document.getElementById('btnConsolidar').disabled = calculo.grupos.length === 0;
+        mostrarFeedback(`Vista previa lista: ${fmtNum(calculo.grupos.length)} registros consolidados a partir de ${fmtNum(movs.length)} movimientos. Filtrá los artículos a consolidar y presioná "Consolidar".`, 'success');
+      } catch (e) {
+        console.error(e);
+        mostrarFeedback('Error al calcular: ' + e.message, 'error');
+      } finally {
+        ocultarLoading();
+      }
+    }
+
+    function renderStats() {
+      const g = calculo.grupos;
+      const articulos = new Set(g.map(x => x.codigo)).size;
+      const incluidos = g.reduce((s, x) => s + x.registros, 0);
+      const total = g.reduce((s, x) => s + x.cantidadFinal, 0);
+      const sinEntrada = g.filter(x => x.sinEntrada).length;
+      const negativos = g.filter(x => x.ajustadoACero);
+      const unidadesAjustadas = negativos.reduce((s, x) => s - x.cantidad, 0);
+
+      document.getElementById('stats').style.display = 'block';
+      document.getElementById('stats').innerHTML = `
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">Artículos</div><div class="val">${fmtNum(articulos)}</div></div>
+          <div class="kpi"><div class="lbl">Registros consolidados</div><div class="val">${fmtNum(g.length)}</div></div>
+          <div class="kpi"><div class="lbl">Suma total</div><div class="val">${fmtNum(total)}</div></div>
+          <div class="kpi" title="Registros cuyo resultado dio negativo y se guardan con cantidad 0"><div class="lbl">Negativos llevados a 0</div><div class="val ${negativos.length ? 'neg' : ''}">${fmtNum(negativos.length)}</div></div>
+        </div>
+        <div class="kpis-sec">
+          <span><b>${fmtNum(calculo.totalLeidos)}</b> movimientos leídos</span>
+          <span><b>${fmtNum(incluidos)}</b> incluidos</span>
+          <span><b>${fmtNum(sinEntrada)}</b> grupos sin ENTRADA</span>
+          <span title="Unidades que suma el reemplazo de negativos por 0"><b>${fmtNum(unidadesAjustadas)}</b> unidades sumadas por el ajuste</span>
+        </div>
+      `;
+    }
+
+    function renderAvisos(av) {
+      const items = [];
+      const lista = obj => Object.entries(obj).map(([k, v]) => `${escHtml(k)}: ${fmtNum(v)}`).join(', ');
+      if (Object.keys(av.ignorados).length) items.push(`Registros ignorados (no participan de la fórmula): ${lista(av.ignorados)}`);
+      if (Object.keys(av.tiposDesconocidos).length) items.push(`<strong>Tipos desconocidos, no sumados:</strong> ${lista(av.tiposDesconocidos)}`);
+      if (av.sinCodigo) items.push(`<strong>Movimientos sin código, no sumados:</strong> ${fmtNum(av.sinCodigo)}`);
+      if (av.excluidosPorCorte) items.push(`Movimientos posteriores al corte (no incluidos): ${fmtNum(av.excluidosPorCorte)}`);
+
+      const el = document.getElementById('avisos');
+      if (!items.length) { el.style.display = 'none'; return; }
+      el.style.display = 'block';
+      el.innerHTML = `<strong><i class="bi bi-exclamation-triangle"></i> Avisos</strong><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+    }
+
+    function poblarFiltroSucursal() {
+      const sel = document.getElementById('filtroSucursal');
+      const actuales = Array.from(new Set(calculo.grupos.map(g => g.suc))).sort();
+      sel.innerHTML = '<option value="">Todas las sucursales</option>' +
+        actuales.map(s => `<option value="${escHtml(s)}">${escHtml(nombreSucursal(s))}</option>`).join('');
+    }
+
+    // Grupos de la vista previa que pasan el filtro actual (también define qué se consolida).
+    function gruposFiltrados() {
+      if (!calculo) return [];
+      const texto = document.getElementById('filtroTexto').value.trim().toLowerCase();
+      const suc = document.getElementById('filtroSucursal').value;
+      return calculo.grupos.filter(g =>
+        (!suc || g.suc === suc) &&
+        (!texto || g.codigo.toLowerCase().includes(texto) || g.nombre.toLowerCase().includes(texto))
+      );
+    }
+
+    function renderPreview() {
+      if (!calculo) return;
+      const filtrados = gruposFiltrados();
+
+      // Agrupar por artículo para paginar artículos completos (con su fila de total).
+      const porArticulo = [];
+      let actual = null;
+      for (const g of filtrados) {
+        if (!actual || actual.codigo !== g.codigo) {
+          actual = { codigo: g.codigo, filas: [] };
+          porArticulo.push(actual);
+        }
+        actual.filas.push(g);
+      }
+
+      const totalPaginas = Math.max(1, Math.ceil(porArticulo.length / FILAS_POR_PAGINA));
+      if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+      const pagina = porArticulo.slice((paginaActual - 1) * FILAS_POR_PAGINA, paginaActual * FILAS_POR_PAGINA);
+
+      // Indica qué se va a consolidar con el filtro actual.
+      const filtrado = filtrados.length !== calculo.grupos.length;
+      document.getElementById('alcancePreview').innerHTML = filtrados.length
+        ? `Se consolidan <b>${fmtNum(porArticulo.length)}</b> artículos${filtrado ? ' (filtrados)' : ' (todos)'}`
+        : '';
+
+      const cont = document.getElementById('tablaPreview');
+      if (!pagina.length) {
+        cont.innerHTML = '<div class="vacio">No hay registros para mostrar.</div>';
+        document.getElementById('paginacion').innerHTML = '';
+        return;
+      }
+
+      const celdaCant = n => `<td class="num consol ${n < 0 ? 'neg' : n > 0 ? 'pos' : ''}">${fmtNum(n)}</td>`;
+      // Los ceros se atenúan para que resalten los valores con movimiento.
+      const celdaNum = n => `<td class="num${n ? '' : ' cero'}">${fmtNum(n)}</td>`;
+      // Muestra lo que se guarda; si el resultado dio negativo, indica el valor original.
+      const celdaGrupo = g => g.ajustadoACero
+        ? `<td class="num consol" title="La fórmula da ${fmtNum(g.cantidad)}; se guarda 0">0 <span class="tag-sinentrada">era ${fmtNum(g.cantidad)}</span></td>`
+        : celdaCant(g.cantidadFinal);
+      let html = `<table><thead><tr>
+        <th>Código</th><th>Nombre</th><th>Sucursal</th>
+        <th class="num" title="Saldo de una consolidación anterior (registros CONSOLIDADO dentro de movimientos)">Cons. anterior</th>
+        <th class="num">Entradas</th><th class="num">E-INT</th><th class="num">Salidas</th><th class="num">S-INT</th><th class="num">Retiros</th>
+        <th class="num">Consolidado</th><th>Fecha</th><th class="num">Registros</th>
+      </tr></thead><tbody>`;
+
+      for (const art of pagina) {
+        for (const g of art.filas) {
+          const d = g.detalle;
+          html += `<tr>
+            <td class="cod">${escHtml(g.codigo)}</td>
+            <td class="nombre">${escHtml(g.nombre)}</td>
+            <td>${escHtml(nombreSucursal(g.suc))}</td>
+            ${celdaNum(d.CONSOLIDADO)}
+            ${celdaNum(d.ENTRADA)}
+            ${celdaNum(d.ENTRADA_INT)}
+            ${celdaNum(d.SALIDA)}
+            ${celdaNum(d.SALIDA_INT)}
+            ${celdaNum(d.RETIRO)}
+            ${celdaGrupo(g)}
+            <td>${formatearFecha(g.timestamp)}${g.sinEntrada ? '<span class="tag-sinentrada" title="Sin ENTRADA: se usa la fecha del último movimiento">sin entrada</span>' : ''}</td>
+            <td class="num">${fmtNum(g.registros)}</td>
+          </tr>`;
+        }
+        // Fila de total por artículo (solo si se ve más de una sucursal)
+        if (art.filas.length > 1) {
+          const sum = campo => art.filas.reduce((s, g) => s + g.detalle[campo], 0);
+          const total = art.filas.reduce((s, g) => s + g.cantidadFinal, 0);
+          html += `<tr class="fila-total">
+            <td class="cod">${escHtml(art.codigo)}</td><td class="nombre">Total del artículo</td><td></td>
+            <td class="num">${fmtNum(sum('CONSOLIDADO'))}</td>
+            <td class="num">${fmtNum(sum('ENTRADA'))}</td>
+            <td class="num">${fmtNum(sum('ENTRADA_INT'))}</td>
+            <td class="num">${fmtNum(sum('SALIDA'))}</td>
+            <td class="num">${fmtNum(sum('SALIDA_INT'))}</td>
+            <td class="num">${fmtNum(sum('RETIRO'))}</td>
+            ${celdaCant(total)}
+            <td></td>
+            <td class="num">${fmtNum(art.filas.reduce((s, g) => s + g.registros, 0))}</td>
+          </tr>`;
+        }
+      }
+      html += '</tbody></table>';
+      cont.innerHTML = html;
+
+      document.getElementById('paginacion').innerHTML = `
+        <span>${fmtNum(porArticulo.length)} artículos · ${fmtNum(filtrados.length)} registros</span>
+        <span class="pag-ctrl">
+          <button onclick="cambiarPagina(-1)" ${paginaActual <= 1 ? 'disabled' : ''} title="Página anterior"><i class="bi bi-chevron-left"></i></button>
+          ${paginaActual} / ${totalPaginas}
+          <button onclick="cambiarPagina(1)" ${paginaActual >= totalPaginas ? 'disabled' : ''} title="Página siguiente"><i class="bi bi-chevron-right"></i></button>
+        </span>`;
+    }
+
+    function cambiarPagina(delta) {
+      paginaActual += delta;
+      renderPreview();
+      document.getElementById('seccionPreview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Serializa con las claves ordenadas, para comparar registros sin depender del orden.
+    function serializar(v) {
+      if (v === null || typeof v !== 'object') return JSON.stringify(v);
+      if (Array.isArray(v)) return '[' + v.map(serializar).join(',') + ']';
+      return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + serializar(v[k])).join(',') + '}';
+    }
+
+    async function leerObjeto(nodo) {
+      const snap = await conTimeout(
+        db.ref(nodo).once('value'),
+        120000,
+        `Tiempo de espera agotado al leer "${nodo}". Verificá tu conexión.`
+      );
+      return snap.val() || {};
+    }
+
+    // ========== 1. RESPALDAR ==========
+    // Copia exacta de `movimientos` en `movimientos2` (reemplaza el respaldo anterior).
+    async function respaldar() {
+      mostrarLoading('Leyendo movimientos y respaldo actual...');
+      let origen, respaldoActual;
+      try {
+        [origen, respaldoActual] = await Promise.all([leerObjeto(NODO_ORIGEN), leerObjeto(NODO_RESPALDO)]);
+      } catch (e) {
+        ocultarLoading();
+        mostrarFeedback('Error al leer: ' + e.message, 'error');
+        return;
+      }
+      ocultarLoading();
+
+      const total = Object.keys(origen).length;
+      const totalAnterior = Object.keys(respaldoActual).length;
+      if (!total) {
+        mostrarFeedback(`El nodo "${NODO_ORIGEN}" está vacío: no hay nada para respaldar.`, 'error');
+        return;
+      }
+
+      const ok = await confirmar({
+        titulo: 'Respaldar movimientos',
+        cuerpoHtml: `Se copian <strong>${fmtNum(total)}</strong> registros de <code>${NODO_ORIGEN}</code> a
+          <code>${NODO_RESPALDO}</code>.` + (totalAnterior
+            ? `<br><br><code>${NODO_RESPALDO}</code> ya tiene <strong>${fmtNum(totalAnterior)}</strong> registros y se van a
+               <strong>reemplazar</strong>. Si ese respaldo guarda el detalle de movimientos que ya consolidaste, ese detalle
+               se pierde. Para confirmar, escribí RESPALDAR.`
+            : ''),
+        textoAceptar: 'Respaldar',
+        claseAceptar: 'btn-primary',
+        textoRequerido: totalAnterior ? 'RESPALDAR' : null
+      });
+      if (!ok) return;
+
+      try {
+        mostrarLoading('Verificando conexión...');
+        if (!(await verificarConexion())) throw new Error('Sin conexión a Firebase. Verificá tu internet e intentá de nuevo.');
+
+        // Firebase rechaza un único write grande ("Write too large"), así que se copia en lotes
+        // acotados por cantidad y por tamaño. Los registros del respaldo anterior que ya no están
+        // en `movimientos` se eliminan, para que el respaldo quede idéntico.
+        const operaciones = Object.keys(origen).map(k => [k, origen[k]])
+          .concat(Object.keys(respaldoActual).filter(k => !(k in origen)).map(k => [k, null]));
+        const lotes = armarLotes(operaciones);
+        for (let i = 0; i < lotes.length; i++) {
+          mostrarLoading(`Copiando a ${NODO_RESPALDO}... lote ${i + 1} de ${lotes.length}`);
+          const updates = {};
+          lotes[i].forEach(([k, v]) => { updates[k] = v; });
+          await conTimeout(
+            db.ref(NODO_RESPALDO).update(updates),
+            60000,
+            `Tiempo de espera agotado al escribir el lote ${i + 1} de ${lotes.length} del respaldo. Recargá la página y volvé a respaldar.`
+          );
+        }
+
+        mostrarLoading('Comprobando que la copia sea idéntica...');
+        const copia = await leerObjeto(NODO_RESPALDO);
+        const distintos = Object.keys(origen).filter(k => !copia[k] || serializar(copia[k]) !== serializar(origen[k])).length;
+        const sobrantes = Object.keys(copia).filter(k => !(k in origen)).length;
+        if (distintos || sobrantes) {
+          throw new Error(`La copia no coincide (${distintos} registros distintos o faltantes, ${sobrantes} sobrantes). Volvé a respaldar.`);
+        }
+        mostrarFeedback(`Respaldo completo: ${fmtNum(total)} registros copiados a "${NODO_RESPALDO}" y comprobados uno por uno.`, 'success');
+      } catch (e) {
+        console.error(e);
+        mostrarFeedback('Error al respaldar: ' + mensajeFirebase(e), 'error');
+      } finally {
+        ocultarLoading();
+      }
+    }
+
+    // Divide [clave, valor] en lotes de hasta MAX_REGISTROS_LOTE registros y ~MAX_BYTES_LOTE de JSON.
+    const MAX_REGISTROS_LOTE = 1000;
+    const MAX_BYTES_LOTE = 1024 * 1024;
+    function armarLotes(operaciones) {
+      const lotes = [];
+      let lote = [], bytes = 0;
+      for (const op of operaciones) {
+        const tam = op[0].length + JSON.stringify(op[1]).length + 4;
+        if (lote.length && (lote.length >= MAX_REGISTROS_LOTE || bytes + tam > MAX_BYTES_LOTE)) {
+          lotes.push(lote);
+          lote = [];
+          bytes = 0;
+        }
+        lote.push(op);
+        bytes += tam;
+      }
+      if (lote.length) lotes.push(lote);
+      return lotes;
+    }
+
+    function mensajeFirebase(e) {
+      return /permission/i.test((e && (e.message || e.code)) || '')
+        ? 'Firebase rechazó la operación (PERMISSION_DENIED). Revisá las reglas de la base de datos.'
+        : e.message;
+    }
+
+    // ========== 3. CONSOLIDAR ==========
+    // Por cada grupo (artículo + sucursal) visible con el filtro: escribe el registro CONSOLIDADO en
+    // `movimientos` y elimina sus movimientos individuales EN EL MISMO update atómico, así el stock
+    // nunca queda contado dos veces ni a medias. Antes comprueba que todo lo que se elimina esté
+    // copiado idéntico en `movimientos2`.
+    async function consolidar() {
+      if (!calculo) {
+        mostrarFeedback('Primero calculá la vista previa.', 'error');
+        return;
+      }
+      const alcance = gruposFiltrados();
+      if (!alcance.length) {
+        mostrarFeedback('El filtro no deja ningún artículo para consolidar.', 'error');
+        return;
+      }
+      const clavesAlcance = new Set(alcance.map(g => g.clave));
+      const articulos = new Set(alcance.map(g => g.codigo)).size;
+      const filtrado = alcance.length !== calculo.grupos.length;
+
+      const ok = await confirmar({
+        titulo: 'Consolidar movimientos',
+        cuerpoHtml: `Se van a consolidar <strong>${fmtNum(articulos)}</strong> artículos
+          (<strong>${fmtNum(alcance.length)}</strong> registros por sucursal)` +
+          (filtrado ? ` — <strong>solo los visibles con el filtro</strong>` : ` — <strong>TODOS</strong>`) + `.<br><br>
+          Sus movimientos individuales se <strong>eliminan</strong> de <code>${NODO_ORIGEN}</code> y se reemplazan por un registro
+          <code>CONSOLIDADO</code>. Lo que no esté en <code>${NODO_RESPALDO}</code> se copia ahí antes de eliminarlo.<br><br>
+          Para confirmar, escribí CONSOLIDAR.`,
+        textoAceptar: 'Consolidar',
+        claseAceptar: 'btn-danger',
+        textoRequerido: 'CONSOLIDAR'
+      });
+      if (!ok) return;
+
+      try {
+        mostrarLoading('Verificando conexión...');
+        if (!(await verificarConexion())) throw new Error('Sin conexión a Firebase. Verificá tu internet e intentá de nuevo.');
+
+        // Se recalcula con datos frescos (la vista previa puede haber quedado vieja).
+        mostrarLoading('Leyendo movimientos y respaldo...');
+        const [movsObj, respaldo] = await Promise.all([leerObjeto(NODO_ORIGEN), leerObjeto(NODO_RESPALDO)]);
+        const movs = Object.entries(movsObj).map(([k, v]) => ({ _id: k, ...v }));
+        const grupos = calcularConsolidado(movs).grupos.filter(g => clavesAlcance.has(g.clave));
+
+        // Seguridad: cada movimiento a eliminar debe existir idéntico en el respaldo.
+        const sinRespaldo = [];
+        for (const g of grupos) {
+          for (const id of g.ids) {
+            if (id === claveRegistro(g)) continue; // se reemplaza, no se elimina
+            if (!respaldo[id] || serializar(respaldo[id]) !== serializar(movsObj[id])) sinRespaldo.push(id);
+          }
+        }
+        // Si hay movimientos que no están en el respaldo (o cambiaron desde que se respaldó), no se
+        // frena: se avisa y se copian a `movimientos2` ANTES de eliminarlos, para no perder nada.
+        // Si esa copia falla, se aborta sin consolidar.
+        let avisoRespaldo = '';
+        if (sinRespaldo.length) {
+          const faltantes = sinRespaldo.filter(id => !respaldo[id]).length;
+          const cambiados = sinRespaldo.length - faltantes;
+          const lotesRespaldo = armarLotes(sinRespaldo.map(id => [id, movsObj[id]]));
+          for (let i = 0; i < lotesRespaldo.length; i++) {
+            mostrarLoading(`Completando el respaldo con ${fmtNum(sinRespaldo.length)} movimientos... lote ${i + 1} de ${lotesRespaldo.length}`);
+            const updates = {};
+            lotesRespaldo[i].forEach(([k, v]) => { updates[k] = v; });
+            await conTimeout(
+              db.ref(NODO_RESPALDO).update(updates),
+              60000,
+              'Tiempo de espera agotado al completar el respaldo. No se consolidó nada.'
+            );
+          }
+          const partes = [];
+          if (faltantes) partes.push(`${fmtNum(faltantes)} no estaban en "${NODO_RESPALDO}"`);
+          if (cambiados) partes.push(`${fmtNum(cambiados)} habían cambiado desde el último respaldo`);
+          avisoRespaldo = `Atención: de los movimientos consolidados, ${partes.join(' y ')}. ` +
+            `Se copiaron al respaldo antes de consolidar y se procesaron igual.`;
+          console.warn(avisoRespaldo, sinRespaldo);
+        }
+
+        // Un update por lote; un grupo nunca se parte entre dos lotes.
+        const lotes = [];
+        let lote = {}, pathsLote = 0, eliminados = 0, consolidados = 0;
+        for (const g of grupos) {
+          const clave = claveRegistro(g);
+          const aEliminar = g.ids.filter(id => id !== clave);
+          if (!aEliminar.length) continue; // ya estaba consolidado y no tiene movimientos nuevos
+
+          const registro = {};
+          if (g.timestamp) registro.timestamp = g.timestamp;
+          registro.codigo = g.codigo;
+          registro.nombre = g.nombre;
+          registro.cantidad = g.cantidadFinal; // negativo -> 0
+          registro.tipo = 'CONSOLIDADO';
+          registro.sucursal = g.suc;
+
+          lote[`${NODO_ORIGEN}/${clave}`] = registro;
+          aEliminar.forEach(id => { lote[`${NODO_ORIGEN}/${id}`] = null; });
+          pathsLote += 1 + aEliminar.length;
+          eliminados += aEliminar.length;
+          consolidados++;
+
+          if (pathsLote >= PATHS_POR_LOTE) {
+            lotes.push(lote);
+            lote = {};
+            pathsLote = 0;
+          }
+        }
+        if (pathsLote) lotes.push(lote);
+
+        if (!lotes.length) {
+          mostrarFeedback('No había nada nuevo para consolidar: esos artículos ya estaban consolidados.' +
+            (avisoRespaldo ? ' ' + avisoRespaldo : ''), avisoRespaldo ? 'warning' : 'success');
+          return;
+        }
+
+        for (let i = 0; i < lotes.length; i++) {
+          mostrarLoading(`Consolidando... lote ${i + 1} de ${lotes.length}`);
+          await conTimeout(
+            db.ref().update(lotes[i]),
+            60000,
+            'Tiempo de espera agotado al consolidar. Los lotes ya aplicados quedaron bien (cada uno es atómico); volvé a calcular y consolidar para completar.'
+          );
+        }
+
+        // Comprobación posterior: cada CONSOLIDADO existe con su cantidad y no quedan individuales.
+        mostrarLoading('Comprobando el resultado...');
+        const despues = await leerObjeto(NODO_ORIGEN);
+        let errores = 0;
+        for (const l of lotes) {
+          for (const [path, valor] of Object.entries(l)) {
+            const id = path.slice(NODO_ORIGEN.length + 1);
+            if (valor === null ? (id in despues) : (!despues[id] || despues[id].cantidad !== valor.cantidad)) errores++;
+          }
+        }
+        if (errores) throw new Error(`${errores} registros no quedaron como se esperaba. Revisá con "Verificar contra el respaldo".`);
+
+        await calcular(); // refresca la vista previa con el nuevo estado
+        mostrarFeedback(`Consolidación completa: ${fmtNum(consolidados)} registros CONSOLIDADO reemplazaron ${fmtNum(eliminados)} movimientos individuales. Ahora presioná "Verificar contra el respaldo".` +
+          (avisoRespaldo ? '\n\n' + avisoRespaldo : ''), avisoRespaldo ? 'warning' : 'success');
+      } catch (e) {
+        console.error(e);
+        mostrarFeedback('Error al consolidar: ' + mensajeFirebase(e), 'error');
+      } finally {
+        ocultarLoading();
+      }
+    }
+
+    function claveRegistro(g) {
+      return PREFIJO_CONSOLIDADO + g.clave;
+    }
+
+    // ========== RESTAURAR (deshacer) ==========
+    // Reemplaza todo el contenido de `movimientos` por el de `movimientos2`: lo que está en el
+    // respaldo se escribe tal cual y lo que no está en el respaldo se elimina (incluidos los
+    // CONSOLIDADO y los movimientos registrados después del respaldo).
+    async function restaurar() {
+      mostrarLoading('Leyendo respaldo y movimientos actuales...');
+      let respaldo, actual;
+      try {
+        [respaldo, actual] = await Promise.all([leerObjeto(NODO_RESPALDO), leerObjeto(NODO_ORIGEN)]);
+      } catch (e) {
+        ocultarLoading();
+        mostrarFeedback('Error al leer: ' + e.message, 'error');
+        return;
+      }
+      ocultarLoading();
+
+      const totalRespaldo = Object.keys(respaldo).length;
+      if (!totalRespaldo) {
+        mostrarFeedback(`"${NODO_RESPALDO}" está vacío: no hay nada para restaurar. No se modificó nada.`, 'error');
+        return;
+      }
+
+      // Solo se escribe lo que cambia, para no reescribir miles de registros iguales.
+      const aEscribir = Object.keys(respaldo).filter(k => !actual[k] || serializar(actual[k]) !== serializar(respaldo[k]));
+      const aEliminar = Object.keys(actual).filter(k => !(k in respaldo));
+      const consolidadosAEliminar = aEliminar.filter(k => String(actual[k]?.tipo || '').toUpperCase() === 'CONSOLIDADO').length;
+      const nuevosAPerder = aEliminar.length - consolidadosAEliminar;
+
+      if (!aEscribir.length && !aEliminar.length) {
+        mostrarFeedback(`"${NODO_ORIGEN}" ya es idéntico a "${NODO_RESPALDO}". No hay nada para restaurar.`, 'success');
+        return;
+      }
+
+      const ok = await confirmar({
+        titulo: 'Restaurar desde el respaldo',
+        cuerpoHtml: `Se reemplaza <strong>todo</strong> el contenido de <code>${NODO_ORIGEN}</code> por el de
+          <code>${NODO_RESPALDO}</code> (${fmtNum(totalRespaldo)} registros):<br>
+          • se restauran o corrigen <strong>${fmtNum(aEscribir.length)}</strong> registros<br>
+          • se eliminan <strong>${fmtNum(consolidadosAEliminar)}</strong> registros CONSOLIDADO<br>` +
+          (nuevosAPerder
+            ? `• <span style="color:var(--danger)">se eliminan <strong>${fmtNum(nuevosAPerder)}</strong> movimientos que no están en el respaldo
+               (por ejemplo ventas o ingresos registrados después del último respaldo). <strong>Se pierden.</strong></span><br>`
+            : '') +
+          `<br>Para confirmar, escribí RESTAURAR.`,
+        textoAceptar: 'Restaurar',
+        claseAceptar: 'btn-danger',
+        textoRequerido: 'RESTAURAR'
+      });
+      if (!ok) return;
+
+      try {
+        mostrarLoading('Verificando conexión...');
+        if (!(await verificarConexion())) throw new Error('Sin conexión a Firebase. Verificá tu internet e intentá de nuevo.');
+
+        // En lotes por el límite de tamaño de Firebase. Primero se restauran los registros del
+        // respaldo y después se eliminan los que sobran.
+        const operaciones = aEscribir.map(k => [k, respaldo[k]]).concat(aEliminar.map(k => [k, null]));
+        const lotes = armarLotes(operaciones);
+        for (let i = 0; i < lotes.length; i++) {
+          mostrarLoading(`Restaurando... lote ${i + 1} de ${lotes.length}`);
+          const updates = {};
+          lotes[i].forEach(([k, v]) => { updates[k] = v; });
+          await conTimeout(
+            db.ref(NODO_ORIGEN).update(updates),
+            60000,
+            `Tiempo de espera agotado en el lote ${i + 1} de ${lotes.length}. La restauración quedó a medias: recargá la página y volvé a restaurar para completarla.`
+          );
+        }
+
+        mostrarLoading('Comprobando que movimientos sea idéntico al respaldo...');
+        const despues = await leerObjeto(NODO_ORIGEN);
+        const distintos = Object.keys(respaldo).filter(k => !despues[k] || serializar(despues[k]) !== serializar(respaldo[k])).length;
+        const sobrantes = Object.keys(despues).filter(k => !(k in respaldo)).length;
+
+        await calcular(); // refresca la vista previa
+        if (distintos || sobrantes) {
+          mostrarFeedback(`Restauración aplicada, pero "${NODO_ORIGEN}" no quedó idéntico al respaldo: ${fmtNum(distintos)} registros distintos o faltantes y ${fmtNum(sobrantes)} sobrantes. ` +
+            `Los sobrantes pueden ser movimientos registrados durante la restauración. Revisalo o volvé a restaurar.`, 'warning');
+        } else {
+          mostrarFeedback(`Restauración completa: "${NODO_ORIGEN}" quedó idéntico a "${NODO_RESPALDO}" (${fmtNum(totalRespaldo)} registros).`, 'success');
+        }
+      } catch (e) {
+        console.error(e);
+        mostrarFeedback('Error al restaurar: ' + mensajeFirebase(e), 'error');
+      } finally {
+        ocultarLoading();
+      }
+    }
+
+    // ========== 4. VERIFICAR ==========
+    // Esperado = respaldo (detalle original) + movimientos registrados después del respaldo.
+    // Actual   = lo que hay hoy en `movimientos` (consolidados + individuales).
+    // Si la consolidación fue correcta, cada artículo y sucursal da la misma cantidad.
+    async function verificar() {
+      mostrarLoading('Leyendo movimientos y respaldo...');
+      try {
+        const [actualObj, respaldo] = await Promise.all([leerObjeto(NODO_ORIGEN), leerObjeto(NODO_RESPALDO)]);
+        if (!Object.keys(respaldo).length) {
+          mostrarFeedback(`No hay respaldo en "${NODO_RESPALDO}". Primero hacé el paso 1.`, 'error');
+          return;
+        }
+        mostrarLoading('Comparando...');
+        await new Promise(r => setTimeout(r, 30));
+
+        const esConsolidado = m => String(m.tipo || '').toUpperCase() === 'CONSOLIDADO';
+        const actuales = Object.entries(actualObj).map(([k, v]) => ({ _id: k, ...v }));
+        const nuevos = actuales.filter(m => !(m._id in respaldo) && !esConsolidado(m));
+
+        const delRespaldo = calcularConsolidado(Object.entries(respaldo).map(([k, v]) => ({ _id: k, ...v })));
+        const deNuevos = calcularConsolidado(nuevos);
+        const actual = calcularConsolidado(actuales);
+
+        // Esperado por grupo = saldo según el respaldo + movimientos nuevos.
+        // Si el grupo se consolidó después del respaldo (sus movimientos individuales del respaldo
+        // ya no están en `movimientos`), el saldo del respaldo se lleva a 0 si era negativo,
+        // igual que hizo la consolidación. Si no se consolidó, se compara la suma exacta.
+        const fueConsolidado = g => {
+          const individuales = g.ids.filter(id => !esConsolidado(respaldo[id]));
+          return individuales.length > 0 && individuales.every(id => !(id in actualObj));
+        };
+
+        const filas = [];
+        let coinciden = 0, totalEsperado = 0, totalActual = 0;
+        const claves = new Set([...delRespaldo.mapa.keys(), ...deNuevos.mapa.keys(), ...actual.mapa.keys()]);
+        for (const clave of claves) {
+          const r = delRespaldo.mapa.get(clave);
+          const n = deNuevos.mapa.get(clave);
+          const a = actual.mapa.get(clave);
+          const base = r ? (fueConsolidado(r) ? r.cantidadFinal : r.cantidad) : 0;
+          const ce = base + (n ? n.cantidad : 0);
+          const ca = a ? a.cantidad : 0;
+          totalEsperado += ce;
+          totalActual += ca;
+          if (ce === ca) coinciden++;
+          else filas.push({ ce, ca, ref: a || r || n, ultimo: Math.max(r?.ultimoMovimiento || 0, n?.ultimoMovimiento || 0, a?.ultimoMovimiento || 0) });
+        }
+        const consolidadosHoy = actuales.filter(m => String(m.tipo || '').toUpperCase() === 'CONSOLIDADO').length;
+
+        renderVerificacion({
+          filas, coinciden, total: claves.size, totalEsperado, totalActual,
+          nuevos: nuevos.length, consolidadosHoy, registrosHoy: actuales.length, registrosRespaldo: Object.keys(respaldo).length
+        });
+      } catch (e) {
+        console.error(e);
+        mostrarFeedback('Error al verificar: ' + e.message, 'error');
+      } finally {
+        ocultarLoading();
+      }
+    }
+
+    function renderVerificacion({ filas, coinciden, total, totalEsperado, totalActual, nuevos, consolidadosHoy, registrosHoy, registrosRespaldo }) {
+      document.getElementById('seccionVerificacion').style.display = 'block';
+      const ok = filas.length === 0 && totalEsperado === totalActual;
+
+      const notaDif = ok ? '' :
+        `<div class="rv-nota">Una diferencia también aparece si se <strong>borró o editó</strong> un movimiento
+         después del respaldo (por ejemplo desde Inventario). Mirá la columna "Último movimiento".</div>`;
+
+      document.getElementById('resultadoVerif').innerHTML = `
+        <div class="resultado-verif ${ok ? 'ok' : 'error'}">
+          <div class="rv-titulo">
+            <i class="bi ${ok ? 'bi-check-circle-fill' : 'bi-x-circle-fill'}"></i>
+            ${ok ? 'Todo coincide' : 'Se encontraron diferencias'}
+            <span style="font-weight:400;color:var(--muted);font-size:0.85rem;">· ${fmtNum(coinciden)} de ${fmtNum(total)} artículos/sucursales coinciden</span>
+          </div>
+          <div class="rv-datos">
+            Esperado${nuevos ? ` (respaldo + ${fmtNum(nuevos)} nuevos)` : ''}: <strong>${fmtNum(totalEsperado)}</strong> ·
+            Actual: <strong>${fmtNum(totalActual)}</strong> ·
+            Registros: ${fmtNum(registrosRespaldo)} en <code>${NODO_RESPALDO}</code>,
+            ${fmtNum(registrosHoy)} en <code>${NODO_ORIGEN}</code> (${fmtNum(consolidadosHoy)} CONSOLIDADO)
+          </div>
+          ${notaDif}
+        </div>`;
+
+      const wrap = document.getElementById('tablaVerifWrap');
+      if (!filas.length) { wrap.innerHTML = ''; wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+
+      wrap.innerHTML = `<table><thead><tr>
+          <th>Código</th><th>Nombre</th><th>Sucursal</th>
+          <th class="num">Esperado</th><th class="num">Actual</th><th class="num">Diferencia</th><th>Último movimiento</th>
+        </tr></thead><tbody>
+        ${filas.slice(0, 500).map(f => {
+          const { ce, ca } = f;
+          return `<tr>
+            <td>${escHtml(f.ref.codigo)}</td>
+            <td class="nombre">${escHtml(f.ref.nombre)}</td>
+            <td>${escHtml(nombreSucursal(f.ref.suc))}</td>
+            <td class="num">${fmtNum(ce)}</td>
+            <td class="num">${fmtNum(ca)}</td>
+            <td class="num estado-difiere">${fmtNum(ca - ce)}</td>
+            <td>${formatearFecha(f.ultimo)}</td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>
+        ${filas.length > 500 ? `<div class="vacio">Mostrando 500 de ${fmtNum(filas.length)} diferencias.</div>` : ''}`;
+    }
+  </script>
+</body>
+</html>

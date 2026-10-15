@@ -16,7 +16,7 @@
 // buscarPedidos.html, pedidosWhatsapp.html y login.html cuando vuelve a una
 // de ellas. El resto del panel sigue con config.js.
 //
-// Cambiarlo es poco común y pide la contraseña de Admin: se ofrece desde el
+// Cambiarlo es poco común y pide su propia contraseña: se ofrece desde el
 // selector de usuario (usuarioActivo.js) y, como salida de emergencia, desde
 // el login de la caja (por si el equipo quedó en un punto sin credenciales).
 //
@@ -34,8 +34,8 @@
   ];
 
   const LS_PUNTO = 'hpPuntoVenta';
-  // La misma contraseña del acceso Admin de la caja.
-  const CLAVE_CAMBIO = '47623212';
+  // Contraseña propia para cambiar el punto de venta.
+  const CLAVE_CAMBIO = 'homepoint';
   // Lo que queda atado al punto anterior y se descarta al cambiar: la sesión
   // de la pestaña (usuario, modo WhatsApp, marca de sesión) y el "último
   // mensaje leído" del chat, que es de la otra base.
@@ -129,7 +129,7 @@
         <header class="usr-head">
           <span class="usr-eyebrow"><span class="usr-eyebrow-punto" aria-hidden="true"></span>Configuración de este equipo</span>
           <h1 id="pvTitulo" class="usr-titulo">Selecciona el punto de venta</h1>
-          <p id="pvSub" class="usr-sub">El equipo lo va a recordar. Si alguna vez hace falta, se puede cambiar con la contraseña de administrador.</p>
+          <p id="pvSub" class="usr-sub">El equipo lo va a recordar. Si alguna vez hace falta, se puede cambiar con contraseña.</p>
         </header>
         <div class="usr-grilla" role="listbox" aria-labelledby="pvTitulo">${PUNTOS.map(tileHtml).join('')}</div>
         <footer class="usr-pie">
@@ -202,7 +202,7 @@
       <form class="usr-clave-card pv-card" novalidate>
         <span class="usr-avatar usr-clave-avatar" style="--tono:#7c5fd0" aria-hidden="true">${ICONO_LOCAL}</span>
         <h2 id="pvCambioTitulo" class="usr-clave-titulo">Cambiar punto de venta</h2>
-        <p class="usr-clave-sub">Este equipo trabaja en <strong>${esc(actual ? actual.nombre : '')}</strong>. Ingresá la contraseña de administrador para cambiarlo.</p>
+        <p class="usr-clave-sub">Este equipo trabaja en <strong>${esc(actual ? actual.nombre : '')}</strong>. Ingresá la contraseña para cambiarlo.</p>
         <input type="password" class="usr-clave-input" autocomplete="off" aria-label="Contraseña" aria-describedby="pvCambioError">
         <div id="pvCambioError" class="usr-clave-error" role="alert"></div>
         <div class="usr-clave-acciones">
@@ -262,6 +262,13 @@
 
   // `alCerrar` se llama si se cancela (para devolver el foco donde estaba).
   function pedirCambio(alCerrar) {
+    // Pedidos del modo Offline sin subir (modoOffline.js): van a la base de
+    // este punto de venta, así que no se cambia hasta que estén arriba.
+    if (window.ModoOffline && ModoOffline.hayPendientes()) {
+      ModoOffline.avisarPendientes();
+      if (alCerrar) alCerrar();
+      return;
+    }
     if (!cambioEl) {
       cambioEl = document.createElement('div');
       cambioEl.className = 'usr-clave pv-cambio';

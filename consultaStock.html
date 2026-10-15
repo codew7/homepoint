@@ -8,469 +8,565 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="googlebot" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
     <title>Consulta de Stock</title>
     <link rel="icon" href="faviconnegro.png" type="image/png">
-    
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="config.js"></script>
-    <!-- Eliminados stockManager.js y stockUpdater.js -->
-    
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    
+
+    <!-- Tipografías: Manrope para la interfaz y JetBrains Mono para códigos. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Manrope:wght@400;500;600;700&display=swap">
+
     <style>
+        /* ------------------------------------------------------------ tokens -- */
         :root {
-            --primary: #ffe066;
-            --secondary: #fff9db;
-            --accent: #ffd43b;
-            --pastel1: #f8edeb;
-            --pastel2: #e0d6d4;
-            --pastel3: #fae697;
-            --success: #38b000;
-            --danger: #e63946;
-            --text: #333;
-            --border: #ffe066;
-            --shadow: 0 2px 8px rgba(255, 213, 59, 0.267);
-            --primary-blue: #2563eb;
-            --primary-dark: #1e40af;
-            --gray: #f3f4f6;
-            --gray-dark: #6b7280;
-            --warning: #f59e42;
-            --white: #fff;
+            --bg: #f7f7f5;
+            --surface: #ffffff;
+            --surface-2: #f3f3f1;
+            --ink: #23262b;
+            --ink-2: #5f646c;
+            --ink-3: #969ba3;
+            --line: rgba(35, 38, 43, 0.07);
+            --line-strong: rgba(35, 38, 43, 0.12);
+            --accent: #5b6b7d;
+            --accent-soft: #e9edf1;
+            --mark: #fff1c2;
+            --ok: #4f7d64;
+            --ok-soft: #edf4ef;
+            --warn: #9a7a3c;
+            --warn-soft: #f7f1e4;
+            --bad: #a85a55;
+            --bad-soft: #f8ecea;
+            --bar: rgba(247, 247, 245, 0.82);
+            --shadow-card: 0 1px 2px rgba(35, 38, 43, 0.04), 0 8px 24px -16px rgba(35, 38, 43, 0.14);
+            --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+            --font-ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
         }
+
+        /* -------------------------------------------------------------- base -- */
+        *, *::before, *::after { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
         body {
-            font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-            background: var(--secondary);
             margin: 0;
             min-height: 100vh;
-            color: var(--text);
+            font-family: var(--font-ui);
+            font-size: 0.9375rem;
+            line-height: 1.5;
+            color: var(--ink);
+            background: var(--bg);
+            -webkit-font-smoothing: antialiased;
+            font-feature-settings: 'tnum' 1;
+        }
+        button { font: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+        /* ---------------------------------------- cabecera fija (barra + buscador) -- */
+        .top {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--bar);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid var(--line);
+        }
+        .wrap {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+        }
+        .bar {
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+            height: 52px;
         }
-        header {
-            background: linear-gradient(90deg, var(--primary), var(--pastel1));
-            padding: 1.5rem 1rem 1.5rem 1rem;
-            box-shadow: #5c5866 0px 2px 8px 0px;
-            text-align: center;
-            position: relative;
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            white-space: nowrap;
         }
-        header h1 {
-            margin: 0;
-            font-size: 2.2rem;
-            color: #b68900;
-            letter-spacing: 1px;
+        .brand-mark {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: var(--surface);
+            border: 1px solid var(--line-strong);
+            color: var(--ink-2);
+        }
+        .brand-mark svg { width: 15px; height: 15px; }
+        .pv {
+            padding: 0.15rem 0.6rem;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-size: 0.75rem;
             font-weight: 700;
         }
-        header h2 {
-            margin: 0;
-            margin-top: 0.3em;
-            font-size: 1.25rem;
-            font-weight: 500;
-            cursor: pointer;
-            color: #b68900;
-        }
-        .container {
-            max-width: 1100px;
-            margin: 2rem auto;
-            background: var(--white);
-            border-radius: 12px;
-            box-shadow: 0 2px 16px rgba(0,0,0,0.07);
-            padding: 2rem 1rem;
-        }
+        .spacer { flex: 1; }
 
-        .search-bar {
-            display: flex;
-            justify-content: center;
+        .status {
+            display: inline-flex;
             align-items: center;
-            margin-bottom: 1.5rem;
-            gap: 10px;
+            gap: 0.45rem;
+            font-size: 0.8125rem;
+            color: var(--ink-3);
+            white-space: nowrap;
         }
-        .checkbox-filter {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0.7rem 1rem;
-            background: var(--gray);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .checkbox-filter:hover {
-            background: var(--pastel2);
-        }
-        .checkbox-filter input[type="checkbox"] {
-            cursor: pointer;
-            width: 18px;
-            height: 18px;
-        }
-        .checkbox-filter label {
-            cursor: pointer;
-            font-size: 0.95rem;
-            color: var(--text);
-            user-select: none;
-        }
-        .print-btn {
-            padding: 0.7rem 1.2rem;
-            border: none;
-            background: var(--success);
-            color: var(--white);
-            font-size: 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .print-btn:hover {
-            background: #2d8c00;
-        }
-        .search-bar input {
-            flex: 1;
-            max-width: 400px;
-            padding: 0.7rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 1rem;
-            outline: none;
-            transition: border 0.2s;
-        }
-        .search-bar button {
-            padding: 0.7rem 1.2rem;
-            border: none;
-            background: var(--primary);
-            color: var(--text);
-            font-size: 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.2s;
-            min-width: 50px;
-        }
-        .search-bar button:hover {
-            background: var(--accent);
-        }
-        .refresh-btn {
-            background: var(--primary-blue) !important;
-            color: var(--white) !important;
-        }
-        .refresh-btn:hover {
-            background: var(--primary-dark) !important;
-        }
-
-        .table-responsive {
-            overflow-x: auto;
-            margin-bottom: 1rem;
-        }
-
-        table {
-            width: 100%;
-            min-width: 1000px;
-            border-collapse: collapse;
-            margin-bottom: 1rem;
-            background: var(--white);
-        }
-        th, td {
-            padding: 0.9rem 0.7rem;
-            text-align: left;
-        }
-        th {
-            background: var(--primary);
-            color: var(--white);
-            font-weight: 600;
-            cursor: pointer;
-            position: relative;
-            user-select: none;
-            transition: background 0.2s;
-        }
-        th:hover {
-            background: var(--accent);
-        }
-        th .sort-icon {
-            margin-left: 5px;
-            font-size: 0.8rem;
-            opacity: 0.6;
-        }
-        th.sorted-asc .sort-icon::after {
-            content: '▲';
-            opacity: 1;
-        }
-        th.sorted-desc .sort-icon::after {
-            content: '▼';
-            opacity: 1;
-        }
-        tr {
-            border-bottom: 1px solid var(--border);
-        }
-        tr:last-child {
-            border-bottom: none;
-        }
-        .stock-low {
-            background: var(--warning);
-            color: #fff;
-            font-weight: bold;
-        }
-        .stock-zero {
-            background: var(--danger);
-            color: #fff;
-            font-weight: bold;
-        }
-
-        .spinner {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 120px;
-        }
-        .lds-ring {
-            display: inline-block;
-            position: relative;
-            width: 64px;
-            height: 64px;
-        }
-        .lds-ring div {
-            box-sizing: border-box;
-            display: block;
-            position: absolute;
-            width: 51px;
-            height: 51px;
-            margin: 6px;
-            border: 6px solid var(--primary);
+        .status-dot {
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
-            animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-            border-color: var(--primary) transparent transparent transparent;
+            background: var(--ok);
+            box-shadow: 0 0 0 3px var(--ok-soft);
         }
-        .lds-ring div:nth-child(1) {
-            animation-delay: -0.45s;
-        }
-        .lds-ring div:nth-child(2) {
-            animation-delay: -0.3s;
-        }
-        .lds-ring div:nth-child(3) {
-            animation-delay: -0.15s;
-        }
-        @keyframes lds-ring {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .error {
-            color: var(--danger);
-            text-align: center;
-            margin: 1rem 0;
-            font-weight: bold;
-        }
-        @media (max-width: 700px) {
-            .container {
-                padding: 1rem 0.2rem;
-            }
-            th, td {
-                padding: 0.7rem 0.3rem;
-                font-size: 0.97rem;
-            }
-            .export-btn {
-                width: 100%;
-                float: none;
-                margin-bottom: 1rem;
-            }
-        }
+        .status.is-loading .status-dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); animation: pulse 1.2s ease-in-out infinite; }
+        .status.is-error .status-dot { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
+        @keyframes pulse { 50% { opacity: 0.35; } }
 
-        @media print {
-            body {
-                background: white;
-                margin: 0;
-                padding: 0;
-            }
-            header {
-                box-shadow: none;
-                padding: 0.5rem 0;
-                background: white !important;
-                border-bottom: 2px solid #000;
-            }
-            header h1 {
-                font-size: 1.5rem;
-                margin: 0;
-                color: #000 !important;
-            }
-            header h2 {
-                display: none;
-            }
-            .search-bar,
-            #adminIndicator,
-            #userIndicator,
-            .print-btn {
-                display: none !important;
-            }
-            .container {
-                box-shadow: none;
-                max-width: 100%;
-                margin: 0;
-                padding: 0.3rem;
-                background: white;
-            }
-            .table-responsive {
-                margin: 0;
-            }
-            table {
-                page-break-inside: auto;
-                border-collapse: collapse;
-                width: 100%;
-                font-size: 0.85rem;
-            }
-            th, td {
-                padding: 0.25rem 0.4rem;
-                border: 1px solid #000;
-                background: white !important;
-                color: #000 !important;
-            }
-            th {
-                font-weight: bold;
-                text-align: left;
-                border-bottom: 2px solid #000;
-            }
-            th .sort-icon {
-                display: none;
-            }
-            tr {
-                page-break-inside: avoid;
-                page-break-after: auto;
-            }
-            /* Usar símbolos en lugar de colores para stock bajo/cero */
-            .stock-low td:last-child::after {
-                content: " ⚠";
-                font-weight: bold;
-            }
-            .stock-zero {
-                font-weight: bold;
-            }
-            .stock-zero td:last-child::after {
-                content: " ✕";
-            }
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            display: grid;
+            place-items: center;
+            border: none;
+            background: transparent;
+            border-radius: 9px;
+            cursor: pointer;
+            color: var(--ink-2);
+            transition: transform 120ms ease-out, background 160ms ease, color 160ms ease;
         }
+        .icon-btn:hover { color: var(--ink); background: var(--surface-2); }
+        .icon-btn:active { transform: scale(0.92); }
+        .icon-btn svg { width: 16px; height: 16px; }
+        .icon-btn.is-spinning svg { animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Estilos para indicadores de usuario */
-        .user-status-section {
-            display: flex;
-            justify-content: center;
+        .user {
+            display: none;
             align-items: center;
-            margin: 1rem 0;
+            gap: 0.15rem;
+            padding-left: 0.6rem;
+            margin-left: 0.15rem;
+            border-left: 1px solid var(--line-strong);
+        }
+        .user.show { display: inline-flex; }
+        .user-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-weight: 700;
+            font-size: 0.75rem;
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+        #logoutBtn:hover { color: var(--bad); }
+
+        /* Buscador: el protagonista de la página */
+        .finder { padding: 0.5rem 0 0.9rem; }
+        .search { position: relative; display: block; }
+        .search > svg {
+            position: absolute;
+            left: 1.1rem;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translateY(-50%);
+            color: var(--ink-3);
+            pointer-events: none;
+            transition: color 160ms ease;
+        }
+        .search input {
+            width: 100%;
+            height: 56px;
+            padding: 0 7.5rem 0 3.1rem;
+            border-radius: 14px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+            color: var(--ink);
+            font: inherit;
+            font-size: 1.0625rem;
+            font-weight: 500;
+            outline: none;
+            box-shadow: var(--shadow-card);
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+        .search input::placeholder { color: var(--ink-3); font-weight: 400; }
+        .search input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-card);
+        }
+        .search:focus-within > svg { color: var(--accent); }
+        .search-end {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .count {
+            font-size: 0.8125rem;
+            color: var(--ink-3);
+            white-space: nowrap;
+        }
+        .count strong { color: var(--ink); font-weight: 700; }
+        .kbd {
+            font-family: var(--font-mono);
+            font-size: 0.6875rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 6px;
+            border: 1px solid var(--line-strong);
+            color: var(--ink-3);
+        }
+        .clear-btn {
+            display: none;
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 50%;
+            background: var(--surface-2);
+            color: var(--ink-2);
+            cursor: pointer;
+            place-items: center;
+            transition: transform 120ms ease-out, background 160ms ease;
+        }
+        .clear-btn:hover { background: var(--line-strong); }
+        .clear-btn:active { transform: scale(0.88); }
+        .clear-btn svg { width: 12px; height: 12px; }
+        .search.has-value .clear-btn { display: grid; }
+        .search.has-value .kbd { display: none; }
+
+        /* Filtros rápidos */
+        .chips {
+            display: flex;
+            gap: 0.4rem;
+            margin-top: 0.7rem;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .chips::-webkit-scrollbar { display: none; }
+        .chip {
+            --tone: var(--accent);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--ink-2);
+            white-space: nowrap;
+            cursor: pointer;
+            transition: transform 120ms ease-out, background 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+        .chip:hover { border-color: var(--ink-3); color: var(--ink); }
+        .chip:active { transform: scale(0.96); }
+        .chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
+        .chip b { font-weight: 700; color: var(--ink-3); transition: color 160ms ease; }
+        .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+        .chip[aria-pressed="true"] b { color: rgba(255,255,255,0.65); }
+        .chip[data-filtro="todos"] i { display: none; }
+        .chip[data-filtro="bajo"] { --tone: var(--warn); }
+        .chip[data-filtro="sin"], .chip[data-filtro="negativo"] { --tone: var(--bad); }
+
+        /* -------------------------------------------------------------- tabla -- */
+        main { padding-top: 1.25rem; padding-bottom: 3rem; }
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            text-align: left;
+            padding: 0;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface-2);
+            font-size: 0.6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--ink-3);
+        }
+        thead th.num { text-align: right; }
+        .sort-btn {
+            all: unset;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            width: 100%;
+            padding: 0.7rem 1rem;
+            cursor: pointer;
+            transition: color 160ms ease;
+        }
+        th.num .sort-btn { justify-content: flex-end; }
+        .sort-btn:hover { color: var(--ink); }
+        .sort-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 8px; }
+        .sort-icon { width: 9px; height: 9px; opacity: 0; transition: opacity 160ms ease, transform 220ms var(--ease-out); }
+        th[aria-sort] .sort-btn { color: var(--ink); }
+        th[aria-sort] .sort-icon { opacity: 1; }
+        th[aria-sort="descending"] .sort-icon { transform: rotate(180deg); }
+
+        tbody td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--line);
+            vertical-align: middle;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr { transition: background 120ms ease; }
+        tbody tr:hover { background: var(--surface-2); }
+        tbody tr.enter { animation: rise 360ms var(--ease-out) both; animation-delay: calc(var(--i) * 14ms); }
+
+        td.num { text-align: right; }
+        .code { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--ink-3); white-space: nowrap; }
+        .name { font-weight: 600; }
+        mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+        .total { color: var(--ink-2); }
+        .date { color: var(--ink-2); white-space: nowrap; font-size: 0.875rem; }
+        .date-rel { display: block; font-size: 0.75rem; color: var(--ink-3); }
+
+        .qty {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
+            min-width: 3rem;
+            padding: 0.15rem 0.6rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            background: var(--ok-soft);
+            color: var(--ok);
+        }
+        .qty.low { background: var(--warn-soft); color: var(--warn); }
+        .qty.zero { background: var(--bad-soft); color: var(--bad); }
+
+        .skeleton td { padding: 1rem; }
+        .skeleton span {
+            display: block;
+            height: 11px;
+            border-radius: 6px;
+            background: linear-gradient(90deg, var(--surface-2), var(--line-strong), var(--surface-2));
+            background-size: 200% 100%;
+            animation: shimmer 1.4s ease-in-out infinite;
+        }
+        @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+        .empty { padding: 3.5rem 1rem; text-align: center; color: var(--ink-3); }
+        .empty strong { display: block; font-size: 1.05rem; color: var(--ink); margin-bottom: 0.2rem; }
+
+        .error-banner {
+            display: none;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.9rem;
+            padding: 0.7rem 1rem;
+            border-radius: 12px;
+            background: var(--bad-soft);
+            color: var(--bad);
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        .error-banner.show { display: flex; }
+        .error-banner svg { width: 18px; height: 18px; flex: none; }
+
+        .print-head { display: none; }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: none; }
         }
 
-        #adminIndicator,
-        #userIndicator {
-            animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            animation-delay: 0.6s;
-            opacity: 0;
-            transform: translateY(20px);
+        /* ---------------------------------------------------------- responsive -- */
+        @media (max-width: 760px) {
+            .status-text, #printBtn { display: none; }
         }
+        @media (max-width: 640px) {
+            .wrap { padding-left: 1rem; padding-right: 1rem; }
+            .brand-name { display: none; }
+            .search input { height: 52px; font-size: 1rem; padding-right: 5.5rem; }
+            .kbd { display: none; }
 
-        #adminIndicator.show,
-        #userIndicator.show {
-            display: block !important;
-        }
-
-        /* Estilos para botones de logout */
-        #logoutBtn:hover,
-        #logoutBtnUser:hover {
-            background: rgba(255,255,255,0.4) !important;
-            transform: translateY(-1px);
-        }
-
-        @keyframes fadeInUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            /* Filas como tarjetas */
+            thead { display: none; }
+            table, tbody { display: block; }
+            tbody tr {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 0.1rem 1rem;
+                padding: 0.85rem 1rem;
+                border-bottom: 1px solid var(--line);
             }
+            tbody tr:last-child { border-bottom: none; }
+            tbody td { padding: 0; border: none; }
+            td.c-codigo { grid-column: 1; grid-row: 1; }
+            td.c-nombre { grid-column: 1; grid-row: 2; }
+            td.c-stock { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+            td.c-total, td.c-fecha { grid-row: 3; font-size: 0.75rem; color: var(--ink-3); padding-top: 0.2rem; }
+            td.c-total { grid-column: 1; text-align: left; }
+            td.c-fecha { grid-column: 2; text-align: right; }
+            td.c-total::before { content: 'Total: '; }
+            .date { font-size: 0.75rem; }
+            .date-rel { display: none; }
+            .skeleton, .empty-row { display: block !important; }
+            .skeleton td, .empty-row td { display: block; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 1ms !important;
+                animation-delay: 0ms !important;
+                transition-duration: 1ms !important;
+            }
+        }
+        @media (prefers-reduced-transparency: reduce) {
+            .top { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+        }
+
+        /* ------------------------------------------------------------ impresión -- */
+        @media print {
+            body { background: #fff; color: #000; font-size: 10pt; }
+            .top, .error-banner, .date-rel { display: none !important; }
+            main { padding: 0; }
+            .wrap { max-width: none; padding: 0; }
+            .panel { border: none; box-shadow: none; border-radius: 0; }
+            .print-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 4pt; margin-bottom: 6pt; }
+            .print-head h2 { margin: 0; font-size: 16pt; }
+            thead th { background: none; color: #000; border-bottom: 1.5px solid #000; }
+            .sort-btn { padding: 3pt 5pt; }
+            .sort-icon { display: none; }
+            tbody td { padding: 3pt 5pt; border-bottom: 0.5pt solid #999; }
+            tbody tr { break-inside: avoid; animation: none !important; }
+            mark { background: none; }
+            .qty { background: none !important; color: #000 !important; padding: 0; min-width: 0; font-size: inherit; }
+            .qty.low::after { content: ' ⚠'; }
+            .qty.zero::after { content: ' ✕'; }
+            .code, .total, .date { color: #000; }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>📋 Consulta de Stock 🔎</h1>
-        
-        <!-- Indicadores de usuario -->
-        <div id="adminIndicator" style="position: absolute; top: 15px; right: 20px; background: rgba(182, 137, 0, 0.9); padding: 8px 15px; border-radius: 20px; font-size: 0.85rem; display: none; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-            <i class="bi bi-shield-check"></i> Modo Administrador
-            <button id="logoutBtn" style="margin-left: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.75rem; color: white; cursor: pointer; transition: all 0.3s ease;" title="Cerrar sesión">
-                <i class="bi bi-box-arrow-right"></i>
-            </button>
-        </div>
-        <div id="userIndicator" style="position: absolute; top: 15px; right: 20px; background: rgba(56, 176, 0, 0.9); padding: 8px 15px; border-radius: 20px; font-size: 0.85rem; display: none; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-            <i class="bi bi-person-check"></i> <span id="userEmail"></span>
-            <button id="logoutBtnUser" style="margin-left: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.75rem; color: white; cursor: pointer; transition: all 0.3s ease;" title="Cerrar sesión">
-                <i class="bi bi-box-arrow-right"></i>
-            </button>
+    <header class="top">
+        <div class="wrap">
+            <div class="bar">
+                <div class="brand">
+                    <span class="brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg>
+                    </span>
+                    <span class="brand-name">Consulta de stock</span>
+                    <span class="pv" id="puntoLabel">PV 1</span>
+                </div>
+                <div class="spacer"></div>
+                <div class="status" id="status" role="status" aria-live="polite">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="statusText">Conectando…</span>
+                </div>
+                <button class="icon-btn" id="refreshStockBtn" type="button" title="Actualizar ahora" aria-label="Actualizar ahora">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                </button>
+                <button class="icon-btn" id="printBtn" type="button" title="Imprimir" aria-label="Imprimir">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>
+                </button>
+                <div class="user" id="userChip">
+                    <span class="user-avatar" id="userAvatar"></span>
+                    <button class="icon-btn" id="logoutBtn" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17-5-5 5-5"/><path d="M5 12h12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="finder">
+                <label class="search" id="searchBox">
+                    <span class="sr-only">Buscar artículo</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input type="text" id="searchInput" placeholder="¿Qué artículo buscás? Código o nombre" autocomplete="off" spellcheck="false" autofocus>
+                    <span class="search-end">
+                        <span class="count" id="resultCounter"></span>
+                        <span class="kbd" aria-hidden="true">/</span>
+                        <button class="clear-btn" id="clearBtn" type="button" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        </button>
+                    </span>
+                </label>
+                <div class="chips" role="group" aria-label="Filtros rápidos">
+                    <button class="chip" type="button" data-filtro="todos" aria-pressed="true">Todos <b id="kpiTodos">—</b></button>
+                    <button class="chip" type="button" data-filtro="bajo" aria-pressed="false"><i></i>Stock bajo <b id="kpiBajo">—</b></button>
+                    <button class="chip" type="button" data-filtro="sin" aria-pressed="false"><i></i>Sin stock <b id="kpiSin">—</b></button>
+                    <button class="chip" type="button" data-filtro="negativo" aria-pressed="false"><i></i>Negativos <b id="kpiNegativo">—</b></button>
+                </div>
+            </div>
         </div>
     </header>
-    <div class="container">
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Buscar por código o nombre...">
-            <button id="clearBtn" title="Limpiar búsqueda">✕</button>
-            <div class="checkbox-filter">
-                <input type="checkbox" id="zeroStockFilter">
-                <label for="zeroStockFilter">Mostrar solo < 0</label>
-            </div>            <button id="printBtn" class="print-btn" title="Imprimir reporte">
-                <i class="bi bi-printer"></i> Imprimir
-            </button>
+
+    <main class="wrap">
+        <div class="error-banner" id="errorMsg" role="alert">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span id="errorText"></span>
         </div>
-        <div id="resultCounter" style="text-align:right; font-size:0.92rem; color:var(--gray-dark); margin-bottom:0.5rem; display:none;"></div>
-        <div class="table-responsive">
+        <section class="panel">
+            <div class="print-head">
+                <h2>Consulta de stock</h2>
+                <span id="printMeta"></span>
+            </div>
             <table id="stockTable">
                 <thead>
                     <tr>
-                        <th data-column="codigo">Código<span class="sort-icon"></span></th>
-                        <th data-column="nombre">Nombre<span class="sort-icon"></span></th>
-                        <th data-column="stock">Stock Actual<span class="sort-icon"></span></th>
-                        <th data-column="ultimaEntrada">Ultima Entrada<span class="sort-icon"></span></th>
+                        <th data-column="codigo"><button class="sort-btn" type="button">Código<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
+                        <th data-column="nombre"><button class="sort-btn" type="button">Artículo<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
+                        <th data-column="stock" class="num"><button class="sort-btn" type="button"><span id="thStockLocal">Stock PV 1</span><svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
+                        <th data-column="stockTotal" class="num"><button class="sort-btn" type="button">Total<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
+                        <th data-column="ultimaEntrada"><button class="sort-btn" type="button">Último ingreso<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
                     </tr>
                 </thead>
-                <tbody id="tableBody">
-                    <!-- Filas generadas dinámicamente -->
-                </tbody>
+                <tbody id="tableBody"></tbody>
             </table>
-        </div>
-        <div class="spinner" id="spinner" style="display:none;">
-            <div class="lds-ring"><div></div><div></div><div></div><div></div></div>
-        </div>
-        <div class="error" id="errorMsg" style="display:none;"></div>
-    </div>
-    
+        </section>
+    </main>
+
     <!-- Firebase Auth Check -->
     <script>
-        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
-        
-        // Sistema de autenticación
-        let admin = false; // Declarar admin al principio para evitar errores de hoisting
-        let authResolved = false; // Flag para controlar si la autenticación se resolvió
-        
-        // Lista de emails de administradores
+
+        let admin = false;
+        let authResolved = false;
         const adminEmails = ["distribuidorahomepoint@gmail.com"];
 
-        // Función para inicializar la página después de la autenticación
         function inicializarPagina() {
-            // Si la página ya está cargada, ejecutar inmediatamente
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
-                    console.log('Página inicializada para usuario autenticado');
-                    // Continuar con la inicialización de la página de stock
-                    inicializarStock();
-                });
+                document.addEventListener('DOMContentLoaded', inicializarStock);
             } else {
-                console.log('Página inicializada para usuario autenticado');
-                // Continuar con la inicialización de la página de stock
                 inicializarStock();
             }
         }
 
-        // Función para redirigir a login con parámetro de retorno
         function redirigirALogin() {
             const currentUrl = encodeURIComponent(window.location.href);
             window.location.href = `login.html?redirect=${currentUrl}`;
         }
 
-        // Timeout de seguridad: verificar autenticación después de 5 segundos
+        // Timeout de seguridad: si la autenticación no responde en 5 s, a login
         setTimeout(() => {
             if (!authResolved) {
                 console.warn('Timeout de autenticación - redirigiendo a login');
@@ -478,316 +574,340 @@
             }
         }, 5000);
 
+        function mostrarUsuario(user) {
+            const avatar = document.getElementById('userAvatar');
+            avatar.textContent = (user.email || '?').charAt(0).toUpperCase();
+            avatar.title = `${user.email || ''}${admin ? ' · Administrador' : ''}`;
+            document.getElementById('userChip').classList.add('show');
+        }
+
         firebase.auth().onAuthStateChanged(user => {
-            console.log('Firebase Auth State Changed:', user ? 'Usuario autenticado' : 'No hay usuario');
-            authResolved = true; // Marcar que la autenticación se resolvió
-            
+            authResolved = true;
             if (user) {
-                // Usuario autenticado
-                console.log('Usuario autenticado:', user.email);
-                
-                // Verificar si es administrador
-                if (adminEmails.includes(user.email)) {
-                    admin = true;
-                    console.log('Usuario es administrador:', user.email);
-                    
-                    // Mostrar indicador de administrador
-                    const adminIndicator = document.getElementById('adminIndicator');
-                    const userIndicator = document.getElementById('userIndicator');
-                    if (adminIndicator) {
-                        adminIndicator.style.display = 'block';
-                        adminIndicator.classList.add('show');
-                    }
-                    if (userIndicator) {
-                        userIndicator.style.display = 'none';
-                        userIndicator.classList.remove('show');
-                    }
+                admin = adminEmails.includes(user.email);
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => mostrarUsuario(user));
                 } else {
-                    // Usuario normal (no administrador)
-                    admin = false;
-                    console.log('Usuario normal:', user.email);
-                    
-                    // Mostrar indicador de usuario normal
-                    const adminIndicator = document.getElementById('adminIndicator');
-                    const userIndicator = document.getElementById('userIndicator');
-                    const userEmail = document.getElementById('userEmail');
-                    
-                    if (adminIndicator) {
-                        adminIndicator.style.display = 'none';
-                        adminIndicator.classList.remove('show');
-                    }
-                    if (userIndicator) {
-                        userIndicator.style.display = 'block';
-                        userIndicator.classList.add('show');
-                    }
-                    if (userEmail) {
-                        userEmail.textContent = user.email;
-                    }
+                    mostrarUsuario(user);
                 }
-                
-                // Usuario autenticado, inicializar página
-                console.log('Inicializando página para usuario autenticado...');
                 inicializarPagina();
             } else {
-                // No hay usuario autenticado, redirigir a login
-                console.log('No hay usuario autenticado, redirigiendo a login...');
                 redirigirALogin();
             }
         });
 
-        // Función para cerrar sesión
         function cerrarSesion() {
             if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-                firebase.auth().signOut()
-                    .then(() => {
-                        console.log('Sesión cerrada exitosamente');
-                        // La redirección se manejará automáticamente por onAuthStateChanged
-                    })
-                    .catch(error => {
-                        console.error('Error al cerrar sesión:', error);
-                        alert('Error al cerrar sesión: ' + error.message);
-                    });
+                firebase.auth().signOut().catch(error => {
+                    console.error('Error al cerrar sesión:', error);
+                    alert('Error al cerrar sesión: ' + error.message);
+                });
             }
         }
 
-        // Event listeners para los botones de logout
-        document.addEventListener('DOMContentLoaded', function() {
-            const logoutBtn = document.getElementById('logoutBtn');
-            const logoutBtnUser = document.getElementById('logoutBtnUser');
-            
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', cerrarSesion);
-            }
-            if (logoutBtnUser) {
-                logoutBtnUser.addEventListener('click', cerrarSesion);
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('logoutBtn').addEventListener('click', cerrarSesion);
         });
     </script>
-    <!-- Fin Firebase Auth Check -->
-    
+
     <script>
-        // Nueva función para inicializar la funcionalidad de stock usando Google Sheets
         function inicializarStock() {
-            // Elementos DOM
             const tableBody = document.getElementById('tableBody');
-            const spinner = document.getElementById('spinner');
-            const errorMsg = document.getElementById('errorMsg');
             const searchInput = document.getElementById('searchInput');
+            const searchBox = document.getElementById('searchBox');
             const clearBtn = document.getElementById('clearBtn');
-            const zeroStockFilter = document.getElementById('zeroStockFilter');
             const printBtn = document.getElementById('printBtn');
-            const tableHeaders = document.querySelectorAll('#stockTable thead th');
-            let stockData = [];
-            let filteredData = [];
-            let currentSort = { column: 'nombre', order: 'asc' }; // Default sort by nombre
-
-            function showSpinner(show) {
-                spinner.style.display = show ? 'flex' : 'none';
-            }
-
-            function showError(msg) {
-                errorMsg.textContent = msg;
-                errorMsg.style.display = 'block';
-                showSpinner(false);
-            }
-
-            function clearError() {
-                errorMsg.textContent = '';
-                errorMsg.style.display = 'none';
-            }
-
+            const refreshBtn = document.getElementById('refreshStockBtn');
             const resultCounter = document.getElementById('resultCounter');
+            const errorMsg = document.getElementById('errorMsg');
+            const errorText = document.getElementById('errorText');
+            const status = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const tableHeaders = document.querySelectorAll('#stockTable thead th');
+            const chips = document.querySelectorAll('.chip');
 
-            function renderTable(data) {
-                tableBody.innerHTML = '';
+            let stockData = [];
+            let currentSort = { column: 'nombre', order: 'asc' };
+            let filtro = 'todos';
+            let primeraCarga = true;
+            let cargando = false;
 
-                // Actualizar contador
-                if (data.length > 0) {
-                    resultCounter.textContent = `${data.length} artículo${data.length !== 1 ? 's' : ''} encontrado${data.length !== 1 ? 's' : ''}`;
-                    resultCounter.style.display = 'block';
-                } else {
-                    resultCounter.style.display = 'none';
+            // Punto de venta elegido en el panel (lo guarda puntoVenta.js).
+            // En StockPorSucursal la columna C es el stock del punto 1 y la D
+            // el del punto 2. Si no hay ninguno elegido se toma el 1.
+            function puntoVentaActual() {
+                try { const v = localStorage.getItem('hpPuntoVenta'); if (v) return v; } catch (_) {}
+                try { const v = sessionStorage.getItem('hpPuntoVenta'); if (v) return v; } catch (_) {}
+                return '1';
+            }
+            const puntoVenta = puntoVentaActual() === '2' ? '2' : '1';
+            const COL_STOCK_LOCAL = puntoVenta === '2' ? 3 : 2; // D : C
+            document.getElementById('thStockLocal').textContent = `Stock PV ${puntoVenta}`;
+            document.getElementById('puntoLabel').textContent = `PV ${puntoVenta}`;
+
+            const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const fmt = n => n.toLocaleString('es-AR');
+            // Sin tildes y en minúscula, para que "cafe" encuentre "Café"
+            const norm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+            // Resalta la parte del texto que coincide con la búsqueda
+            function resaltar(texto, q) {
+                if (!q) return esc(texto);
+                const i = norm(texto).indexOf(q);
+                if (i < 0) return esc(texto);
+                return esc(texto.slice(0, i)) + '<mark>' + esc(texto.slice(i, i + q.length)) + '</mark>' + esc(texto.slice(i + q.length));
+            }
+
+            // Fechas de la planilla: dd/mm/aaaa (con o sin hora) o aaaa-mm-dd.
+            function parseFecha(txt) {
+                if (!txt) return null;
+                let m = String(txt).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+                if (m) {
+                    const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+                    return new Date(y, Number(m[2]) - 1, Number(m[1]));
                 }
+                m = String(txt).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+                return null;
+            }
+            function haceCuanto(fecha) {
+                if (!fecha) return '';
+                const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+                const dias = Math.round((hoy - fecha) / 86400000);
+                if (dias <= 0) return 'Hoy';
+                if (dias === 1) return 'Ayer';
+                if (dias < 30) return `Hace ${dias} días`;
+                const meses = Math.round(dias / 30);
+                if (meses < 12) return `Hace ${meses} ${meses === 1 ? 'mes' : 'meses'}`;
+                const anios = Math.round(dias / 365);
+                return `Hace ${anios} ${anios === 1 ? 'año' : 'años'}`;
+            }
+
+            function setStatus(estado, texto) {
+                status.classList.toggle('is-loading', estado === 'loading');
+                status.classList.toggle('is-error', estado === 'error');
+                statusText.textContent = texto;
+                refreshBtn.classList.toggle('is-spinning', estado === 'loading');
+            }
+            function showError(msg) {
+                errorText.textContent = msg;
+                errorMsg.classList.add('show');
+            }
+            function clearError() {
+                errorMsg.classList.remove('show');
+            }
+
+            function renderSkeleton() {
+                const anchos = [[60, 70, 40, 40, 55], [50, 85, 40, 40, 50], [65, 60, 40, 40, 60]];
+                let html = '';
+                for (let i = 0; i < 8; i++) {
+                    const a = anchos[i % anchos.length];
+                    html += `<tr class="skeleton">${a.map(w => `<td><span style="width:${w}%"></span></td>`).join('')}</tr>`;
+                }
+                tableBody.innerHTML = html;
+            }
+
+            function claseStock(n) {
+                if (n <= 0) return 'zero';
+                if (n <= 5) return 'low';
+                return '';
+            }
+
+            function coincideFiltro(item) {
+                switch (filtro) {
+                    case 'bajo': return item.stock > 0 && item.stock <= 5;
+                    case 'sin': return item.stock <= 0;
+                    case 'negativo': return item.stock < 0;
+                    default: return true;
+                }
+            }
+
+            function actualizarContadores() {
+                document.getElementById('kpiTodos').textContent = fmt(stockData.length);
+                document.getElementById('kpiBajo').textContent = fmt(stockData.filter(i => i.stock > 0 && i.stock <= 5).length);
+                document.getElementById('kpiSin').textContent = fmt(stockData.filter(i => i.stock <= 0).length);
+                document.getElementById('kpiNegativo').textContent = fmt(stockData.filter(i => i.stock < 0).length);
+            }
+
+            function renderTable(data, q, animar) {
+                resultCounter.innerHTML = `<strong>${fmt(data.length)}</strong> ${data.length === 1 ? 'resultado' : 'resultados'}`;
 
                 if (data.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray-dark);">Sin resultados</td></tr>';
+                    const texto = searchInput.value.trim();
+                    tableBody.innerHTML = `<tr class="empty-row"><td colspan="5"><div class="empty"><strong>Sin resultados</strong>${texto ? `Ningún artículo coincide con “${esc(texto)}”.` : 'No hay artículos en este filtro.'}</div></td></tr>`;
                     return;
                 }
 
-                // Usar DocumentFragment para mejor rendimiento
                 const fragment = document.createDocumentFragment();
-
-                data.forEach(item => {
-                    let stockClass = '';
-                    if (item.stock <= 0) stockClass = 'stock-zero';
-                    else if (item.stock <= 5) stockClass = 'stock-low';
-
+                data.forEach((item, i) => {
                     const row = document.createElement('tr');
-                    row.className = stockClass;
+                    if (animar && i < 20) {
+                        row.className = 'enter';
+                        row.style.setProperty('--i', i);
+                    }
                     row.innerHTML = `
-                        <td>${item.codigo || ''}</td>
-                        <td>${item.nombre || ''}</td>
-                        <td>${typeof item.stock === 'number' ? item.stock : 0}</td>
-                        <td>${item.ultimaEntrada || ''}</td>
+                        <td class="c-codigo"><span class="code">${resaltar(item.codigo, q)}</span></td>
+                        <td class="c-nombre"><span class="name">${resaltar(item.nombre, q)}</span></td>
+                        <td class="c-stock num"><span class="qty ${claseStock(item.stock)}">${fmt(item.stock)}</span></td>
+                        <td class="c-total num"><span class="total">${fmt(item.stockTotal)}</span></td>
+                        <td class="c-fecha"><span class="date">${esc(item.ultimaEntrada)}</span><span class="date-rel">${haceCuanto(item.fecha)}</span></td>
                     `;
                     fragment.appendChild(row);
                 });
-
+                tableBody.innerHTML = '';
                 tableBody.appendChild(fragment);
             }
 
-            let searchTimeout;
-
             function sortData(data, column, order) {
-                const sorted = [...data];
-                sorted.sort((a, b) => {
-                    let valA = a[column];
-                    let valB = b[column];
-                    
-                    // Handle numeric values
-                    if (column === 'stock') {
-                        valA = Number(valA) || 0;
-                        valB = Number(valB) || 0;
-                        return order === 'asc' ? valA - valB : valB - valA;
+                const dir = order === 'asc' ? 1 : -1;
+                return [...data].sort((a, b) => {
+                    if (column === 'stock' || column === 'stockTotal') {
+                        return ((Number(a[column]) || 0) - (Number(b[column]) || 0)) * dir;
                     }
-                    
-                    // Handle string values
-                    valA = (valA || '').toString().toLowerCase();
-                    valB = (valB || '').toString().toLowerCase();
-                    
-                    if (order === 'asc') {
-                        return valA.localeCompare(valB, 'es', { sensitivity: 'base' });
-                    } else {
-                        return valB.localeCompare(valA, 'es', { sensitivity: 'base' });
+                    if (column === 'ultimaEntrada') {
+                        // Sin fecha siempre al final
+                        const ta = a.fecha ? a.fecha.getTime() : null;
+                        const tb = b.fecha ? b.fecha.getTime() : null;
+                        if (ta === tb) return 0;
+                        if (ta === null) return 1;
+                        if (tb === null) return -1;
+                        return (ta - tb) * dir;
                     }
+                    return String(a[column] || '').localeCompare(String(b[column] || ''), 'es', { sensitivity: 'base', numeric: true }) * dir;
                 });
-                return sorted;
             }
 
             function updateSortIcons() {
-                // Clear all sort classes
-                tableHeaders.forEach(th => {
-                    th.classList.remove('sorted-asc', 'sorted-desc');
-                });
-                
-                // Add sort class to current sorted column
                 tableHeaders.forEach(th => {
                     if (th.dataset.column === currentSort.column) {
-                        th.classList.add(`sorted-${currentSort.order}`);
+                        th.setAttribute('aria-sort', currentSort.order === 'asc' ? 'ascending' : 'descending');
+                    } else {
+                        th.removeAttribute('aria-sort');
                     }
                 });
             }
 
-            function filterData() {
-                const query = searchInput.value.trim().toLowerCase();
-                const showZeroStockOnly = zeroStockFilter.checked;
-                
-                filteredData = stockData.filter(item => {
-                    // Search filter
-                    const matchesSearch = (item.codigo && item.codigo.toLowerCase().includes(query)) ||
-                                         (item.nombre && item.nombre.toLowerCase().includes(query));
-                    
-                    // Zero stock filter
-                    const matchesStockFilter = !showZeroStockOnly || (item.stock < 0);
-                    
-                    return matchesSearch && matchesStockFilter;
-                });
-                
-                // Apply current sort
-                filteredData = sortData(filteredData, currentSort.column, currentSort.order);
-                
-                renderTable(filteredData);
+            function filterData(animar = false) {
+                const q = norm(searchInput.value.trim());
+                searchBox.classList.toggle('has-value', q.length > 0);
+
+                const filtered = stockData.filter(item =>
+                    coincideFiltro(item) && (!q || item._busqueda.includes(q))
+                );
+                renderTable(sortData(filtered, currentSort.column, currentSort.order), q, animar);
                 updateSortIcons();
             }
 
-            // Debouncing para búsqueda
-            function debouncedFilterData() {
+            // Búsqueda al instante; solo agrupa teclas muy rápidas
+            let searchTimeout;
+            searchInput.addEventListener('input', () => {
                 clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    filterData();
-                }, 300);
-            }
+                searchTimeout = setTimeout(() => filterData(), 80);
+            });
 
-            // Event listeners
-            clearBtn.addEventListener('click', () => {
+            clearBtn.addEventListener('click', e => {
+                e.preventDefault();
                 searchInput.value = '';
                 filterData();
                 searchInput.focus();
             });
 
-            searchInput.addEventListener('input', debouncedFilterData);
-            
-            zeroStockFilter.addEventListener('change', filterData);
-            
-            printBtn.addEventListener('click', () => {
-                window.print();
+            // "/" enfoca el buscador desde cualquier lugar, Esc lo limpia
+            document.addEventListener('keydown', e => {
+                if (e.key === '/' && document.activeElement !== searchInput) {
+                    e.preventDefault();
+                    searchInput.focus();
+                    searchInput.select();
+                } else if (e.key === 'Escape' && document.activeElement === searchInput) {
+                    searchInput.value = '';
+                    filterData();
+                }
             });
-            
-            // Add click event to table headers for sorting
-            tableHeaders.forEach(th => {
-                th.addEventListener('click', () => {
-                    const column = th.dataset.column;
-                    if (!column) return;
-                    
-                    // Toggle sort order if clicking the same column
-                    if (currentSort.column === column) {
-                        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
-                    } else {
-                        currentSort.column = column;
-                        currentSort.order = 'asc';
-                    }
-                    
+
+            chips.forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const elegido = chip.dataset.filtro;
+                    // Tocar el filtro activo lo apaga y vuelve a "Todos"
+                    filtro = (filtro === elegido && elegido !== 'todos') ? 'todos' : elegido;
+                    chips.forEach(c => c.setAttribute('aria-pressed', String(c.dataset.filtro === filtro)));
                     filterData();
                 });
             });
 
-            // Consulta a Google Sheets
+            printBtn.addEventListener('click', () => {
+                const ahora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+                document.getElementById('printMeta').textContent = `Punto de venta ${puntoVenta} · ${ahora}`;
+                window.print();
+            });
+
+            tableHeaders.forEach(th => {
+                th.querySelector('.sort-btn').addEventListener('click', () => {
+                    const column = th.dataset.column;
+                    if (currentSort.column === column) {
+                        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        // Números y fechas arrancan de mayor a menor
+                        currentSort.order = (column === 'nombre' || column === 'codigo') ? 'asc' : 'desc';
+                    }
+                    filterData();
+                });
+            });
+
+            // Consulta a Google Sheets. Las recargas automáticas no borran la
+            // tabla: solo cambia el indicador de estado de la barra superior.
             async function fetchStockData() {
-                showSpinner(true);
-                clearError();
+                if (cargando) return;
+                cargando = true;
+                setStatus('loading', 'Actualizando…');
+                if (primeraCarga) renderSkeleton();
                 try {
-                    // Configuración de Sheets (reutilizar config.js)
                     const SHEETS_ID = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID : '';
-                    const RANGE = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.RANGO : '';
+                    const RANGE = 'StockPorSucursal!A2:F';
                     const API_KEY = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.API_KEY : '';
-                    if (!SHEETS_ID || !RANGE || !API_KEY) throw new Error('Faltan datos de configuración de Google Sheets');
+                    if (!SHEETS_ID || !API_KEY) throw new Error('Faltan datos de configuración de Google Sheets');
 
                     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${RANGE}?key=${API_KEY}`;
                     const response = await fetch(url, { cache: 'no-store' });
                     const { values } = await response.json();
-                    if (!values || !values.length) throw new Error('No se encontraron datos en Sheets');
+                    if (!values || !values.length) throw new Error('No se encontraron datos en la hoja StockPorSucursal');
 
-                    // Asumimos que la primera fila es el header
-                    // Ajusta los índices según el log si es necesario
-                    stockData = values.slice(1).map(row => ({
-                        codigo: row[2] || '',
-                        nombre: row[3] || '',
-                        stock: Number(row[10]) || 0,
-                        ultimaEntrada: row[12] || ''
-                    })).filter(item => item.nombre.trim() !== '');
-                    // Ordenar alfabéticamente por nombre
-                    stockData.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+                    // StockPorSucursal (fila 1 = encabezado): A código, B nombre,
+                    // C stock punto 1, D stock punto 2, E stock total, F último ingreso
+                    stockData = values.map(row => {
+                        const codigo = row[0] || '';
+                        const nombre = row[1] || '';
+                        return {
+                            codigo,
+                            nombre,
+                            stock: Number(row[COL_STOCK_LOCAL]) || 0,
+                            stockTotal: Number(row[4]) || 0,
+                            ultimaEntrada: row[5] || '',
+                            fecha: parseFecha(row[5]),
+                            _busqueda: norm(codigo) + ' ' + norm(nombre)
+                        };
+                    }).filter(item => item.nombre.trim() !== '');
 
-                    filterData();
-                    showSpinner(false);
+                    clearError();
+                    actualizarContadores();
+                    filterData(primeraCarga);
+                    primeraCarga = false;
+                    const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                    setStatus('ok', `Actualizado ${hora}`);
                 } catch (error) {
                     console.error('Error al cargar datos de inventario:', error);
-                    showError('Error al cargar datos de inventario: ' + error.message);
+                    setStatus('error', 'Sin conexión');
+                    if (primeraCarga) tableBody.innerHTML = '';
+                    showError('No se pudo cargar el inventario: ' + error.message);
+                } finally {
+                    cargando = false;
                 }
             }
 
-            // Event listener para actualización manual
-            document.getElementById('refreshStockBtn')?.addEventListener('click', async () => {
-                await fetchStockData();
-            });
+            refreshBtn.addEventListener('click', fetchStockData);
 
-            // Inicializar
             fetchStockData();
-
-            // Auto-refresh cada 30 segundos
             setInterval(fetchStockData, 30000);
-
-            // Refrescar al volver a la pestaña
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) fetchStockData();
             });
