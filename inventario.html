@@ -489,7 +489,7 @@
       font-weight: 500;
     }
     /* Badges de tipo de movimiento */
-    .entrada, .salida, .retiro {
+    .entrada, .salida, .retiro, .entrada-int, .salida-int {
       display: inline-block;
       font-weight: 600;
       font-size: .8rem;
@@ -509,6 +509,14 @@
       color: var(--warning);
       background: var(--warning-soft);
     }
+    .entrada-int {
+      color: #0e7490;
+      background: #e0f4f8;
+    }
+    .salida-int {
+      color: #7c3aed;
+      background: #f1eafd;
+    }
     .acciones-btns {
       display: flex;
       gap: 0.35rem;
@@ -525,14 +533,6 @@
     .btn-accion:hover {
       background: var(--surface-2);
       border-color: var(--border);
-    }
-    /* Edit buttons should remain visible but be non-interactive */
-    .btn-accion:disabled,
-    .btn-accion[disabled] {
-      opacity: 0.5;
-      cursor: not-allowed;
-      filter: grayscale(40%);
-      pointer-events: none;
     }
     .paginacion {
       display: flex;
@@ -848,6 +848,8 @@
             <option value="ENTRADA">Entrada</option>
             <option value="SALIDA">Salida</option>
             <option value="RETIRO">Retiro</option>
+            <option value="ENTRADA-INT">Entrada interna</option>
+            <option value="SALIDA-INT">Salida interna</option>
           </select>
           <button id="btnCargarTodos"><i class="bi bi-arrow-clockwise"></i> Cargar Todos</button>
         </div>
@@ -992,11 +994,6 @@
       // Habilitar todos los controles interactivos
       document.querySelectorAll('input, select, button, textarea').forEach(el => {
         el.disabled = false;
-      });
-      
-      // Volver a deshabilitar el botón de editar que debe permanecer deshabilitado
-      document.querySelectorAll('.btn-accion[title="Modificar"]').forEach(btn => {
-        btn.disabled = true;
       });
     }
     
@@ -1304,7 +1301,6 @@
     let movimientosFiltrados = [];
     let paginaActual = 1;
     const MOVS_POR_PAGINA = 30;
-    let editandoId = null;
     let movimientosCargados = false; // true una vez que se cargó el historial completo
 
     // Utilidades
@@ -1314,6 +1310,13 @@
       // yyyy-mm-dd HH:MM:SS (24hs)
       const pad = n => n.toString().padStart(2, '0');
       return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+    // Traduce el campo sucursal del movimiento (1 = Munro, 2 = Caseros)
+    function nombreSucursal(valor) {
+      const v = String(valor ?? '').trim();
+      if (v === '1') return 'Munro';
+      if (v === '2') return 'Caseros';
+      return '—';
     }
     function mostrarFeedback(msg, tipo = 'success') {
       const fb = document.getElementById('feedbackIngreso');
@@ -1572,6 +1575,7 @@
             <th>Nombre</th>
             <th>Cantidad</th>
             <th>Tipo</th>
+            <th>Sucursal</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -1589,6 +1593,12 @@
         } else if (mov.tipo === 'RETIRO') {
           tipoClass = 'retiro';
           tipoTexto = 'RETIRO';
+        } else if (mov.tipo === 'ENTRADA-INT') {
+          tipoClass = 'entrada-int';
+          tipoTexto = 'ENTRADA-INT';
+        } else if (mov.tipo === 'SALIDA-INT') {
+          tipoClass = 'salida-int';
+          tipoTexto = 'SALIDA-INT';
         }
 
         html += `<tr>
@@ -1596,9 +1606,9 @@
           <td class="col-nombre" title="pedidoId: ${mov.pedidoId ? String(mov.pedidoId).replace(/"/g, '&quot;') : 'Sin pedido'}" style="cursor:help;">${mov.nombre}</td>
           <td>${mov.cantidad}</td>
           <td><span class="${tipoClass}">${tipoTexto}</span></td>
+          <td>${nombreSucursal(mov.sucursal)}</td>
           <td>
             <div class="acciones-btns">
-              <button class="btn-accion" title="Modificar" disabled aria-disabled="true">✏️</button>
               <button class="btn-accion" title="Eliminar" onclick="eliminarMovimiento('${mov._id}')">🗑️</button>
             </div>
           </td>
@@ -1682,21 +1692,6 @@
         console.error('Error al eliminar movimiento:', e);
         mostrarFeedback('Error al eliminar: ' + e.message, 'error');
       }
-    }
-
-    // Editar movimiento (modal inline)
-    window.editarMovimiento = function(id) {
-      const mov = movimientos.find(m => m._id === id);
-      if (!mov) return;
-      const nuevaCantidad = prompt('Editar cantidad:', mov.cantidad);
-      if (nuevaCantidad === null) return;
-      const cantidadNum = parseInt(nuevaCantidad);
-      if (isNaN(cantidadNum) || cantidadNum < 1) {
-        mostrarFeedback('Cantidad inválida','error');
-        return;
-      }
-      db.ref('movimientos/' + id).update({ cantidad: cantidadNum });
-      mostrarFeedback('Movimiento modificado','success');
     }
   </script>
 </body>

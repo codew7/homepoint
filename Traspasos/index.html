@@ -24,7 +24,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
 <!-- Config propia de esta carpeta (pedidos-87064). No usa archivos de afuera. -->
-<script src="config.js"></script>
+<script src="../config.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -620,12 +620,12 @@ img{display:block}
 <script>
 // ============================================================
 //  Traspasos — pedidos y despachos de mercadería entre sucursales.
-//  Independiente del resto del panel: solo usa config.js de esta carpeta.
+//  Independiente del resto del panel: solo usa ../config.js (el de la raíz del repo).
 //
 //  Flujo: la sucursal que necesita mercadería (destino) arma un pedido; la otra
 //  (origen) lo prepara, corrige cantidades o quita artículos y lo despacha. Al
-//  despachar se escriben, en un único update atómico, los movimientos SI
-//  (salida interna, sucursal origen) y EI (entrada interna, sucursal destino).
+//  despachar se escriben, en un único update atómico, los movimientos SALIDA-INT
+//  (salida interna, sucursal origen) y ENTRADA-INT (entrada interna, sucursal destino).
 // ============================================================
 
 // Mismos ids que puntoVenta.js y que el campo `sucursal` de las ENTRADAS de articulos.html.
@@ -1434,7 +1434,7 @@ async function confirmarRecibido(id){
   btn.disabled = true;
   try {
     if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase.');
-    // Solo seguimiento: no escribe movimientos (SI/EI ya se registraron al despachar).
+    // Solo seguimiento: no escribe movimientos (SALIDA-INT/ENTRADA-INT ya se registraron al despachar).
     await conTimeout(db.ref('traspasos/' + id).update({
       estado: 'RECIBIDO',
       recibidoEn: firebase.database.ServerValue.TIMESTAMP,
@@ -1699,7 +1699,7 @@ function abrirConfirmacion(t){
           <div class="art-info"><div class="art-name">${escapeHtml(x.i.nombre)}</div></div>
           <div class="det-q"><span class="q"><s>${x.sol}</s>${x.env}</span><span class="motivo ${x.m}">${MOTIVO_TXT[x.m]}</span></div></div>`).join('')
         : `<div class="det-nota" style="margin-bottom:0">Se envía todo tal cual se pidió.</div>`}
-      <p class="conf-mov" style="margin-top:16px">Se registra la salida (<b>SI</b>) de ${escapeHtml(o.nombre)} y la entrada (<b>EI</b>) en ${escapeHtml(d.nombre)} de cada artículo enviado.</p>`;
+      <p class="conf-mov" style="margin-top:16px">Se registra la salida (<b>SALIDA-INT</b>) de ${escapeHtml(o.nombre)} y la entrada (<b>ENTRADA-INT</b>) en ${escapeHtml(d.nombre)} de cada artículo enviado.</p>`;
     $('confBtn').className = 'btn btn-ink';
     $('confBtn').textContent = `Despachar ${unid(st.unidades)}`;
   } else {
@@ -1749,13 +1749,11 @@ async function despachar(){
       if (env <= 0) return;
       unidades += env;
       // Claves determinísticas: un reintento o doble despacho pisa las mismas claves (no duplica stock).
-      const comun = {
-        timestamp: ts, codigo: i.codigo, nombre: i.nombre, cantidad: env,
-        traspasoId: id, traspasoNumero: actual.numero || ''
-      };
+      // Sin traspasoId/traspasoNumero/sucursalNombre: el id va en la clave y el nombre sale de `sucursal` vía SUCURSALES.
+      const comun = { timestamp: ts, codigo: i.codigo, nombre: i.nombre, cantidad: env };
       const kSI = 'tr_' + id + '_' + k + '_SI', kEI = 'tr_' + id + '_' + k + '_EI';
-      updates['movimientos/' + kSI] = Object.assign({}, comun, { tipo: 'SI', sucursal: o.id, sucursalNombre: o.nombre });
-      updates['movimientos/' + kEI] = Object.assign({}, comun, { tipo: 'EI', sucursal: d.id, sucursalNombre: d.nombre });
+      updates['movimientos/' + kSI] = Object.assign({}, comun, { tipo: 'SALIDA-INT', sucursal: o.id });
+      updates['movimientos/' + kEI] = Object.assign({}, comun, { tipo: 'ENTRADA-INT', sucursal: d.id });
       movKeys.push(kSI, kEI);
     });
 
@@ -1771,7 +1769,7 @@ async function despachar(){
     updates[base + 'preparadoPor'] = yo;
     if (!actual.tomadoEn) updates[base + 'tomadoEn'] = firebase.database.ServerValue.TIMESTAMP;
 
-    // Todo o nada: estado del pedido + cantidades finales + movimientos SI/EI.
+    // Todo o nada: estado del pedido + cantidades finales + movimientos SALIDA-INT/ENTRADA-INT.
     await conTimeout(db.ref().update(updates), 15000, 'El despacho tardó demasiado.');
 
     const check = await conTimeout(db.ref(base + 'estado').once('value'), 10000, 'No se pudo verificar el despacho.');
