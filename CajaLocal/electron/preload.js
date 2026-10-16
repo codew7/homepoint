@@ -4,31 +4,53 @@
 //  Corre aislado de la página: comparte el DOM pero no las variables de la
 //  caja, y la página no puede ver nada de acá salvo window.cajaApp.
 //
-//  Hace dos cosas:
+//  Hace tres cosas:
 //   1. Le cuenta a la app si hay un pedido en curso, para que una
 //      actualización nunca reinicie la caja en medio de una venta.
 //   2. Muestra el aviso "Nueva versión lista" cuando ya se descargó una.
+//   3. Conecta la página con el modo Offline (offline.js): la bandeja de
+//      pedidos en el disco.
 //
-//  Ninguna de las dos necesita tocar los archivos de "app": así siguen siendo
-//  copias exactas de la versión web.
+//  1 y 2 no necesitan tocar los archivos de "app": así siguen siendo copias
+//  exactas de la versión web. El modo Offline sí tiene su parte en la página
+//  (modoOffline.js), que en la web no hace nada porque no encuentra cajaApp.
 // =============================================================================
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Solo lo usa la pantalla "Sin conexión" (botón Reintentar ahora).
+// reintentarConexion: pantalla "Sin conexión" (botón Reintentar ahora).
+// offline: modo de emergencia (modoOffline.js en la caja, y el botón "Entrar
+// en modo Offline" de la pantalla "Sin conexión").
 contextBridge.exposeInMainWorld('cajaApp', {
   escritorio: true,
-  reintentarConexion: () => ipcRenderer.send('conexion:reintentar')
+  reintentarConexion: () => ipcRenderer.send('conexion:reintentar'),
+  offline: {
+    obtener: () => ipcRenderer.invoke('offline:obtener'),
+    alCambiar: (fn) => { ipcRenderer.on('offline:estado', (_evento, estado) => fn(estado)); },
+    entrar: () => ipcRenderer.send('offline:entrar'),
+    cola: {
+      guardar: (entrada) => ipcRenderer.invoke('offline:cola-guardar', entrada),
+      listar: () => ipcRenderer.invoke('offline:cola-listar'),
+      subido: (id) => ipcRenderer.invoke('offline:cola-subido', id),
+      error: (id, mensaje) => ipcRenderer.invoke('offline:cola-error', id, mensaje)
+    },
+    copia: {
+      guardar: (clave, datos) => ipcRenderer.invoke('offline:copia-guardar', clave, datos),
+      leer: (clave) => ipcRenderer.invoke('offline:copia-leer', clave)
+    }
+  }
 });
 
 const esPantallaDeCaja = location.protocol === 'http:' && location.hostname === 'localhost';
 
 // --- 1. pedido en curso ------------------------------------------------------
 // En ingresoPedidoV2 cada artículo cargado es una fila con data-idx, y mientras
-// se guarda en Firebase aparece el cartel #overlayBloqueo. Con cualquiera de
-// las dos cosas presentes, no se reinicia.
+// se guarda en Firebase aparece el cartel #overlayBloqueo. Mientras se suben
+// los pedidos del modo Offline, la página marca <html data-offline-subiendo>.
+// Con cualquiera de esas cosas presentes, no se reinicia.
 function hayPedidoEnCurso() {
   if (document.querySelector('#itemsBody tr[data-idx]')) return true;
+  if (document.documentElement.hasAttribute('data-offline-subiendo')) return true;
   const guardando = document.getElementById('overlayBloqueo');
   return !!guardando && guardando.style.display !== 'none';
 }

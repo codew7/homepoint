@@ -316,6 +316,8 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
         cotizacionActual = data.blue.value_avg || data.blue.avg;
+        // La de venta queda guardada para el modo Offline (modoOffline.js).
+        if (window.ModoOffline) ModoOffline.guardarCotizacion(data.blue.value_sell || data.blue.sell);
         if (cotizacionActual) {
           cotizacionValorElement.textContent = `$${cotizacionActual.toLocaleString('es-AR')}`;
           cotizacionValorElement.style.color = '#28a745';
@@ -455,42 +457,68 @@ document.addEventListener('DOMContentLoaded', function() {
     renderItems();
   }
 
-  // Cargar artículos al iniciar
-  fetch(`https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`)
-    .then(response => response.json())
-    .then(data => {
-      const items = data.values || [];
-      articulosDisponibles = items.filter(item => item[4]?.toLowerCase() !== 'no disponible');
-      articulosPorCodigo = {};
-      articulosPorCodigoInterno = {};
-      articulosDisponibles.forEach(item => {
-        // Usar Columna L (índice 11) para códigos de barras (puede contener múltiples códigos separados por comas)
-        if (item[11]) {
-          item[11].split(',').forEach(codigo => indexarCodigo(articulosPorCodigo, codigo, item));
-        }
-        // Columna C (índice 2): código interno, también usable con etiquetas propias
-        indexarCodigo(articulosPorCodigoInterno, item[2], item);
-        articulosPorNombre[item[3]] = item;
+  // Cargar artículos al iniciar.
+  // Modo Offline (modoOffline.js, solo en la PC habilitada de la caja de
+  // escritorio): si la planilla no responde, el catálogo sale de la última
+  // copia guardada en la PC. Con internet, cada respuesta deja esa copia al día.
+  // Si se entra en modo Offline con el catálogo sin cargar (se abrió la caja
+  // sin internet), se vuelve a intentar desde la copia.
+  let catalogoCargado = false;
+  let cargandoCatalogo = false;
+  document.addEventListener('modooffline:cambio', e => {
+    if (e.detail && e.detail.activo && !catalogoCargado && !cargandoCatalogo) cargarCatalogo();
+  });
+  cargarCatalogo();
+
+  function cargarCatalogo() {
+    cargandoCatalogo = true;
+    const urlCatalogo = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+    const pedirCatalogo = (window.ModoOffline && ModoOffline.activo())
+      ? ModoOffline.catalogo(urlCatalogo)
+      : fetch(urlCatalogo)
+          .then(response => response.json())
+          .then(data => {
+            if (window.ModoOffline) ModoOffline.guardarCatalogo(data);
+            return data;
+          });
+    pedirCatalogo
+      .then(data => {
+        cargandoCatalogo = false;
+        catalogoCargado = true;
+        const items = data.values || [];
+        articulosDisponibles = items.filter(item => item[4]?.toLowerCase() !== 'no disponible');
+        articulosPorCodigo = {};
+        articulosPorCodigoInterno = {};
+        articulosDisponibles.forEach(item => {
+          // Usar Columna L (índice 11) para códigos de barras (puede contener múltiples códigos separados por comas)
+          if (item[11]) {
+            item[11].split(',').forEach(codigo => indexarCodigo(articulosPorCodigo, codigo, item));
+          }
+          // Columna C (índice 2): código interno, también usable con etiquetas propias
+          indexarCodigo(articulosPorCodigoInterno, item[2], item);
+          articulosPorNombre[item[3]] = item;
+        });
+      
+        // Actualizar items existentes con datos frescos de Google Sheets
+        actualizarTodosLosItems();
+        // Habilitar controles después de cargar
+        setControlesBloqueados(false);
+        // Mantener tipoCliente como solo lectura
+        radiosTipoCliente.forEach(radio => radio.disabled = true);
+      
+        // Inicializar buscador de artículos después de cargar
+        initializeSearchArticulos();
+      })
+      .catch(() => {
+        cargandoCatalogo = false;
+        // Si falla la carga, mantener controles deshabilitados
+        setControlesBloqueados(true);
+        radiosTipoCliente.forEach(radio => radio.disabled = true);
+        // Sin catálogo el escáner no puede resolver nada: avisarlo en el panel en
+        // lugar de dejar un buscador mudo (initializeSearchArticulos no llegó a correr).
+        setEstadoScanner('catalogo-error', 'No se pudo cargar el catálogo');
       });
-      
-      // Actualizar items existentes con datos frescos de Google Sheets
-      actualizarTodosLosItems();
-      // Habilitar controles después de cargar
-      setControlesBloqueados(false);
-      // Mantener tipoCliente como solo lectura
-      radiosTipoCliente.forEach(radio => radio.disabled = true);
-      
-      // Inicializar buscador de artículos después de cargar
-      initializeSearchArticulos();
-    })
-    .catch(() => {
-      // Si falla la carga, mantener controles deshabilitados
-      setControlesBloqueados(true);
-      radiosTipoCliente.forEach(radio => radio.disabled = true);
-      // Sin catálogo el escáner no puede resolver nada: avisarlo en el panel en
-      // lugar de dejar un buscador mudo (initializeSearchArticulos no llegó a correr).
-      setEstadoScanner('catalogo-error', 'No se pudo cargar el catálogo');
-    });
+  }
   // === ESTILOS PARA BLOQUEO VISUAL ===
   const styleCargando = document.createElement('style');
   styleCargando.innerHTML = `
@@ -2410,9 +2438,14 @@ function getTipoCliente() {
       // Calcular valorG (el signo lo aporta el tipo de línea)
       item.valorG = signoLinea(item) * (item.valorU - item.valorC) * (item.cantidad || 1);
     }
-    // Obtener cotización blue en tiempo real
-    fetch('https://api.bluelytics.com.ar/v2/latest')
-      .then(r => r.json())
+    // Obtener cotización blue en tiempo real.
+    // En modo Offline (modoOffline.js) la da ModoOffline: la de internet si
+    // responde rápido, si no la última conocida.
+    const enModoOffline = !!(window.ModoOffline && ModoOffline.activo());
+    const pedirCotizacion = enModoOffline
+      ? ModoOffline.cotizacion().then(valor => ({ blue: { value_sell: valor } }))
+      : fetch('https://api.bluelytics.com.ar/v2/latest').then(r => r.json());
+    pedirCotizacion
       .then(d => {
         if (!d.blue || (typeof d.blue.value_sell === 'undefined' && typeof d.blue.sell === 'undefined')) {
           throw new Error('cotizacion');
@@ -2474,6 +2507,12 @@ function getTipoCliente() {
           vendedor,
           ...datosOperacionCambio()
         };
+        // Modo Offline: el pedido se guarda en la PC y se sube solo al volver
+        // internet (modoOffline.js). Solo ventas nuevas.
+        if (enModoOffline) {
+          ingresarPedidoOffline(pedidoObj, getFechaActual());
+          return;
+        }
         // Guardar en Firebase
         if (pedidoId) {
           db.ref('pedidos/' + pedidoId).once('value').then(async snap => {
@@ -2577,6 +2616,75 @@ function getTipoCliente() {
         } else {
           showPopup('Ocurrió un error inesperado al guardar el pedido.', '❌', false);
         }
+      });
+  }
+
+  // === MODO OFFLINE: venta nueva guardada en la PC (modoOffline.js) ===
+  // Mismo pedido y mismos movimientos que el guardado de siempre, pero el
+  // paquete se escribe en un archivo de la PC y se sube solo al volver
+  // internet, en el orden en que se vendió. "Guardado" se muestra recién
+  // cuando el archivo está escrito: si falla, el formulario queda como estaba.
+  function ingresarPedidoOffline(pedidoObj, fecha) {
+    if (new URLSearchParams(window.location.search).get('id') || items.some(esLineaCambio)) {
+      enviandoPedido = false;
+      showPopup('Sin conexión solo se pueden cargar ventas nuevas.', '❗', false);
+      return;
+    }
+    pedidoObj.fecha = fecha;
+    pedidoObj.vendedor = ModoOffline.NOMBRE;
+    pedidoObj.sinConexion = true;
+
+    // El id se genera en la PC (no necesita internet) y el paquete se arma una
+    // sola vez: si la subida se repite, escribe exactamente lo mismo.
+    const pedidoKey = db.ref('pedidos').push().key;
+    let paquete;
+    try {
+      paquete = armarActualizacionPedido(pedidoKey, pedidoObj, items);
+    } catch (err) {
+      console.error('Modo Offline: no se pudo armar el pedido:', err);
+      enviandoPedido = false;
+      showPopup('Error al guardar el pedido.', '❌', false);
+      return;
+    }
+    if (paquete.errores.length) console.warn('⚠️ Artículos omitidos en movimientos:', paquete.errores);
+
+    bloquearInterfaz('Guardando el pedido en esta PC...');
+    ModoOffline.encolar({
+      id: pedidoKey,
+      actualizaciones: paquete.rootUpdates,
+      movimientos: paquete.exitosos,
+      resumen: {
+        fecha,
+        cliente: pedidoObj.cliente.nombre || '',
+        total: pedidoObj.pagos.totalFinal,
+        articulos: items.length
+      }
+    })
+      .then(() => {
+        if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
+          guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
+        }
+        desbloquearInterfaz();
+        enviandoPedido = false;
+        const terminar = function(imprimir) {
+          if (imprimir) generarReciboYImprimir(pedidoKey);
+          showPopup('Pedido guardado en esta PC. Se sube solo cuando vuelva internet.', '✅', true);
+          if (window.contraerExtraCliente) window.contraerExtraCliente();
+          form.reset();
+          // reset() deja el Vendedor vacío: se repone el usuario activo.
+          aplicarVendedorPorDefecto();
+          items = [];
+          limpiarEstadoCambios();
+          renderItems();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+        mostrarModalImprimirOrden(() => terminar(true), () => terminar(false));
+      })
+      .catch(err => {
+        console.error('Modo Offline: no se pudo guardar el pedido en la PC:', err);
+        desbloquearInterfaz();
+        enviandoPedido = false;
+        showPopup('No se pudo guardar el pedido en esta PC. No quedó registrado: volvé a intentar.', '❌', false);
       });
   }
 
@@ -4261,6 +4369,44 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
     }
 
+    // 2 y 3. Movimientos, pedido y retro-referencias (armarActualizacionPedido).
+    const { exitosos, errores: omitidos } = armarActualizacionPedido(pedidoId, pedidoObj, items, rootUpdates);
+    errores.push(...omitidos);
+
+    // 4. Commit atómico: pedido + movimientos juntos (todo o nada).
+    console.log(`📝 Commit atómico: pedido + ${exitosos} movimientos...`);
+    await db.ref().update(rootUpdates);
+
+    // 5. Verificación defensiva: confirmar que los movimientos quedaron registrados.
+    const verif = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
+    let verifCount = 0;
+    verif.forEach(() => { verifCount++; });
+    if (verifCount < exitosos) {
+      throw new Error(`Movimientos incompletos (${verifCount}/${exitosos}).`);
+    }
+    console.log(`✅ Confirmados ${verifCount} movimientos para el pedido ${pedidoId}`);
+
+    // 6. Aviso de artículos omitidos (no aborta: el pedido y sus movimientos válidos ya quedaron).
+    if (errores.length > 0) {
+      console.warn('⚠️ Artículos omitidos en movimientos:', errores);
+      const msg = errores.length === 1
+        ? '⚠️ 1 artículo no generó movimiento de inventario (datos incompletos).'
+        : `⚠️ ${errores.length} artículos no generaron movimiento de inventario (datos incompletos).`;
+      showPopup(msg + '\nRevise la consola para más detalles.', '⚠️', true);
+    }
+
+    console.log('===== FIN guardarPedidoConMovimientos =====');
+    return { exitosos, errores };
+  }
+
+  // Arma, sin leer nada de Firebase, las escrituras de un pedido: sus
+  // movimientos de inventario, el nodo del pedido y las retro-referencias en
+  // los pedidos de origen. Las usa guardarPedidoConMovimientos (que les suma
+  // el borrado de los movimientos previos) y el modo Offline, que las guarda
+  // en la PC para subirlas después tal cual.
+  function armarActualizacionPedido(pedidoId, pedidoObj, items, rootUpdates = {}) {
+    const errores = [];
+
     // 2. Construir los nuevos movimientos (mismas validaciones, id y campos que antes).
     let exitosos = 0;
     const devolucionesPorOrigen = {};
@@ -4331,30 +4477,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       };
     });
 
-    // 4. Commit atómico: pedido + movimientos juntos (todo o nada).
-    console.log(`📝 Commit atómico: pedido + ${exitosos} movimientos...`);
-    await db.ref().update(rootUpdates);
-
-    // 5. Verificación defensiva: confirmar que los movimientos quedaron registrados.
-    const verif = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
-    let verifCount = 0;
-    verif.forEach(() => { verifCount++; });
-    if (verifCount < exitosos) {
-      throw new Error(`Movimientos incompletos (${verifCount}/${exitosos}).`);
-    }
-    console.log(`✅ Confirmados ${verifCount} movimientos para el pedido ${pedidoId}`);
-
-    // 6. Aviso de artículos omitidos (no aborta: el pedido y sus movimientos válidos ya quedaron).
-    if (errores.length > 0) {
-      console.warn('⚠️ Artículos omitidos en movimientos:', errores);
-      const msg = errores.length === 1
-        ? '⚠️ 1 artículo no generó movimiento de inventario (datos incompletos).'
-        : `⚠️ ${errores.length} artículos no generaron movimiento de inventario (datos incompletos).`;
-      showPopup(msg + '\nRevise la consola para más detalles.', '⚠️', true);
-    }
-
-    console.log('===== FIN guardarPedidoConMovimientos =====');
-    return { exitosos, errores };
+    return { rootUpdates, exitosos, errores };
   }
 
   // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===

@@ -104,16 +104,26 @@
 
   function esWhatsapp(nombre) { return nombre.toLowerCase() === WHATSAPP.toLowerCase(); }
 
+  // "Offline" tampoco es una persona: es el modo de emergencia sin internet
+  // (modoOffline.js). Solo existe en la caja de escritorio, y el botón
+  // aparece solo cuando no hay conexión.
+  const TONO_OFFLINE = '#5f6470';
+  const ICONO_OFFLINE = '<path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 5.2-2.7"/><path d="M19 12.9a10 10 0 0 0-2-1.5"/><path d="M2 8.8a15 15 0 0 1 4.2-2.6"/><path d="M22 8.8a15 15 0 0 0-11.3-3.8"/><path d="m2 2 20 20"/>';
+
+  function modoOffline() { return window.ModoOffline || null; }
+  function esOffline(nombre) { const m = modoOffline(); return !!m && m.esOffline(nombre); }
+
   function svgAvatar(id) {
-    if (id.whatsapp) {
+    if (id.whatsapp || id.offline) {
       return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
-        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONO_WHATSAPP + '</svg>';
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (id.offline ? ICONO_OFFLINE : ICONO_WHATSAPP) + '</svg>';
     }
     return svgAnimal(id.animal);
   }
 
   function identidad(nombre) {
     if (esWhatsapp(nombre)) return { tono: TONO_WHATSAPP, whatsapp: true };
+    if (esOffline(nombre)) return { tono: TONO_OFFLINE, offline: true };
     const clave = nombre.toLowerCase();
     let i = listaIdentidades.findIndex(n => n.toLowerCase() === clave);
     if (i < 0) {
@@ -257,7 +267,7 @@
     estadoEl = overlay.querySelector('#usrEstado');
     construirClave();
     // Punto de venta del equipo (puntoVenta.js): discreto, al pie. Cambiarlo
-    // pide la contraseña de Admin y recarga la página en el otro proyecto.
+    // pide su contraseña y recarga la página en el otro proyecto.
     const pv = overlay.querySelector('.usr-pv');
     if (window.PuntoVenta && PuntoVenta.multiple()) {
       pv.querySelector('.usr-pv-nombre').textContent = PuntoVenta.nombre();
@@ -287,9 +297,9 @@
     claveEl.setAttribute('aria-labelledby', 'usrClaveTitulo');
     claveEl.innerHTML = `
       <form class="usr-clave-card" novalidate>
-        <span class="usr-avatar usr-clave-avatar" style="--tono:${TONO_WHATSAPP}" aria-hidden="true">${svgAvatar({ whatsapp: true })}</span>
-        <h2 id="usrClaveTitulo" class="usr-clave-titulo">Modo WhatsApp</h2>
-        <p class="usr-clave-sub">Ingresá la contraseña para atender los pedidos de WhatsApp.</p>
+        <span class="usr-avatar usr-clave-avatar" aria-hidden="true"></span>
+        <h2 id="usrClaveTitulo" class="usr-clave-titulo"></h2>
+        <p class="usr-clave-sub"></p>
         <input type="password" class="usr-clave-input" autocomplete="off" aria-label="Contraseña" aria-describedby="usrClaveError">
         <div id="usrClaveError" class="usr-clave-error" role="alert"></div>
         <div class="usr-clave-acciones">
@@ -303,7 +313,7 @@
     const card = claveEl.querySelector('.usr-clave-card');
     card.addEventListener('submit', e => {
       e.preventDefault();
-      if (claveInput.value === CLAVE_WHATSAPP) { resolverClave(true); return; }
+      if (claveValida(claveInput.value)) { resolverClave(true); return; }
       claveError.textContent = 'Contraseña incorrecta';
       claveInput.value = '';
       claveInput.focus();
@@ -319,7 +329,24 @@
     });
   }
 
-  function pedirClave(cb) {
+  const CLAVES = {
+    whatsapp: {
+      id: { whatsapp: true, tono: TONO_WHATSAPP },
+      titulo: 'Modo WhatsApp',
+      sub: 'Ingresá la contraseña para atender los pedidos de WhatsApp.',
+      valida: v => v === CLAVE_WHATSAPP
+    }
+  };
+  let claveValida = CLAVES.whatsapp.valida;
+
+  function pedirClave(cb, tipo) {
+    const conf = CLAVES[tipo] || CLAVES.whatsapp;
+    claveValida = conf.valida;
+    const av = claveEl.querySelector('.usr-clave-avatar');
+    av.style.setProperty('--tono', conf.id.tono);
+    av.innerHTML = svgAvatar(conf.id);
+    claveEl.querySelector('.usr-clave-titulo').textContent = conf.titulo;
+    claveEl.querySelector('.usr-clave-sub').textContent = conf.sub;
     alResolverClave = cb;
     claveInput.value = '';
     claveError.textContent = '';
@@ -333,6 +360,82 @@
     claveEl.hidden = true;
     const cb = alResolverClave;
     alResolverClave = null;
+    if (cb) cb(ok);
+  }
+
+  // ------------------------------------------------ aviso modo Offline --
+  // Misma tarjeta que la contraseña. No pide una clave: hay que marcar que se
+  // entendió y escribir "homepoint", para que el aviso se lea antes de entrar.
+  let avisoOffEl, alResolverAvisoOff = null;
+
+  function construirAvisoOffline() {
+    const m = modoOffline();
+    avisoOffEl = document.createElement('div');
+    avisoOffEl.id = 'usrAvisoOffline';
+    avisoOffEl.className = 'usr-clave';
+    avisoOffEl.hidden = true;
+    avisoOffEl.setAttribute('role', 'alertdialog');
+    avisoOffEl.setAttribute('aria-modal', 'true');
+    avisoOffEl.setAttribute('aria-labelledby', 'usrAvisoOffTitulo');
+    avisoOffEl.setAttribute('aria-describedby', 'usrAvisoOffSub');
+    avisoOffEl.innerHTML = `
+      <form class="usr-clave-card usr-aviso-off" novalidate>
+        <span class="usr-avatar usr-clave-avatar" style="--tono:${TONO_OFFLINE}" aria-hidden="true">${svgAvatar({ offline: true })}</span>
+        <h2 id="usrAvisoOffTitulo" class="usr-clave-titulo">Modo Offline</h2>
+        <div id="usrAvisoOffSub" class="usr-aviso-off-texto">
+          <p class="usr-aviso-off-alerta"><strong>Solo un equipo a la vez</strong> puede cargar pedidos en este modo.</p>
+          <p>Si otra caja ya está en modo Offline, no entres desde esta.</p>
+        </div>
+        <label class="usr-aviso-off-check">
+          <input type="checkbox">
+          <span>Entendido: solo este equipo va a cargar pedidos</span>
+        </label>
+        <label class="usr-aviso-off-label" for="usrAvisoOffInput">Escribí <strong>${esc(m.PALABRA_CONFIRMAR)}</strong> para continuar</label>
+        <input type="text" id="usrAvisoOffInput" class="usr-clave-input usr-aviso-off-input" autocomplete="off" spellcheck="false" placeholder="${esc(m.PALABRA_CONFIRMAR)}" aria-describedby="usrAvisoOffNota">
+        <p id="usrAvisoOffNota" class="usr-aviso-off-nota">No es una contraseña: es solo para confirmar que leíste el aviso.</p>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar">Cancelar</button>
+          <button type="submit" class="usr-clave-btn usr-aviso-off-ok" disabled>Entrar</button>
+        </div>
+      </form>`;
+    document.body.appendChild(avisoOffEl);
+    const card = avisoOffEl.querySelector('form');
+    const check = card.querySelector('input[type="checkbox"]');
+    const input = card.querySelector('.usr-aviso-off-input');
+    const ok = card.querySelector('.usr-aviso-off-ok');
+    // "Entrar" se habilita recién con el check marcado y la palabra escrita.
+    const listo = () => check.checked && modoOffline().palabraCorrecta(input.value);
+    const actualizar = () => { ok.disabled = !listo(); };
+    check.addEventListener('change', actualizar);
+    input.addEventListener('input', actualizar);
+    card.addEventListener('submit', e => {
+      e.preventDefault();
+      if (listo()) resolverAvisoOffline(true);
+    });
+    card.querySelector('.usr-clave-cancelar').addEventListener('click', () => resolverAvisoOffline(false));
+    avisoOffEl.addEventListener('click', e => { if (e.target === avisoOffEl) resolverAvisoOffline(false); });
+    avisoOffEl.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); resolverAvisoOffline(false); }
+    });
+  }
+
+  function pedirAvisoOffline(cb) {
+    if (!avisoOffEl) construirAvisoOffline();
+    alResolverAvisoOff = cb;
+    const check = avisoOffEl.querySelector('input[type="checkbox"]');
+    const input = avisoOffEl.querySelector('.usr-aviso-off-input');
+    check.checked = false;
+    input.value = '';
+    avisoOffEl.querySelector('.usr-aviso-off-ok').disabled = true;
+    avisoOffEl.hidden = false;
+    setTimeout(() => check.focus(), 60);
+  }
+
+  function resolverAvisoOffline(ok) {
+    if (!avisoOffEl || avisoOffEl.hidden) return;
+    avisoOffEl.hidden = true;
+    const cb = alResolverAvisoOff;
+    alResolverAvisoOff = null;
     if (cb) cb(ok);
   }
 
@@ -403,17 +506,27 @@
     el.textContent = pv ? pv + ' · ' + fecha : fecha;
   }
 
+  // Sin sesión de Firebase (se entró desde el login sin internet) solo se
+  // puede usar Offline; si no, va al final cuando no hay conexión.
+  function nombresDelSelector(personas) {
+    const m = modoOffline();
+    if (m && m.soloOffline()) return [m.NOMBRE];
+    const nombres = personas.concat(WHATSAPP);
+    if (m && m.mostrarEnSelector()) nombres.push(m.NOMBRE);
+    return nombres;
+  }
+
   function pintarTiles(personas) {
     listaIdentidades = personas.slice();
     pintarHeader();
-    const nombres = personas.concat(WHATSAPP);
+    const nombres = nombresDelSelector(personas);
     const ultimo = (actual || lsGet(LS_ULTIMO) || '').toLowerCase();
     grilla.innerHTML = nombres.map((n, i) => {
       const esUltimo = n.toLowerCase() === ultimo;
       const esActual = actual && n.toLowerCase() === actual.toLowerCase();
       const id = identidad(n);
       return `
-        <button type="button" class="usr-tile${esUltimo ? ' es-ultimo' : ''}${id.whatsapp ? ' usr-tile-whatsapp' : ''}" role="option"
+        <button type="button" class="usr-tile${esUltimo ? ' es-ultimo' : ''}${id.whatsapp ? ' usr-tile-whatsapp' : ''}${id.offline ? ' usr-tile-offline' : ''}" role="option"
                 aria-selected="${esActual ? 'true' : 'false'}"
                 data-nombre="${esc(n)}" style="--tono:${id.tono}; --i:${i}">
           <span class="usr-avatar" aria-hidden="true">${svgAvatar(id)}</span>
@@ -690,6 +803,23 @@
   // `forzar` = se confirmó "Entrar igual" sobre alguien que figuraba conectado.
   function elegir(nombre, tile, forzar) {
     if (!nombre || esperandoClave || overlay.classList.contains('usr-eligiendo')) return;
+    if (esOffline(nombre)) {
+      // Sin presencia ni "Conectado": es el modo de emergencia de esta PC.
+      const m = modoOffline();
+      if (m.activo()) { confirmarEleccion(m.NOMBRE, tile); return; }
+      esperandoClave = true;
+      pedirAvisoOffline(ok => {
+        esperandoClave = false;
+        if (ok) {
+          ssDel(SS_MODO_WHATSAPP);
+          m.entrar();
+          confirmarEleccion(m.NOMBRE, tile);
+        } else if (tile) tile.focus({ preventScroll: true });
+      });
+      return;
+    }
+    // Cualquier persona (o WhatsApp) apaga el modo Offline.
+    if (modoOffline() && modoOffline().activo()) modoOffline().salir();
     if (estaOcupado(nombre) && !forzar) {
       ofrecerEntrarIgual(nombre, tile);
       return;
@@ -786,6 +916,17 @@
     headerBtn = document.getElementById('usuarioActualBtn');
     if (headerBtn) headerBtn.addEventListener('click', () => abrir());
     pintarHeader();
+  });
+
+  // Se cortó o volvió internet con el selector abierto: aparece o desaparece
+  // el botón Offline (solo si cambió la lista, para no mover el foco).
+  document.addEventListener('modooffline:cambio', () => {
+    if (!abierto || !grilla) return;
+    const pintados = tiles().map(t => t.dataset.nombre).join('|');
+    if (pintados === nombresDelSelector(listaIdentidades).join('|')) return;
+    pintarTiles(listaIdentidades);
+    limpiarEstado();
+    enfocarInicial();
   });
 
   // Arranca la consulta a la planilla ya mismo: cuando termine el login la

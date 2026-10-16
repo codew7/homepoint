@@ -78,6 +78,12 @@
     button:hover { background: #2A2C33; }
     button:active { transform: scale(0.985); }
     button:focus-visible { outline: 3px solid rgba(108, 78, 182, 0.45); outline-offset: 2px; }
+    .offline { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--borde); }
+    .offline p { font-size: 13px; }
+    .offline strong { color: var(--texto); font-weight: 600; }
+    button.secundario { margin-top: 14px; background: var(--violeta); }
+    button.secundario:hover { background: #7a5cc6; }
+    button:disabled { opacity: 0.6; cursor: progress; }
     @keyframes entrar {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: none; }
@@ -104,11 +110,23 @@
     <p>La caja necesita internet para trabajar con los pedidos, los artículos y los precios. Apenas vuelva la conexión, se abre sola.</p>
     <div class="estado" role="status"><span class="punto"></span>Reintentando cada 5 segundos…</div>
     <button type="button" id="reintentar">Reintentar ahora</button>
+    <!-- main.js pasa ?offline=1: se ofrece entrar en modo Offline. -->
+    <div id="bloqueOffline" class="offline" hidden>
+      <p>Esta PC puede vender sin internet con el usuario <strong>Offline</strong>. Las ventas se suben solas cuando vuelve la conexión.</p>
+      <button type="button" id="entrarOffline" class="secundario">Entrar en modo Offline</button>
+    </div>
   </main>
   <script>
     document.getElementById('reintentar').addEventListener('click', () => {
       if (window.cajaApp) window.cajaApp.reintentarConexion();
     });
+    if (new URLSearchParams(location.search).get('offline') === '1' && window.cajaApp && window.cajaApp.offline) {
+      document.getElementById('bloqueOffline').hidden = false;
+      document.getElementById('entrarOffline').addEventListener('click', (e) => {
+        e.currentTarget.disabled = true;
+        window.cajaApp.offline.entrar();
+      });
+    }
   </script>
 </body>
 </html>

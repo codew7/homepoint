@@ -6,17 +6,21 @@
 //    - abre la caja en una ventana propia, maximizada y sin barras;
 //    - si se vuelve a abrir el programa, abre otra ventana de caja (no otro
 //      servidor), igual que antes;
-//    - se actualiza sola desde GitHub (ver actualizador.js).
+//    - se actualiza sola desde GitHub (ver actualizador.js);
+//    - permite vender sin internet con el usuario Offline (ver offline.js).
 //
 //  Registro: %APPDATA%\Caja HomePoint\logs\main.log
 // =============================================================================
 
-const { app, BrowserWindow, Menu, shell, ipcMain, net, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, net, dialog, session } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const log = require('electron-log/main');
 
 const { iniciarServidor, PAGINA_INICIAL } = require('./servidor');
 const { iniciarActualizador } = require('./actualizador');
+const { iniciarOffline } = require('./offline');
+const LIBRERIAS = require('./librerias');
 
 log.initialize();
 log.transports.file.maxSize = 2 * 1024 * 1024;
@@ -85,14 +89,23 @@ async function hayInternet() {
 
 // Sin internet la caja no puede funcionar (Firebase, la planilla, las fotos).
 // En vez de una pantalla rota se muestra un aviso que reintenta solo.
+// El aviso ofrece además entrar igual, en modo Offline.
 function esperarConexion(ventana) {
   let reintentando = false;
+  let terminado = false;
+  const terminar = () => {
+    terminado = true;
+    clearInterval(temporizador);
+    ipcMain.removeListener('conexion:reintentar', manual);
+    ipcMain.removeListener('offline:entrar', entrarOffline);
+  };
   const intentar = async () => {
-    if (reintentando || ventana.isDestroyed()) return;
+    if (reintentando || terminado || ventana.isDestroyed()) return;
     reintentando = true;
-    if (await hayInternet()) {
-      clearInterval(temporizador);
-      ipcMain.removeListener('conexion:reintentar', manual);
+    const hay = await hayInternet();
+    // Pudo haberse elegido "Entrar en modo Offline" mientras se probaba.
+    if (hay && !terminado && !ventana.isDestroyed()) {
+      terminar();
       log.info('Volvió la conexión: se abre la caja');
       ventana.loadURL(urlCaja);
     }
@@ -101,12 +114,40 @@ function esperarConexion(ventana) {
   const manual = (evento) => {
     if (evento.sender === ventana.webContents) intentar();
   };
+  const entrarOffline = (evento) => {
+    if (evento.sender !== ventana.webContents || terminado) return;
+    terminar();
+    log.info('Sin conexión: se abre la caja en modo Offline');
+    ventana.loadURL(urlCaja);
+  };
   const temporizador = setInterval(intentar, 5000);
   ipcMain.on('conexion:reintentar', manual);
-  ventana.once('closed', () => {
-    clearInterval(temporizador);
-    ipcMain.removeListener('conexion:reintentar', manual);
+  ipcMain.on('offline:entrar', entrarOffline);
+  ventana.once('closed', terminar);
+}
+
+// ------------------------------------------------- librerías sin internet ---
+// Las librerías del CDN se sirven desde app/vendor/ (copias idénticas, de
+// versión fija), así la caja abre aunque no haya internet.
+let libreriasLocales = false;
+
+function usarLibreriasLocales() {
+  if (libreriasLocales || !servidor) return;
+  const mapa = new Map();
+  for (const { url, archivo } of LIBRERIAS) {
+    if (fs.existsSync(path.join(RAIZ_APP, 'vendor', archivo))) {
+      mapa.set(url, `http://localhost:${servidor.puerto}/vendor/${archivo}`);
+    } else {
+      log.warn(`Falta la copia local de ${url}: se usa la de internet`);
+    }
+  }
+  if (!mapa.size) return;
+  libreriasLocales = true;
+  session.defaultSession.webRequest.onBeforeRequest({ urls: [...mapa.keys()] }, (detalle, responder) => {
+    const local = mapa.get(detalle.url);
+    responder(local ? { redirectURL: local } : {});
   });
+  log.info(`Offline: ${mapa.size} librerías se sirven desde la PC`);
 }
 
 // ---------------------------------------------------------- ventana caja ---
@@ -217,7 +258,7 @@ async function crearVentanaCaja() {
     ventana.loadURL(urlCaja);
   } else {
     log.warn('Sin conexión a internet al abrir la caja');
-    ventana.loadFile(path.join(__dirname, 'sin-conexion.html'));
+    ventana.loadFile(path.join(__dirname, 'sin-conexion.html'), { query: { offline: '1' } });
     esperarConexion(ventana);
   }
   return ventana;
@@ -244,6 +285,8 @@ async function arrancar() {
 
   urlCaja = `http://localhost:${servidor.puerto}/${PAGINA_INICIAL}`;
   iniciarActualizador(log);
+  iniciarOffline({ log, hayInternet });
+  usarLibreriasLocales();
 
   // La caja se abre sola al prender la PC (reemplaza INICIO AUTOMATICO.bat).
   // Si alguien la desactiva desde el Administrador de tareas, Windows respeta

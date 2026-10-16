@@ -7,7 +7,7 @@
  carpeta CajaLocal/app/ es una copia que arma este script: no se edita a mano.
 
  Corre solo antes de:
-   - publicar una version (PUBLICAR VERSION.bat / npm run publicar),
+   - armar una version (ARMAR VERSION.bat / npm run armar),
    - abrir la app para probar (npm start),
    - armar el instalador (npm run dist).
 
@@ -26,6 +26,8 @@ const path = require('path');
 
 const WEB = path.resolve(__dirname, '..', '..');
 const APP = path.resolve(__dirname, '..', 'app');
+const LIBRERIAS = require('../electron/librerias');
+const VENDOR_CARPETA = 'vendor';
 
 // Todo lo que necesita la app. Un archivo nuevo que usen estas paginas va aca.
 const ARCHIVOS = [
@@ -42,6 +44,9 @@ const ARCHIVOS = [
   'sw-imagenes.js',
   // Punto de venta del equipo: elige cuál config de Firebase carga la caja.
   'puntoVenta.js',
+  // Modo de emergencia "Offline" (solo actúa en la PC habilitada).
+  'modoOffline.js',
+  'modoOffline.css',
   'config.js',
   'config2.js',
   'logo.png',
@@ -120,6 +125,7 @@ for (const nombre of ARCHIVOS) {
 // ------------------------------------------- 3. lo que sobra en la app --
 if (fs.existsSync(APP)) {
   for (const nombre of fs.readdirSync(APP)) {
+    if (nombre === VENDOR_CARPETA) continue;
     if (!ARCHIVOS.includes(nombre)) avisos.push(`La app tiene "${nombre}", que no esta en la lista (no se usa ni se actualiza).`);
   }
 }
@@ -143,4 +149,62 @@ if (soloVerificar) {
   console.log(`  [OK] Copiados desde la web: ${copiados.join(', ')}`);
 } else {
   console.log(`  [OK] La app ya era igual a la web (${ARCHIVOS.length} archivos).`);
+}
+
+// ------------------------------------ 5. librerías para el modo Offline --
+// La PC con el modo Offline habilitado sirve estas librerías desde app/vendor/
+// (electron/librerias.js), para abrir la caja sin internet. Son versiones
+// fijas: se bajan una sola vez. Si falta alguna, la caja usa la de internet.
+bajarLibrerias().catch((error) => {
+  console.log(`  [X] No se pudieron bajar las librerías del modo Offline: ${error.message}`);
+  process.exit(1);
+});
+
+function descargar(url, destino, saltos = 0) {
+  const https = require('https');
+  return new Promise((resolve, reject) => {
+    https.get(url, (respuesta) => {
+      if ([301, 302, 303, 307, 308].includes(respuesta.statusCode) && respuesta.headers.location && saltos < 5) {
+        respuesta.resume();
+        resolve(descargar(new URL(respuesta.headers.location, url).href, destino, saltos + 1));
+        return;
+      }
+      if (respuesta.statusCode !== 200) {
+        respuesta.resume();
+        reject(new Error(`${url} respondió ${respuesta.statusCode}`));
+        return;
+      }
+      const partes = [];
+      respuesta.on('data', (p) => partes.push(p));
+      respuesta.on('end', () => {
+        const temporal = destino + '.tmp';
+        fs.writeFileSync(temporal, Buffer.concat(partes));
+        fs.renameSync(temporal, destino);
+        resolve();
+      });
+      respuesta.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+async function bajarLibrerias() {
+  const carpeta = path.join(APP, VENDOR_CARPETA);
+  const faltan = LIBRERIAS.filter(({ archivo }) => !fs.existsSync(path.join(carpeta, archivo)));
+  const sobran = fs.existsSync(carpeta)
+    ? fs.readdirSync(carpeta).filter((n) => !LIBRERIAS.some((l) => l.archivo === n))
+    : [];
+  for (const n of sobran) console.log(`  [!] app/${VENDOR_CARPETA} tiene "${n}", que ya no se usa.`);
+  if (!faltan.length) {
+    console.log(`  [OK] Librerías del modo Offline completas (${LIBRERIAS.length}).`);
+    return;
+  }
+  if (soloVerificar) {
+    console.log(`  [X] Faltan librerías del modo Offline: ${faltan.map((l) => l.archivo).join(', ')}`);
+    process.exit(1);
+  }
+  fs.mkdirSync(carpeta, { recursive: true });
+  for (const { url, archivo } of faltan) {
+    await descargar(url, path.join(carpeta, archivo));
+  }
+  console.log(`  [OK] Librerías del modo Offline bajadas: ${faltan.map((l) => l.archivo).join(', ')}`);
 }

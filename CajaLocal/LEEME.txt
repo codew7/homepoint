@@ -72,15 +72,21 @@
 
   Las pantallas estan en la carpeta "app" y son copias exactas de la web.
   No se editan a mano: scripts\sincronizar.js las copia solo desde la web
-  antes de publicar, de "npm start" y de "npm run dist". La lista de
+  antes de armar una version, de "npm start" y de "npm run dist". La lista de
   archivos que se copian esta adentro de ese script.
 
-  1. Doble clic en PUBLICAR VERSION.bat
-       - la primera vez pide un permiso (token) de GitHub y lo guarda;
+  Son dos pasos separados:
+
+  1. Doble clic en ARMAR VERSION.bat
        - pregunta si es un arreglo, una mejora o un cambio grande;
        - pide una linea con lo que cambio (se ve en el aviso de la caja);
-       - arma el instalador y lo sube a GitHub Releases.
-  2. Commitear package.json (tiene el numero de version nuevo).
+       - arma el instalador en la carpeta dist. Todavia NO lo sube: las
+         cajas no se enteran. Se puede probar ese instalador en una PC.
+  2. Doble clic en SUBIR VERSION.bat
+       - la primera vez pide un permiso (token) de GitHub y lo guarda;
+       - muestra la version armada y pide confirmar (S);
+       - la sube a GitHub Releases: desde ahi la reciben las cajas.
+  3. Commitear package.json (tiene el numero de version nuevo).
 
   Para probar antes de publicar:  npm start     (abre la caja sin instalar)
   Para armar el instalador local: npm run dist  (queda en la carpeta dist)
@@ -106,6 +112,40 @@
 
 
 -------------------------------------------------------------------------------
+  MODO OFFLINE (emergencia, un solo equipo a la vez)
+-------------------------------------------------------------------------------
+
+  Si se corta internet, la caja puede seguir cargando VENTAS NUEVAS con el
+  usuario "Offline". Cada venta queda guardada en un archivo de la PC y se
+  sube sola a Firebase, en el mismo orden, cuando vuelve la conexion.
+  No hay que habilitar nada: esta en todas las PCs con el programa.
+
+  Para tener precios sin internet, la caja guarda una copia del catalogo y
+  de la cotizacion del dolar cada vez que los carga con internet (y cada
+  media hora).
+
+  USAR (cuando se corta internet)
+    1. Si la caja esta cerrada, al abrirla aparece "Entrar en modo Offline".
+    2. En "Selecciona Usuario" aparece "Offline" solo, sin teclas ni atajos.
+       Al elegirlo, un aviso recuerda que SOLO UN EQUIPO A LA VEZ puede
+       cargar pedidos en este modo: hay que marcar "Entendido" y escribir
+       la palabra homepoint (no es una contrasena).
+    3. Se cobra como siempre. Los pedidos quedan con vendedor "Offline".
+       Cambios, Admin, Historial, Mensajes y clientes quedan bloqueados.
+    4. Arriba se ve cuantos pedidos hay guardados. Tocandolo se ve la lista.
+
+  CUANDO VUELVE INTERNET
+    La caja termina la venta en curso, sube los pedidos uno por uno y vuelve
+    a pedir un usuario. Si alguno no se puede subir, avisa y lo reintenta
+    solo: nunca se borra ni se saltea un pedido.
+
+  DONDE QUEDAN (para soporte)
+    %APPDATA%\Caja HomePoint\pedidos\pendientes   los que faltan subir
+    %APPDATA%\Caja HomePoint\pedidos\subidos      respaldo de 30 dias
+    Codigo: electron\offline.js (programa) y modoOffline.js (pantalla).
+
+
+-------------------------------------------------------------------------------
   COMO FUNCIONA (para soporte)
 -------------------------------------------------------------------------------
 
@@ -123,6 +163,8 @@
     servidor.js      servidor local
     actualizador.js  actualizaciones automaticas
     preload.js       aviso de actualizacion y deteccion de pedido en curso
+    offline.js       modo Offline: pedidos guardados, internet
+    librerias.js     librerias que el programa sirve desde app\vendor
 
   Registro:  %APPDATA%\Caja HomePoint\logs\main.log
   Instalado: %LOCALAPPDATA%\Programs\caja-homepoint
