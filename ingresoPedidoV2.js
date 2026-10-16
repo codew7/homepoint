@@ -2622,7 +2622,7 @@ function getTipoCliente() {
 
   // Sucursal del pedido en la raíz ('1' Munro, '2' Caseros): es el id del
   // punto de venta del equipo (puntoVenta.js), como texto igual que en los
-  // movimientos de stock (Articulos/articulos.html). Solo al crear: editar
+  // movimientos de stock de la pantalla Artículos. Solo al crear: editar
   // un pedido no le cambia la sucursal donde se vendió.
   function asignarSucursal(pedidoObj) {
     const id = window.PuntoVenta && PuntoVenta.actual();
