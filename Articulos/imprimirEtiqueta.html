@@ -15,6 +15,9 @@
 <!-- PDF Generation -->
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 
+<!-- QZ Tray: puente local para impresión directa ESC-POS en la térmica (opcional) -->
+<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
+
 <!-- Barcode scanning (cámara del móvil) -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -239,10 +242,14 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
 .btn-clear:hover{border-color:var(--danger);color:var(--danger-600)}
 .btn-generate{background:linear-gradient(135deg,var(--primary),#383d47);color:#fff;box-shadow:var(--sh-primary);border-radius:var(--r-sm);padding:13px 22px;font-weight:700;font-size:.95rem}
 .btn-generate:disabled{opacity:.5;cursor:not-allowed}
+.btn-pos{background:var(--card);border:1px solid var(--primary);color:var(--primary);border-radius:var(--r-sm);padding:13px 18px;font-weight:700;font-size:.95rem}
+.btn-pos:hover:not(:disabled){background:var(--primary-soft)}
+.btn-pos:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:520px){
   .action-info b{font-size:.95rem}
   .btn-clear{padding:13px 12px}
-  .btn-generate{padding:13px 16px;font-size:.88rem}
+  .btn-generate,.btn-pos{padding:13px 12px;font-size:.84rem}
+  .btn-pos svg,.btn-generate svg{display:none}
 }
 
 /* ====== BLOCK / SPINNER ====== */
@@ -387,7 +394,7 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
           </div>
         </div>
       </div>
-      <div class="cfg-note">Cada artículo seleccionado genera una etiqueta. Con “Artículos por hoja” mayor a 1, se agrupan varias etiquetas en la misma página separadas por una línea de corte.</div>
+      <div class="cfg-note">Cada artículo seleccionado genera una etiqueta. Con “Artículos por hoja” mayor a 1, se agrupan varias etiquetas en la misma página separadas por una línea de corte. “Imprimir POS” ignora ese valor: manda cada etiqueta por separado a la térmica (máx. 72 mm de ancho) y la corta.</div>
     </div>
 
     <div class="cfg-card preview-card">
@@ -472,6 +479,10 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
     </div>
     <div class="action-spacer"></div>
     <button class="btn btn-clear" id="clearSelBtn">Limpiar</button>
+    <button class="btn btn-pos" id="posBtn" title="Impresión directa en la térmica: una etiqueta y un corte por artículo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+      Imprimir POS
+    </button>
     <button class="btn btn-generate" id="generateBtn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       Generar PDF
@@ -748,6 +759,7 @@ function updateActionBar(){
   const n = selected.size;
   $('selCount').textContent = n + (n === 1 ? ' seleccionado' : ' seleccionados');
   $('generateBtn').disabled = n === 0;
+  $('posBtn').disabled = n === 0;
   $('actionBar').classList.toggle('show', n > 0);
 }
 
@@ -923,6 +935,246 @@ function drawArticleInSlot(doc, item, x, y, slotW, slotH, today){
 }
 
 // ============================================================
+//  Impresión POS (térmica 80 mm vía QZ Tray) — una etiqueta por envío
+// ============================================================
+// Mismo puente que el ticket de historialRecientes.html: QZ Tray recibe la
+// orden y manda bytes ESC-POS crudos a la impresora. La etiqueta se dibuja en
+// un canvas con el mismo diseño que el PDF y se envía como imagen; cada una va
+// en su propio qz.print() terminado en corte, así salen separadas.
+
+// Nombre exacto de la impresora en Windows (null = autodetectar / por defecto).
+const POS_PRINTER_NAME = 'POS-80C';
+// 203 dpi ≈ 8 puntos por mm. Ancho imprimible a 80 mm: 72 mm (576 puntos).
+const POS_DOTS_MM = 8;
+const POS_MAX_W_MM = 72;
+
+const escCmd = (hex) => ({ type: 'raw', format: 'hex', data: hex });
+
+// Dibuja la etiqueta en blanco y negro puro (la térmica no imprime grises:
+// sin el umbral final, los bordes suavizados del texto salen punteados).
+function dibujarEtiquetaCanvas(item, today){
+  const wMm = Math.min(labelSettings.width, POS_MAX_W_MM);
+  const hMm = labelSettings.height;
+  const k = POS_DOTS_MM;
+  const W = Math.floor(wMm * k / 8) * 8;   // ESC-POS raster: ancho múltiplo de 8
+  const H = Math.round(hMm * k);
+
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#000';
+  ctx.strokeStyle = '#000';
+  ctx.textBaseline = 'alphabetic';
+  const font = (mm) => `bold ${Math.round(mm * k)}px Helvetica, Arial, sans-serif`;
+
+  // Mismas medidas que drawArticleInSlot (en mm, ×k para pasar a puntos)
+  const NAME_H_MM = 3, PRICE_H_MM = 15, BOTTOM_H_MM = 3;
+  const pad = 2 * k;
+  const usableW = W - pad * 2;
+
+  // === TOP BAND: nombre + línea divisoria ===
+  const topBandH = (NAME_H_MM + 2) * k;
+  ctx.font = font(NAME_H_MM);
+  let displayName = item.nombre;
+  while(ctx.measureText(displayName).width > usableW && displayName.length > 1){
+    displayName = displayName.slice(0, -1);
+  }
+  if(displayName.length < item.nombre.length) displayName += '…';
+  ctx.fillText(displayName, pad, topBandH / 2 + NAME_H_MM * k * 0.35);
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, topBandH); ctx.lineTo(W, topBandH); ctx.stroke();
+
+  // === PRICE ZONE ===
+  const bottomStripH = (BOTTOM_H_MM + 1.5) * k;
+  const priceZoneH = H - topBandH - bottomStripH;
+  const priceBaseline = topBandH + priceZoneH / 2 + PRICE_H_MM * k * 0.32;
+  ctx.font = font(PRICE_H_MM * 0.45);
+  const dollarW = ctx.measureText('$ ').width;
+  ctx.fillText('$', pad, priceBaseline);
+  ctx.font = font(PRICE_H_MM);
+  ctx.fillText(formatPriceDisplay(item.precio), pad + dollarW, priceBaseline);
+
+  // === BOTTOM STRIP: código + fecha ===
+  const bottomY = H - 1 * k;
+  ctx.font = font(BOTTOM_H_MM);
+  ctx.textAlign = 'left';
+  ctx.fillText(formatCodigoLinea(item), pad, bottomY);
+  ctx.textAlign = 'right';
+  ctx.fillText(today, W - pad, bottomY);
+
+  // Umbral a blanco/negro
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  for(let i = 0; i < d.length; i += 4){
+    const v = (d[i] + d[i + 1] + d[i + 2]) / 3 < 150 ? 0 : 255;
+    d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv.toDataURL('image/png').split(',')[1];
+}
+
+function construirEtiquetaESCPOS(item, today){
+  return [
+    escCmd('1B40'),     // ESC @ -> reset
+    escCmd('1B6101'),   // centrar
+    { type: 'raw', format: 'image', flavor: 'base64', data: dibujarEtiquetaCanvas(item, today),
+      options: { language: 'ESCPOS', dotDensity: 'double' } },
+    escCmd('0A'),
+    escCmd('1D564203')  // GS V 66 3 -> avanza hasta la guillotina y corta (parcial)
+  ];
+}
+
+// QZ Tray — certificado propio (importar C:\Users\alero\.claude\qz-cert.pem en Site Manager para eliminar el diálogo).
+let qzConfigurado = false;
+function configurarQZ() {
+  if (qzConfigurado || typeof qz === 'undefined') return;
+  const QZ_CERT = `-----BEGIN CERTIFICATE-----
+MIIDXTCCAkWgAwIBAgIUPMCoqhpYQ4z55zCYiyngpH47VAwwDQYJKoZIhvcNAQEL
+BQAwPjELMAkGA1UEBhMCQVIxEjAQBgNVBAoMCUhvbWVQb2ludDEbMBkGA1UEAwwS
+SG9tZVBvaW50IEFkbWluIFFaMB4XDTI2MDUxOTE2NTAxOFoXDTM2MDUxNjE2NTAx
+OFowPjELMAkGA1UEBhMCQVIxEjAQBgNVBAoMCUhvbWVQb2ludDEbMBkGA1UEAwwS
+SG9tZVBvaW50IEFkbWluIFFaMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+AQEA0G3Pek2EDxsUuyRoqYttHqkmudOhJ56FrUqqdks01dB52+kfoElM995N4Xqm
+GkBTkPLV30lUkEF1W5xKdCe3DcTp0qcZpIDf2468SKlvyi4WI9ji8rIBB4b/jN6l
+ECKUooi4iEeihKQ2WY2o7d7vhD52ITvJ9rKXJ1TWe9yyaW2sz3b7DfGKqZv+VwWY
+bQfZwLtymkGOi0IIplHwWmRoQdrl3rXE8tOIeB7Br15vKbIoXGwkV6W4rVmg+ngA
+M0BYqmcg08hRXZqUZ1nmyNsRrXijTv6D8qLvefO7D3eqIKXs0okmacGWZzfGLGnD
+YlEXTAVnMNmolKaRSVNVbF230wIDAQABo1MwUTAdBgNVHQ4EFgQUJbmYNOzALjUF
+zMY93JIwa2M6bi8wHwYDVR0jBBgwFoAUJbmYNOzALjUFzMY93JIwa2M6bi8wDwYD
+VR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAYO72+pxaqZifKkimB0tw
+mvKuqEfOOiXBawh7xBlLaTvHDaVH6v6ABqj7S73vSRBiD00oFKf5FQ42I+O1bUoN
+QYdIsxA2Q8ka7HaxMTB5v4ZBvbyXWLrRIavwY5XI2JWzArvZ8oTKB/gHF5lo9yDI
+nfvKQ9SL9y+GfwHOGkmUaw2ViScT17KdMJzSWoE37Qasp50Du+boRdmOgL0fN4nL
+zRY73MMEek1ny+DkbJ2OR7vmF2FSHaPqJzZb+UCINC3Pbf5KxqUPn+K2CEfT53hW
+3ALNhGIFw9E7pN6IE5LEdNkZCwpZRDksRo3UeBVcowsdmKzZ7Uwbe1dzxygzaLxX
+tw==
+-----END CERTIFICATE-----`;
+  const QZ_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDQbc96TYQPGxS7
+JGipi20eqSa506EnnoWtSqp2SzTV0Hnb6R+gSUz33k3heqYaQFOQ8tXfSVSQQXVb
+nEp0J7cNxOnSpxmkgN/bjrxIqW/KLhYj2OLysgEHhv+M3qUQIpSiiLiIR6KEpDZZ
+jajt3u+EPnYhO8n2spcnVNZ73LJpbazPdvsN8Yqpm/5XBZhtB9nAu3KaQY6LQgim
+UfBaZGhB2uXetcTy04h4HsGvXm8psihcbCRXpbitWaD6eAAzQFiqZyDTyFFdmpRn
+WebI2xGteKNO/oPyou9587sPd6ogpezSiSZpwZZnN8YsacNiURdMBWcw2aiUppFJ
+U1VsXbfTAgMBAAECggEACsutQ+3w6aFi9QCBRUrZ940WWuipv7YXwW6NHrxte6el
+MC1GfJRfXrVOfl/Oa6yqR2c0ibCwJxqk2/5f4t1Nv3JUFBugmeMs9R/TA8Z26ldx
+wSCSPLTYlc25vc+oaAoKfdKsEC75rXod8IyEU/HIoSZlEvqYTuVYK+ragybevNQf
+69UNrSovGjHuwDj3+tyZh0V7/Tp9Ch3iDRxFEZeqXtH0C8g4SxR0pTafyAIasyhV
+q6Y2ETEJWMVNUIIyrqtvWIQsewV6ykwUns09Qi6mFbBtz8uCLPsSyV7FccpOuWEk
+evL37yDL6HwdzA/xDnBST+eZeaRqBkB9rZs4W0kjpQKBgQD7fBZdudKO1/63AND4
+0DeVW/g3XZ6JiqBNFTtY1Q3pZRKbJhS+fSrZdReI7/7SZg9Tpgp9L6ih0aGe/Xqm
+Utz2SHQEk9D5nr8aTmn6E/YK956XuW1h6OGAdvxYfnnJibMIzT6yVVDYlFY1olj/
+VzXsmT0NM1JO/T4MCCfAKicEfwKBgQDUK9LU5NE/SaLwXslUK+jccTSP6cGUn+D0
+2IVTsccrh1lnD1ZlMoUR+5RTXAV5cyBzDL3ogvhpHTTaS8LGrJsw6c9wUvlbAVis
+hZ9WhXcC/U62ww5wZXFb+ShrYqrOLIv1Ul62Ixdoi2wofUOzT13tyGVgfuAtdeJ5
+QY4US/FSrQKBgQCKNi5MoH26B7dzeD1hIX4K1hrawtcInGlxM8QEFEOrC+Nn5Uvt
+TPkpvhKLLesMUw8FV/HXz0OMe5upt4Gau1u49yTcBykIp1g76vCPgjzs1h4RINWe
+w9B7O+l/8TKZstX0dmiIth7SiOPAYlMrMhDu0WEeSiBoTQG2txyxnfkHnQKBgHP9
+kUD55rrmksE90GrHpoH9EXMro7yQuvaf+CONKQlO8T06UUz5lW4DT09TG1sN6Ut8
+R8X487zjTqWYjV73tc/DwrfxZIiv775BPp6aUDm+KW4YrKgdjR9u0v4B7sbP66Ot
+6EFCZeWtcu+fq4c3eG4qA+IA+qVfsPQBNp859S/xAoGBALKK0Wx/OHaWPrAaThP0
+swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
+0YPZcP39H64LvTr+s65TtMrhCs5eNKd5hiGAB0T5Ctardy4f5liqQ8EqNa7YzcR/
+8xJFkCasp5SwyHnKysUl8ViY
+-----END PRIVATE KEY-----`;
+  qz.security.setCertificatePromise((resolve) => resolve(QZ_CERT));
+  qz.security.setSignatureAlgorithm('SHA512');
+  qz.security.setSignaturePromise(function(toSign) {
+    return function(resolve, reject) {
+      const pem = QZ_KEY.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+      const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+      crypto.subtle.importKey('pkcs8', der.buffer,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['sign'])
+        .then(function(key) {
+          return crypto.subtle.sign('RSASSA-PKCS1-v1_5', key,
+            new TextEncoder().encode(toSign));
+        })
+        .then(function(sig) {
+          const bytes = new Uint8Array(sig);
+          let str = '';
+          for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+          resolve(btoa(str));
+        })
+        .catch(reject);
+    };
+  });
+  qzConfigurado = true;
+}
+
+async function conectarQZ(){
+  if(typeof qz === 'undefined') throw new Error('La librería de QZ Tray no se cargó (¿sin internet o CDN bloqueado?).');
+  configurarQZ();
+  if(qz.websocket.isActive()) return;
+  try{
+    await qz.websocket.connect();
+  }catch(e){
+    throw new Error('No se pudo conectar con QZ Tray. Verificá que esté instalado y CORRIENDO (ícono en la bandeja del sistema).');
+  }
+}
+
+async function seleccionarImpresoraPOS(){
+  if(POS_PRINTER_NAME) return POS_PRINTER_NAME;
+  let lista = await qz.printers.find();
+  if(!Array.isArray(lista)) lista = [lista];
+  const m = lista.find(n => /3n[\s-]?star|rpt[\s-]?008|pos[\s-]?80|thermal|ticket/i.test(n));
+  return m || await qz.printers.getDefault();
+}
+
+// Un qz.print() por etiqueta, en orden y esperando a que termine cada uno.
+// Si una falla se frena ahí y se avisa cuántas salieron, para no perder
+// etiquetas sin darse cuenta.
+async function imprimirPOS(){
+  const items = [...selected.values()];
+  if(items.length === 0) return;
+  saveSettings();
+
+  const btn = $('posBtn');
+  btn.disabled = true;
+  $('generateBtn').disabled = true;
+  showBlock('Conectando con la impresora…');
+
+  let impresas = 0;
+  let errMsg = '';
+  try{
+    await conectarQZ();
+    const printer = await seleccionarImpresoraPOS();
+    if(!printer) throw new Error('No se encontró ninguna impresora.');
+    const config = qz.configs.create(printer);
+    const today = getTodayString();
+
+    for(const item of items){
+      showBlock(`Imprimiendo ${impresas + 1} de ${items.length}…`);
+      try{
+        await qz.print(config, construirEtiquetaESCPOS(item, today));
+      }catch(e){
+        throw new Error(`Falló la etiqueta de "${item.nombre}" (#${item.codigo}): ${(e && e.message) || e}`);
+      }
+      impresas++;
+    }
+  }catch(e){
+    console.error('Impresión POS:', e);
+    errMsg = (e && e.message) ? e.message : String(e);
+  }finally{
+    hideBlock();
+    btn.disabled = selected.size === 0;
+    $('generateBtn').disabled = selected.size === 0;
+  }
+
+  if(errMsg){
+    alert(
+      'Se interrumpió la impresión.\n\n' +
+      `Salieron bien: ${impresas} de ${items.length}.\n\n` +
+      errMsg
+    );
+  } else {
+    showSuccessStamp();
+    showToast(items.length + ' etiqueta(s) enviadas a la impresora', 'ok');
+  }
+}
+
+// ============================================================
 //  UI Helpers
 // ============================================================
 function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
@@ -1002,6 +1254,9 @@ $('clearSelBtn').addEventListener('click', () => {
 
 // Generar PDF
 $('generateBtn').addEventListener('click', generatePDF);
+
+// Imprimir en la térmica (QZ Tray)
+$('posBtn').addEventListener('click', imprimirPOS);
 
 // Paginación
 $('pagerPrev').addEventListener('click', () => gotoPage(page - 1));

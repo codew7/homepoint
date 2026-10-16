@@ -29,8 +29,8 @@
   'use strict';
 
   const PUNTOS = [
-    { id: '1', nombre: 'Punto de venta 1', config: 'config.js' },
-    { id: '2', nombre: 'Punto de venta 2', config: 'config2.js' }
+    { id: '1', nombre: 'Sucursal 1 Munro', config: 'config.js' },
+    { id: '2', nombre: 'Sucursal 2 Caseros', config: 'config2.js' }
   ];
 
   const LS_PUNTO = 'hpPuntoVenta';

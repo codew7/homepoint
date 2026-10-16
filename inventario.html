@@ -489,7 +489,7 @@
       font-weight: 500;
     }
     /* Badges de tipo de movimiento */
-    .entrada, .salida, .retiro, .entrada-int, .salida-int {
+    .entrada, .salida, .retiro, .entrada-int, .salida-int, .consolidado {
       display: inline-block;
       font-weight: 600;
       font-size: .8rem;
@@ -516,6 +516,10 @@
     .salida-int {
       color: #7c3aed;
       background: #f1eafd;
+    }
+    .consolidado {
+      color: #be185d;
+      background: #fce7f3;
     }
     .acciones-btns {
       display: flex;
@@ -842,6 +846,10 @@
       <div class="tabla-header">
         <div class="titulo"><i class="bi bi-clock-history"></i> Historial de Movimientos</div>
         <div class="search-group">
+          <select id="nodoFiltro" title="Nodo de Firebase desde el que se consultan los movimientos">
+            <option value="movimientos">Nodo: movimientos</option>
+            <option value="movimientos2">Nodo: movimientos2</option>
+          </select>
           <input type="text" id="busqueda" placeholder="🔎 Nombre o código..." />
           <select id="tipoFiltro">
             <option value="">Todos</option>
@@ -850,6 +858,7 @@
             <option value="RETIRO">Retiro</option>
             <option value="ENTRADA-INT">Entrada interna</option>
             <option value="SALIDA-INT">Salida interna</option>
+            <option value="CONSOLIDADO">Consolidado</option>
           </select>
           <button id="btnCargarTodos"><i class="bi bi-arrow-clockwise"></i> Cargar Todos</button>
         </div>
@@ -1058,6 +1067,23 @@
         filtrarMovimientos();
       });
 
+      // Cambiar el nodo consultado: se descarta lo cargado y se vuelve a leer
+      // si el historial ya estaba visible.
+      document.getElementById('nodoFiltro').addEventListener('change', function() {
+        nodoConsulta = this.value;
+        const habiaCargado = movimientosCargados;
+        movimientos = [];
+        movimientosFiltrados = [];
+        movimientosCargados = false;
+        paginaActual = 1;
+        if (habiaCargado) {
+          cargarMovimientos(true);
+        } else {
+          document.getElementById('paginacion').innerHTML = '';
+          mostrarLoadingTabla(`Presiona "Cargar Todos" para ver el historial de "${nodoConsulta}".`);
+        }
+      });
+
       // Checkbox de análisis: por defecto desactivado (no se persiste entre sesiones)
       const chkAnalisis = document.getElementById('chkAnalisis');
       if (chkAnalisis) {
@@ -1129,8 +1155,11 @@
         );
 
         // Agregar al array local para mostrar en tiempo real sin releer Firebase
-        movimientos.unshift({ ...mov, _id: newId });
-        filtrarMovimientos();
+        // (solo si el historial visible es el mismo nodo donde se escribió)
+        if (nodoConsulta === NODO_ESCRITURA) {
+          movimientos.unshift({ ...mov, _id: newId });
+          filtrarMovimientos();
+        }
 
         // Actualizar el stock mostrado si el artículo sigue seleccionado
         if (codigo && document.getElementById('codigo').value === codigo) {
@@ -1302,6 +1331,10 @@
     let paginaActual = 1;
     const MOVS_POR_PAGINA = 30;
     let movimientosCargados = false; // true una vez que se cargó el historial completo
+    // Nodo de Firebase del que se leen (y eliminan) los movimientos del historial.
+    // Los ingresos/retiros nuevos siempre se escriben en 'movimientos'.
+    const NODO_ESCRITURA = 'movimientos';
+    let nodoConsulta = 'movimientos';
 
     // Utilidades
     function formatearFecha(ts) {
@@ -1487,7 +1520,7 @@
     // Registrar movimiento en Firebase con verificación de escritura
     async function registrarMovimiento(mov) {
       try {
-        const ref = db.ref('movimientos').push();
+        const ref = db.ref(NODO_ESCRITURA).push();
         await ref.set(mov);
 
         // Verificar que los datos se guardaron correctamente leyendo de vuelta
@@ -1511,7 +1544,8 @@
     // Cargar movimientos desde Firebase (solo del día o todos)
     function cargarMovimientos(cargarTodos = false) {
       mostrarLoadingTabla();
-      let ref = db.ref('movimientos');
+      const nodoPedido = nodoConsulta;
+      let ref = db.ref(nodoPedido);
       if (!cargarTodos) {
         // Calcular timestamp de inicio y fin del día actual (zona local)
         const ahora = new Date();
@@ -1520,6 +1554,8 @@
         ref = ref.orderByChild('timestamp').startAt(inicioDia).endAt(finDia);
       }
       ref.once('value', snap => {
+        // Si el usuario cambió de nodo mientras se cargaba, ignorar esta respuesta
+        if (nodoPedido !== nodoConsulta) return;
         movimientos = [];
         snap.forEach(child => {
           let mov = { ...child.val(), _id: child.key };
@@ -1599,6 +1635,9 @@
         } else if (mov.tipo === 'SALIDA-INT') {
           tipoClass = 'salida-int';
           tipoTexto = 'SALIDA-INT';
+        } else if (mov.tipo === 'CONSOLIDADO') {
+          tipoClass = 'consolidado';
+          tipoTexto = 'CONSOLIDADO';
         }
 
         html += `<tr>
@@ -1673,7 +1712,7 @@
           return;
         }
 
-        const ref = db.ref('movimientos/' + id);
+        const ref = db.ref(nodoConsulta + '/' + id);
         await conTimeout(ref.remove(), 15000, 'Timeout al eliminar. Verifica tu conexión.');
 
         // Verificar que se eliminó correctamente
