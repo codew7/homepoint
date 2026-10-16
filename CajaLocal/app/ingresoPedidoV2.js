@@ -2525,7 +2525,12 @@ function getTipoCliente() {
             if (pedidoAnterior && pedidoAnterior.fecha) {
               pedidoObj.fecha = pedidoAnterior.fecha;
             }
-            
+            // CONSERVAR sucursal original: el nodo se sobrescribe entero y sus
+            // movimientos la copian del pedido.
+            if (pedidoAnterior && pedidoAnterior.sucursal) {
+              pedidoObj.sucursal = pedidoAnterior.sucursal;
+            }
+
             // BLOQUEAR INTERFAZ durante proceso crítico
             bloquearInterfaz('Actualizando pedido y restaurando inventario...');
             
@@ -2555,6 +2560,7 @@ function getTipoCliente() {
 
           // Agregar campo fecha solo al crear el pedido
           pedidoObj.fecha = getFechaActual();
+          asignarSucursal(pedidoObj);
           
           // BLOQUEAR INTERFAZ durante proceso crítico
           bloquearInterfaz('Registrando pedido y actualizando inventario...');
@@ -2619,6 +2625,15 @@ function getTipoCliente() {
       });
   }
 
+  // Sucursal del pedido en la raíz ('1' Munro, '2' Caseros): es el id del
+  // punto de venta del equipo (puntoVenta.js), como texto igual que en los
+  // movimientos de stock de la pantalla Artículos. Solo al crear: editar
+  // un pedido no le cambia la sucursal donde se vendió.
+  function asignarSucursal(pedidoObj) {
+    const id = window.PuntoVenta && PuntoVenta.actual();
+    if (id) pedidoObj.sucursal = String(id);
+  }
+
   // === MODO OFFLINE: venta nueva guardada en la PC (modoOffline.js) ===
   // Mismo pedido y mismos movimientos que el guardado de siempre, pero el
   // paquete se escribe en un archivo de la PC y se sube solo al volver
@@ -2631,6 +2646,7 @@ function getTipoCliente() {
       return;
     }
     pedidoObj.fecha = fecha;
+    asignarSucursal(pedidoObj);
     pedidoObj.vendedor = ModoOffline.NOMBRE;
     pedidoObj.sinConexion = true;
 
@@ -3052,7 +3068,11 @@ function getTipoCliente() {
             if (pedido && pedido.fecha) {
               pedidoObj.fecha = pedido.fecha;
             }
-            
+            // CONSERVAR sucursal original (la copian sus movimientos)
+            if (pedido && pedido.sucursal) {
+              pedidoObj.sucursal = pedido.sucursal;
+            }
+
             // BLOQUEAR INTERFAZ durante proceso crítico
             bloquearInterfaz('Guardando cambios y actualizando inventario...');
             
@@ -4439,6 +4459,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         cantidad: parseInt(item.cantidad, 10) || 0,
         tipo: tipoMov,
         pedidoId: pedidoId,
+        // Misma sucursal que el pedido ('1' Munro, '2' Caseros), como en Artículos y Traspasos.
+        ...(pedidoObj.sucursal ? { sucursal: pedidoObj.sucursal } : {}),
         // Campos aditivos: los consumidores existentes solo leen tipo/cantidad/codigo.
         ...(esLineaCambio(item) ? {
           motivo: item.tipoLinea,
