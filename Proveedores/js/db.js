@@ -3,7 +3,8 @@
  *
  * Estructura de datos:
  *   proveedores/{id} → { nombre, cuit, telefono, notas, activo, creadoEn, actualizadoEn }
- *   facturas/{id}    → { proveedorId, numero, fecha, moneda, montoTotal, creadoEn, actualizadoEn }
+ *   facturas/{id}    → { proveedorId, sucursal, numero, fecha, moneda, montoTotal, creadoEn, actualizadoEn }
+ *                      sucursal: 'Munro' | 'Caseros'
  *   pagos/{id}       → { proveedorId, fecha, moneda, monto, cotizacion, montoARS,
  *                        concepto, metodoPago, imputaciones, creadoEn }
  *                      imputaciones: { facturaId: monto } — monto en la moneda de la factura.

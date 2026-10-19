@@ -135,6 +135,7 @@ function abrirModal(factura = null) {
     ? 'Editar factura'
     : 'Nueva factura';
   document.getElementById('factura-id').value = factura?.id || '';
+  document.getElementById('factura-sucursal').value = factura?.sucursal || '';
   document.getElementById('factura-numero').value = factura?.numero || '';
   document.getElementById('factura-fecha').value = factura?.fecha || hoyISO();
   document.getElementById('factura-moneda').value = factura?.moneda || 'ARS';
@@ -170,12 +171,14 @@ function validarFormulario() {
   let valido = true;
 
   const proveedorInput = document.getElementById('factura-proveedor');
+  const sucursalInput = document.getElementById('factura-sucursal');
   const numeroInput = document.getElementById('factura-numero');
   const fechaInput = document.getElementById('factura-fecha');
   const montoInput = document.getElementById('factura-monto');
 
   const idActual = document.getElementById('factura-id').value;
   const proveedorId = proveedorInput.value;
+  const sucursal = sucursalInput.value;
   const numero = numeroInput.value.trim();
   const fecha = fechaInput.value;
   const moneda = document.getElementById('factura-moneda').value;
@@ -183,6 +186,11 @@ function validarFormulario() {
 
   if (!proveedorId) {
     marcarError(proveedorInput, 'Elegí un proveedor.');
+    valido = false;
+  }
+
+  if (!sucursal) {
+    marcarError(sucursalInput, 'Elegí una sucursal.');
     valido = false;
   }
 
@@ -216,7 +224,7 @@ function validarFormulario() {
 
   if (!valido) return null;
 
-  return { proveedorId, numero, fecha, moneda, montoTotal };
+  return { proveedorId, sucursal, numero, fecha, moneda, montoTotal };
 }
 
 async function guardar(event) {
