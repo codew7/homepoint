@@ -4877,7 +4877,9 @@
           if (!codigo) return;
           const imagenRaw = row[1] || '';
           const imgPartes = imagenRaw.split(',').map(u => u.trim());  // posicional (1er y 4to link)
-          const stockRaw = (row[10] || '').trim();
+          // Stock: R = Munro (stock total, el que usa toda la app), S = Caseros.
+          const stockRaw = (row[17] || '').trim();
+          const stockCasRaw = (row[18] || '').trim();
           const nombre = (row[3] || '').trim();
           sheetsData[codigo] = {
             imagen: imgPartes[0] || '',
@@ -4885,7 +4887,8 @@
             nombre: nombre,
             categoria: (row[0] || '').trim(),
             codigoBarras: (row[11] || '').split(',').map(s => s.trim()).filter(Boolean),
-            stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null
+            stock: stockRaw !== '' ? parseInt(stockRaw, 10) : null,
+            stockCaseros: stockCasRaw !== '' ? parseInt(stockCasRaw, 10) : null
           };
           sheetsAllItems.push({
             codigo,
@@ -4964,8 +4967,9 @@
 
     async function actualizarStock() {
       try {
-        // Fetches columnas C:K (relativo a C: codigo=0, valorUInt/E=2, valorU/G=4, valorC/H=5, stock/K=8)
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Lista!C2:K?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+        // Fetches columnas C:S (relativo a C: codigo=0, valorUInt/E=2, valorU/G=4, valorC/H=5,
+        // stock Munro/R=15, stock Caseros/S=16)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/Lista!C2:S?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
         const res = await fetch(url);
         const data = await res.json();
         const rows = data.values || [];
@@ -4973,11 +4977,17 @@
         rows.forEach(row => {
           const codigo = (row[0] || '').trim();
           if (!codigo) return;
-          const stockRaw = (row[8] || '').trim();
+          const stockRaw = (row[15] || '').trim();
           const nuevoStock = stockRaw !== '' ? parseInt(stockRaw, 10) : null;
+          const stockCasRaw = (row[16] || '').trim();
+          const nuevoStockCas = stockCasRaw !== '' ? parseInt(stockCasRaw, 10) : null;
           if (sheetsData[codigo]) {
             if (sheetsData[codigo].stock !== nuevoStock) {
               sheetsData[codigo].stock = nuevoStock;
+              hubocambios = true;
+            }
+            if (sheetsData[codigo].stockCaseros !== nuevoStockCas) {
+              sheetsData[codigo].stockCaseros = nuevoStockCas;
               hubocambios = true;
             }
           }
@@ -11099,7 +11109,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           return;
         }
 
-        let html = '<div class="nec-cols"><span class="nc-art">Artículo</span><span class="nc-stock">Stock</span><span class="nc-nec">Neces.</span><span class="nc-ok">OK</span></div>';
+        let html = '<div class="nec-cols"><span class="nc-art">Artículo</span><span class="nc-stock" title="Stock total (columna R)">Munro</span><span class="nc-stock" title="Stock de la otra sucursal (columna S)">Caseros</span><span class="nc-nec">Neces.</span><span class="nc-ok">OK</span></div>';
 
         let cat = null;
         let i = 0;
@@ -11134,10 +11144,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           imgHtml = '<div class="nec-img-ph">' + IC_FOTO + '</div>';
         }
 
+        // El aviso de "faltan" se calcula solo contra Munro; Caseros es informativo.
+        const stockCelda = (v) => {
+          const hay = v !== null && v !== undefined && Number.isFinite(v);
+          const clase = !hay ? 'stock-nd' : v <= 0 ? 'stock-zero' : v <= 10 ? 'stock-low' : 'stock-ok';
+          return '<span class="nec-stock ' + clase + '">' + (hay ? v : '—') + '</span>';
+        };
         const stock = si.stock;
         const hayStock = stock !== null && stock !== undefined && Number.isFinite(stock);
-        const stockClase = !hayStock ? 'stock-nd' : stock <= 0 ? 'stock-zero' : stock <= 10 ? 'stock-low' : 'stock-ok';
-        const stockTxt = hayStock ? stock : '—';
         const falta = hayStock && stock < a.cantidad;
 
         const barras = (si.codigoBarras && si.codigoBarras.length) ? si.codigoBarras[0] : '';
@@ -11160,7 +11174,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
                 '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + remotoHtml(a.codigo) + '</div>' +
               (parcial !== null ? '<div class="nec-parcial">OK por ' + parcial + ' · faltan ' + (a.cantidad - parcial) + ' más</div>' : '') +
             '</div>' +
-            '<span class="nec-stock ' + stockClase + '">' + stockTxt + '</span>' +
+            stockCelda(stock) + stockCelda(si.stockCaseros) +
             '<span class="nec-nec' + (falta ? ' is-falta' : '') + '" title="' + (falta ? 'Faltan ' + (a.cantidad - stock) + ' para cubrir los pedidos' : '') + '">' + a.cantidad + '</span>' +
             '<button type="button" class="nec-check" aria-label="Verificado" aria-pressed="' + (verif ? 'true' : 'false') + '"><i>' + IC_CHECK + '</i></button>' +
           '</div>' + det + '</div>';
@@ -11782,16 +11796,19 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         arr.forEach((a, i) => {
           if (a.categoria !== cat) {
             cat = a.categoria;
-            filas += '<tr class="cat"><td colspan="6">' + escapeHtml(cat) + '</td></tr>';
+            filas += '<tr class="cat"><td colspan="7">' + escapeHtml(cat) + '</td></tr>';
           }
           const si = sheetsData[a.codigo] || {};
-          const stock = (si.stock !== null && si.stock !== undefined && Number.isFinite(si.stock)) ? si.stock : '—';
+          const fmt = (v) => (v !== null && v !== undefined && Number.isFinite(v)) ? v : '—';
+          const stock = fmt(si.stock);
+          const stockCas = fmt(si.stockCaseros);
           const verif = getVerificado(a.codigo);
           filas += '<tr' + (verif ? ' class="ok"' : '') + '>' +
             '<td class="n">' + (i + 1) + '</td>' +
             '<td class="nombre">' + escapeHtml(a.nombre) + '</td>' +
             '<td class="cod">' + escapeHtml(a.codigo) + '</td>' +
             '<td class="c">' + stock + '</td>' +
+            '<td class="c">' + stockCas + '</td>' +
             '<td class="c b">' + a.cantidad + '</td>' +
             '<td class="c chk">' + (verif ? '&#10003;' : '') + '</td></tr>';
         });
@@ -11811,7 +11828,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
           '</style></head><body>' +
           '<div class="h"><h1>Artículos necesarios</h1><div class="m">' + fecha + '<br>' + pedidosEnCalculo + ' pedidos &middot; ' + arr.length + ' artículos</div></div>' +
-          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th><th class="c">Stock</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
+          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th><th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
           '<tbody>' + filas + '</tbody></table>' +
           '<script>window.onload=function(){window.print()}<\/script></body></html>';
 
