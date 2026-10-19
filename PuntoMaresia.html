@@ -945,25 +945,6 @@
   </div>
 </div>
 
-<!-- Credenciales de Caseros: se piden una sola vez, la sesion queda guardada -->
-<div class="modal-back" id="modalCaseros">
-  <form class="modal" id="formCaseros" autocomplete="on">
-    <h3>Conectar con Caseros</h3>
-    <p>Ingresá el usuario de Caseros. Se pide una sola vez: la sesión queda guardada en este equipo.</p>
-    <label>Email
-      <input type="email" id="casEmail" required autocomplete="username">
-    </label>
-    <label>Contraseña
-      <input type="password" id="casPass" required autocomplete="current-password">
-    </label>
-    <div class="modal-error" id="casError"></div>
-    <div class="modal-acciones">
-      <button type="button" class="btn-clear" id="casCancelar">Cancelar</button>
-      <button type="submit" class="btn-apply" id="casEntrar">Conectar</button>
-    </div>
-  </form>
-</div>
-
 <div class="container">
 
 
@@ -1307,7 +1288,7 @@
   function errorDeCarga(err) {
     hideLoading();
     if (err && /permission/i.test(err.code || err.message)) {
-      // Munro usa el login del panel; Caseros tiene su propia sesion en esta pagina.
+      // Munro usa el login del panel.
       if (puntoActual === 'munro') {
         window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.pathname);
         return;
@@ -1319,11 +1300,9 @@
   }
 
   /* ─── Punto de venta (Munro / Caseros) ──────────────────────── */
-  // La conexion de Caseros sale de config2.js; las credenciales se piden solo
-  // la primera vez y Firebase deja la sesion guardada en el equipo (LOCAL).
+  // La conexion de Caseros sale de config2.js; no se piden credenciales.
   const LS_PUNTO = 'pmPuntoVenta';
   const NOMBRES_PUNTO = { munro: 'Munro', caseros: 'Caseros' };
-  const CANCELADO = new Error('cancelado');
   let puntoActual = 'munro';
   let appCaseros = null;
 
@@ -1346,53 +1325,10 @@
     });
   }
 
-  function mensajeAuth(err) {
-    const code = (err && err.code) || '';
-    if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(code)) return 'Email o contraseña incorrectos.';
-    if (/too-many-requests/.test(code)) return 'Demasiados intentos. Probá de nuevo en unos minutos.';
-    if (/network/.test(code)) return 'Sin conexión. Revisá internet y probá de nuevo.';
-    return (err && err.message) || 'No se pudo conectar.';
-  }
-
-  function pedirCredenciales(app) {
-    return new Promise((resolve, reject) => {
-      const modal = document.getElementById('modalCaseros');
-      const form = document.getElementById('formCaseros');
-      const email = document.getElementById('casEmail');
-      const pass = document.getElementById('casPass');
-      const error = document.getElementById('casError');
-      const btn = document.getElementById('casEntrar');
-      form.reset();
-      error.textContent = '';
-      modal.classList.add('open');
-      email.focus();
-
-      function cerrar() {
-        modal.classList.remove('open');
-        form.onsubmit = null;
-        document.getElementById('casCancelar').onclick = null;
-      }
-      form.onsubmit = e => {
-        e.preventDefault();
-        btn.disabled = true;
-        error.textContent = '';
-        app.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-          .then(() => app.auth().signInWithEmailAndPassword(email.value.trim(), pass.value))
-          .then(() => { cerrar(); resolve(); })
-          .catch(err => { error.textContent = mensajeAuth(err); })
-          .finally(() => { btn.disabled = false; });
-      };
-      document.getElementById('casCancelar').onclick = () => { cerrar(); reject(CANCELADO); };
-    });
-  }
-
   async function conectarPunto(id) {
     if (id === 'caseros') {
       const app = await appDeCaseros();
-      if (!(await usuarioDe(app))) {
-        hideLoading();
-        await pedirCredenciales(app);
-      }
+      await usuarioDe(app);
       db = app.database();
     } else {
       await usuarioDe(firebase.app());
@@ -1432,7 +1368,7 @@
       await conectarPunto(id);
     } catch (err) {
       hideLoading();
-      if (err !== CANCELADO) showToast('No se pudo conectar con ' + NOMBRES_PUNTO[id] + ': ' + err.message, 'error');
+      showToast('No se pudo conectar con ' + NOMBRES_PUNTO[id] + ': ' + err.message, 'error');
       return;
     }
     reiniciarDatos();
@@ -1446,7 +1382,7 @@
   });
 
   // Al abrir se vuelve al ultimo punto elegido en este equipo. Si era Caseros
-  // y la sesion ya no esta (o se cancela el pedido de credenciales), Munro.
+  // y no se puede conectar, Munro.
   async function loadFromFirebase() {
     cargarStock();   // en paralelo: la tabla muestra "…" hasta que llegue
     showLoading('Conectando con Firebase…');
@@ -1455,7 +1391,7 @@
     try {
       await conectarPunto(inicial);
     } catch (err) {
-      if (err !== CANCELADO) showToast('No se pudo conectar con Caseros: ' + err.message, 'error');
+      showToast('No se pudo conectar con Caseros: ' + err.message, 'error');
       showLoading('Conectando con Firebase…');
       await conectarPunto('munro');
     }
