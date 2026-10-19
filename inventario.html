@@ -21,13 +21,16 @@
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   
+  <!-- Punto de venta del equipo (puntoVenta.js): carga el config (Firebase) que le toca,
+       o pide elegirlo si es la primera vez. Cada punto de venta tiene su propia base. -->
+  <script src="puntoVenta.js"></script>
+
   <!-- Firebase Auth Check -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="config.js"></script>
   <script>
-    // Inicializar Firebase (proyecto principal: pedidos-87064 → movimientos)
+    // Inicializar Firebase con la base del punto de venta elegido en el panel
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     
@@ -203,6 +206,17 @@
       gap: .5rem;
     }
     header h1 i { color: #93b4fb; }
+    .chip-sucursal {
+      font-size: .75rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      background: rgba(147,180,251,.18);
+      border: 1px solid rgba(147,180,251,.35);
+      border-radius: 999px;
+      padding: .15rem .6rem;
+      letter-spacing: .2px;
+    }
+    .chip-sucursal[hidden] { display: none; }
     main {
       flex: 1;
       width: 100%;
@@ -783,7 +797,7 @@
 </head>
 <body>
   <header>
-    <h1><i class="bi bi-boxes"></i> Gestión de Inventario</h1>
+    <h1><i class="bi bi-boxes"></i> Gestión de Inventario <span id="puntoVentaHeader" class="chip-sucursal" hidden></span></h1>
     
     <!-- Indicadores de usuario -->
     <div id="adminIndicator" style="position: absolute; top: 11px; right: 20px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); padding: 6px 8px 6px 12px; border-radius: 999px; font-size: 0.82rem; display: none; color: #e2e8f0; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.25);">
@@ -1008,6 +1022,14 @@
     
     // Función para inicializar la funcionalidad de inventario
     function inicializarInventario() {
+      // Punto de venta: su nombre en el encabezado
+      if (window.PuntoVenta && PuntoVenta.multiple()) {
+        const chipSucursal = document.getElementById('puntoVentaHeader');
+        chipSucursal.textContent = PuntoVenta.nombre();
+        chipSucursal.hidden = false;
+        document.title = 'Gestión de Inventario · ' + PuntoVenta.nombre();
+      }
+
       // Event listeners para los botones de logout
       const logoutBtn = document.getElementById('logoutBtn');
       const logoutBtnUser = document.getElementById('logoutBtnUser');
@@ -1126,7 +1148,9 @@
         codigo,
         nombre,
         cantidad,
-        tipo: tipo
+        tipo: tipo,
+        // Sucursal donde se registra ('1' Munro, '2' Caseros), como en pedidos y Traspasos
+        sucursal: (window.PuntoVenta && PuntoVenta.actual()) || '1'
       };
       
       try {

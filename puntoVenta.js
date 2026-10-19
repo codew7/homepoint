@@ -13,7 +13,8 @@
 //     pantalla de elección. Al elegir se guarda y la página se recarga.
 //
 // Lo usan: index.html (panel), ingresoPedidoV2.html, historialRecientes.html,
-// buscarPedidos.html, pedidosWhatsapp.html, resumenFacturacion.html y login.html cuando vuelve a una
+// buscarPedidos.html, pedidosWhatsapp.html, resumenFacturacion.html, inventario.html,
+// consolidarMovimientos.html y login.html cuando vuelve a una
 // de ellas. El resto del panel sigue con config.js.
 //
 // Cambiarlo es poco común y pide su propia contraseña: se ofrece desde el
