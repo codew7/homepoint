@@ -937,7 +937,8 @@
     .item-stock {
       font-family: var(--font-mono);
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
+      white-space: nowrap;
       position: relative;
       padding-left: 11px;
     }
@@ -956,6 +957,14 @@
     .item-stock.stock-ok   { color: var(--ok); }
     .item-stock.stock-low  { color: var(--warn); }
     .item-stock.stock-zero { color: var(--bad); font-weight: 700; }
+    .item-stock-cas {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--ink-4);
+      opacity: .75;
+      white-space: nowrap;
+    }
 
     /* Precio unitario y subtotal: columna propia, alineada a la derecha */
     .pv-item-fin {
@@ -5612,8 +5621,12 @@
           const stockVal = sheetInfo.stock;
           const stockClass = Number.isFinite(stockVal)
             ? (stockVal <= 0 ? ' stock-zero' : stockVal <= 10 ? ' stock-low' : ' stock-ok') : '';
-          const stockDisplay = Number.isFinite(stockVal)
-            ? '<span class="item-stock' + stockClass + '">stk ' + stockVal + '</span>' : '';
+          const stockCas = sheetInfo.stockCaseros;
+          // Munro (columna R) resaltado con color; Caseros (columna S) discreto, solo informativo.
+          const stockDisplay = (Number.isFinite(stockVal)
+            ? '<span class="item-stock' + stockClass + '" title="Stock Munro">Munro ' + stockVal + '</span>' : '') +
+            (Number.isFinite(stockCas)
+            ? '<span class="item-stock-cas" title="Stock Caseros">Caseros ' + stockCas + '</span>' : '');
           groupHtml += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
           groupHtml += '</div>';
 
@@ -6216,8 +6229,7 @@
     function showTooltip(event, codigo) {
       const info = sheetsData[codigo] || {};
       tooltipBox.innerHTML =
-        '<span class="tt-label">Codigo</span><span class="tt-value">' + escapeHtml(codigo) + '</span>' +
-        '<span class="tt-label" style="margin-top:6px">Codigo de Barras</span><span class="tt-value">' + escapeHtml((info.codigoBarras && info.codigoBarras.length ? info.codigoBarras.join(', ') : 'N/A')) + '</span>';
+        '<span class="tt-label">Codigo de Barras</span><span class="tt-value">' + escapeHtml((info.codigoBarras && info.codigoBarras.length ? info.codigoBarras.join(', ') : 'N/A')) + '</span>';
 
       // Posicionar cerca del click
       const rect = event.target.getBoundingClientRect();
