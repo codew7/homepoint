@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparador de envíos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3f2ee; --paper-2: #ebe9e3; --card: #ffffff; --ink: #14181f; --ink-2: #3c4250; --muted: #737a88; --line: #e1dfd8; --line-2: #cfccc3;
+    --correo: #152663; --correo-2: #1f3580; --correo-soft: #eaeef8; --amarillo: #ffce00;
+    --vc: #1e8d34; --vc-2: #176e29; --vc-soft: #e9f5ec; --vc-rojo: #dc2525;
+    --oro: #b7791f; --oro-soft: #fbf3e2; --oro-line: #ecd9a8;
+    --ok: #1f7a4d; --ok-soft: #e6f4ec; --warn: #8a5a10; --warn-soft: #fff5df; --err: #b42323; --err-soft: #fdecec;
+    --r: 14px; --r-s: 9px;
+    --sans: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+    --serif: "Fraunces", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --sombra: 0 1px 2px rgba(20,24,31,.05), 0 8px 24px -16px rgba(20,24,31,.25);
+    --sombra-2: 0 24px 60px -30px rgba(20,24,31,.45), 0 2px 8px rgba(20,24,31,.06);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink); font: 14.5px/1.45 var(--sans);
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
+    background-image: radial-gradient(1200px 500px at 80% -10%, rgba(21,38,99,.07), transparent 60%),
+                      radial-gradient(900px 400px at -10% 110%, rgba(30,141,52,.07), transparent 60%);
+    background-attachment: fixed;
+  }
+  b, strong { font-weight: 600; }
+  a { color: var(--correo); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .hidden { display: none !important; }
+  img.lg { height: 15px; width: auto; vertical-align: middle; }
+  html, body { overflow-x: clip; }
+  .vis-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* ---------- Barra superior ---------- */
+  .topbar { position: sticky; top: 0; z-index: 30; background: rgba(243,242,238,.82); backdrop-filter: blur(14px) saturate(1.3); border-bottom: 1px solid var(--line); }
+  .topbar .in { max-width: 1480px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 18px; }
+  .marca { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+  .marca h1 { font: 600 21px/1 var(--serif); margin: 0; letter-spacing: -.01em; }
+  .marca .sub { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-left: 4px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 9px 4px 7px; border-radius: 999px; border: 1px solid var(--line-2); background: #fff; color: var(--ink-2); cursor: default; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); display: inline-block; }
+  .pill.ok i { background: var(--ok); box-shadow: 0 0 0 3px rgba(31,122,77,.15); }
+  .pill.warn i { background: var(--oro); box-shadow: 0 0 0 3px rgba(183,121,31,.18); }
+  .pill.err i { background: var(--err); box-shadow: 0 0 0 3px rgba(180,35,35,.15); }
+  .topbar .acc { margin-left: auto; display: flex; gap: 8px; }
+
+  /* ---------- Botones ---------- */
+  button { font: inherit; cursor: pointer; border-radius: var(--r-s); border: 1px solid transparent; padding: 9px 14px; background: var(--ink); color: #fff; font-weight: 600; transition: transform .08s ease, filter .15s ease, background .15s ease; }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .55; cursor: wait; transform: none; }
+  button.sec { background: #fff; color: var(--ink); border-color: var(--line-2); font-weight: 500; }
+  button.sec:hover { background: var(--paper-2); filter: none; }
+  button.ghost { background: transparent; color: var(--ink-2); border-color: transparent; font-weight: 500; padding: 6px 10px; }
+  button.ghost:hover { background: var(--paper-2); filter: none; }
+  button.chico { padding: 5px 10px; font-size: 12.5px; }
+  button.principal { width: 100%; padding: 14px; font-size: 15.5px; background: var(--ink); position: relative; overflow: hidden; border-radius: 12px; }
+  button.principal::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.14) 50%, transparent 70%); transform: translateX(-100%); }
+  button.principal:not(:disabled):hover::after { animation: brillo .9s ease; }
+  @keyframes brillo { to { transform: translateX(100%); } }
+  button.correo { background: var(--correo); }
+  button.vc { background: var(--vc); }
+  .cnt { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 600; }
+  button.ghost .cnt { background: var(--ink-2); }
+
+  /* ---------- Layout ---------- */
+  main { max-width: 1480px; margin: 0 auto; padding: 22px 20px 60px; }
+  .disposicion { display: grid; grid-template-columns: 410px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .col-form { position: sticky; top: 70px; }
+  @media (max-width: 1080px) { .disposicion { grid-template-columns: minmax(0, 1fr); } .col-form { position: static; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sombra); }
+  .card + .card { margin-top: 16px; }
+  .card > .cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 0; }
+  .card h2 { font: 600 17px/1.2 var(--serif); margin: 0; letter-spacing: -.01em; }
+  .card h3 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .cuerpo { padding: 14px 18px 18px; }
+
+  /* ---------- Formulario ---------- */
+  form { padding: 0; }
+  fieldset { border: 0; margin: 0; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  fieldset:last-of-type { border-bottom: 0; }
+  legend { float: left; width: 100%; margin: 0 0 12px; padding: 0; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  legend + * { clear: both; }
+  label { display: block; font-size: 12.5px; color: var(--ink-2); margin-bottom: 4px; font-weight: 500; }
+  input, select, textarea { width: 100%; font: inherit; padding: 9px 10px; border: 1px solid var(--line-2); border-radius: var(--r-s); background: #fff; color: var(--ink); transition: border-color .12s, box-shadow .12s; }
+  input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(20,24,31,.08); }
+  input:disabled, select:disabled { background: var(--paper); color: var(--muted); }
+  input[type=number] { font-family: var(--mono); }
+  input[inputmode=decimal], input[inputmode=numeric] { font-family: var(--mono); }
+  .grid { display: grid; gap: 10px; }
+  .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fila-paquete { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  form[data-modo="volumen"] .solo-medidas { display: none; }
+  form[data-modo="medidas"] .solo-volumen { display: none; }
+  .solo-volumen { grid-column: span 3; }
+  .combo { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 6px; }
+  .segmentado { display: inline-flex; background: var(--paper-2); border-radius: 999px; padding: 3px; gap: 2px; }
+  .segmentado label { margin: 0; }
+  .segmentado input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .segmentado span { display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; text-transform: none; letter-spacing: 0; transition: background .15s, color .15s; }
+  .segmentado input:checked + span { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .segmentado input:focus-visible + span { outline: 2px solid var(--ink); }
+  .ayuda { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .ayuda.ok { color: var(--ok); }
+  .ayuda.err { color: var(--err); }
+  /* Combobox de destino */
+  .cbx { position: relative; }
+  .cbx input { padding-right: 34px; font-family: var(--sans); }
+  .cbx .lupa { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 13px; }
+  .cbx-lista { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--line-2); border-radius: var(--r-s); box-shadow: var(--sombra-2); max-height: 320px; overflow: auto; padding: 4px; }
+  .cbx-item { padding: 8px 10px; border-radius: 7px; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+  .cbx-item:hover, .cbx-item.activo { background: var(--paper-2); }
+  .cbx-item .n { font-weight: 600; }
+  .cbx-item .n small { font-weight: 400; color: var(--muted); }
+  .cbx-item .p { font-size: 12px; color: var(--muted); grid-column: 1; }
+  .cbx-item .cp { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); grid-row: 1 / span 2; text-align: right; }
+  .cbx-item .cob { grid-column: 2; display: flex; gap: 4px; justify-content: flex-end; }
+  .cbx-vacio { padding: 12px; color: var(--muted); font-size: 13px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+  .dot.correo { background: var(--correo); } .dot.vc { background: var(--vc); } .dot.no { background: var(--line-2); }
+  .destino-res { margin-top: 8px; padding: 10px 12px; border-radius: var(--r-s); background: var(--paper); border: 1px solid var(--line); font-size: 13px; display: none; }
+  .destino-res.on { display: block; }
+  .destino-res .t { font-weight: 600; font-size: 14px; }
+  .destino-res .cob { display: flex; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .destino-res .cob span { display: inline-flex; align-items: center; gap: 5px; }
+
+  /* Servicios a consultar */
+  .servicios { display: grid; gap: 8px; }
+  .srv { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 0 10px; align-items: center; border: 1px solid var(--line); border-radius: var(--r-s); padding: 8px 10px 8px 0; overflow: hidden; background: #fff; transition: background .15s; }
+  .srv .b { height: 100%; border-radius: 4px 0 0 4px; }
+  .srv.correo .b { background: var(--correo); } .srv.vc .b { background: var(--vc); }
+  .srv .t { font-weight: 600; font-size: 13px; display: block; }
+  .srv .d { font-size: 12px; color: var(--muted); display: block; }
+  .srv .d .cache { color: var(--oro); font-weight: 500; }
+  .srv.off { background: var(--paper); }
+  .srv.off .t { color: var(--muted); }
+  .switch { position: relative; width: 38px; height: 22px; flex: 0 0 auto; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+  .switch i { position: absolute; inset: 0; background: var(--line-2); border-radius: 999px; transition: background .15s; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+  .switch input:checked + i { background: var(--ink); }
+  .srv.correo .switch input:checked + i { background: var(--correo); }
+  .srv.vc .switch input:checked + i { background: var(--vc); }
+  .switch input:checked + i::after { transform: translateX(16px); }
+  .switch input:focus-visible + i { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; margin-top: 10px; }
+  .check input { width: auto; margin: 0; }
+  details.avanzado { margin-top: 12px; }
+  details.avanzado summary { cursor: pointer; font-size: 12.5px; color: var(--muted); user-select: none; }
+  details.avanzado summary:hover { color: var(--ink); }
+  details.avanzado .in { margin-top: 10px; padding: 12px; border: 1px dashed var(--line-2); border-radius: var(--r-s); }
+  .accion { padding: 16px 18px 18px; }
+  .estado { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 18px; }
+  .estado.err { color: var(--err); }
+
+  /* ---------- Análisis ---------- */
+  .analisis-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 720px) { .analisis-grid { grid-template-columns: minmax(0, 1fr); } }
+  .an { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; position: relative; overflow: hidden; }
+  .an::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+  .an.correo::before { background: var(--correo); } .an.vc::before { background: var(--vc); }
+  .an .emp { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+  .an .emp img { height: 16px; width: auto; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 8px; }
+  .kpi .n { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .kpi .v { font-size: 17px; font-weight: 600; font-family: var(--mono); letter-spacing: -.02em; }
+  .kpi .v small { font-size: 11px; font-weight: 400; color: var(--muted); font-family: var(--sans); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .tag.tam { background: var(--warn-soft); color: var(--warn); } .tag.peso { background: var(--ok-soft); color: var(--ok); }
+  .tag.oro { background: var(--oro-soft); color: var(--oro); border: 1px solid var(--oro-line); }
+  .tag.correo { background: var(--correo-soft); color: var(--correo); } .tag.vc { background: var(--vc-soft); color: var(--vc-2); }
+  .tag.gris { background: var(--paper-2); color: var(--ink-2); } .tag.rojo { background: var(--err-soft); color: var(--err); }
+  .an ul { margin: 8px 0 0; padding-left: 16px; font-size: 12.5px; color: var(--ink-2); }
+  .an li { margin-bottom: 3px; }
+  .an .nota { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .an .bajar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 10px; border: 1px solid var(--oro-line); border-radius: 8px; background: var(--oro-soft); font-size: 12.5px; }
+  .an .bajar .t { font-weight: 600; color: var(--oro); margin-right: 2px; }
+  .an .bajar .y { color: var(--oro); font-weight: 600; }
+  .an .bajar .chip { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--ink); background: var(--paper); border: 1px solid var(--oro-line); border-radius: 6px; padding: 2px 8px; }
+  .an .bajar .chip small { font-family: var(--sans); font-weight: 500; font-size: 11.5px; color: var(--ink-2); }
+  .vacio { color: var(--muted); font-size: 13.5px; }
+
+  /* ---------- Resultado ---------- */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px 18px 0; }
+  .hero.h2 { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } .hero.h1 { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+  .mejor { border-radius: 12px; padding: 16px 18px; position: relative; overflow: hidden; background: var(--ink); color: #fff; min-height: 128px; display: flex; flex-direction: column; justify-content: space-between; }
+  .mejor::after { content: ""; position: absolute; right: -40px; top: -40px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.14), transparent 65%); }
+  .mejor .et { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.65); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .mejor .et i { width: 8px; height: 8px; background: var(--amarillo); border-radius: 50%; display: inline-block; }
+  .mejor .srvn { font: 600 20px/1.15 var(--serif); margin-top: 6px; }
+  .mejor .srvn small { display: block; font: 12.5px/1.4 var(--sans); color: rgba(255,255,255,.7); margin-top: 3px; }
+  .mejor .pv { font: 600 34px/1 var(--mono); letter-spacing: -.03em; margin-top: 10px; }
+  .mejor .dif { font-size: 12.5px; color: rgba(255,255,255,.75); margin-top: 6px; }
+  .mejor .logo { position: absolute; right: 16px; top: 14px; height: 22px; opacity: .95; filter: brightness(0) invert(1); }
+  .mejor.vacio-mejor { background: var(--paper-2); color: var(--muted); justify-content: center; align-items: center; }
+  .sub-mejor { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #fff; }
+  .sub-mejor .et { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .sub-mejor .srvn { font-weight: 600; margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+  .sub-mejor .pv { font: 600 24px/1 var(--mono); letter-spacing: -.03em; margin-top: 8px; }
+  .sub-mejor .dif { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .sub-mejor .pend { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+  table.comp { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
+  table.comp th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.comp td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.comp tr:last-child td { border-bottom: 0; }
+  table.comp td.num, table.comp th.num { text-align: right; white-space: nowrap; }
+  table.comp .emp { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; }
+  table.comp .emp img { height: 15px; width: auto; }
+  table.comp .srvn { font-weight: 600; }
+  table.comp .srvn small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  table.comp td.tarifa { font-family: var(--mono); font-weight: 600; font-size: 15px; letter-spacing: -.02em; }
+  table.comp td.dif { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  table.comp tr.top td { background: var(--oro-soft); }
+  table.comp tr.top td:first-child { box-shadow: inset 3px 0 0 var(--oro); }
+  table.comp tr.grupo td { background: var(--paper); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; padding: 6px 10px; }
+  table.comp tr.pend td { color: var(--muted); }
+  table.comp tr.errf td { color: var(--err); background: var(--err-soft); }
+  table.comp tr.nodisp td { color: var(--muted); }
+  .skl { display: inline-block; height: 14px; width: 90px; border-radius: 6px; background: linear-gradient(90deg, var(--paper-2) 25%, #f7f6f2 50%, var(--paper-2) 75%); background-size: 200% 100%; animation: skl 1.2s infinite linear; vertical-align: middle; }
+  @keyframes skl { to { background-position: -200% 0; } }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line-2); border-top-color: var(--ink); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tabla-wrap { overflow: auto; padding: 0 18px; }
+  .acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+
+  .paneles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+  @media (max-width: 980px) { .paneles { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sombra); overflow: hidden; }
+  .panel .cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .panel .cab img { height: 18px; width: auto; }
+  .panel .cab .t { display: flex; align-items: center; gap: 10px; font-weight: 600; white-space: nowrap; }
+  .panel.correo .cab { border-top: 3px solid var(--correo); } .panel.vc .cab { border-top: 3px solid var(--vc); }
+  .panel .in { padding: 14px 16px; }
+  .panel .in + .in { border-top: 1px solid var(--line); }
+  .panel h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .precios { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  .precio { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; position: relative; }
+  .precio.mejor-p { border-color: var(--oro); background: var(--oro-soft); }
+  .precio.nodisp { opacity: .55; }
+  .precio .n { font-size: 12px; font-weight: 600; }
+  .precio .m { font-size: 11.5px; color: var(--muted); }
+  .precio .v { font-family: var(--mono); font-weight: 600; font-size: 17px; margin-top: 4px; letter-spacing: -.02em; }
+  .precio .e { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .detalle { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+  .detalle b { color: var(--ink); }
+  .agencia { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; font-size: 12.5px; margin-bottom: 6px; }
+  .agencia .nom { font-weight: 600; }
+  .agencia .ext { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .aviso { border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .aviso.err { background: var(--err-soft); color: var(--err); }
+  .aviso.warn { background: var(--warn-soft); color: var(--warn); }
+  .aviso.ok { background: var(--ok-soft); color: var(--ok); }
+  .aviso.info { background: var(--paper); color: var(--ink-2); border: 1px solid var(--line); }
+  details.crudo { font-size: 12.5px; margin-top: 8px; }
+  details.crudo summary { cursor: pointer; color: var(--muted); }
+  pre { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; font-size: 11.5px; font-family: var(--mono); max-height: 320px; }
+  table.desg { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 6px; }
+  table.desg th, table.desg td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  table.desg th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  table.desg td.num, table.desg th.num { text-align: right; font-family: var(--mono); }
+
+  /* ---------- Paneles laterales (historial / configuración) ---------- */
+  .velo { position: fixed; inset: 0; background: rgba(20,24,31,.35); backdrop-filter: blur(2px); z-index: 40; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .velo.on { opacity: 1; pointer-events: auto; }
+  .lateral { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--card); z-index: 50; box-shadow: var(--sombra-2); transform: translateX(104%); transition: transform .25s cubic-bezier(.2,.8,.2,1); display: flex; flex-direction: column; }
+  .lateral.on { transform: none; }
+  .lateral .cab { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .lateral .cab h2 { font: 600 19px/1 var(--serif); margin: 0; }
+  .lateral .in { padding: 14px 18px; overflow: auto; flex: 1; }
+  .lateral .pie { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; }
+  .hist { border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; background: #fff; transition: border-color .12s; }
+  .hist:hover { border-color: var(--line-2); }
+  .hist .f1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .hist .dest { font-weight: 600; }
+  .hist .fecha { color: var(--muted); font-size: 12px; white-space: nowrap; font-family: var(--mono); }
+  .hist .paq { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .hist .mejores { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .hist .mejores span { font-size: 12px; color: var(--muted); }
+  .hist .mejores b { display: block; font-family: var(--mono); font-size: 13.5px; color: var(--ink); }
+  .hist .acc { display: flex; gap: 6px; margin-top: 8px; }
+  .cfg label { margin-top: 10px; }
+  .cfg .g2 { gap: 8px; }
+  .cfg h3 { margin: 16px 0 4px; font-size: 12px; }
+  .cfg h3:first-child { margin-top: 0; }
+  .cfg .ayuda { margin-bottom: 4px; }
+  .hist.elegible { cursor: pointer; }
+  .hist.elegible:hover { border-color: var(--ink-2); background: var(--paper); }
+  .hist.elegible.activo { border-color: var(--oro); background: var(--oro-soft); }
+  .hist .ped { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+
+  /* ---------- Pedido asignado ---------- */
+  .pedido-vacio { display: flex; align-items: center; gap: 10px; }
+  .pedido-vacio .ayuda { margin: 0; }
+  .pedido-vacio button { white-space: nowrap; flex: 0 0 auto; }
+  .pedido { clear: both; border: 1px solid var(--line); border-radius: var(--r-s); padding: 10px 12px; background: var(--paper); }
+  .pedido .f1 { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .pedido .nom { font-weight: 600; font-size: 14px; }
+  .pedido .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .pedido .acc { display: flex; gap: 2px; flex: 0 0 auto; }
+  .pedido .dest { margin-top: 10px; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .pedido .dest .ancho { grid-column: 1 / -1; }
+  .pedido .dest label { font-size: 11.5px; margin-bottom: 2px; }
+  .pedido .dest input { padding: 7px 9px; font-size: 13.5px; }
+  .pedido .ayuda { margin-top: 8px; }
+
+  /* ---------- Toast ---------- */
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13.5px; opacity: 0; transition: opacity .2s, transform .2s; z-index: 60; pointer-events: none; box-shadow: var(--sombra-2); }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- Animación de entrada ---------- */
+  .aparece { animation: aparece .35s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes aparece { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  @media (max-width: 720px) { .oc-m { display: none; } table.comp td, table.comp th { padding: 8px 6px; } }
+  @media (max-width: 640px) { .topbar .in { padding: 10px 14px; flex-wrap: wrap; gap: 8px; } .marca .sub { display: none; } main { padding: 14px 12px 40px; } .hero { padding: 12px 12px 0; } .tabla-wrap { padding: 0 12px; } .cuerpo, fieldset, .accion { padding-left: 14px; padding-right: 14px; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="in">
+    <div class="marca"><h1>Comparador de envíos</h1><span class="sub">Correo Argentino · Vía Cargo · sucursal a sucursal</span></div>
+    <div class="pills" id="pills"><span class="pill"><i></i> conectando…</span></div>
+    <div class="acc">
+      <button type="button" class="ghost" id="btnHistorial">Historial <span class="cnt" id="cntHist">0</span></button>
+      <button type="button" class="ghost" id="btnConfig">Configuración</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="disposicion">
+  <div class="col-form">
+  <form id="form" class="card" autocomplete="off" data-modo="medidas">
+    <fieldset id="fsPedido">
+      <legend><span>Pedido</span><span class="ayuda" style="margin:0; text-transform:none; letter-spacing:0; font-weight:400">opcional</span></legend>
+      <div class="pedido-vacio" id="pedidoVacio">
+        <button type="button" class="sec chico" id="btnPedido">Asignar pedido…</button>
+        <span class="ayuda">Con un pedido, MiCorreo se abre con los datos del cliente ya cargados.</span>
+      </div>
+      <div class="pedido hidden" id="pedidoCard">
+        <div class="f1">
+          <div><div class="nom" id="pedNombre"></div><div class="meta" id="pedMeta"></div></div>
+          <div class="acc"><button type="button" class="ghost chico" id="pedCambiar">Cambiar</button><button type="button" class="ghost chico" id="pedQuitar" title="Quitar el pedido de esta cotización">✕</button></div>
+        </div>
+        <div class="dest">
+          <div class="ancho"><label for="dest_nombre">Destinatario (nombre y apellido)</label><input id="dest_nombre" type="text"></div>
+          <div class="ancho"><label for="dest_email">Email</label><input id="dest_email" type="email"></div>
+          <div><label for="dest_cod_area">Cód. área</label><input id="dest_cod_area" type="text" inputmode="numeric" maxlength="4" placeholder="11"></div>
+          <div><label for="dest_celular">Celular (sin 0 ni 15)</label><input id="dest_celular" type="text" inputmode="numeric" maxlength="8" placeholder="31308444"></div>
+        </div>
+        <div class="ayuda" id="pedAyuda"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>
+        <span>Paquete</span>
+        <span class="segmentado" role="radiogroup" aria-label="Forma de ingresar el tamaño">
+          <label><input type="radio" name="modo" value="medidas" checked><span>Medidas</span></label>
+          <label><input type="radio" name="modo" value="volumen"><span>Volumen</span></label>
+        </span>
+      </legend>
+      <div class="fila-paquete">
+        <div class="solo-medidas"><label for="largo">Largo (cm)</label><input id="largo" name="largo" type="number" min="1" max="999" step="1" placeholder="20"></div>
+        <div class="solo-medidas"><label for="ancho">Ancho (cm)</label><input id="ancho" name="ancho" type="number" min="1" max="999" step="1" placeholder="15"></div>
+        <div class="solo-medidas"><label for="alto">Alto (cm)</label><input id="alto" name="alto" type="number" min="1" max="999" step="1" placeholder="10"></div>
+        <div class="solo-volumen">
+          <label for="volumen">Volumen del paquete</label>
+          <div class="combo">
+            <input id="volumen" name="volumen" type="text" inputmode="decimal" placeholder="Ej: 3000" disabled>
+            <select id="volumen_unidad" name="volumen_unidad" aria-label="Unidad" disabled><option value="cm3" selected>cm³</option><option value="l">litros</option></select>
+          </div>
+        </div>
+        <div><label for="peso">Peso real (kg)</label><input id="peso" name="peso" type="text" inputmode="decimal" placeholder="2 o 2,5"></div>
+        <div style="grid-column: span 2"><label for="valor">Valor declarado ($)</label><input id="valor" name="valor" type="number" min="1" step="1" value="100000"></div>
+      </div>
+      <div class="ayuda" id="ayudaValor"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span>Destino</span><span id="infoCatalogo" class="ayuda" style="margin:0; text-transform:none; letter-spacing:0; font-weight:400"></span></legend>
+      <label for="destino">Localidad o código postal</label>
+      <div class="cbx">
+        <input id="destino" name="destino" type="text" placeholder="Ej: Córdoba, Munro, 5000…" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="cbxLista" aria-autocomplete="list">
+        <span class="lupa">⌕</span>
+        <div id="cbxLista" class="cbx-lista hidden" role="listbox"></div>
+      </div>
+      <div id="destinoRes" class="destino-res"></div>
+
+      <div id="campoSucursal" style="margin-top:12px">
+        <label for="sucursal_destino">Sucursal del Correo donde retira el destinatario</label>
+        <select id="sucursal_destino" name="sucursal_destino"><option value="">— elegí un destino —</option></select>
+        <div class="ayuda" id="ayudaSuc"></div>
+      </div>
+
+      <details class="avanzado" id="avanzado">
+        <summary>Origen y opciones avanzadas</summary>
+        <div class="in grid g2">
+          <div>
+            <label for="origen_cp">CP de origen (Vía Cargo)</label>
+            <input id="origen_cp" name="origen_cp" type="text" inputmode="numeric" placeholder="1602">
+            <div class="ayuda" id="ayudaOrigen"></div>
+          </div>
+          <div>
+            <label for="sucursal_origen">Sucursal de origen (Correo)</label>
+            <input id="sucursal_origen" name="sucursal_origen" type="text" placeholder="cabecera de la cuenta">
+          </div>
+          <div>
+            <label for="provincia">Provincia para el Correo</label>
+            <select id="provincia" name="provincia"></select>
+            <div class="ayuda" id="ayudaProv"></div>
+          </div>
+          <div>
+            <label for="bultos">Bultos (Vía Cargo)</label>
+            <input id="bultos" name="bultos" type="number" min="1" max="999" step="1" value="1">
+          </div>
+        </div>
+      </details>
+    </fieldset>
+
+    <fieldset>
+      <legend><span>Servicios a consultar</span></legend>
+      <div class="servicios">
+        <label class="srv correo" data-srv="correo_sucursal"><span class="b"></span><span><span class="t">Correo Argentino · Paq.ar</span><span class="d">Paq.ar Clásico, sucursal a sucursal · vía MiCorreo (15–40 s)</span></span><span class="switch"><input type="checkbox" name="srv" value="correo_sucursal" checked><i></i></span></label>
+        <label class="srv vc" data-srv="viacargo_P"><span class="b"></span><span><span class="t">Vía Cargo · Estándar</span><span class="d">Agencia a agencia, pago en origen</span></span><span class="switch"><input type="checkbox" name="srv" value="viacargo_P" checked><i></i></span></label>
+        <label class="srv vc" data-srv="viacargo_D"><span class="b"></span><span><span class="t">Vía Cargo · Estándar, pago en destino</span><span class="d">Lo paga el destinatario al retirar (+15 % del flete)</span></span><span class="switch"><input type="checkbox" name="srv" value="viacargo_D"><i></i></span></label>
+      </div>
+      <label class="check"><input type="checkbox" id="usarCache" checked> Reutilizar cotizaciones recientes (mismo escalón, destino y valor, hasta 30 días) sin volver a consultar</label>
+    </fieldset>
+
+    <div class="accion">
+      <button id="btn" type="submit" class="principal">Comparar tarifas</button>
+      <div id="estado" class="estado"></div>
+    </div>
+  </form>
+  </div>
+
+  <div class="col-main">
+    <section class="card" id="cardAnalisis">
+      <div class="cab"><h2>Análisis del paquete</h2><span class="ayuda" id="analisisResumen" style="margin:0"></span></div>
+      <div class="cuerpo"><div id="analisis" class="analisis-grid"></div></div>
+    </section>
+
+    <section class="card hidden" id="resultado">
+      <div class="cab">
+        <h2>Comparativa <span id="resTitulo" style="font: 400 14px var(--sans); color: var(--muted)"></span></h2>
+        <div class="acciones" id="accionesRes"></div>
+      </div>
+      <div class="hero" id="hero"></div>
+      <div class="tabla-wrap" style="margin-top:14px"><table class="comp"><thead id="compHead"></thead><tbody id="compBody"></tbody></table></div>
+      <div class="cuerpo" id="resNotas"></div>
+    </section>
+    <div class="paneles hidden" id="paneles">
+      <section class="panel correo" id="panelCorreo"></section>
+      <section class="panel vc" id="panelVC"></section>
+    </div>
+  </div>
+</div>
+</main>
+
+<div class="velo" id="velo"></div>
+<aside class="lateral" id="drawerHist" aria-hidden="true">
+  <div class="cab"><h2>Historial</h2><button type="button" class="ghost" data-cerrar>Cerrar ✕</button></div>
+  <div class="in">
+    <input type="search" id="filtroHist" placeholder="Filtrar por destino, CP o medidas…" style="margin-bottom:10px">
+    <div id="historial"></div>
+  </div>
+  <div class="pie"><button type="button" class="sec chico" id="exportCsv">Exportar CSV</button><button type="button" class="sec chico" id="exportJson">Exportar JSON</button><button type="button" class="ghost chico" id="borrarHistorial" style="margin-left:auto; color: var(--err)">Vaciar</button></div>
+</aside>
+<aside class="lateral" id="drawerCfg" aria-hidden="true">
+  <div class="cab"><h2>Configuración</h2><button type="button" class="ghost" data-cerrar>Cerrar ✕</button></div>
+  <div class="in cfg">
+    <h3>Tu negocio (aparece en la ficha para el cliente)</h3>
+    <label for="cfg_negocio">Nombre</label><input id="cfg_negocio" type="text" placeholder="Ej: Tienda Aurora">
+    <label for="cfg_contacto">Contacto (WhatsApp, mail, redes)</label><input id="cfg_contacto" type="text" placeholder="Ej: WhatsApp 11 5555-5555">
+    <label for="cfg_firma">Nota al pie de la ficha</label><input id="cfg_firma" type="text" placeholder="Ej: El envío se despacha dentro de las 24 h de acreditado el pago.">
+
+    <h3>Precio al cliente</h3>
+    <div class="ayuda">Si cobrás el envío con un recargo (embalaje, gestión, margen), acá lo definís. Se muestra junto a la tarifa real y se puede usar en la ficha.</div>
+    <div class="grid g2">
+      <div><label for="cfg_recargo_pct">Recargo (%)</label><input id="cfg_recargo_pct" type="number" min="0" step="0.5" value="0"></div>
+      <div><label for="cfg_recargo_fijo">Recargo fijo ($)</label><input id="cfg_recargo_fijo" type="number" min="0" step="1" value="0"></div>
+    </div>
+    <label for="cfg_redondeo">Redondear hacia arriba a</label>
+    <select id="cfg_redondeo"><option value="1">sin redondeo</option><option value="10">$10</option><option value="50">$50</option><option value="100" selected>$100</option><option value="500">$500</option><option value="1000">$1.000</option></select>
+
+    <h3>Valores por defecto</h3>
+    <div class="grid g2">
+      <div><label for="cfg_origen_cp">CP de origen</label><input id="cfg_origen_cp" type="text" inputmode="numeric" value="1602"></div>
+      <div><label for="cfg_sucursal_origen">Sucursal origen Correo</label><input id="cfg_sucursal_origen" type="text" placeholder="vacío = cabecera"></div>
+      <div><label for="cfg_valor">Valor declarado ($)</label><input id="cfg_valor" type="number" min="1" step="1" value="100000"></div>
+      <div><label for="cfg_validez">Validez de la ficha (días)</label><input id="cfg_validez" type="number" min="0" step="1" value="3"></div>
+    </div>
+
+    <h3>Plazo de referencia del Correo (opcional)</h3>
+    <div class="ayuda">MiCorreo no informa el plazo al cotizar. Si querés mostrar uno orientativo en la comparativa y la ficha, escribilo acá (ej. "3 a 6 días hábiles").</div>
+    <label for="cfg_plazo_clasico">Paq.ar Clásico</label><input id="cfg_plazo_clasico" type="text" placeholder="—">
+
+    <h3>Catálogos</h3>
+    <div class="ayuda" id="cfgCatalogos"></div>
+    <div class="acciones" style="justify-content:flex-start; margin-top:8px">
+      <button type="button" class="sec chico" data-act="localidades">Localidades Vía Cargo</button>
+      <button type="button" class="sec chico" data-act="agencias">Agencias Vía Cargo</button>
+      <button type="button" class="sec chico" data-act="sucursales">Sucursales Correo (requiere sesión)</button>
+    </div>
+  </div>
+  <div class="pie"><button type="button" id="guardarCfg">Guardar configuración</button><button type="button" class="sec" data-cerrar>Cancelar</button></div>
+</aside>
+<aside class="lateral" id="drawerPedidos" aria-hidden="true">
+  <div class="cab"><h2>Pedidos</h2><button type="button" class="ghost" data-cerrar>Cerrar ✕</button></div>
+  <div class="in">
+    <form id="formLoginPedidos" class="cfg hidden" autocomplete="on">
+      <div class="ayuda">Entrá con el mismo usuario y contraseña de pedidosv2. La sesión queda guardada en esta PC; los pedidos solo se leen, no se modifican.</div>
+      <label for="ped_email">Email</label><input id="ped_email" type="email" autocomplete="username">
+      <label for="ped_password">Contraseña</label><input id="ped_password" type="password" autocomplete="current-password">
+      <div class="acciones" style="justify-content:flex-start; margin-top:12px"><button type="submit" id="pedEntrar">Entrar</button></div>
+      <div class="estado" id="pedLoginEstado"></div>
+    </form>
+    <div id="pedListaWrap" class="hidden">
+      <input type="search" id="filtroPedidos" placeholder="Buscar por cliente, código, teléfono o localidad…" style="margin-bottom:10px">
+      <div id="listaPedidos"></div>
+    </div>
+  </div>
+  <div class="pie hidden" id="pedPie"><button type="button" class="sec chico" id="pedActualizar">Actualizar lista</button><button type="button" class="ghost chico" id="pedSalir" style="margin-left:auto">Cerrar sesión</button></div>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script>
+  // =====================================================================
+  //  Reglas tarifarias observadas (copiadas de los cotizadores hermanos)
+  // =====================================================================
+  // Correo (Paq.ar): peso volumétrico = L×A×H/6000; se cobra max(real, volumétrico)
+  // redondeado al escalón siguiente.
+  const CORREO = { FACTOR_VOL: 6000, ESCALONES: [0.5, 1, 2, 3, 5, 10, 15, 20, 25] };
+  // Vía Cargo: franjas por peso real (5/10/20/30/40/50 kg y después por kg) y por
+  // volumen (28/72/120/160/200 dm³, cada una cuesta como 5/10/20/40/50 kg); se
+  // paga la más cara. Más allá: vol/4000 kg (250 kg/m³).
+  const VC = { FRANJAS_PESO: [5, 10, 20, 30, 40, 50], FRANJAS_VOL: [27999, 71999, 120000, 160000, 200000], VOL_EQUIV_KG: [5, 10, 20, 40, 50], FACTOR_VOL_GRANDE: 4000 };
+  VC.POR_KG = VC.FRANJAS_PESO.length;
+  const DIAS_CACHE = 30, MAX_HISTORIAL = 60, MAX_AGENCIAS = 3;
+  const NOMBRES_VC = { "2000": "Estándar", "3000": "Plus RD", "4000": "Plus ED", "0001": "Puerta a puerta" };
+  const TEL_CORREO = "0810-777-7787", WA_VC = "+54 9 11 6207-5652";
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), btn = $("btn"), estado = $("estado");
+
+  // ---------- Utilidades ----------
+  const escapar = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const normalizar = (s) => String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().trim().replace(/\s+/g, " ");
+  const fmtKg = (x) => (+x).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  const fmtN = (x) => Math.round(+x).toLocaleString("es-AR");
+  const fmt$ = (x, dec = 0) => "$ " + (+x).toLocaleString("es-AR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  const dd = (n) => String(n).padStart(2, "0");
+  const fmtFechaCorta = (ts) => { const f = new Date(ts); return `${dd(f.getDate())}/${dd(f.getMonth() + 1)} ${dd(f.getHours())}:${dd(f.getMinutes())}`; };
+  const fmtFecha = (ts) => new Date(ts).toLocaleDateString("es-AR");
+  const leerDecimal = (t) => parseFloat(String(t ?? "").trim().replace(",", "."));
+  const titulo = (s) => String(s || "").toLowerCase().replace(/(^|\s|-)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Del|La|Las|Los|El|Y)\b/g, (m) => m.toLowerCase());
+  function numPrecio(txt) { const m = String(txt || "").match(/[\d.]+,\d+|\d+/); return m ? parseFloat(m[0].replace(/\./g, "").replace(",", ".")) : null; }
+  function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }
+  const soloFecha = (s) => String(s || "").slice(0, 10);
+  let toastTimer;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 2600); }
+  async function api(ruta, cuerpo) {
+    const resp = await fetch(ruta, cuerpo ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) } : undefined);
+    let json; try { json = await resp.json(); } catch (e) { throw new Error(`HTTP ${resp.status}`); }
+    if (!resp.ok) { const err = new Error(json.error || `HTTP ${resp.status}`); err.datos = json; throw err; }
+    return json;
+  }
+
+  // ---------- Configuración ----------
+  const CFG_DEF = { negocio: "", contacto: "", firma: "", recargo_pct: 0, recargo_fijo: 0, redondeo: 100, origen_cp: "1602", sucursal_origen: "", valor: 100000, validez: 3, plazo_clasico: "" };
+  let CFG = { ...CFG_DEF, ...load("comparador:config", {}) };
+  const hayRecargo = () => +CFG.recargo_pct > 0 || +CFG.recargo_fijo > 0;
+  function alCliente(p) {
+    if (p == null) return null;
+    const bruto = p * (1 + (+CFG.recargo_pct || 0) / 100) + (+CFG.recargo_fijo || 0);
+    const r = +CFG.redondeo || 1;
+    return Math.ceil(bruto / r - 1e-9) * r;
+  }
+
+  // =====================================================================
+  //  Análisis del paquete (ambas empresas)
+  // =====================================================================
+  function escalonCorreo(kg) { for (const e of CORREO.ESCALONES) if (kg <= e + 1e-9) return e; return null; }
+  function analizarCorreo(l, a, h, peso) {
+    const vol = l * a * h, pv = vol / CORREO.FACTOR_VOL, pf = Math.max(peso, pv);
+    const manda = pv > peso + 1e-9 ? "tamaño" : (peso > pv + 1e-9 ? "peso" : "ambos");
+    const esc = escalonCorreo(pf), idx = esc === null ? -1 : CORREO.ESCALONES.indexOf(esc);
+    return { vol, pv, pf, manda, esc, anterior: idx > 0 ? CORREO.ESCALONES[idx - 1] : null };
+  }
+  function rangoPesoVC(kg) { for (let i = 0; i < VC.FRANJAS_PESO.length; i++) if (kg <= VC.FRANJAS_PESO[i] + 1e-9) return i; return VC.POR_KG; }
+  function rangoVolVC(cm3) { for (let i = 0; i < VC.FRANJAS_VOL.length; i++) if (cm3 <= VC.FRANJAS_VOL[i] + 1e-9) return VC.FRANJAS_PESO.indexOf(VC.VOL_EQUIV_KG[i]); return VC.POR_KG; }
+  function volMaxRangoVC(r) { let v = null; for (let i = 0; i < VC.FRANJAS_VOL.length; i++) if (VC.VOL_EQUIV_KG[i] <= VC.FRANJAS_PESO[r]) v = VC.FRANJAS_VOL[i]; return v; }
+  function analizarVC(l, a, h, peso) {
+    const vol = l * a * h, rp = rangoPesoVC(peso), rv = rangoVolVC(vol), rango = Math.max(rp, rv);
+    const manda = rv > rp ? "tamaño" : (rp > rv ? "peso" : "ambos");
+    const pv = vol / VC.FACTOR_VOL_GRANDE;
+    const facturable = rango === VC.POR_KG ? Math.max(peso, pv) : VC.FRANJAS_PESO[rango];
+    return { vol, rp, rv, rango, manda, pv, facturable };
+  }
+  const nombreRangoVC = (r) => r === VC.POR_KG ? "más de 50 kg" : `hasta ${VC.FRANJAS_PESO[r]} kg`;
+  const escTxtCorreo = (esc) => esc === null ? "más de 25 kg" : `hasta ${fmtKg(esc)} kg`;
+
+  // Modo por volumen: tres medidas enteras (≤ 999) cuyo producto sea el volumen pedido, o un
+  // vecino a < 0,2 % con medidas más parejas, sin cambiar de escalón (Correo) ni de franja (VC).
+  const MAX_CM = 999, cacheFactor = new Map();
+  function factorizarVolumen(v) {
+    if (cacheFactor.has(v)) return cacheFactor.get(v);
+    const divs = [];
+    for (let i = 1; i * i <= v; i++) if (v % i === 0) { divs.push(i); if (i * i !== v) divs.push(v / i); }
+    let mejor = null;
+    for (const a of divs) {
+      if (a > MAX_CM) continue;
+      const resto = v / a;
+      for (const b of divs) {
+        if (b > a || b > MAX_CM || resto % b !== 0) continue;
+        const c = resto / b;
+        if (c > b) continue;
+        if (!mejor || a - c < mejor.spread) mejor = { dims: [a, b, c], spread: a - c };
+      }
+    }
+    const r = mejor ? mejor.dims : null; cacheFactor.set(v, r); return r;
+  }
+  function medidasDesdeVolumen(volCm3) {
+    const objetivo = Math.max(1, Math.round(volCm3));
+    const esc = escalonCorreo(objetivo / CORREO.FACTOR_VOL), rv = rangoVolVC(objetivo);
+    const ventana = Math.max(3, Math.round(objetivo * 0.002));
+    let mejor = null;
+    for (let k = 0; k <= ventana; k++) for (const v of (k === 0 ? [objetivo] : [objetivo + k, objetivo - k])) {
+      if (v < 1 || escalonCorreo(v / CORREO.FACTOR_VOL) !== esc || rangoVolVC(v) !== rv) continue;
+      const d = factorizarVolumen(v); if (!d) continue;
+      const puntaje = (d[0] - d[2]) + 3 * k;
+      if (!mejor || puntaje < mejor.puntaje) mejor = { dims: d, volumen: v, ajustado: v !== objetivo, puntaje };
+    }
+    return mejor;
+  }
+  const modoActual = () => form.elements.modo.value || "medidas";
+  function leerVolumenCm3() { const v = leerDecimal($("volumen").value); if (!(v > 0)) return NaN; return $("volumen_unidad").value === "l" ? v * 1000 : v; }
+  // Paquete tal como se cotiza (siempre con largo/ancho/alto enteros) o null si falta algo.
+  function leerPaquete() {
+    const peso = leerDecimal($("peso").value);
+    if (modoActual() === "volumen") {
+      const vol = leerVolumenCm3();
+      if (!(vol > 0 && peso > 0)) return null;
+      const conv = medidasDesdeVolumen(vol); if (!conv) return null;
+      const [largo, ancho, alto] = conv.dims;
+      return { modo: "volumen", largo, ancho, alto, peso, volumen_cm3: conv.volumen, volumen_pedido: vol, ajustado: conv.ajustado };
+    }
+    const largo = Math.round(+$("largo").value), ancho = Math.round(+$("ancho").value), alto = Math.round(+$("alto").value);
+    if (!(largo > 0 && ancho > 0 && alto > 0 && peso > 0)) return null;
+    return { modo: "medidas", largo, ancho, alto, peso, volumen_cm3: largo * ancho * alto };
+  }
+  const textoMedidas = (p) => `${p.largo}×${p.ancho}×${p.alto} cm`;
+  const textoPaquete = (p) => p.modo === "volumen" && p.volumen_cm3 ? `${fmtN(p.volumen_cm3)} cm³` : textoMedidas(p);
+
+  function actualizarModo(prefill = true) {
+    const modo = modoActual(), porVol = modo === "volumen";
+    form.dataset.modo = modo;
+    for (const id of ["largo", "ancho", "alto"]) $(id).disabled = porVol;
+    $("volumen").disabled = !porVol; $("volumen_unidad").disabled = !porVol;
+    if (prefill) {
+      const l = +$("largo").value, a = +$("ancho").value, h = +$("alto").value;
+      if (porVol && !$("volumen").value.trim() && l > 0 && a > 0 && h > 0) {
+        const vol = l * a * h; $("volumen").value = $("volumen_unidad").value === "l" ? String(vol / 1000).replace(".", ",") : String(vol);
+      } else if (!porVol && !(l > 0 && a > 0 && h > 0)) {
+        const vol = leerVolumenCm3(), conv = vol > 0 ? medidasDesdeVolumen(vol) : null;
+        if (conv) [$("largo").value, $("ancho").value, $("alto").value] = conv.dims;
+      }
+    }
+    store("comparador:modo", modo);
+  }
+
+  function tipsCorreo(an, pq) {
+    const { largo: l, ancho: a, alto: h, peso } = pq, tips = [];
+    if (an.esc === null) { tips.push("Más de 25 kg facturables: por encima de los escalones verificados. Si podés, dividí el envío."); return tips; }
+    const margen = an.esc - an.pf, volMax = an.esc * CORREO.FACTOR_VOL;
+    if (an.manda === "tamaño") {
+      tips.push(`Podés sumar hasta <b>${fmtKg(an.esc - peso)} kg</b> reales sin cambiar de escalón (el volumétrico ya es ${fmtKg(an.pv)} kg).`);
+    } else if (margen > 0.005) tips.push(`Podés sumar hasta <b>${fmtKg(margen)} kg</b> reales sin cambiar de escalón.`);
+    if (volMax > an.vol) tips.push(`La caja puede crecer hasta <b>${fmtN(volMax)} cm³</b> sin cambiar el precio.`);
+    if (an.anterior === null) tips.push("Ya estás en el escalón más bajo.");
+    return tips;
+  }
+  // Aviso de "cerca de bajar": solo si para caer en el escalón / franja anterior alcanza con
+  // achicar peso real y volumen como mucho UMBRAL_BAJAR cada uno (peso ≤ pesoObj y vol ≤ volObj).
+  const UMBRAL_BAJAR = 0.10;
+  function bloqueBajar(destino, pesoObj, volObj, pq, vol) {
+    const dPeso = pq.peso - pesoObj, dVol = vol - volObj, chips = [];
+    if (dPeso <= 1e-9 && dVol <= 0) return "";
+    if (dPeso / pq.peso > UMBRAL_BAJAR + 1e-9 || dVol / vol > UMBRAL_BAJAR + 1e-9) return "";
+    if (dPeso > 1e-9) chips.push(`<span class="chip">−${fmtKg(Math.ceil(dPeso * 100 - 1e-9) / 100)} kg</span>`);
+    if (dVol > 0) {
+      let corte = "";
+      if (pq.modo !== "volumen") {
+        // la medida que menos cm hay que recortar para llegar al volumen objetivo
+        const { largo: l, ancho: a, alto: h } = pq;
+        const ops = [["largo", Math.floor(volObj / (a * h)), l], ["ancho", Math.floor(volObj / (l * h)), a], ["alto", Math.floor(volObj / (l * a)), h]]
+          .filter(([, max, act]) => max >= 1 && max < act).sort((x, y) => (x[2] - x[1]) - (y[2] - y[1]));
+        if (ops.length) corte = ` <small>(${ops[0][0]} −${ops[0][2] - ops[0][1]} cm)</small>`;
+      }
+      chips.push(`<span class="chip">−${fmtN(Math.ceil(dVol))} cm³${corte}</span>`);
+    }
+    return `<div class="bajar"><span class="t">↓ Bajás ${destino}</span>${chips.join(chips.length > 1 ? '<span class="y">+</span>' : "")}</div>`;
+  }
+  function bajarCorreo(an, pq) {
+    const obj = an.esc === null ? CORREO.ESCALONES[CORREO.ESCALONES.length - 1] : an.anterior;
+    return obj === null ? "" : bloqueBajar(`al escalón de ${fmtKg(obj)} kg`, obj, obj * CORREO.FACTOR_VOL, pq, an.vol);
+  }
+  function bajarVC(an, pq) {
+    if (an.rango === 0) return "";
+    const ant = an.rango - 1;
+    return bloqueBajar(`a la franja de ${fmtKg(VC.FRANJAS_PESO[ant])} kg`, VC.FRANJAS_PESO[ant], volMaxRangoVC(ant), pq, an.vol);
+  }
+  function tipsVC(an, pq) {
+    const { largo: l, ancho: a, alto: h, peso } = pq, tips = [];
+    if (an.rango === VC.POR_KG) { tips.push(`Más de 50 kg facturables: se cobra por kilo sobre ${fmtKg(an.facturable)} kg (peso real o volumen a 250 kg/m³). Conviene dividir el envío.`); return tips; }
+    const pesoMax = VC.FRANJAS_PESO[an.rango], volMax = volMaxRangoVC(an.rango);
+    if (pesoMax - peso > 0.005) tips.push(`Podés sumar hasta <b>${fmtKg(pesoMax - peso)} kg</b> reales sin cambiar de franja.`);
+    if (volMax > an.vol) tips.push(`La caja puede crecer hasta <b>${fmtN(volMax)} cm³</b> sin cambiar el precio.`);
+    if (an.rango === 0) tips.push("Ya estás en la franja más económica.");
+    return tips;
+  }
+  const tagManda = (m) => m === "tamaño" ? '<span class="tag tam">manda el tamaño</span>' : m === "peso" ? '<span class="tag peso">manda el peso</span>' : '<span class="tag peso">empate peso / tamaño</span>';
+
+  function renderAnalisis() {
+    const cont = $("analisis"), pq = leerPaquete();
+    if (!pq) {
+      cont.innerHTML = `<div class="vacio" style="grid-column: 1 / -1">${modoActual() === "volumen" ? "Completá volumen y peso" : "Completá medidas y peso"} para ver cómo cobra cada empresa y cuánto margen tenés.</div>`;
+      $("analisisResumen").textContent = ""; return;
+    }
+    const ac = analizarCorreo(pq.largo, pq.ancho, pq.alto, pq.peso), av = analizarVC(pq.largo, pq.ancho, pq.alto, pq.peso);
+    const pesoVC = Math.round(pq.peso * 10) / 10;
+    $("analisisResumen").textContent = `${textoPaquete(pq)} · ${fmtKg(pq.peso)} kg · ${fmtN(ac.vol)} cm³`;
+    cont.innerHTML = `
+      <div class="an correo">
+        <div class="emp"><img src="/logo-correo.png" alt=""> Correo Argentino · Paq.ar ${tagManda(ac.manda)}</div>
+        ${bajarCorreo(ac, pq)}
+        <div class="kpis">
+          <div class="kpi"><div class="n">Volumétrico</div><div class="v">${fmtKg(ac.pv)} <small>kg</small></div></div>
+          <div class="kpi"><div class="n">Facturable</div><div class="v">${fmtKg(ac.pf)} <small>kg</small></div></div>
+          <div class="kpi"><div class="n">Escalón</div><div class="v">${escTxtCorreo(ac.esc)}</div></div>
+        </div>
+        <ul>${tipsCorreo(ac, pq).map((t) => `<li>${t}</li>`).join("")}</ul>
+      </div>
+      <div class="an vc">
+        <div class="emp"><img src="/logo-viacargo.png" alt=""> Vía Cargo ${tagManda(av.manda)}</div>
+        ${bajarVC(av, pq)}
+        <div class="kpis">
+          <div class="kpi"><div class="n">Por peso</div><div class="v">${nombreRangoVC(av.rp)}</div></div>
+          <div class="kpi"><div class="n">Por volumen</div><div class="v">${av.rv === VC.POR_KG ? `${fmtKg(av.pv)} <small>kg eq.</small>` : nombreRangoVC(av.rv)}</div></div>
+          <div class="kpi"><div class="n">Se cobra como</div><div class="v">${nombreRangoVC(av.rango)}</div></div>
+        </div>
+        <ul>${tipsVC(av, pq).map((t) => `<li>${t}</li>`).join("")}</ul>
+        ${pesoVC !== pq.peso ? `<div class="nota">Vía Cargo acepta un solo decimal en el peso: se cotiza con ${fmtKg(pesoVC)} kg.</div>` : ""}
+      </div>
+      ${pq.modo === "volumen" ? `<div class="detalle" style="grid-column: 1 / -1">Se cotiza como <b>${textoMedidas(pq)}</b> (${fmtN(ac.vol)} cm³): ambas empresas piden medidas, pero el precio depende del volumen y el peso, así que el resultado es el mismo.${pq.ajustado ? ` El volumen se ajustó de ${fmtN(pq.volumen_pedido)} a ${fmtN(ac.vol)} cm³ para expresarlo en cm enteros, sin cambiar de escalón ni de franja.` : ""}</div>` : ""}`;
+  }
+
+  // =====================================================================
+  //  Destino (catálogo unificado por CP)
+  // =====================================================================
+  let DESTINOS = null, porCp = new Map(), destinoElegido = null, SUCURSALES_PROV = {}, ESTADO = null;
+  async function cargarDestinos() {
+    $("infoCatalogo").textContent = "cargando catálogo…";
+    try {
+      const json = await api("/api/destinos");
+      DESTINOS = json.destinos; porCp = new Map(DESTINOS.map((d) => [d.cp, d]));
+      $("infoCatalogo").textContent = `${DESTINOS.length.toLocaleString("es-AR")} destinos`;
+      if (guardado && guardado.destino_cp && !destinoElegido) elegirDestino(porCp.get(guardado.destino_cp), guardado.sucursal_destino);
+      resolverOrigen();
+    } catch (e) {
+      $("infoCatalogo").textContent = "sin catálogo: " + e.message;
+    }
+  }
+  function buscarDestinos(texto, limite = 14) {
+    if (!DESTINOS) return [];
+    const t = normalizar(texto); if (!t) return [];
+    if (/^\d+$/.test(t)) {
+      const ex = porCp.get(t);
+      return (ex ? [ex] : []).concat(DESTINOS.filter((d) => d.cp !== t && d.cp.startsWith(t)).slice(0, limite - 1));
+    }
+    const res = [];
+    for (const d of DESTINOS) {
+      let score = null;
+      if (d.nombre === t) score = 0; else if (d.nombre.startsWith(t)) score = 1;
+      else if (d.alias.some((a) => a === t)) score = 2; else if (d.alias.some((a) => a.startsWith(t))) score = 3;
+      else if (d.nombre.includes(t)) score = 4; else if (d.alias.some((a) => a.includes(t))) score = 5;
+      if (score !== null) res.push([score, d]);
+    }
+    res.sort((x, y) => x[0] - y[0] || x[1].nombre.localeCompare(y[1].nombre));
+    return res.slice(0, limite).map((x) => x[1]);
+  }
+  const cobertura = (d) => `<span class="cob"><span class="dot ${d.correo.sucursales.length ? "correo" : "no"}" title="Correo: ${d.correo.sucursales.length} sucursales"></span><span class="dot ${d.viacargo ? "vc" : "no"}" title="Vía Cargo: ${d.viacargo ? "con agencia" : "sin agencia (solo domicilio o sin servicio)"}"></span></span>`;
+  let cbxActivo = -1, cbxItems = [];
+  function renderCbx(texto) {
+    const lista = $("cbxLista");
+    cbxItems = buscarDestinos(texto); cbxActivo = cbxItems.length ? 0 : -1;
+    if (!texto.trim()) { lista.classList.add("hidden"); $("destino").setAttribute("aria-expanded", "false"); return; }
+    lista.innerHTML = cbxItems.length ? cbxItems.map((d, i) => {
+      const t = normalizar(texto), alias = d.alias.find((a) => a.includes(t) && !d.nombre.includes(t));
+      return `<div class="cbx-item ${i === cbxActivo ? "activo" : ""}" role="option" data-i="${i}">
+        <div class="n">${escapar(d.nombre_bonito)}${alias ? ` <small>· ${escapar(titulo(alias))}</small>` : ""}</div>
+        <div class="cp">${escapar(d.cp)}</div>
+        <div class="p">${escapar(titulo(d.provincia || "provincia desconocida"))}${d.correo.sucursales.length ? ` · ${d.correo.sucursales.length} suc. Correo` : ""}</div>
+        ${cobertura(d)}
+      </div>`;
+    }).join("") : (DESTINOS ? `<div class="cbx-vacio">Sin coincidencias. Probá con el código postal.</div>` : `<div class="cbx-vacio">Cargando catálogo…</div>`);
+    lista.classList.remove("hidden"); $("destino").setAttribute("aria-expanded", "true");
+  }
+  function elegirDestino(d, sucursalPreferida) {
+    destinoElegido = d || null;
+    const res = $("destinoRes");
+    if (!d) { res.classList.remove("on"); res.innerHTML = ""; renderSucursalesDestino(); renderHintsCache(); return; }
+    $("destino").value = `${d.nombre_bonito} (${d.cp})`;
+    $("cbxLista").classList.add("hidden");
+    res.classList.add("on");
+    res.innerHTML = `<div class="t">${escapar(d.nombre_bonito)} <span class="num" style="color:var(--muted); font-weight:400">CP ${escapar(d.cp)}</span> · ${escapar(titulo(d.provincia || "?"))}</div>
+      <div class="cob">
+        <span><span class="dot ${d.correo.sucursales.length ? "correo" : "no"}"></span> Correo: ${d.correo.sucursales.length ? `${d.correo.sucursales.length} sucursal${d.correo.sucursales.length > 1 ? "es" : ""} en el CP` : "sin sucursal en el CP"}${d.provincia ? "" : " · provincia desconocida"}</span>
+        <span><span class="dot ${d.viacargo ? "vc" : "no"}"></span> Vía Cargo: ${d.viacargo ? `con agencia en este CP${d.viacargo.agencias > 1 ? ` (${d.viacargo.agencias})` : ""}` : "sin agencia en este CP"}</span>
+      </div>`;
+    if (d.provincia) $("provincia").value = d.provincia;
+    $("ayudaProv").textContent = d.provincia_fuente === "rango" ? "Provincia estimada por rango de CP: verificala." : "";
+    renderSucursalesDestino(sucursalPreferida);
+    renderHintsCache();
+  }
+  $("destino").addEventListener("input", () => { destinoElegido = null; $("destinoRes").classList.remove("on"); renderCbx($("destino").value); renderSucursalesDestino(); });
+  $("destino").addEventListener("focus", () => { if (!destinoElegido) renderCbx($("destino").value); });
+  $("destino").addEventListener("keydown", (ev) => {
+    const lista = $("cbxLista");
+    if (lista.classList.contains("hidden")) { if (ev.key === "ArrowDown") { renderCbx($("destino").value); ev.preventDefault(); } return; }
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault(); if (!cbxItems.length) return;
+      cbxActivo = (cbxActivo + (ev.key === "ArrowDown" ? 1 : -1) + cbxItems.length) % cbxItems.length;
+      lista.querySelectorAll(".cbx-item").forEach((el, i) => el.classList.toggle("activo", i === cbxActivo));
+      lista.querySelector(".cbx-item.activo")?.scrollIntoView({ block: "nearest" });
+    } else if (ev.key === "Enter") { if (cbxActivo >= 0) { ev.preventDefault(); elegirDestino(cbxItems[cbxActivo]); } }
+    else if (ev.key === "Escape") lista.classList.add("hidden");
+  });
+  $("cbxLista").addEventListener("mousedown", (ev) => { const it = ev.target.closest(".cbx-item"); if (it) { ev.preventDefault(); elegirDestino(cbxItems[+it.dataset.i]); } });
+  document.addEventListener("click", (ev) => { if (!ev.target.closest(".cbx")) $("cbxLista").classList.add("hidden"); });
+  $("destino").addEventListener("blur", () => {
+    // Si escribió un CP exacto o un nombre único y no eligió, lo resolvemos solos.
+    if (destinoElegido) return;
+    const items = buscarDestinos($("destino").value, 2);
+    const t = normalizar($("destino").value);
+    if (items.length && (items[0].cp === t || items[0].nombre === t || items.length === 1)) elegirDestino(items[0]);
+  });
+
+  // Sucursales del Correo para retirar: primero las del CP; opción de ver toda la provincia.
+  async function renderSucursalesDestino(preferida) {
+    const sel = $("sucursal_destino"), ayuda = $("ayudaSuc"), d = destinoElegido;
+    const previa = preferida || sel.value;
+    if (!d) { sel.innerHTML = '<option value="">— elegí un destino —</option>'; ayuda.textContent = ""; return; }
+    let lista = d.correo.sucursales, ambito = "en el CP";
+    if (!lista.length || sel.dataset.ambito === "provincia:" + d.cp) {
+      ambito = `en ${titulo(d.provincia || "la provincia")}`;
+      if (d.provincia) {
+        if (!SUCURSALES_PROV[d.provincia]) {
+          try { SUCURSALES_PROV[d.provincia] = (await api(`/api/sucursales?provincia=${encodeURIComponent(d.provincia)}`)).sucursales; } catch (e) { SUCURSALES_PROV[d.provincia] = []; }
+        }
+        lista = SUCURSALES_PROV[d.provincia].map((s) => ({ ...s, nombre: `${s.nombre} (CP ${s.cp})` }));
+      }
+    }
+    sel.innerHTML = lista.length ? lista.map((s) => `<option value="${escapar(s.codigo)}" data-nombre="${escapar(s.nombre.replace(/ \(CP \d+\)$/, ""))}">${escapar(s.nombre)}</option>`).join("") : '<option value="">— sin sucursales —</option>';
+    if (previa && lista.some((s) => s.codigo === previa)) sel.value = previa;
+    else { const n = normalizar(d.nombre), afin = lista.find((s) => normalizar(s.nombre) === n) || lista.find((s) => normalizar(s.nombre).startsWith(n)); if (afin) sel.value = afin.codigo; }
+    ayuda.innerHTML = `${lista.length} sucursal${lista.length === 1 ? "" : "es"} ${ambito}${d.correo.sucursales.length && ambito === "en el CP" ? ` · <a href="#" data-suc-ambito="provincia">ver toda la provincia</a>` : (d.correo.sucursales.length ? ` · <a href="#" data-suc-ambito="cp">solo las del CP</a>` : "")}`;
+    renderHintsCache();
+  }
+  $("ayudaSuc").addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-suc-ambito]"); if (!a) return; ev.preventDefault();
+    $("sucursal_destino").dataset.ambito = a.dataset.sucAmbito === "provincia" ? "provincia:" + destinoElegido.cp : "";
+    renderSucursalesDestino();
+  });
+  const nombreSucursal = (codigo) => { const o = $("sucursal_destino").querySelector(`option[value="${codigo}"]`); return o ? o.dataset.nombre : codigo; };
+  function resolverOrigen() {
+    const cp = $("origen_cp").value.trim(), d = porCp.get(cp);
+    $("ayudaOrigen").className = "ayuda " + (d && d.viacargo ? "ok" : (cp ? "err" : ""));
+    $("ayudaOrigen").textContent = !cp ? "" : d && d.viacargo ? `✓ ${d.nombre_bonito}` : d ? `${d.nombre_bonito}: sin agencia Vía Cargo en este CP` : "CP no encontrado en el catálogo";
+  }
+  $("origen_cp").addEventListener("input", () => { resolverOrigen(); renderHintsCache(); });
+
+  // =====================================================================
+  //  Pedido asignado (pedidosv2, solo lectura vía /api/pedidos)
+  // =====================================================================
+  let PEDIDO = null, PEDIDOS = null;
+  // Códigos de área de 3 dígitos (sin 0); el 11 es el único de 2 y el resto son de 4.
+  const AREAS_3 = new Set("220 221 223 230 236 237 249 260 261 263 264 266 280 291 294 297 299 336 341 342 343 345 348 351 353 358 362 364 370 376 379 380 381 383 385 387 388".split(" "));
+  // Separa un teléfono argentino en código de área (sin 0) y número (sin 15), como lo pide MiCorreo.
+  function partirTelefono(tel) {
+    let n = String(tel || "").replace(/\D/g, ""), supuesto = false;
+    if (n.length >= 12 && n.startsWith("54")) n = n.slice(2);
+    if (n.length === 11 && n.startsWith("9")) n = n.slice(1);
+    if (n.startsWith("0")) n = n.slice(1);
+    if (n.length === 10 && n.startsWith("15")) { n = "11" + n.slice(2); supuesto = true; }
+    const largo = n.startsWith("11") ? 2 : AREAS_3.has(n.slice(0, 3)) ? 3 : 4;
+    if (n.length === 12 && n.slice(largo, largo + 2) === "15") n = n.slice(0, largo) + n.slice(largo + 2);
+    if (n.length !== 10) return { cod_area: "", celular: n, ok: false };
+    return { cod_area: n.slice(0, largo), celular: n.slice(largo), ok: !supuesto, supuesto };
+  }
+  // Provincia de pedidosv2 → etiqueta de MiCorreo.
+  const provinciaPedido = (p) => { const n = normalizar(p); return n === "CABA" ? "CAPITAL FEDERAL" : n === "GRAN BUENOS AIRES" ? "BUENOS AIRES" : n; };
+  const ESTADO_PED = { ABIERTO: "abierto", CERRADO: "cerrado" };
+
+  function destinatarioActual() {
+    if (!PEDIDO) return null;
+    const v = (id) => $(id).value.trim();
+    return { pedido: { id: PEDIDO.id, codigo: PEDIDO.codigo, nombre: PEDIDO.cliente.nombre }, nombre: v("dest_nombre"), email: v("dest_email"), cod_area: v("dest_cod_area").replace(/\D/g, ""), celular: v("dest_celular").replace(/\D/g, "") };
+  }
+  function renderPedido() {
+    const p = PEDIDO;
+    $("pedidoVacio").classList.toggle("hidden", !!p); $("pedidoCard").classList.toggle("hidden", !p);
+    if (!p) return;
+    const c = p.cliente;
+    $("pedNombre").textContent = c.nombre || "Sin nombre";
+    $("pedMeta").innerHTML = `<span class="num">${escapar(p.codigo)}</span> · ${escapar(ESTADO_PED[p.status] || p.status.toLowerCase())}${c.localidad || c.provincia ? " · " + escapar([c.localidad, c.provincia].filter(Boolean).join(", ")) : ""}${p.tipo_entrega ? " · " + escapar(p.tipo_entrega) : ""}`;
+    validarDestinatario();
+  }
+  function validarDestinatario() {
+    const d = destinatarioActual(); if (!d) return;
+    const faltan = [];
+    if (!d.nombre) faltan.push("nombre");
+    if (!d.email) faltan.push("email");
+    if (!(d.cod_area.length >= 2 && d.celular.length >= 6 && d.cod_area.length + d.celular.length === 10)) faltan.push("celular (área + número = 10 dígitos)");
+    const tel = PEDIDO.cliente.telefono;
+    $("pedAyuda").className = "ayuda" + (faltan.length ? " err" : " ok");
+    $("pedAyuda").textContent = faltan.length ? `Revisá: ${faltan.join(", ")}. MiCorreo los pide para avisarle al destinatario.${tel ? ` Teléfono en el pedido: ${tel}.` : ""}`
+      : (PEDIDO.tel_supuesto ? `✓ Listo para MiCorreo (se tomó el código de área 11 para «${tel}»).` : "✓ Listo para MiCorreo. Podés corregir los datos acá; el pedido no se modifica.");
+  }
+  for (const id of ["dest_nombre", "dest_email", "dest_cod_area", "dest_celular"]) $(id).addEventListener("input", validarDestinatario);
+  for (const id of ["dest_nombre", "dest_email", "dest_cod_area", "dest_celular"]) $(id).addEventListener("change", () => { if (ACTUAL) renderPaneles(); });
+
+  // Lee el pedido fresco de la base (si falla, usa el del listado) y completa el destinatario.
+  async function asignarPedido(p, { sugerir = true } = {}) {
+    let fresco = p;
+    try { fresco = await api(`/api/pedido?id=${encodeURIComponent(p.id)}`); }
+    catch (e) { if (!p.cliente) { toast("No se pudo leer el pedido: " + e.message); return; } }
+    const c = fresco.cliente, tel = partirTelefono(c.telefono);
+    PEDIDO = { ...fresco, tel_supuesto: !!tel.supuesto };
+    $("dest_nombre").value = c.nombre; $("dest_email").value = c.email;
+    $("dest_cod_area").value = tel.cod_area; $("dest_celular").value = tel.celular;
+    renderPedido(); cerrarLaterales();
+    if (sugerir) sugerirDestino(c);
+    if (ACTUAL) renderPaneles();
+  }
+  function quitarPedido() { PEDIDO = null; renderPedido(); if (ACTUAL) renderPaneles(); }
+  // Propone el destino según la localidad del cliente: si hay una única coincidencia exacta, la elige.
+  function sugerirDestino(c) {
+    const n = normalizar(c.localidad); if (!n || !DESTINOS) return;
+    const prov = provinciaPedido(c.provincia), coincide = (d) => d.nombre === n || d.alias.includes(n);
+    if (destinoElegido && coincide(destinoElegido)) return;
+    const exactos = buscarDestinos(c.localidad, 60).filter((d) => coincide(d) && (!prov || !d.provincia || d.provincia === prov));
+    if (exactos.length === 1) { elegirDestino(exactos[0]); toast(`Destino según el pedido: ${exactos[0].nombre_bonito} (${exactos[0].cp}).`); return; }
+    // Sin coincidencias se respeta el destino ya elegido; con varias, hay que elegir el CP.
+    if (destinoElegido && !exactos.length) return;
+    elegirDestino(null);
+    $("destino").value = titulo(c.localidad); renderCbx($("destino").value); $("destino").focus();
+    toast(exactos.length ? `«${titulo(c.localidad)}» tiene varios códigos postales: elegí el correcto.` : `No encontré «${titulo(c.localidad)}» en el catálogo: buscá el destino a mano.`);
+  }
+
+  function mostrarLoginPedidos(mensaje) {
+    $("formLoginPedidos").classList.remove("hidden"); $("pedListaWrap").classList.add("hidden"); $("pedPie").classList.add("hidden");
+    $("pedLoginEstado").className = "estado" + (mensaje ? " err" : ""); $("pedLoginEstado").textContent = mensaje || "";
+    setTimeout(() => $($("ped_email").value ? "ped_password" : "ped_email").focus(), 260);
+  }
+  async function cargarPedidos(forzar = false) {
+    $("formLoginPedidos").classList.add("hidden"); $("pedListaWrap").classList.remove("hidden"); $("pedPie").classList.remove("hidden");
+    if (PEDIDOS && !forzar) { renderPedidos(); return; }
+    $("listaPedidos").innerHTML = '<div class="vacio"><span class="spin"></span>Leyendo pedidos…</div>';
+    try {
+      const r = await api("/api/pedidos");
+      PEDIDOS = r.pedidos; $("pedSalir").textContent = `Cerrar sesión${r.email ? ` (${r.email})` : ""}`;
+      renderPedidos(); setTimeout(() => $("filtroPedidos").focus(), 260);
+    } catch (e) {
+      if (e.datos && e.datos.sin_sesion) { PEDIDOS = null; mostrarLoginPedidos(ESTADO && ESTADO.pedidos && ESTADO.pedidos.conectado ? e.message : ""); return; }
+      $("listaPedidos").innerHTML = `<div class="aviso err">${escapar(e.message)}</div>`;
+    }
+  }
+  function renderPedidos() {
+    const filtro = normalizar($("filtroPedidos").value), cont = $("listaPedidos");
+    const lista = (PEDIDOS || []).filter((p) => !filtro || normalizar(`${p.codigo} ${p.cliente.nombre} ${p.cliente.telefono} ${p.cliente.localidad} ${p.cliente.provincia} ${p.cliente.email}`).includes(filtro)
+      || (/^\d{3,}$/.test(filtro) && p.cliente.telefono.replace(/\D/g, "").includes(filtro)));
+    if (!lista.length) { cont.innerHTML = `<div class="vacio">${PEDIDOS && PEDIDOS.length ? "Ningún pedido coincide." : "No hay pedidos abiertos ni cerrados."}</div>`; return; }
+    cont.innerHTML = lista.slice(0, 80).map((p) => {
+      const c = p.cliente, envio = p.tipo_entrega === "Correo Argentino" ? "correo" : p.tipo_entrega === "Via Cargo" ? "vc" : "gris";
+      return `<div class="hist elegible${PEDIDO && PEDIDO.id === p.id ? " activo" : ""}" data-ped="${escapar(p.id)}" role="button" tabindex="0">
+        <div class="f1"><span class="dest">${escapar(c.nombre || "Sin nombre")}</span><span class="fecha">${p.timestamp ? fmtFechaCorta(p.timestamp) : ""}</span></div>
+        <div class="paq"><span class="num">${escapar(p.codigo)}</span> · ${escapar(ESTADO_PED[p.status] || p.status.toLowerCase())}${c.localidad || c.provincia ? " · " + escapar([c.localidad, c.provincia].filter(Boolean).join(", ")) : ""}</div>
+        <div class="paq">${c.telefono ? escapar(c.telefono) : "sin teléfono"}${c.email ? " · " + escapar(c.email) : " · sin email"}${p.tipo_entrega ? ` <span class="tag ${envio}">${escapar(p.tipo_entrega)}</span>` : ""}</div>
+      </div>`;
+    }).join("") + (lista.length > 80 ? `<div class="detalle">… y ${lista.length - 80} más: afiná la búsqueda.</div>` : "");
+  }
+  const elegirDeLista = (el) => { const p = (PEDIDOS || []).find((x) => x.id === el.dataset.ped); if (p) asignarPedido(p); };
+  $("listaPedidos").addEventListener("click", (ev) => { const el = ev.target.closest("[data-ped]"); if (el) elegirDeLista(el); });
+  $("listaPedidos").addEventListener("keydown", (ev) => { const el = ev.target.closest("[data-ped]"); if (el && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); elegirDeLista(el); } });
+  $("filtroPedidos").addEventListener("input", renderPedidos);
+  $("filtroPedidos").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { const el = $("listaPedidos").querySelector("[data-ped]"); if (el) { ev.preventDefault(); elegirDeLista(el); } } });
+  const abrirPedidos = () => { abrirLateral("drawerPedidos"); cargarPedidos(); };
+  $("btnPedido").addEventListener("click", abrirPedidos);
+  $("pedCambiar").addEventListener("click", abrirPedidos);
+  $("pedQuitar").addEventListener("click", quitarPedido);
+  $("pedActualizar").addEventListener("click", () => cargarPedidos(true));
+  $("pedSalir").addEventListener("click", async () => {
+    try { await api("/api/pedidos/salir", {}); } catch (e) {}
+    PEDIDOS = null; if (ESTADO) ESTADO.pedidos = { conectado: false }; $("ped_password").value = ""; mostrarLoginPedidos();
+  });
+  $("formLoginPedidos").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const b = $("pedEntrar"); b.disabled = true; $("pedLoginEstado").className = "estado"; $("pedLoginEstado").innerHTML = '<span class="spin"></span>Entrando…';
+    try {
+      const r = await api("/api/pedidos/login", { email: $("ped_email").value, password: $("ped_password").value });
+      if (ESTADO) ESTADO.pedidos = r;
+      $("ped_password").value = ""; await cargarPedidos(true);
+    } catch (e) { $("pedLoginEstado").className = "estado err"; $("pedLoginEstado").textContent = e.message; }
+    finally { b.disabled = false; }
+  });
+
+  // =====================================================================
+  //  Servicios, caché y hints
+  // =====================================================================
+  const serviciosElegidos = () => Array.from(form.querySelectorAll('input[name="srv"]:checked')).map((i) => i.value);
+  form.querySelectorAll('input[name="srv"]').forEach((i) => i.addEventListener("change", () => { i.closest(".srv").classList.toggle("off", !i.checked); store("comparador:servicios", serviciosElegidos()); renderHintsCache(); }));
+
+  // Clave de caché: mismo escalón/franja + destino + valor + origen → mismo precio.
+  function claveCache(srv, pq, d) {
+    const valor = String(+$("valor").value || 0);
+    if (srv.startsWith("correo")) {
+      const an = analizarCorreo(pq.largo, pq.ancho, pq.alto, pq.peso);
+      const entrega = srv.split("_")[1];
+      const dest = entrega === "sucursal" ? $("sucursal_destino").value : d.cp;
+      if (!dest) return null;
+      return ["correo", entrega, $("provincia").value, dest, ($("sucursal_origen").value.trim().toUpperCase() || "CAB"), an.esc === null ? `pf:${an.pf.toFixed(2)}` : `esc:${an.esc}`, valor].join("|");
+    }
+    const an = analizarVC(pq.largo, pq.ancho, pq.alto, pq.peso);
+    const valorVC = clampValorVC(+valor);
+    return ["vc", srv.split("_")[1], $("origen_cp").value.trim(), d.cp, an.rango === VC.POR_KG ? `kg:${an.facturable.toFixed(1)}` : `r:${an.rango}`, String(valorVC)].join("|");
+  }
+  function buscarCache(clave) { const c = clave && load("comparador:cache", {})[clave]; return c && Date.now() - c.fecha <= DIAS_CACHE * 864e5 ? c : null; }
+  function guardarCache(clave, r) {
+    if (!clave) return;
+    const cache = load("comparador:cache", {}), ahora = Date.now();
+    for (const k of Object.keys(cache)) if (ahora - cache[k].fecha > DIAS_CACHE * 864e5) delete cache[k];
+    cache[clave] = { fecha: ahora, r };
+    store("comparador:cache", cache);
+  }
+  function renderHintsCache() {
+    const pq = leerPaquete(), d = destinoElegido;
+    form.querySelectorAll(".srv").forEach((el) => {
+      const srv = el.dataset.srv, dsc = el.querySelector(".d");
+      dsc.querySelector(".cache")?.remove();
+      if (!pq || !d) return;
+      const c = buscarCache(claveCache(srv, pq, d));
+      if (c) { const s = document.createElement("span"); s.className = "cache"; s.textContent = ` · en caché del ${fmtFecha(c.fecha)}`; dsc.appendChild(s); }
+    });
+  }
+  let LIMITES_VC = { minimo: 100000, maximo: 1000000 };
+  const clampValorVC = (v) => Math.min(LIMITES_VC.maximo, Math.max(LIMITES_VC.minimo, v));
+  function renderAyudaValor() {
+    const v = +$("valor").value || 0;
+    const c = clampValorVC(v);
+    $("ayudaValor").innerHTML = c !== v ? `Vía Cargo solo admite entre ${fmt$(LIMITES_VC.minimo)} y ${fmt$(LIMITES_VC.maximo)}: se cotiza con <b>${fmt$(c)}</b> (seguro 5 %). El Correo usa el valor real.` : "Cubre el seguro en ambas empresas. Vía Cargo cobra 5 % del valor declarado.";
+  }
+
+  // =====================================================================
+  //  Cotizar (en paralelo, resultados progresivos)
+  // =====================================================================
+  let ACTUAL = null;  // cotización en curso / última
+  // Solo envíos de sucursal a sucursal: Paq.ar Clásico y Vía Cargo Estándar (agencia → agencia).
+  const DEF_SERV = {
+    correo_sucursal: { empresa: "correo", entrega: "sucursal", titulo: "Correo Argentino · Paq.ar" },
+    viacargo_P: { empresa: "viacargo", pago: "P", titulo: "Vía Cargo · Estándar (pago en origen)" },
+    viacargo_D: { empresa: "viacargo", pago: "D", titulo: "Vía Cargo · Estándar (pago en destino)" },
+  };
+  const PRODUCTO_VC = "2000";
+
+  // Convierte cada respuesta en filas homogéneas: { empresa, servicio, cod, pago, precio, plazo }.
+  function filasDe(srv, r) {
+    const def = DEF_SERV[srv]; if (!def) return [];
+    const filas = [];
+    if (def.empresa === "correo") {
+      // MiCorreo también devuelve Expreso (y a veces Hoy); solo se usa Clásico.
+      if (r.clasico) filas.push({ srv, empresa: "correo", servicio: "Paq.ar Clásico", cod: "clasico", pago: "origen", precio: numPrecio(r.clasico), precio_txt: r.clasico, plazo: CFG.plazo_clasico || "", disponible: true,
+        destino_txt: `Sucursal ${titulo(r.destino?.nombre || "")}` });
+    } else {
+      for (const p of r.productos) {
+        if (p.codigo !== PRODUCTO_VC) continue;
+        filas.push({ srv, empresa: "viacargo", servicio: p.nombre, cod: p.codigo, pago: def.pago === "D" ? "destino" : "origen", precio: p.permitido ? p.total : null, precio_txt: p.total_txt,
+          plazo: p.entrega_estimada ? "estimada " + soloFecha(p.entrega_estimada) : "", disponible: p.permitido, modalidad: p.modalidad, resumen: p.resumen,
+          destino_txt: `Agencia en ${titulo(r.destino?.nombre || "")}` });
+      }
+    }
+    return filas;
+  }
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const pq = leerPaquete();
+    if (!pq) { estado.className = "estado err"; estado.textContent = modoActual() === "volumen" ? "Revisá el volumen y el peso." : "Revisá las medidas y el peso: tienen que ser mayores a cero."; return; }
+    if (!destinoElegido) { estado.className = "estado err"; estado.textContent = "Elegí un destino del listado (por nombre o CP)."; $("destino").focus(); return; }
+    const srvs = serviciosElegidos().filter((s) => DEF_SERV[s]);
+    if (!srvs.length) { estado.className = "estado err"; estado.textContent = "Activá al menos un servicio para consultar."; return; }
+    const d = destinoElegido, valor = +$("valor").value || CFG.valor;
+    const datos = {
+      ...pq, valor, destino_cp: d.cp, destino_nombre: d.nombre_bonito, provincia: $("provincia").value || d.provincia,
+      sucursal_destino: $("sucursal_destino").value, sucursal_nombre: nombreSucursal($("sucursal_destino").value),
+      sucursal_origen: $("sucursal_origen").value.trim(), origen_cp: $("origen_cp").value.trim() || CFG.origen_cp, bultos: +$("bultos").value || 1,
+      destinatario: destinatarioActual(),
+    };
+    store("comparador:ultimo", { destino_cp: d.cp, sucursal_destino: datos.sucursal_destino, origen_cp: datos.origen_cp, sucursal_origen: datos.sucursal_origen, valor });
+
+    // Validaciones por servicio (se informan como error en la fila, no bloquean el resto).
+    const usarCache = $("usarCache").checked;
+    const trabajos = srvs.map((srv) => {
+      const t = { srv, def: DEF_SERV[srv], estado: "pendiente", r: null, error: null, filas: [], fuente: "live", clave: claveCache(srv, pq, d) };
+      if (srv === "correo_sucursal" && !datos.sucursal_destino) t.error = "Elegí la sucursal del Correo donde retira el destinatario.";
+      if (srv.startsWith("correo") && !datos.provincia) t.error = "Falta la provincia para el Correo (opciones avanzadas).";
+      if (srv.startsWith("viacargo") && !d.viacargo) t.error = "Vía Cargo no tiene agencia en este CP (no se cotiza entrega a domicilio).";
+      if (srv.startsWith("viacargo") && !(porCp.get(datos.origen_cp)?.viacargo)) t.error = `El CP de origen ${datos.origen_cp} no tiene agencia Vía Cargo.`;
+      if (t.error) t.estado = "error";
+      const c = usarCache && !t.error ? buscarCache(t.clave) : null;
+      if (c) { t.estado = "ok"; t.r = c.r; t.fuente = "cache"; t.fecha_cache = c.fecha; t.filas = filasDe(srv, c.r); }
+      return t;
+    });
+    ACTUAL = { id: Date.now(), fecha: Date.now(), datos, destino: { cp: d.cp, nombre: d.nombre_bonito, provincia: d.provincia }, trabajos, an: { correo: analizarCorreo(pq.largo, pq.ancho, pq.alto, pq.peso), vc: analizarVC(pq.largo, pq.ancho, pq.alto, pq.peso) }, agencias: null };
+    const cot = ACTUAL;
+
+    btn.disabled = true; estado.className = "estado"; estado.innerHTML = '<span class="spin"></span>Consultando…';
+    renderResultado();
+    $("resultado").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    // Datos auxiliares (agencias de Vía Cargo en origen y destino) en paralelo.
+    const pAgencias = (async () => {
+      try {
+        const [o, dst] = await Promise.all([api(`/api/agencias?cp=${encodeURIComponent(datos.origen_cp)}&localidad=${encodeURIComponent(porCp.get(datos.origen_cp)?.nombre || "")}`), api(`/api/agencias?cp=${encodeURIComponent(d.cp)}&localidad=${encodeURIComponent(d.nombre)}`)]);
+        cot.agencias = { origen: o.agencias, destino: dst.agencias };
+      } catch (e) { cot.agencias = { origen: [], destino: [] }; }
+      if (cot === ACTUAL) renderPaneles();
+    })();
+
+    const correr = async (t) => {
+      if (t.estado !== "pendiente") return;
+      t.estado = "cargando"; renderResultado();
+      try {
+        if (t.def.empresa === "correo") {
+          t.r = await api("/api/correo/cotizar", { provincia: datos.provincia, entrega: t.def.entrega, cp: d.cp, sucursal_destino: datos.sucursal_destino, sucursal_origen: datos.sucursal_origen, peso: pq.peso, largo: pq.largo, ancho: pq.ancho, alto: pq.alto, valor });
+          if (t.def.entrega === "sucursal" && t.r.destino?.sucursal) {
+            try { t.r.destino.detalle = await api(`/api/sucursal?codigo=${encodeURIComponent(t.r.destino.sucursal)}`); } catch (e) {}
+          }
+        } else {
+          t.r = await api("/api/viacargo/cotizar", { origen: datos.origen_cp, destino: d.cp, peso: Math.round(pq.peso * 10) / 10, largo: pq.largo, ancho: pq.ancho, alto: pq.alto, valor: clampValorVC(valor), pago: t.def.pago, bultos: datos.bultos });
+          delete t.r.raw;
+        }
+        t.filas = filasDe(t.srv, t.r);
+        if (!t.filas.length) throw new Error("El sitio no devolvió precios para estos parámetros.");
+        t.estado = "ok"; guardarCache(t.clave, t.r);
+      } catch (e) { t.estado = "error"; t.error = e.message; }
+      if (cot === ACTUAL) { renderResultado(); guardarEnHistorial(cot); }
+    };
+    // Todas las consultas en paralelo (el servidor serializa las del Correo).
+    const correo = trabajos.filter((t) => t.def.empresa === "correo"), vc = trabajos.filter((t) => t.def.empresa === "viacargo");
+    await Promise.all([...vc.map(correr), (async () => { for (const t of correo) await correr(t); })(), pAgencias]);
+    if (cot === ACTUAL) {
+      guardarEnHistorial(cot); renderResultado(); renderHintsCache();
+      const errores = trabajos.filter((t) => t.estado === "error").length;
+      estado.className = "estado" + (errores ? " err" : ""); estado.textContent = errores ? `${errores} consulta${errores > 1 ? "s" : ""} con error (ver comparativa).` : "";
+      btn.disabled = false;
+    }
+  });
+
+  // =====================================================================
+  //  Render del resultado
+  // =====================================================================
+  const logoDe = (emp, cls = "lg") => `<img class="${cls}" src="/logo-${emp === "correo" ? "correo" : "viacargo"}.png" alt="">`;
+  const nombreEmp = (emp) => emp === "correo" ? "Correo Argentino" : "Vía Cargo";
+  const todasFilas = (c) => c.trabajos.flatMap((t) => t.filas);
+  const filasValidas = (c) => todasFilas(c).filter((f) => f.disponible && f.precio != null);
+  const masBarata = (filas) => filas.reduce((m, f) => (!m || f.precio < m.precio ? f : m), null);
+  const pctDif = (a, b) => b > 0 ? Math.round((a - b) / b * 100) : 0;
+
+  function renderResultado() {
+    const c = ACTUAL; if (!c) return;
+    $("resultado").classList.remove("hidden"); $("paneles").classList.remove("hidden");
+    const d = c.datos;
+    $("resTitulo").textContent = `→ ${c.destino.nombre} (${c.destino.cp}) · ${textoPaquete(d)} · ${fmtKg(d.peso)} kg`;
+    const validas = filasValidas(c), pendientes = c.trabajos.some((t) => t.estado === "pendiente" || t.estado === "cargando");
+    const mejor = masBarata(validas);
+    const otras = validas.filter((f) => f !== mejor).sort((a, b) => a.precio - b.precio).slice(0, 2);
+
+    // Hero: la más económica y hasta dos alternativas.
+    const sub = (f) => `<div class="sub-mejor"><div class="et">${nombreEmp(f.empresa)}</div><div class="srvn">${logoDe(f.empresa)} ${escapar(f.servicio)}${f.pago === "destino" ? " · pago en destino" : ""}</div><div class="pv">${fmt$(f.precio)}</div><div class="dif">+${fmt$(f.precio - mejor.precio)} (+${pctDif(f.precio, mejor.precio)} %) vs. la mejor${hayRecargo() ? ` · al cliente ${fmt$(alCliente(f.precio))}` : ""}</div></div>`;
+    $("hero").className = "hero h" + (mejor ? 1 + otras.length : 1);
+    $("hero").innerHTML = mejor ? `
+      <div class="mejor aparece">${logoDe(mejor.empresa, "logo")}
+        <div><div class="et"><i></i> Opción más económica${pendientes ? " · por ahora" : ""}</div><div class="srvn">${escapar(mejor.servicio)}<small>${nombreEmp(mejor.empresa)} · sucursal a sucursal${mejor.pago === "destino" ? " · pago en destino" : ""}</small></div></div>
+        <div><div class="pv">${fmt$(mejor.precio)}</div><div class="dif">${otras[0] ? `Le sigue ${escapar(otras[0].servicio)} (${nombreEmp(otras[0].empresa)}) a ${fmt$(otras[0].precio)}: ahorrás ${fmt$(otras[0].precio - mejor.precio)}.` : ""}${hayRecargo() ? ` Precio al cliente: <b>${fmt$(alCliente(mejor.precio))}</b>.` : ""}</div></div>
+      </div>${otras.map(sub).join("")}`
+      : `<div class="mejor vacio-mejor">${pendientes ? '<span class="spin"></span>Esperando la primera respuesta…' : "Ninguna consulta devolvió precios."}</div>`;
+
+    // Tabla ordenada por precio.
+    const conRecargo = hayRecargo();
+    $("compHead").innerHTML = `<tr><th>Empresa</th><th>Servicio</th><th class="oc-m">Pago</th><th>Plazo</th><th class="num">Tarifa</th>${conRecargo ? '<th class="num">Al cliente</th>' : ""}<th class="num">vs. mejor</th></tr>`;
+    const fs = todasFilas(c).sort((a, b) => (a.precio ?? Infinity) - (b.precio ?? Infinity));
+    const pend = c.trabajos.filter((t) => t.estado === "cargando" || t.estado === "pendiente"), errs = c.trabajos.filter((t) => t.estado === "error");
+    $("compBody").innerHTML = fs.map((f) => `<tr class="${f === mejor ? "top" : ""} ${f.disponible ? "" : "nodisp"}">
+          <td><span class="emp">${logoDe(f.empresa)} ${nombreEmp(f.empresa)}</span></td>
+          <td><span class="srvn">${escapar(f.servicio)}${f === mejor ? ' <span class="tag oro">más económica</span>' : ""}<small>${escapar(f.destino_txt || "")}</small></span></td>
+          <td class="oc-m">${f.pago === "destino" ? "en destino" : "en origen"}</td><td>${escapar(f.plazo || "—")}</td>
+          <td class="tarifa num">${f.disponible && f.precio != null ? fmt$(f.precio) : "no disponible"}</td>
+          ${conRecargo ? `<td class="tarifa num" style="color:var(--ink-2)">${f.disponible && f.precio != null ? fmt$(alCliente(f.precio)) : "—"}</td>` : ""}
+          <td class="dif num">${f.disponible && f.precio != null && mejor ? (f === mejor ? "—" : `+${fmt$(f.precio - mejor.precio)} · +${pctDif(f.precio, mejor.precio)} %`) : ""}</td>
+        </tr>`).join("") +
+      pend.map((t) => `<tr class="pend"><td><span class="emp">${logoDe(t.def.empresa)} ${nombreEmp(t.def.empresa)}</span></td><td colspan="${conRecargo ? 6 : 5}"><span class="spin"></span>${escapar(t.def.titulo)} · ${t.estado === "cargando" ? "consultando…" : "en cola"} <span class="skl"></span></td></tr>`).join("") +
+      errs.map((t) => `<tr class="errf"><td><span class="emp">${logoDe(t.def.empresa)} ${nombreEmp(t.def.empresa)}</span></td><td colspan="${conRecargo ? 6 : 5}">${escapar(t.def.titulo)}: ${escapar(t.error)}</td></tr>`).join("");
+
+    const notas = [];
+    const deCache = c.trabajos.filter((t) => t.fuente === "cache");
+    if (deCache.length) notas.push(`<span class="tag oro">de caché</span> ${deCache.map((t) => `${escapar(t.def.titulo)} (${fmtFecha(t.fecha_cache)})`).join(" · ")}. Desactivá «Reutilizar cotizaciones recientes» para consultar de nuevo.`);
+    if (clampValorVC(d.valor) !== d.valor && c.trabajos.some((t) => t.def.empresa === "viacargo")) notas.push(`Vía Cargo se cotizó con valor declarado ${fmt$(clampValorVC(d.valor))} (límite del cotizador); el Correo con ${fmt$(d.valor)}.`);
+    if (Math.round(d.peso * 10) / 10 !== d.peso && c.trabajos.some((t) => t.def.empresa === "viacargo")) notas.push(`Vía Cargo se cotizó con ${fmtKg(Math.round(d.peso * 10) / 10)} kg (admite un solo decimal).`);
+    notas.push(`Correo: escalón ${escTxtCorreo(c.an.correo.esc)} (facturable ${fmtKg(c.an.correo.pf)} kg). Vía Cargo: se cobra como ${nombreRangoVC(c.an.vc.rango)}. Tarifas con IVA, vigentes al momento de la consulta.`);
+    $("resNotas").innerHTML = `<div class="detalle">${notas.map((n) => `<div>${n}</div>`).join("")}</div>`;
+
+    $("accionesRes").innerHTML = `
+      <button type="button" class="sec chico" id="copiarTexto" ${validas.length ? "" : "disabled"}>Copiar resumen</button>
+      <button type="button" class="chico" id="compartir" ${validas.length ? "" : "disabled"}>Ficha para el cliente</button>`;
+    $("copiarTexto").addEventListener("click", () => copiarTexto(c));
+    $("compartir").addEventListener("click", () => abrirFicha(c));
+    renderPaneles();
+  }
+
+  function renderPaneles() {
+    const c = ACTUAL; if (!c) return;
+    // ---- Correo ----
+    const tc = c.trabajos.filter((t) => t.def.empresa === "correo");
+    let html = `<div class="cab"><div class="t"><img src="/logo-correo.png" alt=""> Correo Argentino · Paq.ar</div><div class="acciones">${tc.filter((t) => t.estado === "ok").map((t) => `<button type="button" class="sec chico" data-abrir="${t.def.entrega}" title="Abrir MiCorreo con esta cotización cargada para completar el destinatario y pagar">Continuar en MiCorreo</button>`).join("")}</div></div>`;
+    if (tc.some((t) => t.estado === "ok")) {
+      const dst = destinatarioPara(c);
+      html += `<div class="in detalle">${dst ? `<b>Destinatario para MiCorreo:</b> ${escapar(dst.nombre || "sin nombre")}${dst.cod_area || dst.celular ? ` · cel. (${escapar(dst.cod_area)}) ${escapar(dst.celular)}` : ""}${dst.email ? ` · ${escapar(dst.email)}` : ""} · pedido <span class="num">${escapar(dst.pedido.codigo)}</span>`
+        : `Sin pedido asignado: el destinatario se completa a mano en MiCorreo. <a href="#" data-asignar>Asignar pedido</a>`}</div>`;
+    }
+    if (!tc.length) html += `<div class="in vacio">No se consultó al Correo.</div>`;
+    for (const t of tc) {
+      html += `<div class="in"><h4>${escapar(t.def.titulo)} ${t.fuente === "cache" ? `<span class="tag oro">caché ${fmtFecha(t.fecha_cache)}</span>` : ""}${t.r && t.r._segundos ? `<span class="tag gris">${t.r._segundos} s</span>` : ""}</h4>`;
+      if (t.estado === "error") html += `<div class="aviso err">${escapar(t.error)}</div>`;
+      else if (t.estado !== "ok") html += `<div class="detalle"><span class="spin"></span>${t.estado === "cargando" ? "Consultando MiCorreo (15–40 s; si la sesión venció, se vuelve a iniciar sola)…" : "En cola detrás de la otra consulta al Correo…"}</div>`;
+      else {
+        const r = t.r, mejorP = masBarata(t.filas);
+        html += `<div class="precios">${t.filas.map((f) => `<div class="precio ${f === mejorP ? "mejor-p" : ""}"><div class="n">${escapar(f.servicio)}</div><div class="m">${escapar(f.plazo || "retiro en sucursal")}</div><div class="v">${fmt$(f.precio)}</div>${hayRecargo() ? `<div class="e">al cliente ${fmt$(alCliente(f.precio))}</div>` : ""}</div>`).join("")}</div>`;
+        const o = r.origen || {}, dst = r.destino || {}, det = dst.detalle || {};
+        html += `<div class="detalle" style="margin-top:10px"><div><b>Origen:</b> sucursal ${escapar(titulo(o.nombre || o.sucursal || "-"))} (CP ${escapar(o.cp || "-")})</div>`;
+        html += `<div><b>Destino:</b> sucursal ${escapar(titulo(dst.nombre || ""))} (${escapar(dst.sucursal)}, CP ${escapar(dst.cp)})${det.direccion ? ` · ${escapar(titulo(det.direccion))}${det.localidad ? ", " + escapar(titulo(det.localidad)) : ""}` : ""}${det.horario ? ` · <b>Horario:</b> ${escapar(det.horario.toLowerCase())}` : ""}${det.mapa ? ` · <a href="${escapar(det.mapa)}" target="_blank" rel="noopener">mapa</a>` : ""}</div>`;
+        if (r._advertencia) html += `<div class="aviso warn" style="margin-top:6px">${escapar(r._advertencia)}</div>`;
+        html += `</div><details class="crudo"><summary>Respuesta completa</summary><pre>${escapar(JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k]) => k !== "expreso" && k !== "hoy")), null, 2))}</pre></details>`;
+      }
+      html += `</div>`;
+    }
+    $("panelCorreo").innerHTML = html;
+    $("panelCorreo").querySelectorAll("[data-abrir]").forEach((b) => b.addEventListener("click", () => abrirMiCorreo(b.dataset.abrir, c, b)));
+    $("panelCorreo").querySelector("[data-asignar]")?.addEventListener("click", (ev) => { ev.preventDefault(); abrirPedidos(); });
+
+    // ---- Vía Cargo ----
+    const tv = c.trabajos.filter((t) => t.def.empresa === "viacargo");
+    html = `<div class="cab"><div class="t"><img src="/logo-viacargo.png" alt=""> Vía Cargo</div><div class="acciones"><a class="sec chico" style="text-decoration:none; padding:5px 10px; border:1px solid var(--line-2); border-radius:9px; color:var(--ink); font-size:12.5px" href="https://viacargo.com.ar/cotizar-envio/" target="_blank" rel="noopener">Sitio de Vía Cargo ↗</a></div></div>`;
+    if (!tv.length) html += `<div class="in vacio">No se consultó a Vía Cargo.</div>`;
+    for (const t of tv) {
+      html += `<div class="in"><h4>${escapar(t.def.titulo)} ${t.fuente === "cache" ? `<span class="tag oro">caché ${fmtFecha(t.fecha_cache)}</span>` : ""}${t.r && t.r._segundos ? `<span class="tag gris">${t.r._segundos} s</span>` : ""}</h4>`;
+      if (t.estado === "error") html += `<div class="aviso err">${escapar(t.error)}</div>`;
+      else if (t.estado !== "ok") html += `<div class="detalle"><span class="spin"></span>Consultando la API de Vía Cargo…</div>`;
+      else {
+        const r = t.r, mejorP = masBarata(t.filas.filter((f) => f.disponible));
+        html += t.filas.length ? `<div class="precios">${t.filas.map((f) => `<div class="precio ${f === mejorP ? "mejor-p" : ""} ${f.disponible ? "" : "nodisp"}"><div class="n">${escapar(f.servicio)}</div><div class="m">${escapar(f.modalidad)}</div><div class="v">${f.disponible ? fmt$(f.precio) : "no disponible"}</div><div class="e">${escapar(f.plazo)}${hayRecargo() && f.disponible ? ` · al cliente ${fmt$(alCliente(f.precio))}` : ""}</div></div>`).join("")}</div>` : `<div class="aviso warn">Vía Cargo no ofrece el servicio Estándar (agencia → agencia) en este trayecto.</div>`;
+        html += `<div class="detalle" style="margin-top:10px"><b>${escapar(r.pago_txt)}</b> · cotización N.º ${escapar(r.id_cotizacion || "-")} · ${escapar(r.origen.nombre)} (${escapar(r.origen.cp)}) → ${escapar(r.destino.nombre)} (${escapar(r.destino.cp)}) · valor declarado ${fmt$(+r.paquete.valor)}</div>`;
+        html += `<details class="crudo"><summary>Desglose por concepto</summary>${tablaConceptos(r)}</details>`;
+      }
+      html += `</div>`;
+    }
+    if (tv.length && c.agencias) {
+      const bloque = (tit, lista) => `<div><h4>${tit}</h4>${lista.length ? lista.slice(0, MAX_AGENCIAS).map((a) => `<div class="agencia"><div class="nom">${escapar(a.nombre)}${a.recibe_encomiendas ? "" : ' <span class="tag rojo">no recibe encomiendas</span>'}</div><div>${escapar(a.direccion)}, ${escapar(a.localidad)} (CP ${escapar(a.cp)})</div><div class="ext">${escapar(a.horarios || "horario no informado")}${a.telefono ? ` · Tel. ${escapar(a.telefono)}` : ""} · <a href="${escapar(mapaAgencia(a))}" target="_blank" rel="noopener">mapa</a></div></div>`).join("") + (lista.length > MAX_AGENCIAS ? `<div class="detalle">… y ${lista.length - MAX_AGENCIAS} más en <a href="https://viacargo.com.ar/agencies/" target="_blank" rel="noopener">viacargo.com.ar/agencies</a>.</div>` : "") : `<div class="detalle">Sin agencia en esa localidad según el listado; la más cercana figura en <a href="https://viacargo.com.ar/agencies/" target="_blank" rel="noopener">viacargo.com.ar/agencies</a>.</div>`}</div>`;
+      html += `<div class="in" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px">${bloque("Agencias en origen (para despachar)", c.agencias.origen)}${bloque("Agencias en destino (para retirar)", c.agencias.destino)}</div>`;
+    }
+    $("panelVC").innerHTML = html;
+  }
+  const mapaAgencia = (a) => a.lat && a.lng ? `https://www.google.com/maps?q=${encodeURIComponent(a.lat + "," + a.lng)}` : `https://www.google.com/maps/search/${encodeURIComponent(a.direccion + ", " + a.localidad)}`;
+  function tablaConceptos(r0) {
+    const r = { ...r0, productos: r0.productos.filter((p) => p.codigo === PRODUCTO_VC) };
+    const codigos = [];
+    for (const p of r.productos) for (const c of p.conceptos || []) if (!codigos.some((x) => x.codigo === c.codigo)) codigos.push(c);
+    const celda = (p, cod) => { const c = (p.conceptos || []).find((x) => x.codigo === cod); return c ? fmt$(c.valor, 2) : "—"; };
+    return `<table class="desg"><tr><th>Concepto (sin IVA)</th>${r.productos.map((p) => `<th class="num">${escapar(p.nombre)}</th>`).join("")}</tr>
+      ${codigos.map((c) => `<tr><td>${escapar(titulo(c.descripcion))}</td>${r.productos.map((p) => `<td class="num">${celda(p, c.codigo)}</td>`).join("")}</tr>`).join("")}
+      <tr><td>Subtotal sin IVA</td>${r.productos.map((p) => `<td class="num">${fmt$(p.neto, 2)}</td>`).join("")}</tr>
+      <tr><td>IVA (21 %)</td>${r.productos.map((p) => `<td class="num">${fmt$(p.iva, 2)}</td>`).join("")}</tr>
+      <tr><td><b>Total</b></td>${r.productos.map((p) => `<td class="num"><b>${fmt$(p.total)}</b></td>`).join("")}</tr></table>
+      <div class="detalle" style="margin-top:6px">Seguro = 5 % del valor declarado · pago en destino = +15 % del flete · IVA 21 % · total redondeado a miles.</div>`;
+  }
+
+  // El pedido asignado ahora en el formulario manda; si no hay, el que se guardó con la cotización.
+  const destinatarioPara = (c) => destinatarioActual() || c.datos.destinatario || null;
+  async function abrirMiCorreo(entrega, c, boton) {
+    const datos = c.datos, dst = destinatarioPara(c);
+    const original = boton.textContent; boton.disabled = true; boton.textContent = "Abriendo…";
+    try {
+      await api("/api/correo/abrir", { provincia: datos.provincia, entrega, cp: datos.destino_cp, sucursal_destino: datos.sucursal_destino, sucursal_origen: datos.sucursal_origen, peso: datos.peso, largo: datos.largo, ancho: datos.ancho, alto: datos.alto, valor: datos.valor,
+        destinatario: dst ? { nombre: dst.nombre, email: dst.email, cod_area: dst.cod_area, celular: dst.celular } : null });
+      toast(`Se abre MiCorreo en una ventana nueva con el formulario${dst ? " y el destinatario" : ""} cargado (unos 15 s).`);
+    } catch (e) { alert("No se pudo abrir MiCorreo: " + e.message); }
+    finally { boton.disabled = false; boton.textContent = original; }
+  }
+
+  // =====================================================================
+  //  Resumen en texto (WhatsApp / mail)
+  // =====================================================================
+  function textoResumen(c, opciones = {}) {
+    const d = c.datos, validas = filasValidas(c), mejor = masBarata(validas);
+    const precioDe = (f) => opciones.cliente && hayRecargo() ? alCliente(f.precio) : f.precio;
+    const L = [];
+    L.push(`*Cotización de envío a ${c.destino.nombre} (CP ${c.destino.cp})*`);
+    L.push(`Paquete: ${textoPaquete(d)} · ${fmtKg(d.peso)} kg · retiro en sucursal / agencia`);
+    L.push("");
+    for (const f of [...validas].sort((a, b) => a.precio - b.precio)) L.push(`• ${nombreEmp(f.empresa)} – ${f.servicio}: ${fmt$(precioDe(f))}${f.plazo ? ` (${f.plazo})` : ""}${f.pago === "destino" ? " · pago en destino" : ""}${f === mejor ? " ⭐" : ""}`);
+    L.push("");
+    L.push(`Tarifas del ${fmtFecha(c.fecha)}${CFG.validez > 0 ? `, válidas ${CFG.validez} día${CFG.validez > 1 ? "s" : ""}` : ""}. Pueden variar.`);
+    if (CFG.negocio) L.push(`${CFG.negocio}${CFG.contacto ? " · " + CFG.contacto : ""}`);
+    return L.join("\n");
+  }
+  async function copiarTexto(c) {
+    const cliente = hayRecargo() ? confirm("¿Copiar con el precio al cliente (con recargo)?\n\nAceptar = precio al cliente · Cancelar = tarifa real") : false;
+    try { await navigator.clipboard.writeText(textoResumen(c, { cliente })); toast("Resumen copiado. Pegalo en WhatsApp o en un mail."); }
+    catch (e) { prompt("Copiá el texto:", textoResumen(c, { cliente })); }
+  }
+
+  // =====================================================================
+  //  Historial
+  // =====================================================================
+  function resumirTrabajo(t) {
+    const r = t.r ? { ...t.r } : null;
+    if (r && r.productos) r.productos = r.productos.map((p) => ({ codigo: p.codigo, nombre: p.nombre, modalidad: p.modalidad, resumen: p.resumen, permitido: p.permitido, entrega_estimada: p.entrega_estimada, total: p.total, total_txt: p.total_txt }));
+    return { srv: t.srv, estado: t.estado, error: t.error, fuente: t.fuente, fecha_cache: t.fecha_cache, r };
+  }
+  function guardarEnHistorial(c) {
+    if (!c.trabajos.some((t) => t.estado === "ok")) return;
+    const hist = load("comparador:historial", []);
+    const entrada = { id: c.id, fecha: c.fecha, datos: c.datos, destino: c.destino, trabajos: c.trabajos.map(resumirTrabajo), agencias: c.agencias };
+    const i = hist.findIndex((h) => h.id === c.id);
+    if (i >= 0) hist[i] = entrada; else hist.unshift(entrada);
+    store("comparador:historial", hist.slice(0, MAX_HISTORIAL));
+    renderHistorial();
+  }
+  // Reconstruye una cotización del historial con las filas derivadas.
+  function rehidratar(h) {
+    const trabajos = h.trabajos.map((t) => ({ ...t, def: DEF_SERV[t.srv], filas: t.estado === "ok" && t.r ? filasDe(t.srv, t.r) : [] }));
+    const pq = h.datos;
+    return { ...h, trabajos, an: { correo: analizarCorreo(pq.largo, pq.ancho, pq.alto, pq.peso), vc: analizarVC(pq.largo, pq.ancho, pq.alto, pq.peso) } };
+  }
+  function renderHistorial() {
+    const hist = load("comparador:historial", []), cont = $("historial"), filtro = normalizar($("filtroHist").value);
+    $("cntHist").textContent = hist.length;
+    const pedidoDe = (h) => h.datos.destinatario && h.datos.destinatario.pedido;
+    const lista = hist.filter((h) => !filtro || normalizar(`${h.destino.nombre} ${h.destino.cp} ${textoPaquete(h.datos)} ${h.datos.peso} ${pedidoDe(h) ? pedidoDe(h).codigo + " " + pedidoDe(h).nombre : ""}`).includes(filtro));
+    if (!lista.length) { cont.innerHTML = `<div class="vacio">${hist.length ? "Nada coincide con el filtro." : "Todavía no hay cotizaciones."}</div>`; return; }
+    cont.innerHTML = lista.map((h) => {
+      const c = rehidratar(h), v = filasValidas(c), mejor = masBarata(v);
+      const mC = masBarata(v.filter((f) => f.empresa === "correo")), mV = masBarata(v.filter((f) => f.empresa === "viacargo"));
+      return `<div class="hist">
+        <div class="f1"><span class="dest">${escapar(h.destino.nombre)} <span class="num" style="font-weight:400; color:var(--muted)">${escapar(h.destino.cp)}</span></span><span class="fecha">${fmtFechaCorta(h.fecha)}</span></div>
+        <div class="paq">${textoPaquete(h.datos)} · ${fmtKg(h.datos.peso)} kg · valor ${fmt$(h.datos.valor)}</div>
+        ${pedidoDe(h) ? `<div class="ped">Pedido <span class="num">${escapar(pedidoDe(h).codigo)}</span> · ${escapar(pedidoDe(h).nombre || "")}</div>` : ""}
+        <div class="mejores">
+          <span>Correo<b>${mC ? fmt$(mC.precio) : "—"}</b></span><span>Vía Cargo<b>${mV ? fmt$(mV.precio) : "—"}</b></span>
+          ${mejor ? `<span>Mejor<b style="color:var(--oro)">${escapar(mejor.servicio)}</b></span>` : ""}
+        </div>
+        <div class="acc"><button type="button" class="sec chico" data-rep="${h.id}">Repetir</button><button type="button" class="sec chico" data-ver="${h.id}">Ver</button><button type="button" class="sec chico" data-ficha="${h.id}">Ficha</button><button type="button" class="ghost chico" data-del="${h.id}" style="margin-left:auto; color:var(--err)">✕</button></div>
+      </div>`;
+    }).join("");
+  }
+  $("historial").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    const hist = load("comparador:historial", []);
+    const h = hist.find((x) => String(x.id) === (b.dataset.rep || b.dataset.ver || b.dataset.ficha || b.dataset.del));
+    if (!h) return;
+    if (b.dataset.del) { store("comparador:historial", hist.filter((x) => x.id !== h.id)); renderHistorial(); return; }
+    if (b.dataset.ficha) { abrirFicha(rehidratar(h)); return; }
+    if (b.dataset.ver) { ACTUAL = rehidratar(h); renderResultado(); cerrarLaterales(); $("resultado").scrollIntoView({ behavior: "smooth" }); return; }
+    // Repetir: cargar el formulario con los datos de esa cotización.
+    const d = h.datos;
+    form.elements.modo.value = d.modo || "medidas"; actualizarModo(false);
+    $("largo").value = d.largo; $("ancho").value = d.ancho; $("alto").value = d.alto;
+    if (d.modo === "volumen" && d.volumen_cm3) { $("volumen").value = String(d.volumen_cm3); $("volumen_unidad").value = "cm3"; }
+    $("peso").value = String(d.peso).replace(".", ","); $("valor").value = d.valor;
+    $("origen_cp").value = d.origen_cp || CFG.origen_cp; $("sucursal_origen").value = d.sucursal_origen || "";
+    if (porCp.get(d.destino_cp)) elegirDestino(porCp.get(d.destino_cp), d.sucursal_destino);
+    if (d.provincia) $("provincia").value = d.provincia;
+    if (d.destinatario && d.destinatario.pedido) asignarPedido({ id: d.destinatario.pedido.id }, { sugerir: false });
+    renderAnalisis(); renderAyudaValor(); resolverOrigen(); cerrarLaterales();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  $("filtroHist").addEventListener("input", renderHistorial);
+  $("borrarHistorial").addEventListener("click", () => { if (confirm("¿Vaciar todo el historial?")) { store("comparador:historial", []); renderHistorial(); } });
+  function descargar(nombre, contenido, tipo) {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([contenido], { type: tipo })); a.download = nombre; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  $("exportJson").addEventListener("click", () => descargar(`cotizaciones-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(load("comparador:historial", []), null, 2), "application/json"));
+  $("exportCsv").addEventListener("click", () => {
+    const filas = [["fecha", "destino", "cp", "provincia", "largo", "ancho", "alto", "peso", "valor", "empresa", "servicio", "pago", "tarifa", "al_cliente", "plazo", "fuente"]];
+    for (const h of load("comparador:historial", [])) {
+      const c = rehidratar(h);
+      for (const t of c.trabajos) for (const f of t.filas) if (f.disponible && f.precio != null)
+        filas.push([new Date(h.fecha).toLocaleString("es-AR"), h.destino.nombre, h.destino.cp, h.destino.provincia, h.datos.largo, h.datos.ancho, h.datos.alto, String(h.datos.peso).replace(".", ","), h.datos.valor, nombreEmp(f.empresa), f.servicio, f.pago, String(f.precio).replace(".", ","), String(alCliente(f.precio)).replace(".", ","), f.plazo, t.fuente]);
+    }
+    const csv = "﻿" + filas.map((r) => r.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
+    descargar(`cotizaciones-${new Date().toISOString().slice(0, 10)}.csv`, csv, "text/csv;charset=utf-8");
+  });
+
+  // =====================================================================
+  //  Paneles laterales y configuración
+  // =====================================================================
+  function abrirLateral(id) { cerrarLaterales(); $(id).classList.add("on"); $(id).setAttribute("aria-hidden", "false"); $("velo").classList.add("on"); }
+  function cerrarLaterales() { document.querySelectorAll(".lateral").forEach((l) => { l.classList.remove("on"); l.setAttribute("aria-hidden", "true"); }); $("velo").classList.remove("on"); }
+  $("velo").addEventListener("click", cerrarLaterales);
+  document.querySelectorAll("[data-cerrar]").forEach((b) => b.addEventListener("click", cerrarLaterales));
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarLaterales(); if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { form.requestSubmit(); } });
+  $("btnHistorial").addEventListener("click", () => { renderHistorial(); abrirLateral("drawerHist"); });
+  $("btnConfig").addEventListener("click", () => { cargarCfgEnForm(); abrirLateral("drawerCfg"); });
+  const CFG_CAMPOS = ["negocio", "contacto", "firma", "recargo_pct", "recargo_fijo", "redondeo", "origen_cp", "sucursal_origen", "valor", "validez", "plazo_clasico"];
+  function cargarCfgEnForm() { for (const k of CFG_CAMPOS) $("cfg_" + k).value = CFG[k] ?? ""; renderCfgCatalogos(); }
+  $("guardarCfg").addEventListener("click", () => {
+    for (const k of CFG_CAMPOS) { const v = $("cfg_" + k).value; CFG[k] = ["recargo_pct", "recargo_fijo", "redondeo", "valor", "validez"].includes(k) ? (+v || 0) : v.trim(); }
+    if (!CFG.origen_cp) CFG.origen_cp = "1602";
+    store("comparador:config", CFG); cerrarLaterales(); toast("Configuración guardada.");
+    if (!$("origen_cp").value) $("origen_cp").value = CFG.origen_cp;
+    if (ACTUAL) renderResultado();
+  });
+  function renderCfgCatalogos() {
+    const e = ESTADO; if (!e) return;
+    const f = (x) => x ? fmtFecha(x) : "—";
+    $("cfgCatalogos").innerHTML = `Sucursales Correo: <b>${e.correo.sucursales ?? "—"}</b> (${f(e.correo.sucursales_actualizado)}) · Localidades Vía Cargo: <b>${e.viacargo.localidades ?? "—"}</b> (${f(e.viacargo.localidades_actualizado)}) · Agencias: <b>${e.viacargo.agencias ?? "—"}</b> (${f(e.viacargo.agencias_actualizado)})`;
+  }
+  document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+    const original = b.textContent; b.disabled = true; b.textContent = "Actualizando…";
+    try { const r = await api("/api/destinos/actualizar", { catalogo: b.dataset.act }); toast("Catálogo actualizado: " + JSON.stringify(r.actualizado)); await cargarEstado(); await cargarDestinos(); }
+    catch (e) { alert("No se pudo actualizar: " + e.message); }
+    finally { b.disabled = false; b.textContent = original; }
+  }));
+
+  async function cargarEstado() {
+    try {
+      ESTADO = await api("/api/estado");
+      const c = ESTADO.correo, v = ESTADO.viacargo;
+      LIMITES_VC = v.limites || LIMITES_VC; renderAyudaValor();
+      $("pills").innerHTML = `
+        <span class="pill ${!c.credenciales ? "err" : c.sesion_fresca ? "ok" : "warn"}" title="${c.credenciales ? (c.sesion_fresca ? `Sesión de MiCorreo vigente (${c.sesion_minutos} min)` : "La sesión de MiCorreo venció: la primera consulta vuelve a iniciar sesión (puede abrir un navegador)") : "Faltan MICORREO_EMAIL / MICORREO_PASSWORD en Correo/.env"}"><i></i> MiCorreo ${!c.credenciales ? "sin credenciales" : c.sesion_fresca ? "sesión activa" : "sesión vencida"}</span>
+        <span class="pill ${v.localidades ? "ok" : "err"}" title="Localidades: ${v.localidades} · Agencias: ${v.agencias}"><i></i> Vía Cargo API</span>`;
+      if (!$("provincia").options.length) for (const p of ESTADO.provincias) { const o = document.createElement("option"); o.value = p; o.textContent = titulo(p); $("provincia").appendChild(o); }
+      renderCfgCatalogos();
+    } catch (e) { $("pills").innerHTML = `<span class="pill err"><i></i> servidor: ${escapar(e.message)}</span>`; }
+  }
+
+  // =====================================================================
+  //  Ficha para el cliente (ventana nueva, autocontenida)
+  // =====================================================================
+  function abrirFicha(c) {
+    const validas = filasValidas(c); if (!validas.length) return toast("No hay precios para armar la ficha.");
+    const datos = {
+      nro: (() => { const f = new Date(c.fecha); return f.getFullYear().toString().slice(2) + dd(f.getMonth() + 1) + dd(f.getDate()) + "-" + dd(f.getHours()) + dd(f.getMinutes()); })(),
+      fecha: c.fecha, destino: { ...c.destino, provincia: titulo(c.destino.provincia || "") }, paquete: { texto: textoPaquete(c.datos), medidas: textoMedidas(c.datos), peso: fmtKg(c.datos.peso), modo: c.datos.modo },
+      cfg: { negocio: CFG.negocio, contacto: CFG.contacto, firma: CFG.firma, validez: +CFG.validez || 0, recargo: hayRecargo() },
+      origen: c.datos.origen_cp, logos: { correo: location.origin + "/logo-correo.png", viacargo: location.origin + "/logo-viacargo.png" },
+      servicios: validas.map((f, i) => {
+        const t = c.trabajos.find((x) => x.srv === f.srv), r = t.r || {}, det = r.destino?.detalle;
+        const extra = f.empresa === "correo" ? { sucursal: titulo(r.destino?.nombre || ""), codigo: r.destino?.sucursal, direccion: det?.direccion ? `${titulo(det.direccion)}${det.localidad ? ", " + titulo(det.localidad) : ""}` : "", horario: det?.horario ? det.horario.toLowerCase() : "", mapa: det?.mapa || "" }
+          : { agencias: ((c.agencias?.destino) || []).filter((a) => a.recibe_encomiendas).slice(0, 2).map((a) => ({ nombre: a.nombre, direccion: `${a.direccion}, ${titulo(a.localidad)}`, horario: a.horarios || "", telefono: a.telefono || "" })) };
+        return { i, empresa: f.empresa, empresa_txt: nombreEmp(f.empresa), servicio: f.servicio, pago: f.pago, plazo: f.plazo, precio: f.precio, cliente: alCliente(f.precio), resumen: f.resumen || (f.empresa === "correo" ? "Se despacha en una sucursal del Correo y el destinatario lo retira en la sucursal elegida." : ""), ...extra };
+      }),
+      contacto: { correo: TEL_CORREO, viacargo: WA_VC },
+      cliente: destinatarioPara(c)?.pedido.nombre || "",
+    };
+    const w = window.open("", "_blank");
+    if (!w) return alert("El navegador bloqueó la ventana emergente. Permitila para este sitio y volvé a intentar.");
+    w.document.open(); w.document.write(htmlFicha(datos)); w.document.close();
+  }
+
+  function htmlFicha(datos) {
+    const json = JSON.stringify(datos).replace(/</g, "\\u003c");
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cotización de envío ${escapar(datos.nro)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<style>
+  :root { --ink: #14181f; --ink-2: #3c4250; --muted: #737a88; --line: #e4e2dc; --paper: #f3f2ee; --correo: #152663; --amarillo: #ffce00; --vc: #1e8d34; --oro: #b7791f; --oro-soft: #fbf3e2; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.45 "Instrument Sans", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .barra { position: sticky; top: 0; z-index: 2; background: #fff; border-bottom: 1px solid var(--line); padding: 12px 16px; display: grid; gap: 10px; }
+  .barra .fila { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; }
+  .barra button { font: inherit; font-size: 13.5px; padding: 8px 14px; border-radius: 9px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--ink); font-weight: 500; }
+  .barra button.p { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+  .barra label { font-size: 12.5px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; background: #fff; cursor: pointer; }
+  .barra label.correo { border-color: rgba(21,38,99,.35); } .barra label.viacargo { border-color: rgba(30,141,52,.4); }
+  .barra input[type=text] { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 220px; }
+  .barra .hint { font-size: 12px; color: var(--muted); text-align: center; }
+  .lienzo { padding: 28px 16px 60px; display: flex; justify-content: center; }
+  .ficha { width: 720px; max-width: 100%; background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 30px 70px -35px rgba(20,24,31,.5), 0 2px 8px rgba(20,24,31,.06); }
+  .cab { padding: 30px 40px 22px; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom: 1px solid var(--line); }
+  .cab .neg { font: 600 22px/1.15 "Fraunces", Georgia, serif; letter-spacing: -.01em; }
+  .cab .neg small { display: block; font: 13px/1.5 "Instrument Sans", sans-serif; color: var(--muted); margin-top: 4px; }
+  .cab .meta { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .cab .meta b { color: var(--ink); font-weight: 600; font-size: 13px; display: block; }
+  .tit { padding: 24px 40px 0; }
+  .tit h1 { margin: 0; font: 600 30px/1.1 "Fraunces", Georgia, serif; letter-spacing: -.02em; }
+  .tit h1 em { font-style: italic; font-weight: 500; color: var(--ink-2); }
+  .tit .para { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .cuerpo { padding: 22px 40px 10px; }
+  .grupo { margin-top: 14px; }
+  .grupo h2 { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+  .grupo h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .op { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; background: #fff; position: relative; }
+  .op.rec { border-color: var(--oro); background: var(--oro-soft); box-shadow: 0 10px 30px -22px rgba(183,121,31,.7); }
+  .op .lg { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--paper); grid-row: 1 / span 2; }
+  .op .lg img { max-width: 38px; max-height: 30px; }
+  .op .n { font-weight: 600; font-size: 15px; grid-column: 2; grid-row: 1; }
+  .op .n small { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+  .op .d { font-size: 12.5px; color: var(--ink-2); grid-column: 2; grid-row: 2; }
+  .op .pr { grid-column: 3; grid-row: 1 / span 2; text-align: right; font: 600 22px/1 "Fraunces", Georgia, serif; letter-spacing: -.02em; white-space: nowrap; }
+  .op .pr small { display: block; font: 11.5px/1.4 "Instrument Sans", sans-serif; color: var(--muted); margin-top: 3px; font-weight: 400; }
+  .op.rec .pr { font-size: 26px; }
+  .op .etq { position: absolute; top: -9px; right: 14px; background: var(--oro); color: #fff; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+  .op .pt { grid-column: 2 / span 2; grid-row: 3; font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; margin-top: 4px; }
+  .op .pt b { color: var(--ink-2); font-weight: 600; }
+  .paq { margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; padding: 16px 20px; background: var(--paper); border-radius: 14px; }
+  .paq dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .paq dd { margin: 0; font-size: 15px; font-weight: 600; }
+  .pie { padding: 18px 40px 26px; font-size: 11.5px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); margin-top: 20px; display: flex; justify-content: space-between; gap: 20px; }
+  .pie b { color: var(--ink-2); font-weight: 600; }
+  .pie .firma { font: 500 13px/1.3 "Fraunces", Georgia, serif; color: var(--ink); white-space: nowrap; }
+  .vacio { padding: 30px 40px; color: var(--muted); text-align: center; }
+  @media print { .barra { display: none; } body { background: #fff; } .lienzo { padding: 0; } .ficha { box-shadow: none; border-radius: 0; width: 100%; } }
+  @media (max-width: 600px) { .cab, .tit, .cuerpo, .pie { padding-left: 20px; padding-right: 20px; } .cab { flex-direction: column; } .cab .meta { text-align: left; } .op { grid-template-columns: 46px minmax(0, 1fr); } .op .pr { grid-row: 3; grid-column: 2; text-align: left; margin-top: 4px; } .op .pt { grid-row: 4; grid-column: 2; } }
+</style></head><body>
+<div class="barra">
+  <div class="fila" id="opciones"></div>
+  <div class="fila">
+    <input type="text" id="cliente" placeholder="Nombre del cliente (opcional)">
+    <button class="p" id="copiar">Copiar imagen (para WhatsApp)</button>
+    <button id="png">Descargar PNG</button>
+    <button id="imprimir">Imprimir / PDF</button>
+  </div>
+  <div class="hint">Elegí qué opciones incluir. «Copiar imagen» deja la ficha en el portapapeles lista para pegar (Ctrl+V). La imagen no incluye esta barra.</div>
+</div>
+<div class="lienzo"><article class="ficha" id="ficha"></article></div>
+<script>
+  const DATOS = ${json};
+  (${fichaRuntime.toString()})(DATOS);
+<\/script>
+</body></html>`;
+  }
+
+  // Corre dentro de la ventana de la ficha (se serializa con toString: sin referencias externas).
+  function fichaRuntime(D) {
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const f$ = (x) => "$ " + Math.round(+x).toLocaleString("es-AR");
+    const fecha = new Date(D.fecha);
+    const fechaTxt = fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+    const horaTxt = fecha.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const validaHasta = D.cfg.validez > 0 ? (() => { const v = new Date(D.fecha + D.cfg.validez * 864e5); return `${v.getDate()} de ${v.toLocaleDateString("es-AR", { month: "long" })}`; })() : null;
+    const estado = { incluidos: new Set(D.servicios.map((s) => s.i)), cliente: D.cfg.recargo, mostrarPuntos: true };
+    // Por defecto: la mejor opción de cada empresa (evita saturar al cliente).
+    (() => {
+      const vistos = new Set(); estado.incluidos.clear();
+      for (const s of [...D.servicios].sort((a, b) => a.precio - b.precio)) { if (!vistos.has(s.empresa)) { vistos.add(s.empresa); estado.incluidos.add(s.i); } }
+    })();
+
+    const opciones = document.getElementById("opciones");
+    opciones.innerHTML = D.servicios.map((s) => `<label class="${s.empresa}"><input type="checkbox" data-i="${s.i}" ${estado.incluidos.has(s.i) ? "checked" : ""}> ${esc(s.empresa === "correo" ? "Correo" : "Vía Cargo")} · ${esc(s.servicio)}${s.pago === "destino" ? " · pago en destino" : ""}</label>`).join("")
+      + (D.cfg.recargo ? `<label><input type="checkbox" id="chkCliente" checked> precio al cliente</label>` : "")
+      + `<label><input type="checkbox" id="chkPuntos" checked> direcciones de retiro</label>`;
+    opciones.addEventListener("change", (ev) => {
+      const t = ev.target;
+      if (t.dataset.i != null) { t.checked ? estado.incluidos.add(+t.dataset.i) : estado.incluidos.delete(+t.dataset.i); }
+      if (t.id === "chkCliente") estado.cliente = t.checked;
+      if (t.id === "chkPuntos") estado.mostrarPuntos = t.checked;
+      render();
+    });
+    document.getElementById("cliente").value = D.cliente || "";
+    document.getElementById("cliente").addEventListener("input", render);
+
+    function render() {
+      const cliente = document.getElementById("cliente").value.trim();
+      const lista = D.servicios.filter((s) => estado.incluidos.has(s.i));
+      const precio = (s) => estado.cliente && D.cfg.recargo ? s.cliente : s.precio;
+      const mejor = lista.reduce((m, s) => (!m || precio(s) < precio(m) ? s : m), null);
+      const grupo = (tit) => {
+        const fs = [...lista].sort((a, b) => precio(a) - precio(b));
+        if (!fs.length) return "";
+        return `<section class="grupo"><h2>${tit}</h2>${fs.map((s) => `
+          <div class="op ${s === mejor ? "rec" : ""}">${s === mejor ? '<span class="etq">Recomendada</span>' : ""}
+            <div class="lg"><img src="${esc(D.logos[s.empresa])}" alt="${esc(s.empresa_txt)}"></div>
+            <div class="n">${esc(s.servicio)}<small>${esc(s.empresa_txt)}</small></div>
+            <div class="pr">${f$(precio(s))}${s.plazo ? `<small>${esc(s.plazo)}</small>` : ""}${s.pago === "destino" ? `<small>se paga al recibir</small>` : ""}</div>
+            <div class="d">${esc(s.resumen || "")}</div>
+            ${estado.mostrarPuntos && s.empresa === "correo" && s.sucursal ? `<div class="pt"><b>Retiro:</b> Sucursal ${esc(s.sucursal)}${s.direccion ? ` · ${esc(s.direccion)}` : ""}${s.horario ? ` · ${esc(s.horario)}` : ""}</div>` : ""}
+            ${estado.mostrarPuntos && s.empresa === "viacargo" && s.agencias && s.agencias.length ? `<div class="pt"><b>Retiro:</b> ${s.agencias.map((a) => `${esc(a.nombre)} · ${esc(a.direccion)}${a.horario ? ` · ${esc(a.horario)}` : ""}`).join(" &nbsp;|&nbsp; ")}</div>` : ""}
+          </div>`).join("")}</section>`;
+      };
+      document.getElementById("ficha").innerHTML = `
+        <header class="cab">
+          <div class="neg">${esc(D.cfg.negocio || "Cotización de envío")}${D.cfg.contacto ? `<small>${esc(D.cfg.contacto)}</small>` : ""}</div>
+          <div class="meta"><b>Cotización N.º ${esc(D.nro)}</b>${esc(fechaTxt)} · ${esc(horaTxt)} hs${cliente ? `<br>Preparada para <b style="display:inline">${esc(cliente)}</b>` : ""}</div>
+        </header>
+        <div class="tit"><h1>Envío a <em>${esc(D.destino.nombre)}</em></h1><div class="para">CP ${esc(D.destino.cp)} · ${esc(D.destino.provincia || "")} · ${lista.length} opci${lista.length === 1 ? "ón" : "ones"} de envío${validaHasta ? ` · válida hasta el ${esc(validaHasta)}` : ""}</div></div>
+        <div class="cuerpo">
+          ${lista.length ? grupo("Opciones de envío · retiro en sucursal o agencia") : '<div class="vacio">Elegí al menos una opción arriba.</div>'}
+          <dl class="paq">
+            <div><dt>${D.paquete.modo === "volumen" ? "Volumen" : "Medidas"}</dt><dd>${esc(D.paquete.texto)}</dd></div>
+            <div><dt>Peso</dt><dd>${esc(D.paquete.peso)} kg</dd></div>
+          </dl>
+        </div>
+        <footer class="pie">
+          <div>${D.cfg.firma ? `<b>${esc(D.cfg.firma)}</b><br>` : ""}Tarifas informadas por Correo Argentino (MiCorreo) y Vía Cargo el ${esc(fechaTxt)}${validaHasta ? `, válidas hasta el ${esc(validaHasta)}` : ""}; pueden variar. Precios finales con IVA.${estado.cliente && D.cfg.recargo ? " Incluyen gestión y embalaje." : ""}<br>Consultas: Correo Argentino ${esc(D.contacto.correo)} · Vía Cargo WhatsApp ${esc(D.contacto.viacargo)}.</div>
+          <div class="firma">${esc(D.cfg.negocio || "")}</div>
+        </footer>`;
+    }
+    render();
+
+    document.getElementById("imprimir").addEventListener("click", () => window.print());
+    async function capturar() {
+      await (document.fonts ? document.fonts.ready : Promise.resolve());
+      return html2canvas(document.getElementById("ficha"), { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+    }
+    document.getElementById("png").addEventListener("click", async () => {
+      const b = document.getElementById("png"); b.disabled = true; b.textContent = "Generando…";
+      try { const canvas = await capturar(); const a = document.createElement("a"); a.download = "cotizacion-envio-" + D.nro + ".png"; a.href = canvas.toDataURL("image/png"); a.click(); }
+      catch (e) { alert("No se pudo generar la imagen: " + e.message); }
+      finally { b.disabled = false; b.textContent = "Descargar PNG"; }
+    });
+    document.getElementById("copiar").addEventListener("click", async () => {
+      const b = document.getElementById("copiar"), original = b.textContent; b.disabled = true; b.textContent = "Copiando…";
+      try {
+        if (!navigator.clipboard || !window.ClipboardItem) throw new Error("este navegador no permite copiar imágenes; usá Descargar PNG.");
+        const blobPromise = capturar().then((canvas) => new Promise((ok, err) => canvas.toBlob((bl) => bl ? ok(bl) : err(new Error("no se pudo generar el PNG")), "image/png")));
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
+        b.textContent = "¡Copiada! Pegala con Ctrl+V"; setTimeout(() => { b.textContent = original; }, 3500);
+      } catch (e) { alert("No se pudo copiar la imagen: " + e.message); b.textContent = original; }
+      finally { b.disabled = false; }
+    });
+  }
+
+  // =====================================================================
+  //  Inicio
+  // =====================================================================
+  const guardado = load("comparador:ultimo", null);
+  $("valor").value = (guardado && guardado.valor) || CFG.valor || 100000;
+  $("origen_cp").value = (guardado && guardado.origen_cp) || CFG.origen_cp || "1602";
+  $("sucursal_origen").value = (guardado && guardado.sucursal_origen) || CFG.sucursal_origen || "";
+  const srvGuardados = load("comparador:servicios", null);
+  if (srvGuardados && srvGuardados.some((s) => DEF_SERV[s])) form.querySelectorAll('input[name="srv"]').forEach((i) => { i.checked = srvGuardados.includes(i.value); i.closest(".srv").classList.toggle("off", !i.checked); });
+  form.elements.modo.value = load("comparador:modo", "medidas") === "volumen" ? "volumen" : "medidas";
+  actualizarModo(false);
+  form.elements.modo.forEach((r) => r.addEventListener("change", () => { actualizarModo(); renderAnalisis(); renderHintsCache(); $(modoActual() === "volumen" ? "volumen" : "largo").focus(); }));
+  for (const id of ["largo", "ancho", "alto", "peso", "volumen"]) $(id).addEventListener("input", () => { renderAnalisis(); renderHintsCache(); });
+  $("volumen_unidad").addEventListener("change", () => { renderAnalisis(); renderHintsCache(); });
+  $("valor").addEventListener("input", () => { renderAyudaValor(); renderHintsCache(); });
+  for (const id of ["sucursal_destino", "provincia"]) $(id).addEventListener("change", renderHintsCache);
+  $("sucursal_origen").addEventListener("input", renderHintsCache);
+
+  renderAnalisis(); renderAyudaValor(); renderHistorial();
+  cargarEstado().then(cargarDestinos);
+</script>
+</body>
+</html>

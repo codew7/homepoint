@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cotizador Correo Argentino</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --card: #fff; --text: #111827; --muted: #6b7280;
+    --border: #d1d5db; --accent: #152663; --accent-hover: #0f1c4a; --amarillo: #ffce00; --gris: #49454f;
+    --ok: #047857; --ok-bg: #ecfdf5; --warn-bg: #fffbeb; --warn: #92400e;
+    --err-bg: #fef2f2; --err: #b91c1c; --price-bg: #eff6ff; --info-bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: var(--accent); }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  /* Dos columnas: formulario + resultado a la izquierda, historial a la derecha. */
+  .disposicion { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+  .lateral { position: sticky; top: 24px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+  .lateral .card { margin-bottom: 0; display: flex; flex-direction: column; min-height: 0; }
+  .lateral .barra { flex: 0 0 auto; }
+  #historial { overflow: auto; min-height: 0; margin: 0 -8px; padding: 0 8px; }
+  @media (max-width: 1023px) {
+    .disposicion { grid-template-columns: minmax(0, 1fr); }
+    .lateral { position: static; max-height: none; }
+    .lateral .card { margin-bottom: 16px; }
+  }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 18px; }
+  legend { font-weight: 600; margin-bottom: 10px; padding: 0; }
+  fieldset.paquete > legend { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  /* Selector de modo (medidas / volumen). */
+  .segmentado { display: inline-flex; background: #e5e7eb; border-radius: 8px; padding: 3px; gap: 2px; position: relative; }
+  .segmentado label { margin: 0; cursor: pointer; }
+  .segmentado input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .segmentado span { display: block; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; user-select: none; }
+  .segmentado input:checked + span { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .segmentado input:focus-visible + span { outline: 2px solid var(--accent); }
+  .combo { display: flex; }
+  .combo input { border-radius: 6px 0 0 6px; min-width: 0; }
+  .combo select { width: auto; flex: 0 0 auto; border-left: 0; border-radius: 0 6px 6px 0; background: #f9fafb; padding-left: 8px; padding-right: 8px; }
+  form[data-modo="medidas"] .solo-volumen, form[data-modo="volumen"] .solo-medidas { display: none; }
+  form[data-modo="volumen"] .paquete-fila { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .equivalente { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .equivalente b { color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .fila { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-top: 10px; }
+  .fila > * { flex: 1 1 140px; }
+  .fila > button { flex: 0 0 auto; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .hidden { display: none !important; }
+  button {
+    padding: 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.principal { width: 100%; background: var(--amarillo); color: var(--accent); }
+  button.principal:hover { background: #f0c200; }
+  .paquete-fila { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .paquete-fila > div { display: flex; flex-direction: column; justify-content: flex-end; }
+  @media (max-width: 640px) { .paquete-fila { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  details.origen { margin-bottom: 18px; }
+  details.origen summary { cursor: pointer; font-weight: 600; color: var(--muted); font-size: 14px; list-style: none; display: flex; align-items: center; gap: 6px; }
+  details.origen summary::-webkit-details-marker { display: none; }
+  details.origen summary::before { content: "▸"; font-size: 12px; transition: transform .15s; }
+  details.origen[open] summary::before { transform: rotate(90deg); }
+  details.origen .grid { margin-top: 10px; }
+  button.sec { background: #fff; color: var(--accent); border: 1px solid var(--accent); padding: 8px 12px; font-weight: 500; font-size: 14px; }
+  button.chico { padding: 5px 10px; font-size: 13px; }
+  button:hover { filter: brightness(.95); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .estado { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 20px; }
+  .aviso { border-radius: 8px; padding: 12px; font-size: 14px; white-space: pre-wrap; }
+  .aviso.error { background: var(--err-bg); color: var(--err); border: 1px solid #fecaca; }
+  .aviso.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #a7f3d0; }
+  .aviso.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde68a; }
+  .aviso.info { background: var(--info-bg); color: var(--text); border: 1px solid var(--border); }
+  .analisis { background: var(--info-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 14px; font-size: 14px; }
+  .analisis .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .kpi .n { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .v { font-size: 18px; font-weight: 700; }
+  .kpi .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .analisis ul { margin: 8px 0 0; padding-left: 18px; }
+  .analisis li { margin-bottom: 4px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .tag.tam { background: #fef3c7; color: #92400e; }
+  .tag.peso { background: #dbeafe; color: #1e40af; }
+  .precios { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .precio { background: var(--price-bg); border-radius: 8px; padding: 14px; text-align: center; }
+  .precio .nombre { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .precio .monto { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 4px; }
+  .comparar { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .comparar .col { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .comparar .col.mejor { border-color: #34d399; background: var(--ok-bg); }
+  .comparar h3 { margin: 0 0 8px; font-size: 15px; }
+  .detalle { font-size: 13px; color: var(--muted); }
+  .detalle b { color: var(--text); font-weight: 600; }
+  details { margin-top: 10px; font-size: 13px; }
+  pre { background: #f9fafb; border: 1px solid var(--border); border-radius: 6px; padding: 10px; overflow: auto; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { text-align: right; white-space: nowrap; }
+  .vacio { color: var(--muted); font-size: 14px; }
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  /* Historial en formato lista compacta (columna lateral). */
+  .hist { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; background: #fff; }
+  .hist:hover { border-color: var(--accent); }
+  .hist .fila1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .hist .paq { font-weight: 600; color: var(--text); }
+  .hist .fecha { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .hist .dest { color: var(--muted); margin-top: 2px; }
+  .hist .pie { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .hist .precios { display: flex; gap: 12px; margin: 0; }
+  .hist .precios span { white-space: nowrap; }
+  .hist .precios small { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .hist .precios b { color: var(--accent); font-size: 14px; }
+  .hist .acc { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cotizador Correo Argentino</h1>
+  <p class="sub">Consulta las tarifas reales de tu cuenta MiCorreo (Paq.ar Clásico / Expreso) y te ayuda a elegir la caja más económica.</p>
+
+  <div class="disposicion">
+  <div>
+  <form id="form" class="card" autocomplete="off" data-modo="medidas">
+    <fieldset class="paquete">
+      <legend>
+        <span>Paquete</span>
+        <span class="segmentado" role="radiogroup" aria-label="Forma de ingresar el tamaño del paquete">
+          <label><input type="radio" name="modo" value="medidas" checked><span>Por medidas</span></label>
+          <label><input type="radio" name="modo" value="volumen"><span>Por volumen</span></label>
+        </span>
+      </legend>
+      <div class="paquete-fila">
+        <div class="solo-medidas"><label for="largo">Largo (cm)</label><input id="largo" name="largo" type="number" min="1" max="999" step="1" required placeholder="Ej: 20"></div>
+        <div class="solo-medidas"><label for="ancho">Ancho (cm)</label><input id="ancho" name="ancho" type="number" min="1" max="999" step="1" required placeholder="Ej: 15"></div>
+        <div class="solo-medidas"><label for="alto">Alto (cm)</label><input id="alto" name="alto" type="number" min="1" max="999" step="1" required placeholder="Ej: 10"></div>
+        <div class="solo-volumen">
+          <label for="volumen">Volumen del paquete</label>
+          <div class="combo">
+            <input id="volumen" name="volumen" type="text" inputmode="decimal" placeholder="Ej: 3000" disabled>
+            <select id="volumen_unidad" name="volumen_unidad" aria-label="Unidad del volumen" disabled>
+              <option value="cm3" selected>cm³</option>
+              <option value="l">litros</option>
+            </select>
+          </div>
+        </div>
+        <div><label for="peso">Peso real (kg)</label><input id="peso" name="peso" type="text" inputmode="decimal" placeholder="Ej: 2 o 2,5" required></div>
+        <div><label for="valor">Valor decl. ($)</label><input id="valor" name="valor" type="number" min="1" step="1" required value="100000"></div>
+      </div>
+      <div id="analisis" class="analisis"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Destino</legend>
+      <div class="grid">
+        <div>
+          <label for="entrega">Tipo de entrega</label>
+          <select id="entrega" name="entrega">
+            <option value="sucursal" selected>Entrega en sucursal</option>
+            <option value="domicilio">Entrega a domicilio</option>
+            <option value="ambos">Comparar sucursal y domicilio</option>
+          </select>
+        </div>
+        <div>
+          <label for="provincia">Provincia</label>
+          <select id="provincia" name="provincia" required></select>
+        </div>
+        <div id="campo-cp" class="hidden">
+          <label for="cp">Código postal (domicilio)</label>
+          <input id="cp" name="cp" type="text" inputmode="numeric" pattern="[0-9]{4}" placeholder="Ej: 1900">
+        </div>
+      </div>
+      <div id="campo-sucursal" style="margin-top:12px">
+        <label for="sucursal_destino">Sucursal de destino</label>
+        <div class="grid" style="grid-template-columns: minmax(140px, 1fr) minmax(200px, 2fr)">
+          <input id="filtroSuc" type="text" placeholder="Filtrar por nombre o CP…">
+          <select id="sucursal_destino" name="sucursal_destino"><option value="">— cargando listado… —</option></select>
+        </div>
+        <div class="detalle" id="infoSuc" style="margin-top:4px"></div>
+      </div>
+    </fieldset>
+
+    <details class="origen">
+      <summary>Sucursal de origen (opcional · por defecto la cabecera de la cuenta)</summary>
+      <div class="grid">
+        <div>
+          <label for="sucursal_origen">Código de sucursal donde entregás el paquete</label>
+          <input id="sucursal_origen" name="sucursal_origen" type="text" placeholder="Vacío = sucursal cabecera de la cuenta (FLORIDA)">
+        </div>
+      </div>
+    </details>
+
+    <div id="conocido" class="aviso info hidden" style="margin-bottom:12px"></div>
+
+    <button id="btn" type="submit" class="principal">Cotizar</button>
+    <div id="estado" class="estado"></div>
+  </form>
+
+  <section id="resultado" class="card hidden"></section>
+  </div>
+
+  <aside class="lateral">
+    <section class="card">
+      <div class="barra">
+        <h2 style="margin:0">Historial de cotizaciones</h2>
+        <button type="button" id="borrarHistorial" class="sec chico">Vaciar</button>
+      </div>
+      <div id="historial"></div>
+    </section>
+  </aside>
+  </div>
+</main>
+
+<script>
+  // ---------- Reglas tarifarias observadas (ver experimento peso vs tamaño) ----------
+  // Peso volumétrico = largo × ancho × alto / 6000. Se cobra el mayor entre peso real
+  // y volumétrico, redondeado hacia arriba al escalón siguiente.
+  const FACTOR_VOL = 6000;
+  const ESCALONES = [0.5, 1, 2, 3, 5, 10, 15, 20, 25];
+  const DIAS_CACHE = 30;
+
+  // Mismas etiquetas que el select #provincia del sitio (el script busca por label).
+  const PROVINCIAS = [
+    "BUENOS AIRES","CAPITAL FEDERAL","CATAMARCA","CHACO","CHUBUT","CORDOBA","CORRIENTES",
+    "ENTRE RIOS","FORMOSA","JUJUY","LA PAMPA","LA RIOJA","MENDOZA","MISIONES","NEUQUEN",
+    "RIO NEGRO","SALTA","SAN JUAN","SAN LUIS","SANTA CRUZ","SANTA FE","SANTIAGO DEL ESTERO",
+    "TIERRA DEL FUEGO","TUCUMAN",
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), btn = $("btn"), estado = $("estado"), resultado = $("resultado");
+
+  // ---------- Utilidades ----------
+  function escapar(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+  const fmtKg = (x) => x.toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  const fmtN = (x) => Math.round(x).toLocaleString("es-AR");
+  const fmt$ = (x) => "$ " + x.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dd = (n) => String(n).padStart(2, "0");
+  const fmtFechaCorta = (ts) => { const f = new Date(ts); return `${dd(f.getDate())}/${dd(f.getMonth() + 1)} ${dd(f.getHours())}:${dd(f.getMinutes())}`; };
+  function numPrecio(txt) {
+    const m = String(txt || "").match(/[\d.]+,\d+/);
+    return m ? parseFloat(m[0].replace(/\./g, "").replace(",", ".")) : null;
+  }
+  const leerDecimal = (txt) => parseFloat(String(txt ?? "").trim().replace(",", "."));
+  function leerPeso() { return leerDecimal($("peso").value); }
+  function store(clave, valor) { try { localStorage.setItem(clave, JSON.stringify(valor)); } catch (e) {} }
+  function load(clave, porDefecto) { try { return JSON.parse(localStorage.getItem(clave)) ?? porDefecto; } catch (e) { return porDefecto; } }
+
+  // ---------- Análisis del paquete ----------
+  function escalonDe(kg) {
+    for (const e of ESCALONES) if (kg <= e + 1e-9) return e;
+    return null; // más de 25 kg: escalones no verificados
+  }
+
+  // ---------- Modo de ingreso: por medidas o por volumen ----------
+  // MiCorreo solo acepta largo/ancho/alto en cm enteros y el precio depende del
+  // volumen (L×A×H) y del peso. Para cotizar "por volumen" se buscan tres medidas
+  // enteras cuyo producto sea exactamente ese volumen (o el entero más cercano que
+  // se pueda factorizar sin cambiar de escalón), así el precio es el mismo.
+  const MAX_CM = 999;
+  const cacheFactor = new Map();
+  function factorizarVolumen(v) {
+    if (cacheFactor.has(v)) return cacheFactor.get(v);
+    const divs = [];
+    for (let i = 1; i * i <= v; i++) if (v % i === 0) { divs.push(i); if (i * i !== v) divs.push(v / i); }
+    let mejor = null;
+    for (const a of divs) {
+      if (a > MAX_CM) continue;
+      const resto = v / a;
+      for (const b of divs) {
+        if (b > a || b > MAX_CM || resto % b !== 0) continue;
+        const c = resto / b;
+        if (c > b) continue; // solo tríos ordenados a ≥ b ≥ c
+        const spread = a - c;
+        if (!mejor || spread < mejor.spread) mejor = { dims: [a, b, c], spread };
+      }
+    }
+    const r = mejor ? mejor.dims : null;
+    cacheFactor.set(v, r);
+    return r;
+  }
+  function medidasDesdeVolumen(volCm3) {
+    const objetivo = Math.max(1, Math.round(volCm3));
+    const esc = escalonDe(objetivo / FACTOR_VOL);
+    // Se prefiere el volumen exacto, pero si sus medidas quedan muy desparejas
+    // (ej. 3001 = 79×19×2) se acepta un vecino a menos del 0,2 % con medidas
+    // más parecidas a una caja. Nunca se cambia de escalón.
+    const ventana = Math.max(3, Math.round(objetivo * 0.002));
+    let mejor = null;
+    for (let k = 0; k <= ventana; k++) {
+      for (const v of (k === 0 ? [objetivo] : [objetivo + k, objetivo - k])) {
+        if (v < 1 || escalonDe(v / FACTOR_VOL) !== esc) continue;
+        const d = factorizarVolumen(v);
+        if (!d) continue;
+        const puntaje = (d[0] - d[2]) + 3 * k;
+        if (!mejor || puntaje < mejor.puntaje) mejor = { dims: d, volumen: v, ajustado: v !== objetivo, puntaje };
+      }
+    }
+    return mejor;
+  }
+  function modoActual() { return form.elements.modo.value || "medidas"; }
+  function leerVolumenCm3() {
+    const v = leerDecimal($("volumen").value);
+    if (!(v > 0)) return NaN;
+    return $("volumen_unidad").value === "l" ? v * 1000 : v;
+  }
+  // Devuelve el paquete tal como se va a cotizar (siempre con largo/ancho/alto) o null si falta algo.
+  function leerPaquete() {
+    const peso = leerPeso();
+    if (modoActual() === "volumen") {
+      const vol = leerVolumenCm3();
+      if (!(vol > 0 && peso > 0)) return null;
+      const conv = medidasDesdeVolumen(vol);
+      if (!conv) return null;
+      const [largo, ancho, alto] = conv.dims;
+      return { modo: "volumen", largo, ancho, alto, peso, volumen_cm3: conv.volumen, volumen_pedido: vol, ajustado: conv.ajustado };
+    }
+    const largo = +$("largo").value, ancho = +$("ancho").value, alto = +$("alto").value;
+    if (!(largo > 0 && ancho > 0 && alto > 0 && peso > 0)) return null;
+    return { modo: "medidas", largo, ancho, alto, peso, volumen_cm3: largo * ancho * alto };
+  }
+  const textoMedidas = (p) => `${escapar(p.largo)}×${escapar(p.ancho)}×${escapar(p.alto)} cm`;
+  // Descripción corta del paquete para historial y detalle (según cómo se cargó).
+  function textoPaquete(p) {
+    if (p.modo === "volumen" && p.volumen_cm3) return `${fmtN(+p.volumen_cm3)} cm³`;
+    return textoMedidas(p);
+  }
+
+  function actualizarModo(prefill = true) {
+    const modo = modoActual();
+    form.dataset.modo = modo;
+    const porVolumen = modo === "volumen";
+    for (const id of ["largo", "ancho", "alto"]) { $(id).disabled = porVolumen; $(id).required = !porVolumen; }
+    $("volumen").disabled = !porVolumen; $("volumen").required = porVolumen;
+    $("volumen_unidad").disabled = !porVolumen;
+    // Al cambiar de modo, se traslada lo ya cargado para no volver a tipearlo.
+    if (prefill) {
+      const l = +$("largo").value, a = +$("ancho").value, h = +$("alto").value;
+      if (porVolumen && !$("volumen").value.trim() && l > 0 && a > 0 && h > 0) {
+        const vol = l * a * h;
+        $("volumen").value = $("volumen_unidad").value === "l" ? String(vol / 1000).replace(".", ",") : String(vol);
+      } else if (!porVolumen && !(l > 0 && a > 0 && h > 0)) {
+        const vol = leerVolumenCm3();
+        const conv = vol > 0 ? medidasDesdeVolumen(vol) : null;
+        if (conv) [$("largo").value, $("ancho").value, $("alto").value] = conv.dims;
+      }
+    }
+    store("cotizador:modo", modo);
+  }
+
+  function analizar(l, a, h, peso) {
+    const vol = l * a * h;
+    const pv = vol / FACTOR_VOL;
+    const pf = Math.max(peso, pv);
+    const manda = pv > peso + 1e-9 ? "tamaño" : (peso > pv + 1e-9 ? "peso" : "ambos");
+    const esc = escalonDe(pf);
+    const idx = esc === null ? -1 : ESCALONES.indexOf(esc);
+    const anterior = idx > 0 ? ESCALONES[idx - 1] : null;
+    return { vol, pv, pf, manda, esc, anterior };
+  }
+
+  function renderAnalisis() {
+    const cont = $("analisis");
+    const pq = leerPaquete();
+    if (!pq) {
+      cont.innerHTML = `<span class="vacio">${modoActual() === "volumen" ? "Completá volumen y peso" : "Completá medidas y peso"} para ver el análisis.</span>`;
+      return;
+    }
+    const { largo: l, ancho: a, alto: h, peso } = pq;
+    const porVolumen = pq.modo === "volumen";
+
+    const an = analizar(l, a, h, peso);
+    const tag = an.manda === "tamaño" ? '<span class="tag tam">manda el tamaño</span>'
+              : an.manda === "peso" ? '<span class="tag peso">manda el peso</span>'
+              : '<span class="tag peso">peso y tamaño empatan</span>';
+    const escTxt = an.esc === null ? "más de 25 kg" : `hasta ${fmtKg(an.esc)} kg`;
+
+    const tips = [];
+    if (an.esc !== null) {
+      // Margen dentro del escalón actual (sin cambiar el precio).
+      const margenKg = an.esc - an.pf;
+      const volMax = an.esc * FACTOR_VOL;
+      if (an.manda === "tamaño") {
+        tips.push(`Podés sumar hasta <b>${fmtKg(an.esc - peso)} kg</b> de peso real sin cambiar de escalón (el volumétrico ya es ${fmtKg(an.pv)} kg).`);
+        if (margenKg > 0.005) tips.push(`También podés agrandar la caja hasta <b>${fmtN(volMax)} cm³</b> (hoy ${fmtN(an.vol)}) sin cambiar el precio.`);
+      } else {
+        if (margenKg > 0.005) tips.push(`Podés sumar hasta <b>${fmtKg(margenKg)} kg</b> de peso real sin cambiar de escalón.`);
+        tips.push(`La caja puede crecer hasta <b>${fmtN(volMax)} cm³</b> (hoy ${fmtN(an.vol)}) sin cambiar el precio: el peso real manda.`);
+      }
+
+      // Cómo bajar al escalón anterior.
+      if (an.anterior !== null) {
+        if (peso > an.anterior + 1e-9) {
+          tips.push(`Para bajar al escalón de ${fmtKg(an.anterior)} kg habría que reducir el <b>peso real</b> a ${fmtKg(an.anterior)} kg o menos` +
+                    (an.manda === "tamaño" ? ` y además el volumen a ${fmtN(an.anterior * FACTOR_VOL)} cm³.` : "."));
+        } else {
+          const volObj = an.anterior * FACTOR_VOL;
+          const opciones = porVolumen ? [] : [
+            ["largo", Math.floor(volObj / (a * h)), l],
+            ["ancho", Math.floor(volObj / (l * h)), a],
+            ["alto", Math.floor(volObj / (l * a)), h],
+          ].filter(([, max, actual]) => max >= 1 && max < actual)
+           .map(([n, max, actual]) => `${n} ≤ <b>${max} cm</b> (hoy ${actual})`);
+          tips.push(`Bajás al escalón de <b>${fmtKg(an.anterior)} kg</b> si el volumen queda en ≤ ${fmtN(volObj)} cm³${porVolumen ? ` (hoy ${fmtN(an.vol)})` : ""}. ` +
+                    (opciones.length ? `Achicando una sola medida: ${opciones.join(", ")}.` : ""));
+        }
+      } else {
+        tips.push("Ya estás en el escalón más bajo.");
+      }
+    } else {
+      tips.push("Más de 25 kg facturables: por encima de los escalones verificados, el precio sigue subiendo con el volumen. Si podés, dividí el envío en dos cajas.");
+    }
+
+    cont.innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><div class="n">Volumen</div><div class="v">${fmtN(an.vol)} <small>cm³</small></div></div>
+        <div class="kpi"><div class="n">Peso volumétrico</div><div class="v">${fmtKg(an.pv)} <small>kg</small></div></div>
+        <div class="kpi"><div class="n">Peso facturable</div><div class="v">${fmtKg(an.pf)} <small>kg</small></div></div>
+        <div class="kpi"><div class="n">Escalón</div><div class="v">${escTxt}</div></div>
+      </div>
+      <div>${tag}</div>
+      <ul>${tips.map((t) => `<li>${t}</li>`).join("")}</ul>
+      ${porVolumen ? `<div class="equivalente">Se cotiza como <b>${textoMedidas(pq)}</b> (${fmtN(an.vol)} cm³): MiCorreo pide medidas, pero el precio depende solo del volumen y el peso, así que el resultado es el mismo.${pq.ajustado ? ` El volumen se ajustó de ${fmtN(pq.volumen_pedido)} a ${fmtN(an.vol)} cm³ para expresarlo en centímetros enteros; no cambia el escalón.` : ""}</div>` : ""}`;
+  }
+
+  // ---------- Cache de cotizaciones (mismos parámetros → mismo precio) ----------
+  function claveCache(d, entrega) {
+    const an = analizar(+d.largo, +d.ancho, +d.alto, leerDecimal(d.peso));
+    const escKey = an.esc === null ? `pf:${an.pf.toFixed(2)}` : `esc:${an.esc}`;
+    const destino = entrega === "sucursal" ? String(d.sucursal_destino || "").trim().toUpperCase() : String(d.cp || "").trim();
+    return [String(d.sucursal_origen || "").trim().toUpperCase() || "DEFAULT", entrega, d.provincia, destino, escKey, String(+d.valor)].join("|");
+  }
+  function guardarCache(clave, r) {
+    const cache = load("cotizador:cache", {});
+    cache[clave] = { clasico: r.clasico, expreso: r.expreso, hoy: r.hoy, fecha: Date.now() };
+    store("cotizador:cache", cache);
+  }
+  function buscarCache(clave) {
+    const c = load("cotizador:cache", {})[clave];
+    if (!c) return null;
+    if (Date.now() - c.fecha > DIAS_CACHE * 86400e3) return null;
+    return c;
+  }
+  function renderConocido() {
+    const cont = $("conocido");
+    const pq = leerPaquete();
+    const d = { ...Object.fromEntries(new FormData(form).entries()), ...(pq || {}) };
+    const entregas = d.entrega === "ambos" ? ["sucursal", "domicilio"] : [d.entrega];
+    const lineas = [];
+    for (const e of entregas) {
+      if (!pq) continue;
+      if (e === "sucursal" && !String(d.sucursal_destino || "").trim()) continue;
+      if (e === "domicilio" && !String(d.cp || "").trim()) continue;
+      const c = buscarCache(claveCache(d, e));
+      if (c) lineas.push(`<b>${e === "sucursal" ? "Sucursal" : "Domicilio"}:</b> Clásico ${escapar(c.clasico || "-")} · Expreso ${escapar(c.expreso || "-")} <span class="detalle">(cotizado el ${new Date(c.fecha).toLocaleDateString("es-AR")})</span>`);
+    }
+    cont.classList.toggle("hidden", lineas.length === 0);
+    cont.innerHTML = lineas.length ? `Ya cotizaste este mismo escalón y destino:<br>${lineas.join("<br>")}<br><span class="detalle">Podés usar ese precio directamente o volver a cotizar para confirmarlo.</span>` : "";
+  }
+
+  // ---------- Historial ----------
+  function agregarHistorial(entrada) {
+    const hist = load("cotizador:historial", []);
+    hist.unshift(entrada);
+    store("cotizador:historial", hist.slice(0, 30));
+    renderHistorial();
+  }
+  function renderHistorial() {
+    const hist = load("cotizador:historial", []);
+    const cont = $("historial");
+    if (!hist.length) { cont.innerHTML = '<div class="vacio">Todavía no hay cotizaciones.</div>'; return; }
+    cont.innerHTML = hist.map((h, i) => `<div class="hist">
+        <div class="fila1">
+          <span class="paq">${textoPaquete(h.p)} · ${escapar(h.p.peso)} kg</span>
+          <span class="fecha">${fmtFechaCorta(h.fecha)}</span>
+        </div>
+        <div class="dest">${h.entrega === "sucursal" ? "Suc. " + escapar(h.p.sucursal_nombre || h.p.sucursal_destino) : "Dom. CP " + escapar(h.p.cp)} · ${escapar(h.p.provincia)}<br>esc. ${h.esc === null ? ">25" : fmtKg(h.esc)} kg · valor $${escapar(fmtN(+h.p.valor))}</div>
+        <div class="pie">
+          <div class="precios"><span><small>Clásico</small><b>${escapar(h.clasico || "-")}</b></span><span><small>Expreso</small><b>${escapar(h.expreso || "-")}</b></span></div>
+          <div class="acc"><button type="button" class="sec chico" data-rep="${i}" title="Volver a cargar estos datos en el formulario">Repetir</button><button type="button" class="sec chico" data-abrir-hist="${i}" title="Abrir MiCorreo con esta cotización cargada para completar el destinatario y pagar">MiCorreo</button></div>
+        </div>
+      </div>`).join("");
+    cont.querySelectorAll("[data-rep]").forEach((b) => b.addEventListener("click", () => {
+      const h = hist[+b.dataset.rep];
+      form.elements.modo.value = h.p.modo || "medidas";
+      actualizarModo(false);
+      for (const [k, v] of Object.entries(h.p)) if (k !== "sucursal_destino" && k !== "modo" && form.elements[k]) form.elements[k].value = v;
+      $("entrega").value = h.entrega;
+      pendienteSuc = h.p.sucursal_destino || ""; $("sucursal_destino").value = ""; renderSucursales();
+      actualizarEntrega(); renderAnalisis(); renderConocido();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }));
+    cont.querySelectorAll("[data-abrir-hist]").forEach((b) => b.addEventListener("click", () => {
+      const h = hist[+b.dataset.abrirHist];
+      abrirMiCorreo(h.entrega, h.p);
+    }));
+  }
+  $("borrarHistorial").addEventListener("click", () => {
+    if (!confirm("¿Vaciar el historial de cotizaciones?")) return;
+    store("cotizador:historial", []); renderHistorial();
+  });
+
+  // ---------- Formulario ----------
+  for (const p of PROVINCIAS) {
+    const opt = document.createElement("option");
+    opt.value = p; opt.textContent = p;
+    $("provincia").appendChild(opt);
+  }
+
+  // Recordar el destino de la última consulta. Los valores del paquete arrancan
+  // siempre vacíos (salvo el valor declarado, que tiene un valor por defecto) y el
+  // tipo de entrega siempre en "sucursal".
+  const NO_RESTAURAR = new Set(["entrega", "sucursal_destino", "modo", "largo", "ancho", "alto", "peso", "valor", "volumen"]);
+  const guardado = load("cotizador:ultimo", null);
+  let pendienteSuc = guardado ? guardado.sucursal_destino : "";
+  if (guardado) for (const [k, v] of Object.entries(guardado)) if (!NO_RESTAURAR.has(k) && form.elements[k]) form.elements[k].value = v;
+  form.elements.modo.value = load("cotizador:modo", "medidas") === "volumen" ? "volumen" : "medidas";
+  actualizarModo(false);
+  form.elements.modo.forEach((r) => r.addEventListener("change", () => { actualizarModo(); renderAnalisis(); renderConocido(); $(modoActual() === "volumen" ? "volumen" : "largo").focus(); }));
+
+  // ---------- Sucursales por provincia (listado descargado del sitio) ----------
+  let SUCURSALES = null;
+  async function cargarSucursales(forzar = false) {
+    $("infoSuc").textContent = forzar ? "Descargando el listado actualizado del Correo (unos 20 s)…" : "Cargando listado de sucursales…";
+    try {
+      const resp = await fetch(forzar ? "/api/sucursales/actualizar" : "/api/sucursales", { method: forzar ? "POST" : "GET" });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+      SUCURSALES = json;
+      renderSucursales();
+    } catch (e) {
+      SUCURSALES = null;
+      $("sucursal_destino").innerHTML = '<option value="">— sin listado —</option>';
+      $("infoSuc").innerHTML = `No se pudo cargar el listado (${escapar(e.message)}). <a href="#" data-suc="reintentar">Reintentar</a>`;
+    }
+  }
+  function renderSucursales() {
+    const sel = $("sucursal_destino");
+    const prov = $("provincia").value;
+    const filtro = $("filtroSuc").value.trim().toUpperCase();
+    const previo = sel.value || pendienteSuc;
+    const todas = ((SUCURSALES && SUCURSALES.provincias && SUCURSALES.provincias[prov]) || []).filter((s) => s.HABILITADA !== "N");
+    const lista = todas.filter((s) => !filtro || s.nombre.toUpperCase().includes(filtro) || s.cp.includes(filtro));
+    sel.innerHTML = '<option value="">— elegir sucursal —</option>' +
+      lista.map((s) => `<option value="${escapar(s.codigo)}" data-nombre="${escapar(s.nombre)}">${escapar(s.nombre)} (CP ${escapar(s.cp)})</option>`).join("");
+    if (previo && lista.some((s) => s.codigo === previo)) { sel.value = previo; pendienteSuc = ""; }
+    const fecha = SUCURSALES && SUCURSALES.actualizado ? new Date(SUCURSALES.actualizado).toLocaleDateString("es-AR") : "-";
+    $("infoSuc").innerHTML = `${lista.length}${filtro ? ` de ${todas.length}` : ""} sucursales en ${escapar(prov)} · listado del ${fecha} · <a href="#" data-suc="actualizar">actualizar desde el Correo</a>`;
+    renderConocido();
+  }
+  $("infoSuc").addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-suc]");
+    if (!a) return;
+    ev.preventDefault();
+    cargarSucursales(a.dataset.suc === "actualizar");
+  });
+  $("filtroSuc").addEventListener("input", renderSucursales);
+  $("provincia").addEventListener("change", () => { $("sucursal_destino").value = ""; renderSucursales(); });
+  function nombreSucursal(codigo) {
+    const opt = $("sucursal_destino").querySelector(`option[value="${codigo}"]`);
+    return opt ? opt.dataset.nombre : codigo;
+  }
+
+  function actualizarEntrega() {
+    const modo = $("entrega").value;
+    const verSuc = modo !== "domicilio", verCp = modo !== "sucursal";
+    $("campo-sucursal").classList.toggle("hidden", !verSuc);
+    $("campo-cp").classList.toggle("hidden", !verCp);
+    $("sucursal_destino").required = verSuc;
+    $("cp").required = verCp;
+  }
+  $("entrega").addEventListener("change", () => { actualizarEntrega(); renderConocido(); });
+  for (const id of ["largo", "ancho", "alto", "peso", "volumen"]) $(id).addEventListener("input", () => { renderAnalisis(); renderConocido(); });
+  $("volumen_unidad").addEventListener("change", () => { renderAnalisis(); renderConocido(); });
+  for (const id of ["valor", "cp", "sucursal_origen"]) $(id).addEventListener("input", renderConocido);
+  for (const id of ["provincia", "sucursal_destino"]) $(id).addEventListener("change", renderConocido);
+
+  // ---------- Cotizar ----------
+  async function pedirCotizacion(datos, entrega) {
+    const cuerpo = { ...datos, entrega };
+    const resp = await fetch("/api/cotizar", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo),
+    });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+    return json;
+  }
+
+  function bloquePrecios(r) {
+    const precios = [["Paq.ar Clásico", r.clasico], ["Paq.ar Expreso", r.expreso], ["Paq.ar Hoy", r.hoy]]
+      .filter(([, v]) => v)
+      .map(([n, v]) => `<div class="precio"><div class="nombre">${escapar(n)}</div><div class="monto">${escapar(v)}</div></div>`)
+      .join("");
+    return precios ? `<div class="precios">${precios}</div>` : `<div class="aviso error">El sitio no devolvió precios para estos parámetros.</div>`;
+  }
+  function textoDestino(d) {
+    if (d.tipo !== "sucursal") return `Domicilio, CP <b>${escapar(d.cp)}</b>, ${escapar(d.provincia)}`;
+    const det = d.detalle || {};
+    let t = `Sucursal <b>${escapar(d.nombre)}</b> (${escapar(d.sucursal)}, CP ${escapar(d.cp)}), ${escapar(d.provincia)}`;
+    if (det.direccion) t += `<br><b>Dirección:</b> ${escapar(det.direccion)}${det.localidad ? ", " + escapar(det.localidad) : ""}`;
+    if (det.horario) t += `<br><b>Horario:</b> ${escapar(det.horario)}`;
+    if (det.mapa) t += ` · <a href="${escapar(det.mapa)}" target="_blank" rel="noopener">ver en el mapa</a>`;
+    return t;
+  }
+  async function completarDetalleSucursal(r) {
+    const d = r.destino || {};
+    if (d.tipo !== "sucursal" || !d.sucursal) return;
+    try {
+      const resp = await fetch(`/api/sucursal?codigo=${encodeURIComponent(d.sucursal)}`);
+      if (resp.ok) d.detalle = await resp.json();
+    } catch (e) { /* sin detalle: la ficha muestra solo nombre, CP y provincia */ }
+  }
+  function bloqueDetalle(r, an, datos) {
+    const o = r.origen || {}, p = r.paquete || {};
+    const paquete = datos && datos.modo === "volumen"
+      ? `${fmtN(+datos.volumen_cm3)} cm³ (cotizado como ${textoMedidas(p)})`
+      : textoMedidas(p);
+    return `<div class="detalle">
+      <div><b>Origen:</b> ${escapar(o.nombre || o.sucursal || "-")} (CP ${escapar(o.cp || "-")})</div>
+      <div><b>Destino:</b> ${textoDestino(r.destino || {})}</div>
+      <div><b>Paquete:</b> ${paquete}, ${escapar(p.peso)} kg, valor $${escapar(p.valor)}</div>
+      <div><b>Facturable:</b> ${fmtKg(an.pf)} kg (volumétrico ${fmtKg(an.pv)} kg) · escalón ${an.esc === null ? ">25" : "hasta " + fmtKg(an.esc)} kg · ${an.manda === "tamaño" ? "manda el tamaño" : an.manda === "peso" ? "manda el peso" : "empate"}</div>
+      ${r._advertencia ? `<div class="aviso warn" style="margin-top:8px">${escapar(r._advertencia)}</div>` : ""}
+    </div>`;
+  }
+
+  // ---------- Ficha para compartir con el cliente ----------
+  let ultimaCotizacion = null;
+
+  function datosSucursal(codigo) {
+    if (!SUCURSALES) return null;
+    for (const lista of Object.values(SUCURSALES.provincias || {})) {
+      const s = lista.find((x) => x.codigo === codigo);
+      if (s) return s;
+    }
+    return null;
+  }
+
+  function htmlFicha(c) {
+    const fecha = new Date(c.fecha);
+    const fechaTxt = fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+    const horaTxt = fecha.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const nro = fecha.getFullYear().toString().slice(2) + String(fecha.getMonth() + 1).padStart(2, "0") + String(fecha.getDate()).padStart(2, "0") + "-" + String(fecha.getHours()).padStart(2, "0") + String(fecha.getMinutes()).padStart(2, "0");
+    const p = c.respuestas[0][1].paquete || {};
+    const o = c.respuestas[0][1].origen || {};
+    const logo = location.origin + "/logo-correo.png";
+
+    const fila = (k, v) => v ? `<div class="f"><dt>${k}</dt><dd>${v}</dd></div>` : "";
+
+    const seccionDestino = (e, r) => {
+      const d = r.destino || {};
+      if (e === "sucursal") {
+        const s = datosSucursal(d.sucursal) || {};
+        const det = d.detalle || {};
+        const tipo = det.tipo && det.tipo.toLowerCase().includes("unidad") ? "Retiro en unidad postal" : "Retiro en sucursal";
+        const datosSuc = (det.direccion || det.horario) ? `
+          <div class="suc"><dl>
+            ${fila("Dirección", `<strong style="font-size:15px">${escapar(det.direccion || "-")}</strong>${det.localidad ? `<br>${escapar(det.localidad)}` : ""}`)}
+            ${fila("Horario de atención", escapar(det.horario || "-"))}
+            ${det.mapa ? fila("Ubicación", `<a href="${escapar(det.mapa)}" target="_blank" rel="noopener">Ver en Google Maps</a>`) : ""}
+          </dl></div>` : "";
+        return `
+          <div class="tit">${tipo}</div>
+          <dl>
+            ${fila("Sucursal / localidad", `<strong>${escapar(d.nombre || s.nombre || "-")}</strong>`)}
+            ${fila("Código postal", escapar(d.cp || s.cp || "-"))}
+            ${fila("Provincia", escapar(d.provincia || s.nombreProvincia || "-"))}
+            ${fila("Código de sucursal", escapar(d.sucursal || s.codigo || "-"))}
+          </dl>
+          ${datosSuc}`;
+      }
+      return `
+        <div class="tit">Entrega a domicilio</div>
+        <dl>
+          ${fila("Código postal", `<strong>${escapar(d.cp || "-")}</strong>`)}
+          ${fila("Provincia", escapar(d.provincia || "-"))}
+        </dl>`;
+    };
+
+    const seccionPrecios = (r) => {
+      const items = [
+        ["Paq.ar Clásico", r.clasico, "Servicio estándar · mejor precio"],
+        ["Paq.ar Expreso", r.expreso, "Servicio prioritario"],
+        ["Paq.ar Hoy", r.hoy, "Entrega en el día"],
+      ].filter(([, v]) => v);
+      return `<div class="precios">${items.map(([n, v, sub], i) => `
+        <div class="precio ${i === 0 && n.includes("Clásico") ? "destacado" : "secundario"}">${i === 0 && n.includes("Clásico") ? '<div class="etq">Recomendado</div>' : ""}<div class="pn">${n}</div><div class="pv">${escapar(v)}</div><div class="ps">${sub}</div></div>`).join("")}</div>`;
+    };
+
+    const bloques = c.respuestas.map(([e, r]) => `
+      <section class="bloque">
+        ${seccionDestino(e, r)}
+        ${seccionPrecios(r)}
+      </section>`).join('<div class="sep"></div>');
+
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<title>Cotización de envío ${escapar(nro)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<style>
+  :root { --azul: #152663; --azul2: #1f3580; --amarillo: #ffce00; --amarillo2: #fff8d6; --gris: #49454f; --ink: #1a2333; --muted: #6b7280; --line: #e3e7ef; --bg: #eef1f7; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .barra { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 14px 16px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  .barra button { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--ink); }
+  .barra button.p { background: var(--azul); color: #fff; border-color: var(--azul); font-weight: 600; }
+  .barra .hint { width: 100%; text-align: center; font-size: 12px; color: var(--muted); }
+  .lienzo { padding: 28px 16px 48px; display: flex; justify-content: center; }
+  .ficha { width: 680px; max-width: 100%; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(20,38,98,.45), 0 2px 6px rgba(20,38,98,.08); }
+  .cab { padding: 28px 36px 22px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .cab img { height: 46px; width: auto; display: block; }
+  .cab .meta { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .cab .meta b { color: var(--azul); font-weight: 700; font-size: 13px; }
+  .franja { background: var(--azul); color: #fff; padding: 12px 36px; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; border-bottom: 4px solid var(--amarillo); }
+  .cuerpo { padding: 26px 36px 10px; }
+  .bloque { padding: 6px 0 4px; }
+  .sep { height: 1px; background: var(--line); margin: 18px 0; }
+  .tit { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--azul); font-weight: 700; margin-bottom: 12px; padding-left: 10px; border-left: 4px solid var(--amarillo); line-height: 1.2; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 24px; margin: 0 0 20px; }
+  .f dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .f dd { margin: 0; font-size: 15px; }
+  .f dd strong { font-weight: 700; font-size: 17px; color: var(--azul); }
+  .pie .tel { color: var(--gris); }
+  .precios { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 8px; }
+  .precios { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: stretch; }
+  .precio { border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px; background: #fff; position: relative; display: flex; flex-direction: column; justify-content: center; }
+  .precio.destacado { background: var(--azul); border-color: var(--azul); color: #fff; padding: 22px 22px 18px; box-shadow: 0 14px 30px -18px rgba(21,38,99,.6); }
+  .precio.destacado .pn, .precio.destacado .ps { color: rgba(255,255,255,.8); }
+  .precio.destacado .pv { color: #fff; font-size: 36px; }
+  .precio.destacado::before { content: ""; position: absolute; left: 22px; right: 22px; top: 0; height: 4px; background: var(--amarillo); border-radius: 0 0 4px 4px; }
+  .etq { position: absolute; top: 14px; right: 16px; background: var(--amarillo); color: var(--azul); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; padding: 4px 8px; border-radius: 999px; }
+  .precio.secundario { background: #f7f8fb; }
+  .precio.secundario .pv { font-size: 24px; color: var(--gris); }
+  .pn { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .pv { font-size: 30px; font-weight: 700; color: var(--azul); margin: 8px 0 4px; letter-spacing: -.02em; }
+  .ps { font-size: 12px; color: var(--muted); }
+  .paquete { background: var(--amarillo2); border-radius: 14px; padding: 18px 20px 6px; margin: 10px 0 6px; }
+  .suc { background: #f6f7fb; border-radius: 14px; padding: 16px 20px 6px; margin: -6px 0 16px; }
+  .suc dl { margin-bottom: 10px; }
+  .suc .f dd { font-size: 14px; }
+  .suc .f dd a { color: var(--azul); }
+  .paquete .tit { color: var(--azul); }
+  .paquete dl { margin-bottom: 12px; }
+  .pie { padding: 18px 36px 24px; font-size: 11.5px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); margin-top: 18px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; }
+  .pie b { color: var(--ink); font-weight: 600; }
+  .pie .paq { color: var(--azul); font-weight: 700; font-size: 13px; }
+  @media print { .barra { display: none; } body { background: #fff; } .lienzo { padding: 0; } .ficha { box-shadow: none; border-radius: 0; width: 100%; } }
+  @media (max-width: 560px) { .cab { flex-direction: column; align-items: flex-start; } .cab .meta { text-align: left; } .cab, .cuerpo, .pie, .franja { padding-left: 22px; padding-right: 22px; } }
+</style></head><body>
+<div class="barra">
+  <button class="p" id="copiar">Copiar imagen (para WhatsApp)</button>
+  <button id="png">Descargar imagen (PNG)</button>
+  <button id="imprimir">Imprimir / guardar PDF</button>
+  <div class="hint">"Copiar imagen" deja la cotización en el portapapeles lista para pegar (Ctrl+V) en WhatsApp, mail o cualquier chat. La imagen no incluye esta barra.</div>
+</div>
+<div class="lienzo">
+<article class="ficha" id="ficha">
+  <header class="cab">
+    <img src="${logo}" alt="Correo Argentino">
+    <div class="meta"><b>Cotización N.º ${escapar(nro)}</b><br>${escapar(fechaTxt)}<br>${escapar(horaTxt)} hs</div>
+  </header>
+  <div class="franja">Cotización de envío · Paq.ar</div>
+  <div class="cuerpo">
+    ${bloques}
+    <div class="sep"></div>
+    <section class="paquete">
+      <div class="tit">Detalle del paquete</div>
+      <dl>
+        ${c.datos && c.datos.modo === "volumen"
+          ? fila("Volumen", `${fmtN(+c.datos.volumen_cm3)} cm³ <span style="color:var(--muted);font-size:12px">(equivale a ${escapar(p.largo)} × ${escapar(p.ancho)} × ${escapar(p.alto)} cm)</span>`)
+          : fila("Medidas", `${escapar(p.largo)} × ${escapar(p.ancho)} × ${escapar(p.alto)} cm`)}
+        ${fila("Peso", `${escapar(p.peso)} kg`)}
+      </dl>
+    </section>
+  </div>
+  <footer class="pie">
+    <div>Despacho desde <b>Sucursal ${escapar(o.nombre || o.sucursal || "-")}</b> (CP ${escapar(o.cp || "-")}). <span class="tel">Atención al cliente Correo Argentino: <b>0810-777-7787</b>.</span><br>Tarifas informadas por Correo Argentino (MiCorreo) el ${escapar(fechaTxt)} a las ${escapar(horaTxt)} hs. Vigentes al momento de la consulta; pueden variar.</div>
+    <div class="paq">Paq.ar</div>
+  </footer>
+</article>
+</div>
+<script>
+  document.getElementById("imprimir").addEventListener("click", () => window.print());
+  async function capturar() {
+    await (document.fonts ? document.fonts.ready : Promise.resolve());
+    return html2canvas(document.getElementById("ficha"), { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+  }
+  document.getElementById("png").addEventListener("click", async () => {
+    const b = document.getElementById("png"); b.disabled = true; b.textContent = "Generando…";
+    try {
+      const canvas = await capturar();
+      const a = document.createElement("a");
+      a.download = "cotizacion-correo-${escapar(nro)}.png"; a.href = canvas.toDataURL("image/png"); a.click();
+    } catch (e) { alert("No se pudo generar la imagen: " + e.message); }
+    finally { b.disabled = false; b.textContent = "Descargar imagen (PNG)"; }
+  });
+  document.getElementById("copiar").addEventListener("click", async () => {
+    const b = document.getElementById("copiar"); const original = b.textContent; b.disabled = true; b.textContent = "Copiando…";
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw new Error("este navegador no permite copiar imágenes al portapapeles; usá Descargar imagen.");
+      // Chrome exige que la escritura ocurra dentro del gesto del usuario: pasamos una promesa del blob.
+      const blobPromise = capturar().then((canvas) => new Promise((ok, err) => canvas.toBlob((bl) => bl ? ok(bl) : err(new Error("no se pudo generar el PNG")), "image/png")));
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
+      b.textContent = "¡Copiada! Pegala en WhatsApp con Ctrl+V";
+      setTimeout(() => { b.textContent = original; }, 3500);
+    } catch (e) {
+      alert("No se pudo copiar la imagen: " + e.message);
+      b.textContent = original;
+    } finally { b.disabled = false; }
+  });
+<\/script>
+</body></html>`;
+  }
+
+  // ---------- Continuar el envío en MiCorreo (ventana visible, formulario completo) ----------
+  async function abrirMiCorreo(entrega, datos) {
+    datos = datos || (ultimaCotizacion && ultimaCotizacion.datos);
+    if (!datos) return;
+    const botones = document.querySelectorAll("[data-abrir], [data-abrir-hist]");
+    botones.forEach((b) => { b.disabled = true; });
+    estado.textContent = "Abriendo MiCorreo en una ventana nueva con el formulario completo… (unos 15 s)";
+    try {
+      const resp = await fetch("/api/abrir", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...datos, entrega }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+      estado.textContent = "Se abrió una ventana con MiCorreo. Ahí elegís el servicio, tocás Siguiente, cargás el destinatario y pagás. Cerrá esa ventana cuando termines.";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      estado.textContent = "";
+      alert("No se pudo abrir MiCorreo: " + e.message);
+    } finally {
+      botones.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  function abrirFicha() {
+    if (!ultimaCotizacion) return;
+    const w = window.open("", "_blank");
+    if (!w) return alert("El navegador bloqueó la ventana emergente. Permitila para este sitio y volvé a intentar.");
+    w.document.open(); w.document.write(htmlFicha(ultimaCotizacion)); w.document.close();
+  }
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const pq = leerPaquete();
+    if (!pq) {
+      estado.textContent = modoActual() === "volumen" ? "Revisá el volumen y el peso: tienen que ser mayores a cero." : "Revisá las medidas y el peso: tienen que ser mayores a cero.";
+      return;
+    }
+    // Siempre se envían largo/ancho/alto; en modo volumen son las medidas equivalentes.
+    const datos = { ...Object.fromEntries(new FormData(form).entries()), modo: pq.modo, largo: pq.largo, ancho: pq.ancho, alto: pq.alto, volumen_cm3: pq.volumen_cm3 };
+    datos.sucursal_nombre = nombreSucursal(datos.sucursal_destino);
+    store("cotizador:ultimo", datos);
+    const an = analizar(+datos.largo, +datos.ancho, +datos.alto, leerDecimal(datos.peso));
+    const entregas = datos.entrega === "ambos" ? ["sucursal", "domicilio"] : [datos.entrega];
+
+    btn.disabled = true;
+    resultado.classList.add("hidden");
+    const bloques = [];
+    try {
+      const respuestas = [];
+      for (const [i, e] of entregas.entries()) {
+        estado.textContent = `Consultando MiCorreo (${e})… ${entregas.length > 1 ? `${i + 1} de ${entregas.length} · ` : ""}puede demorar 15–40 s; si la sesión expiró, se vuelve a iniciar sesión solo.`;
+        const r = await pedirCotizacion(datos, e);
+        if (e === "sucursal") {
+          estado.textContent = "Buscando dirección y horario de la sucursal…";
+          await completarDetalleSucursal(r);
+        }
+        respuestas.push([e, r]);
+        guardarCache(claveCache(datos, e), r);
+        agregarHistorial({ fecha: Date.now(), entrega: e, p: datos, esc: an.esc, clasico: r.clasico, expreso: r.expreso });
+      }
+
+      if (respuestas.length === 1) {
+        const r = respuestas[0][1];
+        bloques.push(bloquePrecios(r), bloqueDetalle(r, an, datos),
+          `<details><summary>Respuesta completa</summary><pre>${escapar(JSON.stringify(r, null, 2))}</pre></details>`);
+      } else {
+        const precioMin = (r) => Math.min(...[r.clasico, r.expreso].map(numPrecio).filter((x) => x !== null));
+        const mins = respuestas.map(([, r]) => precioMin(r));
+        const mejor = mins.indexOf(Math.min(...mins));
+        const dif = Math.abs(mins[0] - mins[1]);
+        bloques.push(`<div class="aviso ok" style="margin-bottom:12px">Más barato: <b>${respuestas[mejor][0] === "sucursal" ? "entrega en sucursal" : "entrega a domicilio"}</b>${isFinite(dif) ? ` — ahorrás ${fmt$(dif)} respecto a la otra opción (comparando el servicio más económico de cada una).` : "."}</div>`);
+        bloques.push(`<div class="comparar">${respuestas.map(([e, r], i) => `
+          <div class="col ${i === mejor ? "mejor" : ""}"><h3>${e === "sucursal" ? "Entrega en sucursal" : "Entrega a domicilio"}</h3>${bloquePrecios(r)}${bloqueDetalle(r, an, datos)}</div>`).join("")}</div>`);
+        bloques.push(`<details><summary>Respuestas completas</summary><pre>${escapar(JSON.stringify(Object.fromEntries(respuestas), null, 2))}</pre></details>`);
+      }
+      ultimaCotizacion = { fecha: Date.now(), datos, respuestas, an };
+      const botonesAbrir = respuestas.map(([e]) => `<button type="button" class="sec" data-abrir="${e}" title="Abrir MiCorreo con esta cotización cargada para completar el destinatario y pagar">MiCorreo${respuestas.length > 1 ? (e === "sucursal" ? " (sucursal)" : " (domicilio)") : ""}</button>`).join("");
+      bloques.unshift(`<div class="barra" style="flex-wrap:wrap"><h2 style="margin:0">Resultado</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${botonesAbrir}<button type="button" id="compartir" class="sec">Compartir cotización</button></div></div>`);
+      resultado.innerHTML = bloques.join("");
+      $("compartir").addEventListener("click", abrirFicha);
+      resultado.querySelectorAll("[data-abrir]").forEach((b) => b.addEventListener("click", () => abrirMiCorreo(b.dataset.abrir)));
+      estado.textContent = "";
+    } catch (e) {
+      resultado.innerHTML = bloques.join("") + `<div class="aviso error">${escapar(e.message)}</div>`;
+      estado.textContent = "";
+    } finally {
+      resultado.classList.remove("hidden");
+      btn.disabled = false;
+      renderConocido();
+    }
+  });
+
+  actualizarEntrega();
+  renderAnalisis();
+  renderConocido();
+  renderHistorial();
+  cargarSucursales();
+</script>
+</body>
+</html>

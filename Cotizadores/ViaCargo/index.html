@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cotizador Vía Cargo</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --card: #fff; --text: #111827; --muted: #6b7280;
+    --border: #d1d5db; --accent: #1e8d34; --accent-hover: #17702a; --rojo: #dc2525; --gris: #212121;
+    --ok: #047857; --ok-bg: #ecfdf5; --warn-bg: #fffbeb; --warn: #92400e;
+    --err-bg: #fef2f2; --err: #b91c1c; --price-bg: #f0fdf4; --info-bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1240px; margin: 0 auto; }
+  .cabecera { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; flex-wrap: wrap; }
+  .cabecera img { height: 34px; width: auto; }
+  h1 { font-size: 22px; margin: 0; color: var(--accent); }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  /* Dos columnas: formulario + resultado a la izquierda, historial a la derecha. */
+  .disposicion { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+  .lateral { position: sticky; top: 24px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+  .lateral .card { margin-bottom: 0; display: flex; flex-direction: column; min-height: 0; }
+  .lateral .barra { flex: 0 0 auto; }
+  #historial { overflow: auto; min-height: 0; margin: 0 -8px; padding: 0 8px; }
+  @media (max-width: 1023px) {
+    .disposicion { grid-template-columns: minmax(0, 1fr); }
+    .lateral { position: static; max-height: none; }
+    .lateral .card { margin-bottom: 16px; }
+  }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 18px; }
+  legend { font-weight: 600; margin-bottom: 10px; padding: 0; }
+  fieldset.paquete > legend { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  /* Selector de modo (medidas / volumen). */
+  .segmentado { display: inline-flex; background: #e5e7eb; border-radius: 8px; padding: 3px; gap: 2px; position: relative; }
+  .segmentado label { margin: 0; cursor: pointer; }
+  .segmentado input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .segmentado span { display: block; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; user-select: none; }
+  .segmentado input:checked + span { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .segmentado input:focus-visible + span { outline: 2px solid var(--accent); }
+  .combo { display: flex; }
+  .combo input { border-radius: 6px 0 0 6px; min-width: 0; }
+  .combo select { width: auto; flex: 0 0 auto; border-left: 0; border-radius: 0 6px 6px 0; background: #f9fafb; padding-left: 8px; padding-right: 8px; }
+  form[data-modo="medidas"] .solo-volumen, form[data-modo="volumen"] .solo-medidas { display: none; }
+  form[data-modo="volumen"] .paquete-fila { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, .8fr); }
+  .equivalente { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .equivalente b { color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .hidden { display: none !important; }
+  button {
+    padding: 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.principal { width: 100%; background: var(--accent); color: #fff; }
+  button.principal:hover { background: var(--accent-hover); }
+  .paquete-fila { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .paquete-fila > div { display: flex; flex-direction: column; justify-content: flex-end; }
+  @media (max-width: 720px) { .paquete-fila, form[data-modo="volumen"] .paquete-fila { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  button.sec { background: #fff; color: var(--accent); border: 1px solid var(--accent); padding: 8px 12px; font-weight: 500; font-size: 14px; }
+  button.chico { padding: 5px 10px; font-size: 13px; }
+  button:hover { filter: brightness(.95); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .estado { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 20px; }
+  .aviso { border-radius: 8px; padding: 12px; font-size: 14px; white-space: pre-wrap; }
+  .aviso.error { background: var(--err-bg); color: var(--err); border: 1px solid #fecaca; }
+  .aviso.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #a7f3d0; }
+  .aviso.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde68a; }
+  .aviso.info { background: var(--info-bg); color: var(--text); border: 1px solid var(--border); }
+  .analisis { background: var(--info-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 14px; font-size: 14px; }
+  .analisis .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .kpi .n { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .v { font-size: 18px; font-weight: 700; }
+  .kpi .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .analisis ul { margin: 8px 0 0; padding-left: 18px; }
+  .analisis li { margin-bottom: 4px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .tag.tam { background: #fef3c7; color: #92400e; }
+  .tag.peso { background: #dcfce7; color: #166534; }
+  .tag.mejor { background: var(--accent); color: #fff; }
+  .tag.no { background: #fee2e2; color: #991b1b; }
+  /* Localidad: input con datalist + estado de resolucion debajo. */
+  .loc-estado { font-size: 12.5px; margin-top: 4px; min-height: 18px; color: var(--muted); }
+  .loc-estado.ok { color: var(--ok); }
+  .loc-estado.err { color: var(--err); }
+  .precios { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .precio { background: var(--price-bg); border-radius: 8px; padding: 14px; text-align: center; border: 1px solid transparent; position: relative; }
+  .precio.mejor { border-color: var(--accent); }
+  .precio .etq { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); white-space: nowrap; }
+  .precio .nombre { font-size: 13px; color: var(--text); font-weight: 700; }
+  .precio .modalidad { font-size: 12px; color: var(--muted); }
+  .precio .monto { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 6px; }
+  .precio .entrega { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .precio.nopermitido { opacity: .55; }
+  .comparar { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .comparar .col { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .comparar .col.mejor { border-color: #34d399; background: var(--ok-bg); }
+  .comparar h3 { margin: 0 0 8px; font-size: 15px; }
+  .detalle { font-size: 13px; color: var(--muted); }
+  .detalle b { color: var(--text); font-weight: 600; }
+  details { margin-top: 10px; font-size: 13px; }
+  summary { cursor: pointer; }
+  pre { background: #f9fafb; border: 1px solid var(--border); border-radius: 6px; padding: 10px; overflow: auto; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  .vacio { color: var(--muted); font-size: 14px; }
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  /* Agencias del origen / destino. */
+  .agencias { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+  .agencias h3 { margin: 0 0 6px; font-size: 14px; }
+  .agencia { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 8px; background: #fff; }
+  .agencia .nom { font-weight: 600; }
+  .agencia .dir { color: var(--text); }
+  .agencia .ext { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .agencia a { color: var(--accent); }
+  /* Historial en formato lista compacta (columna lateral). */
+  .hist { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; background: #fff; }
+  .hist:hover { border-color: var(--accent); }
+  .hist .fila1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .hist .paq { font-weight: 600; color: var(--text); }
+  .hist .fecha { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .hist .dest { color: var(--muted); margin-top: 2px; }
+  .hist .pie { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .hist .precios { display: flex; gap: 12px; margin: 0; }
+  .hist .precios span { white-space: nowrap; }
+  .hist .precios small { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .hist .precios b { color: var(--accent); font-size: 14px; }
+  .hist .acc { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="cabecera"><img src="/logo-viacargo.png" alt="Vía Cargo"><h1>Cotizador Vía Cargo</h1></div>
+  <p class="sub">Consulta las tarifas reales del cotizador público de Vía Cargo (Estándar, Plus RD, Plus ED y Puerta a puerta) y te ayuda a elegir la caja más económica.</p>
+
+  <div class="disposicion">
+  <div>
+  <form id="form" class="card" autocomplete="off" data-modo="medidas">
+    <fieldset class="paquete">
+      <legend>
+        <span>Paquete</span>
+        <span class="segmentado" role="radiogroup" aria-label="Forma de ingresar el tamaño del paquete">
+          <label><input type="radio" name="modo" value="medidas" checked><span>Por medidas</span></label>
+          <label><input type="radio" name="modo" value="volumen"><span>Por volumen</span></label>
+        </span>
+      </legend>
+      <div class="paquete-fila">
+        <div class="solo-medidas"><label for="largo">Largo (cm)</label><input id="largo" name="largo" type="number" min="1" max="999" step="1" required placeholder="Ej: 20"></div>
+        <div class="solo-medidas"><label for="ancho">Ancho (cm)</label><input id="ancho" name="ancho" type="number" min="1" max="999" step="1" required placeholder="Ej: 15"></div>
+        <div class="solo-medidas"><label for="alto">Alto (cm)</label><input id="alto" name="alto" type="number" min="1" max="999" step="1" required placeholder="Ej: 10"></div>
+        <div class="solo-volumen">
+          <label for="volumen">Volumen del paquete</label>
+          <div class="combo">
+            <input id="volumen" name="volumen" type="text" inputmode="decimal" placeholder="Ej: 3000" disabled>
+            <select id="volumen_unidad" name="volumen_unidad" aria-label="Unidad del volumen" disabled>
+              <option value="cm3" selected>cm³</option>
+              <option value="l">litros</option>
+            </select>
+          </div>
+        </div>
+        <div><label for="peso">Peso real (kg)</label><input id="peso" name="peso" type="text" inputmode="decimal" placeholder="Ej: 2 o 2,5" required></div>
+        <div><label for="valor" id="valor-label">Valor decl. ($)</label><input id="valor" name="valor" type="number" min="1" step="1" required value="100000"></div>
+        <div><label for="bultos">Bultos</label><input id="bultos" name="bultos" type="number" min="1" max="999" step="1" value="1" required></div>
+      </div>
+      <div id="analisis" class="analisis"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Origen y destino</legend>
+      <div class="grid">
+        <div>
+          <label for="origen">Origen (localidad o CP)</label>
+          <input id="origen" name="origen" list="lista-localidades" type="text" placeholder="Ej: FLORIDA o 1602" required>
+          <div id="origen-estado" class="loc-estado"></div>
+        </div>
+        <div>
+          <label for="destino">Destino (localidad o CP)</label>
+          <input id="destino" name="destino" list="lista-localidades" type="text" placeholder="Ej: CORDOBA o 5000" required>
+          <div id="destino-estado" class="loc-estado"></div>
+        </div>
+        <div>
+          <label for="pago">Forma de pago</label>
+          <select id="pago" name="pago">
+            <option value="P" selected>Pago en origen</option>
+            <option value="D">Pago en destino</option>
+            <option value="ambos">Comparar origen y destino</option>
+          </select>
+        </div>
+      </div>
+      <datalist id="lista-localidades"></datalist>
+      <div class="detalle" id="infoLoc" style="margin-top:6px"></div>
+    </fieldset>
+
+    <div id="conocido" class="aviso info hidden" style="margin-bottom:12px"></div>
+
+    <button id="btn" type="submit" class="principal">Cotizar</button>
+    <div id="estado" class="estado"></div>
+  </form>
+
+  <section id="resultado" class="card hidden"></section>
+  </div>
+
+  <aside class="lateral">
+    <section class="card">
+      <div class="barra">
+        <h2 style="margin:0">Historial de cotizaciones</h2>
+        <button type="button" id="borrarHistorial" class="sec chico">Vaciar</button>
+      </div>
+      <div id="historial"></div>
+    </section>
+  </aside>
+  </div>
+</main>
+
+<script>
+  // ---------- Reglas tarifarias observadas (deducidas cotizando contra la API) ----------
+  // El flete ("ENCOMIENDA") se cobra por franjas. Hay una escalera por peso real
+  // (hasta 5 / 10 / 20 / 30 / 40 / 50 kg y después por kg) y otra por volumen
+  // (hasta 28 / 72 / 120 / 160 / 200 dm³ y después a 250 kg/m³, o sea vol/4000 kg);
+  // cada franja de volumen cuesta lo mismo que una franja de peso (5, 10, 20, 40 y
+  // 50 kg: no existe la de 30 por volumen). Se paga la más cara de las dos.
+  // Además: seguro = 5 % del valor declarado, pago en destino = +15 % del flete,
+  // IVA 21 % sobre todo, y el total se redondea a miles ("ajustes de redondeo").
+  const FRANJAS_PESO = [5, 10, 20, 30, 40, 50];
+  const FRANJAS_VOL = [27999, 71999, 120000, 160000, 200000]; // 28000 ya paga como 10 kg, 72000 como 20 kg
+  const VOL_EQUIV_KG = [5, 10, 20, 40, 50];
+  const FACTOR_VOL_GRANDE = 4000;
+  const POR_KG = FRANJAS_PESO.length; // rango "más de 50 kg": se cobra por kg
+  const DIAS_CACHE = 30;
+  const ORIGEN_POR_DEFECTO = "FLORIDA (1602) - BUENOS AIRES";
+  const MAX_AGENCIAS = 4;
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), btn = $("btn"), estado = $("estado"), resultado = $("resultado");
+
+  // ---------- Utilidades ----------
+  function escapar(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+  const fmtKg = (x) => x.toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  const fmtN = (x) => Math.round(x).toLocaleString("es-AR");
+  const fmt$ = (x) => "$ " + (+x).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dd = (n) => String(n).padStart(2, "0");
+  const fmtFechaCorta = (ts) => { const f = new Date(ts); return `${dd(f.getDate())}/${dd(f.getMonth() + 1)} ${dd(f.getHours())}:${dd(f.getMinutes())}`; };
+  const leerDecimal = (txt) => parseFloat(String(txt ?? "").trim().replace(",", "."));
+  // La API acepta como máximo un decimal en el peso ("2.5"); con dos devuelve HTTP 400.
+  function leerPeso() { const p = leerDecimal($("peso").value); return p > 0 ? Math.round(p * 10) / 10 : p; }
+  function store(clave, valor) { try { localStorage.setItem(clave, JSON.stringify(valor)); } catch (e) {} }
+  function load(clave, porDefecto) { try { return JSON.parse(localStorage.getItem(clave)) ?? porDefecto; } catch (e) { return porDefecto; } }
+  const normalizar = (s) => String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+  const soloFecha = (s) => String(s || "").slice(0, 10);
+  const fmtPesoTxt = (x) => String(x ?? "").replace(".", ",");
+
+  // ---------- Análisis del paquete ----------
+  function rangoPeso(kg) {
+    for (let i = 0; i < FRANJAS_PESO.length; i++) if (kg <= FRANJAS_PESO[i] + 1e-9) return i;
+    return POR_KG;
+  }
+  // Rango de precio de la franja de volumen, expresado en la escalera de peso.
+  function rangoVol(cm3) {
+    for (let i = 0; i < FRANJAS_VOL.length; i++) if (cm3 <= FRANJAS_VOL[i] + 1e-9) return FRANJAS_PESO.indexOf(VOL_EQUIV_KG[i]);
+    return POR_KG;
+  }
+  // Volumen máximo que no supera un rango de precio dado.
+  function volMaxDeRango(r) {
+    let v = null;
+    for (let i = 0; i < FRANJAS_VOL.length; i++) if (VOL_EQUIV_KG[i] <= FRANJAS_PESO[r]) v = FRANJAS_VOL[i];
+    return v;
+  }
+  function analizar(l, a, h, peso) {
+    const vol = l * a * h;
+    const rp = rangoPeso(peso), rv = rangoVol(vol);
+    const rango = Math.max(rp, rv);
+    const manda = rv > rp ? "tamaño" : (rp > rv ? "peso" : "ambos");
+    const pv = vol / FACTOR_VOL_GRANDE;                 // kg equivalentes en la zona "por kg"
+    const facturable = rango === POR_KG ? Math.max(peso, pv) : FRANJAS_PESO[rango];
+    return { vol, rp, rv, rango, manda, pv, facturable };
+  }
+  const nombreRango = (r) => r === POR_KG ? "más de 50 kg (por kg)" : `hasta ${FRANJAS_PESO[r]} kg`;
+
+  // ---------- Modo de ingreso: por medidas o por volumen ----------
+  // Vía Cargo pide largo/ancho/alto en cm enteros (1 a 999) y el flete depende del
+  // volumen y del peso. Para cotizar "por volumen" se buscan tres medidas enteras
+  // cuyo producto sea exactamente ese volumen (o el entero más cercano que se pueda
+  // factorizar sin cambiar de franja), así el precio es el mismo.
+  const MAX_CM = 999;
+  const cacheFactor = new Map();
+  function factorizarVolumen(v) {
+    if (cacheFactor.has(v)) return cacheFactor.get(v);
+    const divs = [];
+    for (let i = 1; i * i <= v; i++) if (v % i === 0) { divs.push(i); if (i * i !== v) divs.push(v / i); }
+    let mejor = null;
+    for (const a of divs) {
+      if (a > MAX_CM) continue;
+      const resto = v / a;
+      for (const b of divs) {
+        if (b > a || b > MAX_CM || resto % b !== 0) continue;
+        const c = resto / b;
+        if (c > b) continue; // solo tríos ordenados a ≥ b ≥ c
+        const spread = a - c;
+        if (!mejor || spread < mejor.spread) mejor = { dims: [a, b, c], spread };
+      }
+    }
+    const r = mejor ? mejor.dims : null;
+    cacheFactor.set(v, r);
+    return r;
+  }
+  function medidasDesdeVolumen(volCm3) {
+    const objetivo = Math.max(1, Math.round(volCm3));
+    const rv = rangoVol(objetivo);
+    const ventana = Math.max(3, Math.round(objetivo * 0.002));
+    let mejor = null;
+    for (let k = 0; k <= ventana; k++) {
+      for (const v of (k === 0 ? [objetivo] : [objetivo + k, objetivo - k])) {
+        if (v < 1 || rangoVol(v) !== rv) continue;
+        const d = factorizarVolumen(v);
+        if (!d) continue;
+        const puntaje = (d[0] - d[2]) + 3 * k;
+        if (!mejor || puntaje < mejor.puntaje) mejor = { dims: d, volumen: v, ajustado: v !== objetivo, puntaje };
+      }
+    }
+    return mejor;
+  }
+  function modoActual() { return form.elements.modo.value || "medidas"; }
+  function leerVolumenCm3() {
+    const v = leerDecimal($("volumen").value);
+    if (!(v > 0)) return NaN;
+    return $("volumen_unidad").value === "l" ? v * 1000 : v;
+  }
+  // Devuelve el paquete tal como se va a cotizar (siempre con largo/ancho/alto) o null si falta algo.
+  function leerPaquete() {
+    const peso = leerPeso();
+    if (modoActual() === "volumen") {
+      const vol = leerVolumenCm3();
+      if (!(vol > 0 && peso > 0)) return null;
+      const conv = medidasDesdeVolumen(vol);
+      if (!conv) return null;
+      const [largo, ancho, alto] = conv.dims;
+      return { modo: "volumen", largo, ancho, alto, peso, volumen_cm3: conv.volumen, volumen_pedido: vol, ajustado: conv.ajustado };
+    }
+    const largo = +$("largo").value, ancho = +$("ancho").value, alto = +$("alto").value;
+    if (!(largo > 0 && ancho > 0 && alto > 0 && peso > 0)) return null;
+    return { modo: "medidas", largo, ancho, alto, peso, volumen_cm3: largo * ancho * alto };
+  }
+  const textoMedidas = (p) => `${escapar(p.largo)}×${escapar(p.ancho)}×${escapar(p.alto)} cm`;
+  function textoPaquete(p) {
+    if (p.modo === "volumen" && p.volumen_cm3) return `${fmtN(+p.volumen_cm3)} cm³`;
+    return textoMedidas(p);
+  }
+
+  function actualizarModo(prefill = true) {
+    const modo = modoActual();
+    form.dataset.modo = modo;
+    const porVolumen = modo === "volumen";
+    for (const id of ["largo", "ancho", "alto"]) { $(id).disabled = porVolumen; $(id).required = !porVolumen; }
+    $("volumen").disabled = !porVolumen; $("volumen").required = porVolumen;
+    $("volumen_unidad").disabled = !porVolumen;
+    if (prefill) {
+      const l = +$("largo").value, a = +$("ancho").value, h = +$("alto").value;
+      if (porVolumen && !$("volumen").value.trim() && l > 0 && a > 0 && h > 0) {
+        const vol = l * a * h;
+        $("volumen").value = $("volumen_unidad").value === "l" ? String(vol / 1000).replace(".", ",") : String(vol);
+      } else if (!porVolumen && !(l > 0 && a > 0 && h > 0)) {
+        const vol = leerVolumenCm3();
+        const conv = vol > 0 ? medidasDesdeVolumen(vol) : null;
+        if (conv) [$("largo").value, $("ancho").value, $("alto").value] = conv.dims;
+      }
+    }
+    store("viacargo:modo", modo);
+  }
+
+  function renderAnalisis() {
+    const cont = $("analisis");
+    const pq = leerPaquete();
+    if (!pq) {
+      cont.innerHTML = `<span class="vacio">${modoActual() === "volumen" ? "Completá volumen y peso" : "Completá medidas y peso"} para ver el análisis.</span>`;
+      return;
+    }
+    const { largo: l, ancho: a, alto: h, peso } = pq;
+    const porVolumen = pq.modo === "volumen";
+    const an = analizar(l, a, h, peso);
+    const tag = an.manda === "tamaño" ? '<span class="tag tam">manda el tamaño</span>'
+              : an.manda === "peso" ? '<span class="tag peso">manda el peso</span>'
+              : '<span class="tag peso">peso y tamaño empatan</span>';
+    const tips = [];
+    if (an.rango !== POR_KG) {
+      const pesoMax = FRANJAS_PESO[an.rango];
+      const volMax = volMaxDeRango(an.rango);
+      // Margen dentro de la franja actual (sin cambiar el precio).
+      if (pesoMax - peso > 0.005) tips.push(`Podés sumar hasta <b>${fmtKg(pesoMax - peso)} kg</b> de peso real (llegar a ${fmtKg(pesoMax)} kg) sin cambiar de franja.`);
+      if (volMax > an.vol) tips.push(`La caja puede crecer hasta <b>${fmtN(volMax)} cm³</b> (hoy ${fmtN(an.vol)}) sin cambiar el precio.`);
+      // Cómo bajar a la franja anterior.
+      if (an.rango > 0) {
+        const ant = an.rango - 1;
+        const pesoAnt = FRANJAS_PESO[ant], volAnt = volMaxDeRango(ant);
+        const condiciones = [];
+        if (peso > pesoAnt + 1e-9) condiciones.push(`el <b>peso real</b> a ${fmtKg(pesoAnt)} kg o menos`);
+        if (an.vol > volAnt) {
+          const opciones = porVolumen ? [] : [
+            ["largo", Math.floor(volAnt / (a * h)), l],
+            ["ancho", Math.floor(volAnt / (l * h)), a],
+            ["alto", Math.floor(volAnt / (l * a)), h],
+          ].filter(([, max, actual]) => max >= 1 && max < actual)
+           .map(([n, max, actual]) => `${n} ≤ <b>${max} cm</b> (hoy ${actual})`);
+          condiciones.push(`el <b>volumen</b> a ${fmtN(volAnt)} cm³ o menos (hoy ${fmtN(an.vol)})` + (opciones.length ? `, por ejemplo achicando una sola medida: ${opciones.join(", ")}` : ""));
+        }
+        tips.push(`Bajás a la franja de <b>${fmtKg(pesoAnt)} kg</b> reduciendo ${condiciones.join(" y ")}.`);
+      } else {
+        tips.push("Ya estás en la franja más económica.");
+      }
+    } else {
+      tips.push(`Más de 50 kg facturables: se cobra por kilo sobre ${fmtKg(an.facturable)} kg (el mayor entre el peso real y el volumen a 250 kg/m³). Si podés, dividí el envío en dos bultos más chicos.`);
+    }
+
+    cont.innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><div class="n">Volumen</div><div class="v">${fmtN(an.vol)} <small>cm³</small></div></div>
+        <div class="kpi"><div class="n">Franja por peso</div><div class="v">${nombreRango(an.rp)}</div></div>
+        <div class="kpi"><div class="n">Franja por volumen</div><div class="v">${an.rv === POR_KG ? `${fmtKg(an.pv)} kg <small>equiv.</small>` : nombreRango(an.rv)}</div></div>
+        <div class="kpi"><div class="n">Se cobra como</div><div class="v">${nombreRango(an.rango)}</div></div>
+      </div>
+      <div>${tag}</div>
+      <ul>${tips.map((t) => `<li>${t}</li>`).join("")}</ul>
+      ${porVolumen ? `<div class="equivalente">Se cotiza como <b>${textoMedidas(pq)}</b> (${fmtN(an.vol)} cm³): Vía Cargo pide medidas, pero el flete depende solo del volumen y el peso, así que el resultado es el mismo.${pq.ajustado ? ` El volumen se ajustó de ${fmtN(pq.volumen_pedido)} a ${fmtN(an.vol)} cm³ para expresarlo en centímetros enteros; no cambia la franja.` : ""}</div>` : ""}
+      <div class="equivalente">Franjas deducidas empíricamente del cotizador (flete por peso: 5/10/20/30/40/50 kg; por volumen: 28/72/120/160/200 dm³). El precio final también incluye seguro (5 % del valor declarado), IVA y redondeo a miles.</div>`;
+  }
+
+  // ---------- Localidades (listado descargado de Vía Cargo) ----------
+  let LOCALIDADES = null;
+  const porCp = new Map();
+  async function cargarLocalidades(forzar = false) {
+    $("infoLoc").textContent = forzar ? "Descargando el listado actualizado de Vía Cargo…" : "Cargando listado de localidades…";
+    try {
+      const resp = await fetch(forzar ? "/api/localidades/actualizar" : "/api/localidades", { method: forzar ? "POST" : "GET" });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+      LOCALIDADES = json.localidades || [];
+      porCp.clear();
+      for (const l of LOCALIDADES) if (!porCp.has(l.cp)) porCp.set(l.cp, l);
+      $("lista-localidades").innerHTML = LOCALIDADES.map((l) => `<option value="${escapar(l.etiqueta)}"></option>`).join("");
+      const fecha = json.actualizado ? new Date(json.actualizado).toLocaleDateString("es-AR") : "-";
+      $("infoLoc").innerHTML = `${LOCALIDADES.length} localidades con cobertura · listado del ${fecha} · <a href="#" data-loc="actualizar">actualizar desde Vía Cargo</a>`;
+    } catch (e) {
+      LOCALIDADES = null;
+      $("infoLoc").innerHTML = `No se pudo cargar el listado de localidades (${escapar(e.message)}). <a href="#" data-loc="reintentar">Reintentar</a>`;
+    }
+    for (const id of ["origen", "destino"]) resolverCampo(id);
+    renderConocido();
+  }
+  $("infoLoc").addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-loc]");
+    if (!a) return;
+    ev.preventDefault();
+    cargarLocalidades(a.dataset.loc === "actualizar");
+  });
+  // Acepta "NOMBRE (CP) - PROVINCIA", un CP suelto o un nombre. Devuelve la localidad o null.
+  function resolverLocalidad(texto) {
+    if (!LOCALIDADES) return null;
+    const t = String(texto || "").trim();
+    if (!t) return null;
+    const m = t.match(/\((\d+)\)/);
+    if (m) return porCp.get(m[1]) || null;
+    if (/^\d+$/.test(t)) return porCp.get(t) || null;
+    const n = normalizar(t);
+    const exactas = LOCALIDADES.filter((l) => normalizar(l.nombre) === n);
+    if (exactas.length) return exactas[0];
+    const parciales = LOCALIDADES.filter((l) => normalizar(l.nombre).includes(n));
+    return parciales.length === 1 ? parciales[0] : null;
+  }
+  function resolverCampo(id) {
+    const est = $(id + "-estado");
+    const texto = $(id).value.trim();
+    const loc = resolverLocalidad(texto);
+    est.className = "loc-estado" + (loc ? " ok" : (texto && LOCALIDADES ? " err" : ""));
+    if (loc) est.textContent = `✓ ${loc.nombre} (CP ${loc.cp}) · ${loc.provincia || "sin provincia"}`;
+    else if (!texto) est.textContent = "";
+    else if (!LOCALIDADES) est.textContent = "Esperando el listado de localidades…";
+    else {
+      const n = normalizar(texto);
+      const cant = LOCALIDADES.filter((l) => normalizar(l.nombre).includes(n)).length;
+      est.textContent = cant > 1 ? `${cant} localidades coinciden: elegí una de la lista.` : "Localidad sin cobertura o no encontrada en el listado.";
+    }
+    return loc;
+  }
+  for (const id of ["origen", "destino"]) {
+    $(id).addEventListener("input", () => { resolverCampo(id); renderConocido(); });
+    $(id).addEventListener("change", () => { const loc = resolverCampo(id); if (loc) $(id).value = loc.etiqueta; renderConocido(); });
+  }
+
+  // ---------- Agencias ----------
+  let AGENCIAS = null;
+  async function cargarAgencias() {
+    try {
+      const resp = await fetch("/api/agencias");
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+      AGENCIAS = json.agencias || [];
+    } catch (e) { AGENCIAS = null; }
+  }
+  // Primero las agencias del mismo CP; si no hay, las de la localidad con el mismo nombre.
+  function agenciasDe(loc) {
+    if (!AGENCIAS || !loc) return [];
+    const porCp = AGENCIAS.filter((a) => a.cp === loc.cp);
+    const n = normalizar(loc.nombre);
+    const lista = porCp.length ? porCp : AGENCIAS.filter((a) => normalizar(a.localidad) === n);
+    return lista.slice().sort((a, b) => (b.recibe_encomiendas ? 1 : 0) - (a.recibe_encomiendas ? 1 : 0));
+  }
+  const mapaAgencia = (a) => a.lat && a.lng ? `https://www.google.com/maps?q=${encodeURIComponent(a.lat + "," + a.lng)}` : `https://www.google.com/maps/search/${encodeURIComponent(a.direccion + ", " + a.localidad)}`;
+  function htmlAgencia(a) {
+    return `<div class="agencia">
+      <div class="nom">${escapar(a.nombre)} ${a.recibe_encomiendas ? "" : '<span class="tag no">no recibe encomiendas</span>'}</div>
+      <div class="dir">${escapar(a.direccion)}, ${escapar(a.localidad)} (CP ${escapar(a.cp)})</div>
+      <div class="ext">${a.horarios ? escapar(a.horarios) : "Horario no informado"}${a.telefono ? ` · Tel. ${escapar(a.telefono)}` : ""} · <a href="${escapar(mapaAgencia(a))}" target="_blank" rel="noopener">mapa</a></div>
+    </div>`;
+  }
+  function bloqueAgencias(r) {
+    if (!AGENCIAS) return "";
+    const cols = [["Agencias en origen (para despachar)", agenciasDe(r.origen)], ["Agencias en destino (para retirar)", agenciasDe(r.destino)]];
+    return `<div class="agencias">${cols.map(([t, lista]) => `<div><h3>${t}</h3>${
+      lista.length ? lista.slice(0, MAX_AGENCIAS).map(htmlAgencia).join("") + (lista.length > MAX_AGENCIAS ? `<div class="detalle">… y ${lista.length - MAX_AGENCIAS} más en <a href="https://viacargo.com.ar/agencies/" target="_blank" rel="noopener">viacargo.com.ar/agencies</a>.</div>` : "")
+                   : `<div class="detalle">Sin agencia en esa localidad según el listado; la más cercana figura en <a href="https://viacargo.com.ar/agencies/" target="_blank" rel="noopener">viacargo.com.ar/agencies</a>. Los servicios a domicilio no dependen de la agencia.</div>`
+    }</div>`).join("")}</div>`;
+  }
+
+  // ---------- Cache de cotizaciones (mismos parámetros → mismo precio) ----------
+  function claveCache(d, pago) {
+    const an = analizar(+d.largo, +d.ancho, +d.alto, leerDecimal(d.peso));
+    const franja = an.rango === POR_KG ? `kg:${an.facturable.toFixed(1)}` : `r:${an.rango}`;
+    return [d.origen_cp, d.destino_cp, pago, franja, String(+d.valor)].join("|");
+  }
+  function guardarCache(clave, r) {
+    const cache = load("viacargo:cache", {});
+    cache[clave] = { totales: Object.fromEntries(r.productos.map((p) => [p.codigo, p.total])), fecha: Date.now() };
+    store("viacargo:cache", cache);
+  }
+  function buscarCache(clave) {
+    const c = load("viacargo:cache", {})[clave];
+    if (!c) return null;
+    if (Date.now() - c.fecha > DIAS_CACHE * 86400e3) return null;
+    return c;
+  }
+  const NOMBRES = { "2000": "Estándar", "3000": "Plus RD", "4000": "Plus ED", "0001": "Puerta a puerta" };
+  function renderConocido() {
+    const cont = $("conocido");
+    const pq = leerPaquete();
+    const o = resolverLocalidad($("origen").value), dst = resolverLocalidad($("destino").value);
+    const lineas = [];
+    if (pq && o && dst) {
+      const d = { ...pq, origen_cp: o.cp, destino_cp: dst.cp, valor: $("valor").value };
+      const pagos = $("pago").value === "ambos" ? ["P", "D"] : [$("pago").value];
+      for (const pg of pagos) {
+        const c = buscarCache(claveCache(d, pg));
+        if (c) lineas.push(`<b>${pg === "P" ? "Pago en origen" : "Pago en destino"}:</b> ${Object.entries(c.totales).map(([k, v]) => `${NOMBRES[k] || k} ${fmt$(v)}`).join(" · ")} <span class="detalle">(cotizado el ${new Date(c.fecha).toLocaleDateString("es-AR")})</span>`);
+      }
+    }
+    cont.classList.toggle("hidden", lineas.length === 0);
+    cont.innerHTML = lineas.length ? `Ya cotizaste esta misma franja, destino y valor:<br>${lineas.join("<br>")}<br><span class="detalle">Podés usar ese precio directamente o volver a cotizar para confirmarlo.</span>` : "";
+  }
+
+  // ---------- Historial ----------
+  function agregarHistorial(entrada) {
+    const hist = load("viacargo:historial", []);
+    hist.unshift(entrada);
+    store("viacargo:historial", hist.slice(0, 30));
+    renderHistorial();
+  }
+  function renderHistorial() {
+    const hist = load("viacargo:historial", []);
+    const cont = $("historial");
+    if (!hist.length) { cont.innerHTML = '<div class="vacio">Todavía no hay cotizaciones.</div>'; return; }
+    cont.innerHTML = hist.map((h, i) => {
+      const t = h.totales || {};
+      return `<div class="hist">
+        <div class="fila1">
+          <span class="paq">${textoPaquete(h.p)} · ${escapar(fmtPesoTxt(h.p.peso))} kg</span>
+          <span class="fecha">${fmtFechaCorta(h.fecha)}</span>
+        </div>
+        <div class="dest">${escapar(h.origen_nombre)} → ${escapar(h.destino_nombre)}<br>${h.pago === "D" ? "pago en destino" : "pago en origen"} · ${nombreRango(h.rango)} · valor $${escapar(fmtN(+h.p.valor))}</div>
+        <div class="pie">
+          <div class="precios"><span><small>Estándar</small><b>${t["2000"] != null ? fmt$(t["2000"]) : "-"}</b></span><span><small>Puerta a puerta</small><b>${t["0001"] != null ? fmt$(t["0001"]) : "-"}</b></span></div>
+          <div class="acc"><button type="button" class="sec chico" data-rep="${i}" title="Volver a cargar estos datos en el formulario">Repetir</button>${h.r ? `<button type="button" class="sec chico" data-ficha="${i}" title="Abrir la ficha para compartir de esta cotización">Ficha</button>` : ""}</div>
+        </div>
+      </div>`;
+    }).join("");
+    cont.querySelectorAll("[data-rep]").forEach((b) => b.addEventListener("click", () => {
+      const h = hist[+b.dataset.rep];
+      form.elements.modo.value = h.p.modo || "medidas";
+      actualizarModo(false);
+      for (const [k, v] of Object.entries(h.p)) if (k !== "modo" && form.elements[k]) form.elements[k].value = v;
+      if (h.p.modo === "volumen" && h.p.volumen_cm3) { $("volumen").value = String(h.p.volumen_cm3); $("volumen_unidad").value = "cm3"; }
+      $("origen").value = h.origen_etiqueta || h.p.origen; $("destino").value = h.destino_etiqueta || h.p.destino;
+      $("pago").value = h.pago;
+      for (const id of ["origen", "destino"]) resolverCampo(id);
+      renderAnalisis(); renderConocido();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }));
+    cont.querySelectorAll("[data-ficha]").forEach((b) => b.addEventListener("click", () => {
+      const h = hist[+b.dataset.ficha];
+      abrirFicha({ fecha: h.fecha, datos: h.p, respuestas: [[h.pago, h.r]], an: analizar(+h.p.largo, +h.p.ancho, +h.p.alto, leerDecimal(h.p.peso)) });
+    }));
+  }
+  $("borrarHistorial").addEventListener("click", () => {
+    if (!confirm("¿Vaciar el historial de cotizaciones?")) return;
+    store("viacargo:historial", []); renderHistorial();
+  });
+
+  // ---------- Límites de valor declarado (los mismos que aplica el formulario del sitio) ----------
+  async function cargarLimites() {
+    try {
+      const resp = await fetch("/api/limites");
+      const lim = await resp.json();
+      if (!resp.ok || !(lim.minimo > 0)) return;
+      $("valor").min = lim.minimo; $("valor").max = lim.maximo;
+      $("valor").title = `Entre $ ${fmtN(lim.minimo)} y $ ${fmtN(lim.maximo)} (límites del cotizador de Vía Cargo)`;
+      if (+$("valor").value < lim.minimo) $("valor").value = lim.minimo;
+    } catch (e) { /* sin límites: el servidor de Vía Cargo los valida igual */ }
+  }
+
+  // ---------- Formulario ----------
+  // Recordar origen, destino y forma de pago de la última consulta. Los valores del
+  // paquete arrancan siempre vacíos (salvo valor declarado y bultos).
+  const guardado = load("viacargo:ultimo", null);
+  if (guardado) { for (const k of ["origen", "destino", "pago"]) if (guardado[k] != null) $(k).value = guardado[k]; }
+  if (!$("origen").value) $("origen").value = ORIGEN_POR_DEFECTO;
+  form.elements.modo.value = load("viacargo:modo", "medidas") === "volumen" ? "volumen" : "medidas";
+  actualizarModo(false);
+  form.elements.modo.forEach((r) => r.addEventListener("change", () => { actualizarModo(); renderAnalisis(); renderConocido(); $(modoActual() === "volumen" ? "volumen" : "largo").focus(); }));
+  for (const id of ["largo", "ancho", "alto", "peso", "volumen"]) $(id).addEventListener("input", () => { renderAnalisis(); renderConocido(); });
+  $("volumen_unidad").addEventListener("change", () => { renderAnalisis(); renderConocido(); });
+  $("valor").addEventListener("input", renderConocido);
+  $("pago").addEventListener("change", renderConocido);
+
+  // ---------- Cotizar ----------
+  async function pedirCotizacion(datos, pago) {
+    const resp = await fetch("/api/cotizar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origen: datos.origen_cp, destino: datos.destino_cp, peso: datos.peso, largo: datos.largo, ancho: datos.ancho, alto: datos.alto, valor: datos.valor, bultos: datos.bultos, pago }),
+    });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+    return json;
+  }
+  const masBarato = (r) => r.productos.filter((p) => p.permitido).reduce((m, p) => (!m || p.total < m.total ? p : m), null);
+
+  function bloquePrecios(r) {
+    const mejor = masBarato(r);
+    const tarjetas = r.productos.map((p) => `<div class="precio ${mejor && p.codigo === mejor.codigo ? "mejor" : ""} ${p.permitido ? "" : "nopermitido"}">
+        ${mejor && p.codigo === mejor.codigo ? '<span class="tag mejor etq">más económico</span>' : ""}
+        <div class="nombre">${escapar(p.nombre)}</div>
+        <div class="modalidad">${escapar(p.modalidad)}</div>
+        <div class="monto">${p.permitido ? escapar(p.total_txt) : "no disponible"}</div>
+        <div class="entrega">${p.entrega_estimada ? "entrega estimada " + escapar(soloFecha(p.entrega_estimada)) : ""}</div>
+      </div>`).join("");
+    return tarjetas ? `<div class="precios">${tarjetas}</div>` : `<div class="aviso error">Vía Cargo no devolvió precios para estos parámetros.</div>`;
+  }
+  function tablaConceptos(r) {
+    const codigos = [];
+    for (const p of r.productos) for (const c of p.conceptos) if (!codigos.some((x) => x.codigo === c.codigo)) codigos.push({ codigo: c.codigo, descripcion: c.descripcion });
+    const celda = (p, cod) => { const c = p.conceptos.find((x) => x.codigo === cod); return c ? fmt$(c.valor) : "—"; };
+    return `<table>
+      <tr><th>Concepto (sin IVA)</th>${r.productos.map((p) => `<th class="num">${escapar(p.nombre)}</th>`).join("")}</tr>
+      ${codigos.map((c) => `<tr><td>${escapar(c.descripcion.toLowerCase().replace(/^./, (x) => x.toUpperCase()))}</td>${r.productos.map((p) => `<td class="num">${celda(p, c.codigo)}</td>`).join("")}</tr>`).join("")}
+      <tr><td>Subtotal sin IVA</td>${r.productos.map((p) => `<td class="num">${fmt$(p.neto)}</td>`).join("")}</tr>
+      <tr><td>IVA (21 %)</td>${r.productos.map((p) => `<td class="num">${fmt$(p.iva)}</td>`).join("")}</tr>
+      <tr><td><b>Total</b></td>${r.productos.map((p) => `<td class="num"><b>${fmt$(p.total)}</b></td>`).join("")}</tr>
+    </table>
+    <div class="detalle" style="margin-top:6px">Los conceptos vienen sin IVA; el total lo incluye y se redondea a miles ("ajustes de redondeo"). Seguro = 5 % del valor declarado; pago en destino = +15 % del flete.</div>`;
+  }
+  function bloqueDetalle(r, an, datos) {
+    const p = r.paquete || {};
+    const paquete = datos && datos.modo === "volumen"
+      ? `${fmtN(+datos.volumen_cm3)} cm³ (cotizado como ${textoMedidas(p)})`
+      : textoMedidas(p);
+    return `<div class="detalle">
+      <div><b>Origen:</b> ${escapar(r.origen.nombre)} (CP ${escapar(r.origen.cp)}), ${escapar(r.origen.provincia)} · <b>Destino:</b> ${escapar(r.destino.nombre)} (CP ${escapar(r.destino.cp)}), ${escapar(r.destino.provincia)}</div>
+      <div><b>Paquete:</b> ${paquete}, ${escapar(fmtPesoTxt(p.peso))} kg, ${escapar(p.bultos)} bulto${+p.bultos === 1 ? "" : "s"}, valor declarado $${escapar(fmtN(+p.valor))} · <b>${escapar(r.pago_txt)}</b> · cotización N.º ${escapar(r.id_cotizacion || "-")}</div>
+      <div><b>Se cobra como:</b> ${nombreRango(an.rango)} (por peso: ${nombreRango(an.rp)} · por volumen: ${an.rv === POR_KG ? fmtKg(an.pv) + " kg equiv." : nombreRango(an.rv)}) · ${an.manda === "tamaño" ? "manda el tamaño" : an.manda === "peso" ? "manda el peso" : "empate"}</div>
+    </div>`;
+  }
+
+  // ---------- Ficha para compartir con el cliente ----------
+  let ultimaCotizacion = null;
+
+  function htmlFicha(c) {
+    const fecha = new Date(c.fecha);
+    const fechaTxt = fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+    const horaTxt = fecha.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const nro = fecha.getFullYear().toString().slice(2) + dd(fecha.getMonth() + 1) + dd(fecha.getDate()) + "-" + dd(fecha.getHours()) + dd(fecha.getMinutes());
+    const r0 = c.respuestas[0][1];
+    const p = r0.paquete || {};
+    const logo = location.origin + "/logo-viacargo.png";
+    const fila = (k, v) => v ? `<div class="f"><dt>${k}</dt><dd>${v}</dd></div>` : "";
+
+    // La ficha muestra solo el servicio Estándar (agencia → agencia); los demás se omiten.
+    const seccionPrecios = (r) => {
+      const x = r.productos.find((p) => p.codigo === "2000" && p.permitido);
+      if (!x) return `<div class="ps">El servicio Estándar (agencia → agencia) no está disponible para este trayecto.</div>`;
+      return `<div class="precios">
+        <div class="precio destacado"><div class="pn">${escapar(x.nombre)}</div><div class="pm">${escapar(x.modalidad)}</div><div class="pv">${escapar(x.total_txt)}</div><div class="ps">${escapar(x.resumen)}${x.entrega_estimada ? `<br>Entrega estimada: ${escapar(soloFecha(x.entrega_estimada))}` : ""}</div></div>
+      </div>`;
+    };
+    const seccionAgencias = (r) => {
+      const lista = agenciasDe(r.destino).filter((a) => a.recibe_encomiendas).slice(0, 3);
+      if (!lista.length) return "";
+      return `<div class="suc"><div class="tit">Agencias Vía Cargo en ${escapar(r.destino.nombre)} (retiro en agencia)</div>
+        ${lista.map((a) => `<div class="ag"><strong>${escapar(a.nombre)}</strong> · ${escapar(a.direccion)}${a.horarios ? `<br><span>${escapar(a.horarios)}</span>` : ""}${a.telefono ? ` <span>· Tel. ${escapar(a.telefono)}</span>` : ""}</div>`).join("")}</div>`;
+    };
+
+    const bloques = c.respuestas.map(([pago, r]) => `
+      <section class="bloque">
+        <div class="tit">Servicio Estándar · ${escapar(r.pago_txt)}</div>
+        ${seccionPrecios(r)}
+      </section>`).join('<div class="sep"></div>');
+
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<title>Cotización Vía Cargo ${escapar(nro)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<style>
+  :root { --verde: #1e8d34; --verde2: #166b28; --rojo: #dc2525; --verde-suave: #edf7ef; --gris: #212121; --ink: #1a2333; --muted: #6b7280; --line: #e3e7ef; --bg: #eef3ef; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .barra { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 14px 16px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  .barra button { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--ink); }
+  .barra button.p { background: var(--verde); color: #fff; border-color: var(--verde); font-weight: 600; }
+  .barra .hint { width: 100%; text-align: center; font-size: 12px; color: var(--muted); }
+  .lienzo { padding: 28px 16px 48px; display: flex; justify-content: center; }
+  .ficha { width: 680px; max-width: 100%; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(30,141,52,.45), 0 2px 6px rgba(30,141,52,.08); }
+  .cab { padding: 28px 36px 22px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .cab img { height: 52px; width: auto; display: block; }
+  .cab .meta { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .cab .meta b { color: var(--verde); font-weight: 700; font-size: 13px; }
+  .franja { background: var(--verde); color: #fff; padding: 12px 36px; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; border-bottom: 4px solid var(--rojo); }
+  .cuerpo { padding: 26px 36px 10px; }
+  .bloque { padding: 6px 0 4px; }
+  .sep { height: 1px; background: var(--line); margin: 18px 0; }
+  .tit { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--verde); font-weight: 700; margin-bottom: 12px; padding-left: 10px; border-left: 4px solid var(--rojo); line-height: 1.2; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 24px; margin: 0 0 20px; }
+  .f dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .f dd { margin: 0; font-size: 15px; }
+  .f dd strong { font-weight: 700; font-size: 17px; color: var(--verde); }
+  .precios { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 8px; align-items: stretch; }
+  .precio { border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px; background: #fff; position: relative; display: flex; flex-direction: column; justify-content: center; }
+  .precio.destacado { background: var(--verde); border-color: var(--verde); color: #fff; box-shadow: 0 14px 30px -18px rgba(30,141,52,.6); }
+  .precio.destacado .pn, .precio.destacado .pm, .precio.destacado .ps { color: rgba(255,255,255,.85); }
+  .precio.destacado .pv { color: #fff; font-size: 32px; }
+  .precio.destacado::before { content: ""; position: absolute; left: 22px; right: 22px; top: 0; height: 4px; background: var(--rojo); border-radius: 0 0 4px 4px; }
+  .etq { position: absolute; top: 14px; right: 16px; background: var(--rojo); color: #fff; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; padding: 4px 8px; border-radius: 999px; }
+  .precio.secundario { background: #f7f9f7; }
+  .precio.secundario .pv { font-size: 24px; color: var(--gris); }
+  .pn { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .pm { font-size: 12px; color: var(--muted); }
+  .pv { font-size: 28px; font-weight: 700; color: var(--verde); margin: 8px 0 4px; letter-spacing: -.02em; }
+  .ps { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .paquete { background: var(--verde-suave); border-radius: 14px; padding: 18px 20px 6px; margin: 10px 0 6px; }
+  .paquete dl { margin-bottom: 12px; }
+  .suc { background: #f6f7fb; border-radius: 14px; padding: 16px 20px 12px; margin: 14px 0 0; font-size: 13px; }
+  .suc .ag { margin-bottom: 8px; }
+  .suc .ag span { color: var(--muted); font-size: 12px; }
+  .pie { padding: 18px 36px 24px; font-size: 11.5px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); margin-top: 18px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; }
+  .pie b { color: var(--ink); font-weight: 600; }
+  .pie .marca { color: var(--verde); font-weight: 700; font-size: 13px; white-space: nowrap; }
+  @media print { .barra { display: none; } body { background: #fff; } .lienzo { padding: 0; } .ficha { box-shadow: none; border-radius: 0; width: 100%; } }
+  @media (max-width: 560px) { .cab { flex-direction: column; align-items: flex-start; } .cab .meta { text-align: left; } .cab, .cuerpo, .pie, .franja { padding-left: 22px; padding-right: 22px; } }
+</style></head><body>
+<div class="barra">
+  <button class="p" id="copiar">Copiar imagen (para WhatsApp)</button>
+  <button id="png">Descargar imagen (PNG)</button>
+  <button id="imprimir">Imprimir / guardar PDF</button>
+  <div class="hint">"Copiar imagen" deja la cotización en el portapapeles lista para pegar (Ctrl+V) en WhatsApp, mail o cualquier chat. La imagen no incluye esta barra.</div>
+</div>
+<div class="lienzo">
+<article class="ficha" id="ficha">
+  <header class="cab">
+    <img src="${logo}" alt="Vía Cargo">
+    <div class="meta"><b>Cotización N.º ${escapar(nro)}</b><br>${escapar(fechaTxt)}<br>${escapar(horaTxt)} hs</div>
+  </header>
+  <div class="franja">Cotización de envío · Vía Cargo</div>
+  <div class="cuerpo">
+    <section class="bloque">
+      <div class="tit">Trayecto</div>
+      <dl>
+        ${fila("Origen", `<strong>${escapar(r0.origen.nombre)}</strong><br>CP ${escapar(r0.origen.cp)} · ${escapar(r0.origen.provincia)}`)}
+        ${fila("Destino", `<strong>${escapar(r0.destino.nombre)}</strong><br>CP ${escapar(r0.destino.cp)} · ${escapar(r0.destino.provincia)}`)}
+      </dl>
+    </section>
+    <div class="sep"></div>
+    ${bloques}
+    ${seccionAgencias(r0)}
+    <div class="sep"></div>
+    <section class="paquete">
+      <div class="tit">Detalle del paquete</div>
+      <dl>
+        ${c.datos && c.datos.modo === "volumen"
+          ? fila("Volumen", `${fmtN(+c.datos.volumen_cm3)} cm³ <span style="color:var(--muted);font-size:12px">(equivale a ${escapar(p.largo)} × ${escapar(p.ancho)} × ${escapar(p.alto)} cm)</span>`)
+          : fila("Medidas", `${escapar(p.largo)} × ${escapar(p.ancho)} × ${escapar(p.alto)} cm`)}
+        ${fila("Peso", `${escapar(fmtPesoTxt(p.peso))} kg`)}
+        ${fila("Bultos", escapar(p.bultos))}
+      </dl>
+    </section>
+  </div>
+  <footer class="pie">
+    <div>Tarifas informadas por el cotizador público de <b>Vía Cargo</b> el ${escapar(fechaTxt)} a las ${escapar(horaTxt)} hs (${c.respuestas.length > 1 ? "IVA incluido" : escapar(r0.pago_txt.toLowerCase()) + ", IVA incluido"}). Vigentes al momento de la consulta; pueden variar. Atención al cliente Vía Cargo por WhatsApp: <b>+54 9 11 6207-5652</b>.</div>
+    <div class="marca">Vía Cargo</div>
+  </footer>
+</article>
+</div>
+<script>
+  document.getElementById("imprimir").addEventListener("click", () => window.print());
+  async function capturar() {
+    await (document.fonts ? document.fonts.ready : Promise.resolve());
+    return html2canvas(document.getElementById("ficha"), { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+  }
+  document.getElementById("png").addEventListener("click", async () => {
+    const b = document.getElementById("png"); b.disabled = true; b.textContent = "Generando…";
+    try {
+      const canvas = await capturar();
+      const a = document.createElement("a");
+      a.download = "cotizacion-viacargo-${escapar(nro)}.png"; a.href = canvas.toDataURL("image/png"); a.click();
+    } catch (e) { alert("No se pudo generar la imagen: " + e.message); }
+    finally { b.disabled = false; b.textContent = "Descargar imagen (PNG)"; }
+  });
+  document.getElementById("copiar").addEventListener("click", async () => {
+    const b = document.getElementById("copiar"); const original = b.textContent; b.disabled = true; b.textContent = "Copiando…";
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw new Error("este navegador no permite copiar imágenes al portapapeles; usá Descargar imagen.");
+      // Chrome exige que la escritura ocurra dentro del gesto del usuario: pasamos una promesa del blob.
+      const blobPromise = capturar().then((canvas) => new Promise((ok, err) => canvas.toBlob((bl) => bl ? ok(bl) : err(new Error("no se pudo generar el PNG")), "image/png")));
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
+      b.textContent = "¡Copiada! Pegala en WhatsApp con Ctrl+V";
+      setTimeout(() => { b.textContent = original; }, 3500);
+    } catch (e) {
+      alert("No se pudo copiar la imagen: " + e.message);
+      b.textContent = original;
+    } finally { b.disabled = false; }
+  });
+<\/script>
+</body></html>`;
+  }
+
+  function abrirFicha(c) {
+    c = c || ultimaCotizacion;
+    if (!c) return;
+    const w = window.open("", "_blank");
+    if (!w) return alert("El navegador bloqueó la ventana emergente. Permitila para este sitio y volvé a intentar.");
+    w.document.open(); w.document.write(htmlFicha(c)); w.document.close();
+  }
+
+  // Versión reducida de la respuesta para guardar en el historial (alcanza para la ficha).
+  function resumirRespuesta(r) {
+    return { id_cotizacion: r.id_cotizacion, pago: r.pago, pago_txt: r.pago_txt, origen: r.origen, destino: r.destino, paquete: r.paquete,
+      productos: r.productos.map((p) => ({ codigo: p.codigo, nombre: p.nombre, modalidad: p.modalidad, resumen: p.resumen, permitido: p.permitido, entrega_estimada: p.entrega_estimada, total: p.total, total_txt: p.total_txt })) };
+  }
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const pq = leerPaquete();
+    if (!pq) {
+      estado.textContent = modoActual() === "volumen" ? "Revisá el volumen y el peso: tienen que ser mayores a cero." : "Revisá las medidas y el peso: tienen que ser mayores a cero.";
+      return;
+    }
+    const o = resolverCampo("origen"), dst = resolverCampo("destino");
+    if (!o || !dst) { estado.textContent = "Elegí origen y destino de la lista de localidades con cobertura."; return; }
+    // Siempre se envían largo/ancho/alto; en modo volumen son las medidas equivalentes.
+    const datos = { modo: pq.modo, largo: pq.largo, ancho: pq.ancho, alto: pq.alto, volumen_cm3: pq.volumen_cm3, peso: pq.peso,
+      valor: $("valor").value, bultos: $("bultos").value || 1, origen: o.etiqueta, destino: dst.etiqueta, origen_cp: o.cp, destino_cp: dst.cp, pago: $("pago").value };
+    store("viacargo:ultimo", { origen: o.etiqueta, destino: dst.etiqueta, pago: datos.pago });
+    const an = analizar(+datos.largo, +datos.ancho, +datos.alto, +datos.peso);
+    const pagos = datos.pago === "ambos" ? ["P", "D"] : [datos.pago];
+
+    btn.disabled = true;
+    resultado.classList.add("hidden");
+    const bloques = [];
+    try {
+      const respuestas = [];
+      for (const [i, pg] of pagos.entries()) {
+        estado.textContent = `Consultando Vía Cargo (${pg === "P" ? "pago en origen" : "pago en destino"})… ${pagos.length > 1 ? `${i + 1} de ${pagos.length} · ` : ""}suele demorar unos segundos.`;
+        const r = await pedirCotizacion(datos, pg);
+        respuestas.push([pg, r]);
+        guardarCache(claveCache(datos, pg), r);
+        agregarHistorial({ fecha: Date.now(), pago: pg, p: datos, rango: an.rango, origen_nombre: o.nombre, destino_nombre: dst.nombre, origen_etiqueta: o.etiqueta, destino_etiqueta: dst.etiqueta,
+          totales: Object.fromEntries(r.productos.map((p) => [p.codigo, p.total])), r: resumirRespuesta(r) });
+      }
+
+      if (respuestas.length === 1) {
+        const r = respuestas[0][1];
+        bloques.push(bloquePrecios(r), bloqueDetalle(r, an, datos),
+          `<details><summary>Desglose por concepto</summary>${tablaConceptos(r)}</details>`,
+          bloqueAgencias(r),
+          `<details><summary>Respuesta completa</summary><pre>${escapar(JSON.stringify(r.raw || r, null, 2))}</pre></details>`);
+      } else {
+        const mins = respuestas.map(([, r]) => (masBarato(r) || { total: Infinity }).total);
+        const mejor = mins.indexOf(Math.min(...mins));
+        const dif = Math.abs(mins[0] - mins[1]);
+        bloques.push(`<div class="aviso ok" style="margin-bottom:12px">Más barato: <b>${respuestas[mejor][0] === "P" ? "pago en origen" : "pago en destino"}</b>${isFinite(dif) && dif > 0 ? ` — ahorrás ${fmt$(dif)} respecto a la otra forma de pago (comparando el servicio más económico de cada una).` : "."}</div>`);
+        bloques.push(`<div class="comparar">${respuestas.map(([pg, r], i) => `
+          <div class="col ${i === mejor ? "mejor" : ""}"><h3>${pg === "P" ? "Pago en origen" : "Pago en destino"}</h3>${bloquePrecios(r)}<details><summary>Desglose por concepto</summary>${tablaConceptos(r)}</details></div>`).join("")}</div>`);
+        bloques.push(bloqueDetalle(respuestas[0][1], an, datos), bloqueAgencias(respuestas[0][1]));
+        bloques.push(`<details><summary>Respuestas completas</summary><pre>${escapar(JSON.stringify(Object.fromEntries(respuestas.map(([pg, r]) => [pg, r.raw || r])), null, 2))}</pre></details>`);
+      }
+      ultimaCotizacion = { fecha: Date.now(), datos, respuestas, an };
+      bloques.unshift(`<div class="barra" style="flex-wrap:wrap"><h2 style="margin:0">Resultado</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="compartir" class="sec">Compartir cotización</button></div></div>`);
+      resultado.innerHTML = bloques.join("");
+      $("compartir").addEventListener("click", () => abrirFicha());
+      estado.textContent = "";
+    } catch (e) {
+      resultado.innerHTML = bloques.join("") + `<div class="aviso error">${escapar(e.message)}</div>`;
+      estado.textContent = "";
+    } finally {
+      resultado.classList.remove("hidden");
+      btn.disabled = false;
+      renderConocido();
+    }
+  });
+
+  renderAnalisis();
+  renderConocido();
+  renderHistorial();
+  cargarLimites();
+  cargarAgencias();
+  cargarLocalidades();
+</script>
+</body>
+</html>
