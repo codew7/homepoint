@@ -131,6 +131,10 @@ body{
 .btn-primary:active{box-shadow:0 5px 16px -8px var(--primary-glow)}
 .btn-primary:disabled{opacity:.6;cursor:not-allowed}
 .login-err{min-height:1.1em;color:var(--danger-600);font-size:.82rem;font-weight:600;margin-top:12px;text-align:center}
+/* Login de una sucursal con proyecto propio: se abre al guardar, por encima del .block */
+.suc-login{position:fixed;inset:0;z-index:1080;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(14,20,36,.42);backdrop-filter:blur(5px)}
+.suc-login.active{display:flex}
+.suc-login-cancel{width:100%;padding:12px;border-radius:var(--r-sm);font-weight:600;font-size:.92rem;margin-top:8px}
 
 /* ====== TOPBAR ====== */
 .topbar{
@@ -1015,6 +1019,26 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
   <button class="btn btn-primary" id="anotherBtn">Cargar otro artículo</button>
 </div>
 
+<!-- ===== LOGIN DE SUCURSAL (proyecto propio; se pide al guardar stock ahí) ===== -->
+<div class="suc-login" id="sucLogin">
+  <div class="login-card">
+    <div class="login-tag" id="sucLoginTag">Sucursal</div>
+    <h1>Iniciar sesión</h1>
+    <div class="sub" id="sucLoginSub"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" class="inp" id="sucLoginEmail" placeholder="correo@ejemplo.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" class="inp" id="sucLoginPass" placeholder="Contraseña" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="sucLoginBtn">Ingresar</button>
+    <button type="button" class="btn btn-back suc-login-cancel" id="sucLoginCancel">Cancelar</button>
+    <div class="login-err" id="sucLoginErr"></div>
+  </div>
+</div>
+
 <!-- ===== LIGHTBOX DE FOTOS ===== -->
 <div class="lightbox" id="lightbox">
   <div class="lb-frame" id="lbFrame"><img id="lbImg" alt=""></div>
@@ -1075,6 +1099,57 @@ function conTimeout(promise, ms, msg) {
   ]);
 }
 
+// ============================================================
+//  Proyectos de Firebase por sucursal
+// ============================================================
+const conexionesSuc = {};   // id de sucursal -> Promise<{ db, auth }>
+
+function conexionSucursal(s){
+  if (!s.config) return Promise.resolve({ db, auth });
+  if (!conexionesSuc[s.id]){
+    conexionesSuc[s.id] = abrirProyectoSucursal(s).catch(err => { delete conexionesSuc[s.id]; throw err; });
+  }
+  return conexionesSuc[s.id];
+}
+
+async function abrirProyectoSucursal(s){
+  const nombreApp = 'suc' + s.id;
+  let app = firebase.apps.find(a => a.name === nombreApp);
+  if (!app){
+    // El config de la sucursal declara `const firebaseConfig` igual que config.js: cargarlo
+    // con <script> chocaría con el que ya está. Se evalúa aislado y se toma solo ese objeto.
+    const res = await conTimeout(fetch(s.config, { cache: 'no-store' }), 10000, `No se pudo leer la configuración de ${s.nombre}.`);
+    if (!res.ok) throw new Error(`No se pudo leer la configuración de ${s.nombre} (HTTP ${res.status}).`);
+    const cfg = new Function(await res.text() + '\n;return firebaseConfig;')();
+    app = firebase.initializeApp(cfg, nombreApp);
+  }
+  const a = app.auth();
+  // Esperar a que Firebase recupere la sesión guardada antes de mirar currentUser.
+  await new Promise(resolve => { const off = a.onAuthStateChanged(() => { off(); resolve(); }); });
+  return { db: app.database(), auth: a };
+}
+
+function verificarConexionDe(dbX, timeoutMs = 5000){
+  return new Promise(resolve => {
+    const ref = dbX.ref('.info/connected');
+    const timer = setTimeout(() => { ref.off('value', cb); resolve(false); }, timeoutMs);
+    const cb = snap => {
+      if (snap.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); }
+    };
+    ref.on('value', cb);
+  });
+}
+
+// Al entrar, abre también las sesiones de las sucursales con proyecto propio usando el
+// mismo usuario. Si ahí no existe, no pasa nada: se pide al guardar stock en esa sucursal.
+function iniciarSesionSucursales(email, pass){
+  SUCURSALES.filter(s => s.config).forEach(s => {
+    conexionSucursal(s)
+      .then(con => con.auth.currentUser || con.auth.signInWithEmailAndPassword(email, pass))
+      .catch(err => console.warn(`Sin sesión automática en ${s.nombre}:`, err.code || err.message));
+  });
+}
+
 let procesoCriticoEnEjecucion = false;
 window.addEventListener('beforeunload', e => {
   if (procesoCriticoEnEjecucion) {
@@ -1129,9 +1204,12 @@ const state = {
 // Sucursales que reciben stock. El id es el mismo que usa puntoVenta.js para cada
 // punto de venta y viaja en cada movimiento de ENTRADA (campo `sucursal`).
 // Sumar una sucursal = una línea acá; la UI del paso 3 se arma desde esta lista.
+// `config`: proyecto de Firebase propio de la sucursal (el mismo que usa su caja en
+// ../puntoVenta.js). Sus ENTRADAS se guardan ahí, junto a las SALIDAS de sus ventas.
+// Sin `config`, van al proyecto principal (config.js), que además guarda el artículo.
 const SUCURSALES = [
   { id: '1', nombre: 'Munro',   tono: '#7cb342' },
-  { id: '2', nombre: 'Caseros', tono: '#3f8fe6' }
+  { id: '2', nombre: 'Caseros', tono: '#3f8fe6', config: '../config2.js' }
 ];
 // Última sucursal elegida con un atajo: recibe el resto al repartir parejo.
 const LS_SUC_PREF = 'hpArtSucursalPref';
@@ -2146,6 +2224,24 @@ async function guardarArticulo(){
     const conectado = await verificarConexionFirebase(5000).catch(() => false);
     if (!conectado){ toast('Sin conexión a Firebase. Verificá tu internet.', 'err'); return; }
 
+    // Ingreso por sucursal = unidades a sumar como ENTRADA en cada una (0 = sin movimiento).
+    const { porSuc, total: cantIngresada } = getCantidades();
+
+    // Las sucursales con proyecto propio se preparan ANTES de escribir nada (sesión y
+    // conexión): si algo falta se corta acá, sin dejar nada guardado a medias.
+    const externas = [];
+    for (const s of SUCURSALES){
+      if (!s.config || !(porSuc[s.id] > 0)) continue;
+      showBlock(`Conectando con ${s.nombre}…`);
+      const con = await conexionSucursal(s);
+      if (!con.auth.currentUser) await pedirSesionSucursal(s, con);
+      if (!(await verificarConexionDe(con.db, 8000))){
+        toast(`Sin conexión con ${s.nombre}. No se guardó nada.`, 'err');
+        return;
+      }
+      externas.push({ s, con });
+    }
+
     // recalcular cache + código para nuevos (minimiza colisiones)
     await loadArticulos();
     if (!state.editing){
@@ -2162,8 +2258,6 @@ async function guardarArticulo(){
     }
 
     showBlock('Guardando artículo…');
-    // Ingreso por sucursal = unidades a sumar como ENTRADA en cada una (0 = sin movimiento).
-    const { porSuc, total: cantIngresada } = getCantidades();
     // Atributo Cantidad del registro: al editar sin ingresar nada, se preserva el valor previo
     // para no pisarlo con 0; en altas nuevas o cuando hay ingreso, refleja la cantidad ingresada.
     const cantidadRegistro = (state.editing && cantIngresada === 0 && state.existingCantidad != null)
@@ -2187,8 +2281,8 @@ async function guardarArticulo(){
     // reemplaza el nodo completo, así que sin esto se perdería.
     if (state.existingImgUrl) registro.Img = state.existingImgUrl;
 
-    // Escritura atómica: artículo + un movimiento de ENTRADA por cada sucursal con cantidad > 0.
-    // Un multi-location update garantiza "todo o nada": si falla, no queda dato parcial.
+    // Escritura atómica en el proyecto principal: artículo + una ENTRADA por cada sucursal
+    // sin proyecto propio con cantidad > 0. El multi-location update es "todo o nada".
     const updates = {};
     updates['articulos/' + state.codigo] = registro;
 
@@ -2197,18 +2291,19 @@ async function guardarArticulo(){
     // '2' Caseros); los consumidores existentes solo leen tipo/cantidad/codigo.
     const movKeys = [];
     const ts = Date.now();
+    const entrada = s => ({
+      timestamp: ts,
+      codigo: state.codigo,
+      nombre: registro.Nombre,
+      cantidad: porSuc[s.id],
+      tipo: 'ENTRADA',
+      sucursal: s.id
+    });
     SUCURSALES.forEach(s => {
-      if (!(porSuc[s.id] > 0)) return;
+      if (s.config || !(porSuc[s.id] > 0)) return;
       const key = db.ref('movimientos').push().key;   // genera la clave sin escribir todavía
       movKeys.push(key);
-      updates['movimientos/' + key] = {
-        timestamp: ts,
-        codigo: state.codigo,
-        nombre: registro.Nombre,
-        cantidad: porSuc[s.id],
-        tipo: 'ENTRADA',
-        sucursal: s.id
-      };
+      updates['movimientos/' + key] = entrada(s);
     });
 
     await conTimeout(db.ref().update(updates), 15000, 'Timeout: la escritura tardó demasiado.');
@@ -2226,10 +2321,19 @@ async function guardarArticulo(){
     }
 
     articulosCache[state.codigo] = registro;
-    showSuccess(porSuc);
+
+    // ENTRADAS de las sucursales con proyecto propio: van después, cuando el artículo ya
+    // existe. Son otra base, así que no pueden entrar en el update atómico de arriba.
+    const faltantes = [];
+    for (const { s, con } of externas){
+      const key = con.db.ref('movimientos').push().key;
+      if (!(await guardarEntradaExterna(s, con, key, entrada(s)))) faltantes.push(s);
+    }
+
+    showSuccess(porSuc, faltantes);
   } catch (err){
     console.error('Error guardando:', err);
-    toast('Error: ' + err.message, 'err');
+    toast(err.cancelado ? err.message : 'Error: ' + err.message, 'err');
   } finally {
     procesoCriticoEnEjecucion = false;
     hideBlock();
@@ -2237,14 +2341,35 @@ async function guardarArticulo(){
   }
 }
 
-function showSuccess(porSuc){
+// Escribe y verifica la ENTRADA en el proyecto de la sucursal. La clave se genera una sola
+// vez: reintentar vuelve a escribir el mismo movimiento, nunca lo duplica.
+async function guardarEntradaExterna(s, con, key, mov){
+  const ref = con.db.ref('movimientos/' + key);
+  for (;;){
+    try {
+      showBlock(`Cargando stock en ${s.nombre}…`);
+      await conTimeout(ref.set(mov), 15000, 'la escritura tardó demasiado');
+      const check = await conTimeout(ref.once('value'), 10000, 'no se pudo verificar el guardado');
+      if (check.exists()) return true;
+      throw new Error('la verificación del guardado falló');
+    } catch (err){
+      console.error(`Error cargando stock en ${s.nombre}:`, err);
+      hideBlock();
+      if (!confirm(`El artículo ya quedó guardado, pero no se pudo cargar el stock de ${s.nombre} (+${mov.cantidad}): ${err.message}.\n\n¿Reintentar?`)) return false;
+    }
+  }
+}
+
+function showSuccess(porSuc, faltantes = []){
   $('successTitle').textContent = state.editing ? '¡Actualizado!' : '¡Guardado!';
   $('successCod').textContent = '#' + state.codigo;
-  const ingreso = SUCURSALES.filter(s => porSuc && porSuc[s.id] > 0)
+  const ingreso = SUCURSALES.filter(s => porSuc && porSuc[s.id] > 0 && !faltantes.includes(s))
     .map(s => '+' + porSuc[s.id] + ' ' + s.nombre).join(' · ');
+  const falta = faltantes.map(s => '+' + porSuc[s.id] + ' ' + s.nombre).join(' · ');
   $('successMsg').textContent = (state.editing
     ? 'El artículo se actualizó en Firebase.'
-    : 'El artículo se registró en Firebase.') + (ingreso ? ' Stock: ' + ingreso + '.' : '');
+    : 'El artículo se registró en Firebase.') + (ingreso ? ' Stock: ' + ingreso + '.' : '')
+    + (falta ? ` ⚠ NO se cargó: ${falta}. Puede completarse solo al volver la conexión: revisá el stock antes de cargarlo de nuevo.` : '');
   $('success').classList.add('active');
 }
 
@@ -2952,19 +3077,81 @@ function handleLogin(){
   const btn = $('loginBtn');
   if (!email || !pass){ err.textContent = 'Completá ambos campos'; return; }
   btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
-  auth.signInWithEmailAndPassword(email, pass).catch(e => {
-    let msg = 'Error al iniciar sesión';
-    if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) msg = 'Email o contraseña incorrectos';
-    else if (e.code === 'auth/invalid-email') msg = 'Email inválido';
-    else if (e.code === 'auth/too-many-requests') msg = 'Demasiados intentos. Esperá un momento';
-    err.textContent = msg;
-    btn.disabled = false; btn.textContent = 'Ingresar';
-  });
+  auth.signInWithEmailAndPassword(email, pass)
+    .then(() => iniciarSesionSucursales(email, pass))
+    .catch(e => {
+      err.textContent = mensajeErrorLogin(e);
+      btn.disabled = false; btn.textContent = 'Ingresar';
+    });
+}
+function mensajeErrorLogin(e){
+  if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) return 'Email o contraseña incorrectos';
+  if (e.code === 'auth/invalid-email') return 'Email inválido';
+  if (e.code === 'auth/too-many-requests') return 'Demasiados intentos. Esperá un momento';
+  return 'Error al iniciar sesión';
 }
 $('loginBtn').addEventListener('click', handleLogin);
 $('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
 $('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
-$('logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) auth.signOut(); });
+$('logoutBtn').addEventListener('click', () => {
+  if (!confirm('¿Cerrar sesión?')) return;
+  Object.values(conexionesSuc).forEach(p => p.then(con => con.auth.signOut()).catch(() => {}));
+  auth.signOut();
+});
+
+// ---- Login de una sucursal con proyecto propio ----
+// Se abre antes de escribir nada, así que cancelar deja todo como estaba.
+let sucLoginPendiente = null;   // { s, con, resolve, reject }
+
+function pedirSesionSucursal(s, con){
+  return new Promise((resolve, reject) => {
+    sucLoginPendiente = { s, con, resolve, reject };
+    $('sucLoginTag').textContent = 'Sucursal ' + s.nombre;
+    $('sucLoginSub').textContent = `Para cargar stock en ${s.nombre} hay que iniciar sesión en su sistema (el mismo usuario de la caja de ${s.nombre}). Se pide una sola vez.`;
+    $('sucLoginEmail').value = (auth.currentUser && auth.currentUser.email) || '';
+    $('sucLoginPass').value = '';
+    $('sucLoginErr').textContent = '';
+    const btn = $('sucLoginBtn');
+    btn.disabled = false; btn.textContent = 'Ingresar';
+    $('sucLogin').classList.add('active');
+    ($('sucLoginEmail').value ? $('sucLoginPass') : $('sucLoginEmail')).focus();
+  });
+}
+
+function ingresarSucursal(){
+  const p = sucLoginPendiente;
+  if (!p) return;
+  const email = $('sucLoginEmail').value.trim();
+  const pass = $('sucLoginPass').value;
+  const btn = $('sucLoginBtn');
+  if (!email || !pass){ $('sucLoginErr').textContent = 'Completá ambos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; $('sucLoginErr').textContent = '';
+  p.con.auth.signInWithEmailAndPassword(email, pass).then(() => {
+    sucLoginPendiente = null;
+    $('sucLogin').classList.remove('active');
+    p.resolve();
+  }).catch(e => {
+    $('sucLoginErr').textContent = mensajeErrorLogin(e);
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+
+function cancelarSesionSucursal(){
+  const p = sucLoginPendiente;
+  if (!p) return;
+  sucLoginPendiente = null;
+  $('sucLogin').classList.remove('active');
+  const err = new Error('Guardado cancelado: no se guardó nada.');
+  err.cancelado = true;
+  p.reject(err);
+}
+
+$('sucLoginBtn').addEventListener('click', ingresarSucursal);
+$('sucLoginCancel').addEventListener('click', cancelarSesionSucursal);
+$('sucLoginPass').addEventListener('keydown', e => { if (e.key === 'Enter') ingresarSucursal(); });
+$('sucLoginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('sucLoginPass').focus(); });
+$('sucLogin').addEventListener('click', e => { if (e.target === $('sucLogin')) cancelarSesionSucursal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('sucLogin').classList.contains('active')) cancelarSesionSucursal(); });
 
 auth.onAuthStateChanged(user => {
   if (user){
