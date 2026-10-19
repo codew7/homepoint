@@ -2842,6 +2842,29 @@
       gap: 4px;
     }
     .nec-code .nec-npedidos .ic-sm { width: 11px; height: 11px; }
+    /* El codigo es lo que se recorta si no entra: los indicadores no. */
+    .nec-code > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .nec-code .nec-npedidos { flex: none; }
+
+    /* Indicador de solicitud a otra sucursal: celeste "Solicitado" mientras
+       nadie lo marco, verde "Separado" cuando la otra sucursal lo tildo. */
+    .nec-remoto {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 18px;
+      padding: 0 7px;
+      border-radius: 99px;
+      font-family: var(--font-ui);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0;
+      background: var(--int-soft);
+      color: var(--int);
+    }
+    .nec-remoto .ic-sm { width: 11px; height: 11px; stroke-width: 2.4; }
+    .nec-remoto.is-separado { background: var(--ok-soft); color: var(--ok); }
 
     .nec-stock, .nec-nec {
       width: 52px;
@@ -2893,6 +2916,10 @@
     .nec-check:active i { transform: scale(.88); }
     .nec-row.is-ok .nec-check i { background: var(--ok); border-color: var(--ok); }
     .nec-row.is-ok .nec-check i .ic-sm { opacity: 1; transform: scale(1); }
+    /* OK por menos de lo que hoy hace falta: el tilde queda en ambar, vacio,
+       hasta que se vuelva a marcar por la cantidad nueva. */
+    .nec-row.is-parcial .nec-check i { border-color: var(--warn); border-style: dashed; background: var(--warn-soft); }
+    .nec-parcial { font-size: 11px; font-weight: 700; color: var(--warn); line-height: 1.2; }
     .nec-check.is-rebote i { animation: necRebote .32s var(--ease-spring); }
     @keyframes necRebote { 0% { transform: scale(.7); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
 
@@ -3045,7 +3072,7 @@
     .nec-ped.is-on i { background: var(--accent); border-color: var(--accent); }
     .nec-ped.is-on i .ic-sm { opacity: 1; }
     .nec-ped-nombre {
-      flex: 1;
+      flex: 0 1 auto;
       min-width: 0;
       font-size: 14px;
       font-weight: 600;
@@ -3056,7 +3083,130 @@
       transition: color .14s;
     }
     .nec-ped:not(.is-on) .nec-ped-nombre { color: var(--ink-4); text-decoration: line-through; }
-    .nec-ped-n { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-4); }
+    /* Tilde de "Pedido Confirmado", pegado al nombre. Es <span> y no <i> para
+       no heredar la caja del checkbox (.nec-ped i). */
+    .nec-ped-conf { flex: none; display: inline-flex; margin-left: -6px; color: var(--ok); }
+    .nec-ped-conf .ic-sm { width: 15px; height: 15px; stroke-width: 2.8; }
+    .nec-ped-n { flex: none; margin-left: auto; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-4); }
+
+    /* Hoja "Pedir a otra sucursal": misma caja que la sub-hoja de pedidos, un
+       poco mas ancha porque las filas llevan foto. Tres vistas (solicitudes
+       enviadas, armar una nueva y detalle de una) que dibuja el JS. */
+    .sol-box { max-width: 520px; max-height: 86vh; }
+    /* El confirm de "Eliminar solicitud" se abre sobre esta hoja (210). */
+    #confirmModal { z-index: 230; }
+    .sol-head-txt { flex: 1; min-width: 0; }
+    .sol-back { margin-left: -6px; }
+    .sol-back[hidden] { display: none; }
+    .sol-acciones { flex-wrap: wrap; }
+    .sol-acciones button { display: inline-flex; align-items: center; gap: 6px; }
+    .sol-acciones button .ic-sm { width: 14px; height: 14px; }
+    .sol-acciones .is-primario { background: var(--inverso-bg); border-color: transparent; color: var(--inverso-fg); }
+    .sol-acciones .is-primario:hover { background: var(--inverso-bg-hover); color: var(--inverso-fg); }
+    .sol-acciones .is-wa { background: var(--ok-soft); border-color: var(--ok-ring); color: var(--ok); }
+    .sol-acciones .is-peligro { margin-left: auto; }
+    .sol-acciones .is-peligro:hover { background: var(--bad-soft); color: var(--bad); }
+    .sol-pie {
+      flex: none;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--line);
+    }
+    .sol-pie[hidden] { display: none; }
+    .sol-btn-generar {
+      width: 100%;
+      height: 46px;
+      border: none;
+      border-radius: var(--r2);
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      transition: background .14s, transform .12s, opacity .14s;
+    }
+    .sol-btn-generar:hover { background: var(--inverso-bg-hover); }
+    .sol-btn-generar:active { transform: scale(.98); }
+    .sol-btn-generar:disabled { opacity: .45; pointer-events: none; }
+
+    /* Fila de articulo (vistas "nueva" y "detalle") */
+    .sol-art {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 8px 10px;
+      border-radius: var(--r2);
+      transition: background .12s;
+    }
+    label.sol-art { cursor: pointer; }
+    label.sol-art:hover { background: var(--surface-2); }
+    .sol-art .nec-img, .sol-art .nec-img-ph { width: 44px; height: 44px; }
+    .sol-art-info { flex: 1; min-width: 0; }
+    .sol-art-nombre { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.3; }
+    .sol-art-cod { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--ink-4); margin-top: 2px; }
+    .sol-art-cant { flex: none; font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--ink); min-width: 34px; text-align: right; }
+    .sol-art.is-off .sol-art-nombre { color: var(--ink-4); text-decoration: line-through; }
+    .sol-art.is-off .nec-img, .sol-art.is-off .nec-img-ph { opacity: .5; }
+    .sol-estado {
+      flex: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed var(--line);
+      color: transparent;
+    }
+    .sol-estado .ic-sm { width: 15px; height: 15px; stroke-width: 2.8; }
+    .sol-estado.is-ok { border: none; background: var(--ok); color: #fff; }
+    .sol-art.is-disp { background: var(--ok-soft); }
+    .sol-art.is-disp + .sol-art.is-disp { margin-top: 2px; }
+
+    /* Fila de solicitud enviada (vista "lista") */
+    .sol-env {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      min-height: 58px;
+      padding: 8px 10px;
+      border: none;
+      background: none;
+      border-radius: var(--r2);
+      text-align: left;
+      font-family: inherit;
+      color: inherit;
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .sol-env:hover { background: var(--surface-2); }
+    .sol-env-info { flex: 1; min-width: 0; }
+    .sol-env-fecha { font-size: 14px; font-weight: 700; color: var(--ink); }
+    .sol-env-sub { font-size: 12px; font-weight: 500; color: var(--ink-3); margin-top: 2px; }
+    .sol-env-sub b { font-family: var(--font-mono); color: var(--ok); }
+    .sol-chip {
+      flex: none;
+      height: 24px;
+      padding: 0 10px;
+      border-radius: 99px;
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--surface-3);
+      color: var(--ink-3);
+    }
+    .sol-chip.is-terminada { background: var(--ok-soft); color: var(--ok); }
+    .sol-env .ic-sm { width: 14px; height: 14px; color: var(--ink-4); flex: none; }
+    .sol-aviso {
+      margin: 6px 10px 10px;
+      padding: 10px 12px;
+      border-radius: var(--r2);
+      background: var(--ok-soft);
+      color: var(--ok);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
 
     @media (max-width: 720px) {
       .nec-panel { padding: 0; }
@@ -4069,6 +4219,7 @@
           <div class="nec-resumen" id="necResumen"></div>
         </div>
         <div class="nec-head-actions">
+          <button type="button" class="nec-ibtn" id="necBtnSol" title="Pedir a otra sucursal"><svg class="ic" viewBox="0 0 24 24"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4 20-7z"></path></svg></button>
           <button type="button" class="nec-ibtn" id="necBtnPrint" title="Imprimir listado"><svg class="ic" viewBox="0 0 24 24"><polyline points="6 9 6 3 18 3 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="7"></rect></svg></button>
           <button type="button" class="nec-ibtn" id="necBtnReload" title="Volver a cargar los pedidos"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"></path><polyline points="20 3.4 20 7.4 16 7.4"></polyline></svg></button>
           <button type="button" class="nec-ibtn nec-ibtn--peligro" id="necBtnClear" title="Limpiar todos los tildes"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 14h10l1-14"></path><path d="M10 11v5M14 11v5"></path></svg></button>
@@ -4114,6 +4265,25 @@
         <button type="button" id="necSubNinguno">Ninguno</button>
       </div>
       <div class="nec-sub-list" id="necSubList"></div>
+    </div>
+  </div>
+
+  <!-- PEDIR A OTRA SUCURSAL: solicitudes compartidas por link (solicitudMercaderia.html) -->
+  <div class="nec-sub" id="necSol">
+    <div class="nec-sub-box sol-box">
+      <div class="nec-sub-head">
+        <button type="button" class="nec-ibtn sol-back" id="necSolBack" title="Volver" hidden><svg class="ic" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg></button>
+        <div class="pp-title sol-head-txt">
+          <h3 id="necSolTitulo">Pedir a otra sucursal</h3>
+          <span class="pp-resumen" id="necSolResumen"></span>
+        </div>
+        <button type="button" class="nec-ibtn nec-ibtn--cerrar" id="necSolClose" title="Cerrar">&times;</button>
+      </div>
+      <div class="nec-sub-acciones sol-acciones" id="necSolAcciones"></div>
+      <div class="nec-sub-list" id="necSolList"></div>
+      <div class="sol-pie" id="necSolPie" hidden>
+        <button type="button" class="sol-btn-generar" id="necSolGenerar">Generar link</button>
+      </div>
     </div>
   </div>
 
@@ -5209,6 +5379,9 @@
     // esta en NOTAS_PAGADO_SET ni menciona pago, asi que estadoPago() la deja en
     // 'sin-dato' y el tramo verde del riel queda igual que sin nota.
     const NOTA_RETIRA = 'Retira';
+
+    // La escribe el mensaje "Saludo inicial". Tampoco toca el eje de cobro.
+    const NOTA_ESPERANDO_RESPUESTA = 'Esperando Respuesta';
 
     // Ciclo de tres pasos: (sin nota) -> Solicitado -> Pago -> (sin nota).
     // Avanza segun el ESTADO VISUAL del boton, no segun el texto exacto: si se
@@ -9472,6 +9645,19 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       await pvEscribirNota(NOTA_RETIRA);
     }
 
+    // Mandar el saludo inicial deja el pedido esperando que el cliente conteste.
+    // No pisa notas del eje de cobro ('Pago Solicitado', 'Pago'...): seria un
+    // retroceso. Si la hoja notas!A:A ya tiene la opcion con otra capitalizacion
+    // se reusa esa, asi el select del footer no queda con un duplicado.
+    async function marcarEsperandoRespuesta() {
+      if (!pedidoId || !pedidoActual) return;
+      if (estadoPago(pedidoActual.nota) !== 'sin-dato') return;
+      const objetivo = normalizarNota(NOTA_ESPERANDO_RESPUESTA);
+      if (normalizarNota(pedidoActual.nota) === objetivo) return;
+      const opt = notaSelect && Array.prototype.find.call(notaSelect.options, o => normalizarNota(o.value) === objetivo);
+      await pvEscribirNota(opt ? opt.value : NOTA_ESPERANDO_RESPUESTA);
+    }
+
     function actualizarCalculosPV() {
       const subtotal = pvCalcSubtotal();
       const totalDiv = document.getElementById('pvTotal');
@@ -10365,8 +10551,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const link = 'https://www.home-point.com.ar/pedidos.html?id=' + pedidoId;
       let msg = '';
       if (tipo === '1') {
-        // Saludo Inicial
-        msg = 'Hola, ' + nombreCliente + ':\n\nNos comunicamos de Distribuidora HomePoint en relacion a tu pedido.\n\nAdjuntamos el enlace a tu pedido:\n' + link;
+        // Saludo Inicial — deja la nota en 'Esperando Respuesta'. Sin await por
+        // lo mismo que las otras ramas: el window.open tiene que salir en el
+        // mismo tick del click.
+        marcarEsperandoRespuesta();
+        msg ='Hola, ' + nombreCliente + ':\n\nNos comunicamos de Distribuidora HomePoint en relacion a tu pedido.\n\nAdjuntamos el enlace a tu pedido:\n' + link;
       } else if (tipo === '2') {
         // Cotización — exactamente igual que clic en TOTAL FINAL: sella y cierra
         // el pedido y ademas deja la nota de cobro pendiente, porque enviar la
@@ -10518,6 +10707,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // armadoVerificados/<codigo>: true, asi todos los dispositivos ven lo mismo
     // en tiempo real. Solo existen los articulos tildados; destildar borra la
     // clave. No toca pedidos ni ningun otro nodo.
+    //
+    // Los pedidos elegidos para el calculo se comparten igual, en
+    // armadoIncluidos/<pedidoId>: true. Se guardan los INCLUIDOS para que un
+    // pedido nuevo llegue desactivado y solo entre cuando alguien lo tilde.
+    //
+    // La lista de pedidos tambien es en vivo: listeners sobre las consultas de
+    // pedidos ABIERTOS y CERRADOS, que ademas mantienen al dia el tilde verde
+    // de "Pedido Confirmado".
     (function setupNecesarios() {
       const panel = document.getElementById('necPanel');
       const lista = document.getElementById('necList');
@@ -10540,9 +10737,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const IC_LISTO = '<svg class="ic-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.6L16.5 9"></path></svg>';
       const IC_VACIO = '<svg class="ic-lg" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
 
+      // Nota que marca el pedido con tilde verde en la sub-hoja de pedidos.
+      // Se compara normalizada: 'pedido confirmado' tambien cuenta.
+      const NOTA_CONFIRMADO = normalizarNota('Pedido Confirmado');
+
       // Estado
-      let pedidos = [];              // [{ id, cliente, items: [{codigo, nombre, cantidad}] }]
-      let excluidos = new Set();     // ids de pedidos fuera del calculo
+      let pedidos = [];              // [{ id, cliente, confirmado, items: [{codigo, nombre, cantidad}] }]
+      let incluidos = new Set();     // ids de pedidos dentro del calculo
       let articulos = {};            // { codigo: { codigo, nombre, cantidad, pedidos: [{id, cliente, cantidad}] } }
       let pedidosEnCalculo = 0;
       let soloFaltan = true;
@@ -10552,25 +10753,92 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let cargado = false;
 
       // ---------- Persistencia del tilde (compartida en Firebase) ----------
+      // El OK guarda la cantidad que hacia falta al marcarlo:
+      // armadoVerificados/<codigo>: 5. Si despues entra mas cantidad (pedido
+      // nuevo, o uno que vuelve al calculo) el OK queda corto y el articulo
+      // vuelve a "Faltan" como parcial; si la cantidad baja, sigue OK.
+      // Los OK viejos valian `true` (sin cantidad): se toman como validos por
+      // la cantidad que se ve al cargarlos y se reescriben con ese numero.
       const refVerif = db.ref('armadoVerificados');
-      let verificados = new Set();   // claves seguras de los articulos tildados
+      let verificados = new Map();   // clave segura -> cantidad verificada (o true, formato viejo)
       let escuchando = false;
 
       // Firebase no admite . # $ / [ ] en las claves.
       const claveSegura = (codigo) => String(codigo).replace(/[.#$\/\[\]]/g, '_');
-      const getVerificado = (codigo) => verificados.has(claveSegura(codigo));
+      const cantNecesaria = (codigo) => (articulos[codigo] ? articulos[codigo].cantidad : 0);
+
+      // OK completo: cubre lo que hace falta hoy.
+      function getVerificado(codigo) {
+        const v = verificados.get(claveSegura(codigo));
+        if (v === true) return true;
+        return typeof v === 'number' && v >= cantNecesaria(codigo);
+      }
+      // OK que quedo corto: devuelve la cantidad que se habia verificado.
+      function getParcial(codigo) {
+        const v = verificados.get(claveSegura(codigo));
+        return (typeof v === 'number' && v < cantNecesaria(codigo)) ? v : null;
+      }
 
       // Se marca en memoria al instante y se escribe en segundo plano; si el
-      // servidor lo rechaza se vuelve atras.
+      // servidor lo rechaza se vuelve atras. Marcar guarda la cantidad actual.
+      // Si las reglas de Firebase todavia validan armadoVerificados como
+      // booleano, el numero vuelve PERMISSION_DENIED. En ese caso se guarda
+      // `true` como antes (OK sin cantidad) y no se insiste con la migracion,
+      // asi la pantalla sigue andando hasta que se actualice la regla.
+      let soloBooleano = false;
+      const esPermiso = (err) => err && /permission/i.test(String(err.code || err.message || ''));
+
       function setVerificado(codigo, v) {
         const k = claveSegura(codigo);
-        if (v) verificados.add(k); else verificados.delete(k);
-        const op = v ? refVerif.child(k).set(true) : refVerif.child(k).remove();
-        op.catch(err => {
+        const previo = verificados.get(k);
+        const cant = cantNecesaria(codigo);
+        const valor = soloBooleano ? true : cant;
+        if (v) verificados.set(k, valor); else verificados.delete(k);
+        const revertir = (err) => {
           console.error('Error guardando verificado:', err);
-          if (v) verificados.delete(k); else verificados.add(k);
+          if (previo === undefined) verificados.delete(k); else verificados.set(k, previo);
           if (cargado) render();
           showToast('No se pudo guardar el tilde');
+        };
+        const op = v ? refVerif.child(k).set(valor) : refVerif.child(k).remove();
+        op.catch(err => {
+          if (!v || valor === true || !esPermiso(err)) { revertir(err); return; }
+          soloBooleano = true;
+          console.warn('armadoVerificados no acepta cantidades: se guarda el OK sin cantidad. Actualizar la regla de Firebase.');
+          verificados.set(k, true);
+          refVerif.child(k).set(true).catch(revertir);
+        });
+      }
+
+      // Pasa los OK del formato viejo (true) a la cantidad que se ve ahora.
+      // Solo los de articulos que estan en la lista: sin cantidad no hay que
+      // anotar. Se escriben todos juntos en un update.
+      // `migrando` evita un segundo intento mientras el primero sigue en vuelo:
+      // si el servidor lo rechaza, el SDK revierte la cache y dispara el
+      // listener ANTES del catch, que volveria a llamar aca.
+      let migrando = false;
+      function migrarVerificados() {
+        if (soloBooleano || migrando) return;
+        const updates = {};
+        Object.values(articulos).forEach(a => {
+          const k = claveSegura(a.codigo);
+          if (verificados.get(k) === true) {
+            updates[k] = a.cantidad;
+            verificados.set(k, a.cantidad);
+          }
+        });
+        if (!Object.keys(updates).length) return;
+        migrando = true;
+        refVerif.update(updates).finally(() => { migrando = false; }).catch(err => {
+          // La memoria ya tiene los numeros: se vuelven a `true` para que
+          // coincida con lo que quedo en el servidor.
+          Object.keys(updates).forEach(k => verificados.set(k, true));
+          if (esPermiso(err)) {
+            soloBooleano = true;
+            console.warn('armadoVerificados no acepta cantidades: los OK quedan sin cantidad. Actualizar la regla de Firebase.');
+          } else {
+            console.error('Error migrando verificados:', err);
+          }
         });
       }
 
@@ -10580,12 +10848,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         if (escuchando) return;
         escuchando = true;
         refVerif.on('value', snap => {
-          const nuevos = new Set(Object.keys(snap.val() || {}));
+          const val = snap.val() || {};
+          const nuevos = new Map(Object.keys(val).map(k => [k, val[k]]));
           // El eco de un tilde propio llega igual a lo que ya hay en memoria:
           // no se redibuja, asi no se corta la animacion de salida de la fila.
-          const igual = nuevos.size === verificados.size && [...nuevos].every(k => verificados.has(k));
+          const igual = nuevos.size === verificados.size && [...nuevos].every(([k, v]) => verificados.get(k) === v);
           verificados = nuevos;
           if (igual || !cargado) return;
+          migrarVerificados();
           if (panel.classList.contains('active')) render();
           else actualizarStats(listaOrdenada());
         }, err => {
@@ -10594,7 +10864,138 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         });
       }
 
+      // ---------- Pedidos dentro del calculo (compartido en Firebase) ----------
+      // Los ids de pedido son claves push de Firebase: no hace falta claveSegura.
+      const refIncl = db.ref('armadoIncluidos');
+      let escuchandoIncl = false;
+
+      // Puede haber ids de pedidos que ya no estan en la lista (empacados o
+      // despachados): los conteos solo miran los pedidos cargados.
+      const nIncluidos = () => pedidos.reduce((n, p) => n + (incluidos.has(p.id) ? 1 : 0), 0);
+
+      // Igual que setVerificado: se aplica en memoria al instante, se escribe en
+      // segundo plano y si el servidor lo rechaza se vuelve al estado anterior.
+      // La memoria se actualiza ANTES de escribir: Firebase dispara el listener
+      // en el mismo instante de la escritura local, y asi le llega como eco.
+      function escribirIncluidos(nuevos, op) {
+        const previos = incluidos;
+        incluidos = nuevos;
+        op().catch(err => {
+          console.error('Error guardando pedidos del calculo:', err);
+          incluidos = previos;
+          if (cargado) aplicarFiltro();
+          showToast('No se pudo guardar la selección de pedidos');
+        });
+      }
+
+      // Mete en el calculo todos los pedidos que hay ahora en la lista. Usa set
+      // y no update: de paso borra los ids de pedidos que ya no estan.
+      function incluirTodos() {
+        const todos = {};
+        pedidos.forEach(p => { todos[p.id] = true; });
+        escribirIncluidos(new Set(Object.keys(todos)), () => refIncl.set(todos));
+      }
+
+      function escucharIncluidos() {
+        if (escuchandoIncl) return;
+        escuchandoIncl = true;
+        refIncl.on('value', snap => {
+          const nuevos = new Set(Object.keys(snap.val() || {}));
+          // El eco de un cambio propio no redibuja.
+          const igual = nuevos.size === incluidos.size && [...nuevos].every(k => incluidos.has(k));
+          incluidos = nuevos;
+          if (igual || !cargado) return;
+          refrescar();
+        }, err => {
+          console.error('Error escuchando pedidos del calculo:', err);
+          escuchandoIncl = false;
+        });
+      }
+
+      // Recalcula y redibuja lo que este a la vista; con el panel cerrado solo
+      // el globo del boton de la barra.
+      function refrescar() {
+        construir();
+        migrarVerificados();
+        if (panel.classList.contains('active')) render();
+        else actualizarStats(listaOrdenada());
+        if (sub.classList.contains('active')) renderSub();
+      }
+
+      // ---------- Tilde de "Pedido Confirmado" ----------
+      const htmlConfirmado = () => '<span class="nec-ped-conf" title="Pedido Confirmado" aria-label="Pedido Confirmado">' + IC_CHECK + '</span>';
+
+      // Toca solo la fila del pedido para no redibujar la sub-hoja entera.
+      function pintarConfirmado(p) {
+        const fila = subList.querySelector('.nec-ped[data-id="' + CSS.escape(p.id) + '"]');
+        if (!fila) return;
+        const actual = fila.querySelector('.nec-ped-conf');
+        if (p.confirmado && !actual) {
+          fila.querySelector('.nec-ped-nombre').insertAdjacentHTML('afterend', htmlConfirmado());
+        } else if (!p.confirmado && actual) {
+          actual.remove();
+        }
+      }
+
       // ---------- Datos ----------
+      // Pedidos web con items sin empacar, a partir de las dos consultas.
+      function pedidosDesde(snapAbierto, snapCerrado) {
+        const res = [];
+        const recolectar = (child) => {
+          const p = child.val();
+          if (!p || p.createdby !== 'web') return;
+          const itemsRaw = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
+          const items = itemsRaw
+            .filter(it => it && it.listo !== 'y')
+            .map(it => {
+              const codigo = it.codigo || 'SIN_CODIGO';
+              return { codigo, nombre: it.nombre || codigo, cantidad: parseInt(it.cantidad, 10) || 0 };
+            });
+          if (!items.length) return;
+          res.push({
+            id: child.key,
+            cliente: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key),
+            confirmado: normalizarNota(p.nota) === NOTA_CONFIRMADO,
+            items
+          });
+        };
+        snapAbierto.forEach(recolectar);
+        snapCerrado.forEach(recolectar);
+        return res;
+      }
+
+      // Lo que pesa en el calculo y en la lista; la nota queda afuera para que
+      // un cambio de nota no redibuje todo.
+      const firmaPedidos = (arr) => arr.map(p =>
+        p.id + '|' + p.cliente + '|' + p.items.map(it => it.codigo + '*' + it.cantidad + '*' + it.nombre).join(',')
+      ).join('\n');
+
+      // Cualquier cambio en un pedido abierto o cerrado vuelve a avisar, asi
+      // que solo se redibuja si cambio algo que se ve. Si lo unico distinto es
+      // la nota, se tocan nada mas los tildes verdes.
+      function aplicarPedidos(nuevos) {
+        const cambio = firmaPedidos(nuevos) !== firmaPedidos(pedidos);
+        pedidos = nuevos;
+        if (cambio) refrescar();
+        else if (sub.classList.contains('active')) pedidos.forEach(pintarConfirmado);
+      }
+
+      // Se engancha despues de la primera carga: el primer aviso trae lo mismo
+      // que ya se cargo y no redibuja.
+      const snapsVivos = { ABIERTO: null, CERRADO: null };
+      let escuchandoPed = false;
+      function escucharPedidos() {
+        if (escuchandoPed) return;
+        escuchandoPed = true;
+        Object.keys(snapsVivos).forEach(st => {
+          db.ref('pedidos').orderByChild('status').equalTo(st).on('value', snap => {
+            snapsVivos[st] = snap;
+            if (!cargado || !snapsVivos.ABIERTO || !snapsVivos.CERRADO) return;
+            aplicarPedidos(pedidosDesde(snapsVivos.ABIERTO, snapsVivos.CERRADO));
+          }, err => console.error('Error escuchando pedidos ' + st + ':', err));
+        });
+      }
+
       async function cargar() {
         if (cargando) return;
         cargando = true;
@@ -10612,31 +11013,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
           ]));
 
-          pedidos = [];
-          excluidos.clear();
-          const recolectar = (child) => {
-            const p = child.val();
-            if (!p || p.createdby !== 'web') return;
-            const itemsRaw = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
-            const items = itemsRaw
-              .filter(it => it && it.listo !== 'y')
-              .map(it => {
-                const codigo = it.codigo || 'SIN_CODIGO';
-                return { codigo, nombre: it.nombre || codigo, cantidad: parseInt(it.cantidad, 10) || 0 };
-              });
-            if (!items.length) return;
-            pedidos.push({
-              id: child.key,
-              cliente: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key),
-              items
-            });
-          };
-          snapAbierto.forEach(recolectar);
-          snapCerrado.forEach(recolectar);
-
+          pedidos = pedidosDesde(snapAbierto, snapCerrado);
           cargado = true;
           construir();
+          migrarVerificados();
           render();
+          if (sub.classList.contains('active')) renderSub();
+          escucharPedidos();
         } catch (err) {
           console.error('Error cargando articulos necesarios:', err);
           if (!cargado) {
@@ -10655,7 +11038,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         articulos = {};
         pedidosEnCalculo = 0;
         pedidos.forEach(p => {
-          if (excluidos.has(p.id)) return;
+          if (!incluidos.has(p.id)) return;
           pedidosEnCalculo++;
           p.items.forEach(it => {
             if (!articulos[it.codigo]) {
@@ -10687,6 +11070,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const todos = listaOrdenada();
         const visibles = todos.filter(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)));
 
+        // Hay pedidos pero ninguno elegido: no es lo mismo que "no hay nada".
+        if (!todos.length && pedidos.length && !pedidosEnCalculo) {
+          lista.innerHTML = '<div class="nec-empty">' + IC_VACIO +
+            '<b>Ningún pedido en el cálculo</b><span>Tocá "Pedidos" para elegir cuáles entran.</span></div>';
+          actualizarStats(todos);
+          return;
+        }
         if (!todos.length) {
           lista.innerHTML = '<div class="nec-empty">' + IC_VACIO +
             '<b>No hay artículos pendientes</b><span>Los pedidos web no tienen items sin empacar.</span></div>';
@@ -10722,6 +11112,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       function filaHtml(a, delay) {
         const si = sheetsData[a.codigo] || {};
         const verif = getVerificado(a.codigo);
+        const parcial = verif ? null : getParcial(a.codigo);
         const img = si.imagen || '';
         const imgAlt = si.imagenAlt || '';
         const codAttr = escapeHtml(a.codigo);
@@ -10753,13 +11144,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         });
         det += '</div>';
 
-        return '<div class="nec-row' + (verif ? ' is-ok' : '') + (abierta === a.codigo ? ' is-abierta' : '') + '" data-codigo="' + codAttr + '" style="animation-delay:' + delay + 's">' +
+        return '<div class="nec-row' + (verif ? ' is-ok' : '') + (parcial !== null ? ' is-parcial' : '') + (abierta === a.codigo ? ' is-abierta' : '') + '" data-codigo="' + codAttr + '" style="animation-delay:' + delay + 's">' +
           '<div class="nec-main">' +
             imgHtml +
             '<div class="nec-info">' +
               '<div class="nec-name" title="' + escapeHtml(a.nombre) + '">' + escapeHtml(a.nombre) + '</div>' +
               '<div class="nec-code"><span>' + codAttr + (barras ? ' · ' + escapeHtml(barras) : '') + '</span>' +
-                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span></div>' +
+                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + remotoHtml(a.codigo) + '</div>' +
+              (parcial !== null ? '<div class="nec-parcial">OK por ' + parcial + ' · faltan ' + (a.cantidad - parcial) + ' más</div>' : '') +
             '</div>' +
             '<span class="nec-stock ' + stockClase + '">' + stockTxt + '</span>' +
             '<span class="nec-nec' + (falta ? ' is-falta' : '') + '" title="' + (falta ? 'Faltan ' + (a.cantidad - stock) + ' para cubrir los pedidos' : '') + '">' + a.cantidad + '</span>' +
@@ -10787,7 +11179,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         document.getElementById('necNFaltan').textContent = faltan;
         document.getElementById('necNTodos').textContent = total;
 
-        const nExcl = excluidos.size;
+        const nExcl = pedidos.length - pedidosEnCalculo;
         btnPedidos.classList.toggle('has-filtro', nExcl > 0);
         document.getElementById('necBtnPedidosTxt').textContent = nExcl > 0
           ? (pedidosEnCalculo + ' de ' + pedidos.length)
@@ -10804,12 +11196,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       function abrir() {
         panel.classList.add('active');
         escucharVerificados();
+        escucharIncluidos();
+        escucharSolicitudes();
         if (!cargado) cargar();
         else render();
       }
       function cerrar() {
         panel.classList.remove('active');
         cerrarSub();
+        cerrarSol();
       }
       // Re-render silencioso cuando cambia el stock por el polling.
       window.necRenderSiAbierto = function() {
@@ -10827,6 +11222,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
+        if (confirmResolver) return;
+        if (sol.classList.contains('active')) { e.preventDefault(); cerrarSol(); return; }
         if (sub.classList.contains('active')) { e.preventDefault(); cerrarSub(); return; }
         if (panel.classList.contains('active') && !confirmResolver) { e.preventDefault(); cerrar(); }
       });
@@ -10881,9 +11278,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         // Tilde de verificado.
         const check = e.target.closest('.nec-check');
         if (check) {
+          // Sobre un parcial, tocar vuelve a marcar OK por la cantidad de hoy.
           const nuevo = !getVerificado(codigo);
           setVerificado(codigo, nuevo);
           row.classList.toggle('is-ok', nuevo);
+          row.classList.remove('is-parcial');
+          const avisoParcial = row.querySelector('.nec-parcial');
+          if (avisoParcial) avisoParcial.remove();
           check.setAttribute('aria-pressed', nuevo ? 'true' : 'false');
           if (nuevo) {
             check.classList.add('is-rebote');
@@ -10918,15 +11319,16 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const orden = [...pedidos].sort((a, b) => a.cliente.localeCompare(b.cliente, 'es'));
         let html = '';
         orden.forEach(p => {
-          const on = !excluidos.has(p.id);
+          const on = incluidos.has(p.id);
           const n = p.items.reduce((s, it) => s + it.cantidad, 0);
           html += '<label class="nec-ped' + (on ? ' is-on' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
             '<input type="checkbox"' + (on ? ' checked' : '') + '><i>' + IC_CHECK + '</i>' +
             '<span class="nec-ped-nombre">' + escapeHtml(p.cliente) + '</span>' +
+            (p.confirmado ? htmlConfirmado() : '') +
             '<span class="nec-ped-n">' + n + ' art.</span></label>';
         });
         subList.innerHTML = html || '<div class="pedidos-panel-empty">No hay pedidos con artículos pendientes</div>';
-        subResumen.textContent = (pedidos.length - excluidos.size) + ' de ' + pedidos.length + ' incluidos';
+        subResumen.textContent = nIncluidos() + ' de ' + pedidos.length + ' incluidos';
       }
       function abrirSub() {
         if (!cargado || !pedidos.length) { showToast('Todavía no hay pedidos cargados'); return; }
@@ -10943,18 +11345,386 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       btnPedidos.addEventListener('click', abrirSub);
       document.getElementById('necSubClose').addEventListener('click', cerrarSub);
       sub.addEventListener('click', (e) => { if (e.target === sub) cerrarSub(); });
-      document.getElementById('necSubTodos').addEventListener('click', () => { excluidos.clear(); aplicarFiltro(); });
-      document.getElementById('necSubNinguno').addEventListener('click', () => { pedidos.forEach(p => excluidos.add(p.id)); aplicarFiltro(); });
+      document.getElementById('necSubTodos').addEventListener('click', () => {
+        incluirTodos();
+        aplicarFiltro();
+      });
+      // "Ninguno" borra el nodo entero, asi tampoco quedan ids huerfanos.
+      document.getElementById('necSubNinguno').addEventListener('click', () => {
+        escribirIncluidos(new Set(), () => refIncl.remove());
+        aplicarFiltro();
+      });
       subList.addEventListener('change', (e) => {
         const cb = e.target;
         const fila = cb.closest('.nec-ped');
         if (!fila) return;
-        if (cb.checked) excluidos.delete(fila.dataset.id);
-        else excluidos.add(fila.dataset.id);
+        const id = fila.dataset.id;
+        const nuevos = new Set(incluidos);
+        if (cb.checked) nuevos.add(id);
+        else nuevos.delete(id);
+        escribirIncluidos(nuevos, () => cb.checked ? refIncl.child(id).set(true) : refIncl.child(id).remove());
         fila.classList.toggle('is-on', cb.checked);
         construir();
         render();
-        subResumen.textContent = (pedidos.length - excluidos.size) + ' de ' + pedidos.length + ' incluidos';
+        subResumen.textContent = nIncluidos() + ' de ' + pedidos.length + ' incluidos';
+      });
+
+      // ---------- Pedir a otra sucursal ----------
+      // Arma una solicitud con los articulos sin OK, la guarda en Firebase en
+      // solicitudesSucursal/<id> y genera un link a solicitudMercaderia.html?id=<id>,
+      // donde la otra sucursal tilda lo que tiene sin iniciar sesion. El id es
+      // una clave push (imposible de adivinar): el link es la llave.
+      //
+      // solicitudesSucursal/<id> = {
+      //   creado, creadoPor,
+      //   items: { <claveSegura(codigo)>: { codigo, nombre, barras, imagen, imagenAlt, cantidad, orden } },
+      //   disponibles: { <clave>: true },   // lo escribe la otra sucursal
+      //   terminado: <timestamp>            // idem, al tocar "Terminé"
+      // }
+      // Los items son una foto del momento: si despues cambian los pedidos, la
+      // solicitud ya enviada no se toca.
+      const refSol = db.ref('solicitudesSucursal');
+      const sol = document.getElementById('necSol');
+      const solList = document.getElementById('necSolList');
+      const solAcciones = document.getElementById('necSolAcciones');
+      const solTitulo = document.getElementById('necSolTitulo');
+      const solResumen = document.getElementById('necSolResumen');
+      const solBack = document.getElementById('necSolBack');
+      const solPie = document.getElementById('necSolPie');
+      const solGenerar = document.getElementById('necSolGenerar');
+
+      const IC_ENVIO = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4 20-7z"></path></svg>';
+      const IC_COPIAR ='<svg class="ic-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>';
+      const IC_WA = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.6 7.4L3.5 20.5l1.4-4.3a8.5 8.5 0 1 1 15.6-4.5z"></path></svg>';
+      const IC_ABRIR = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M14 4h6v6"></path><path d="M20 4 10 14"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>';
+      const IC_MAS = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>';
+      const IC_BORRAR = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 14h10l1-14"></path></svg>';
+
+      let solVista = 'lista';         // 'lista' | 'nueva' | 'detalle'
+      let solDatos = {};              // { id: solicitud } en vivo, mientras la hoja este abierta
+      let solCargadas = false;
+      let solDetalleId = null;
+      let solCandidatos = [];         // articulos sin OK al abrir "nueva"
+      let solElegidos = new Set();    // claves elegidas en "nueva"
+      let solQuery = null;
+
+      const linkSolicitud = (id) => new URL('solicitudMercaderia.html?id=' + encodeURIComponent(id), location.href).href;
+
+      const fechaSol = (ts) => ts
+        ? new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '—';
+
+      function imgSolHtml(src, alt) {
+        if (!src && !alt) return '<div class="nec-img-ph">' + IC_FOTO + '</div>';
+        const s = src || alt;
+        return '<img class="nec-img" src="' + escapeHtml(s) + '" alt="" loading="lazy" data-alt="' + escapeHtml(alt !== s ? alt : '') + '"' +
+          ' onerror="imgFallback(this, this.dataset.alt, \'nec-img-ph\')">';
+      }
+
+      const itemsDe = (s) => Object.keys((s && s.items) || {})
+        .map(k => Object.assign({ k }, s.items[k]))
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+      function contarDisp(s) {
+        const disp = (s && s.disponibles) || {};
+        const items = itemsDe(s);
+        return { total: items.length, disp: items.filter(it => disp[it.k]).length };
+      }
+
+      // ---------- Indicadores en la lista: solicitado / separado ----------
+      // Por articulo (clave segura del codigo): la solicitud mas reciente que
+      // lo incluye y si en alguna la otra sucursal lo marco disponible.
+      // Borrar una solicitud saca sus indicadores.
+      let remoto = {};                // { clave: { creado, separado } }
+      let firmaRemoto = '';
+
+      function indexarRemoto() {
+        const res = {};
+        Object.keys(solDatos).forEach(id => {
+          const s = solDatos[id] || {};
+          const disp = s.disponibles || {};
+          Object.keys(s.items || {}).forEach(k => {
+            const r = res[k] || (res[k] = { creado: 0, separado: false });
+            r.creado = Math.max(r.creado, s.creado || 0);
+            if (disp[k]) r.separado = true;
+          });
+        });
+        remoto = res;
+        const firma = Object.keys(res).sort().map(k => k + (res[k].separado ? '+' : '-')).join('|');
+        const cambio = firma !== firmaRemoto;
+        firmaRemoto = firma;
+        return cambio;
+      }
+
+      function remotoHtml(codigo) {
+        const r = remoto[claveSegura(codigo)];
+        if (!r) return '';
+        return r.separado
+          ? '<span class="nec-remoto is-separado" title="La otra sucursal ya lo separó">' + IC_CHECK + 'Separado</span>'
+          : '<span class="nec-remoto" title="Pedido a otra sucursal el ' + fechaSol(r.creado) + '">' + IC_ENVIO + 'Solicitado</span>';
+      }
+
+      // Queda activo desde que se abre el panel, como los verificados: los
+      // indicadores de la lista dependen de el. Trae las ultimas 30 en vivo.
+      function escucharSolicitudes() {
+        if (solQuery) return;
+        solQuery = refSol.orderByChild('creado').limitToLast(30);
+        solQuery.on('value', snap => {
+          solDatos = snap.val() || {};
+          solCargadas = true;
+          if (indexarRemoto() && cargado && panel.classList.contains('active')) render();
+          if (!sol.classList.contains('active')) return;
+          if (solVista === 'lista') renderSolLista();
+          else if (solVista === 'detalle') renderSolDetalle();
+        }, err => {
+          console.error('Error escuchando solicitudes:', err);
+          solQuery = null;
+          solList.innerHTML = '<div class="nec-empty">' + IC_VACIO + '<b>No se pudieron cargar las solicitudes</b><span>Revisá la conexión o los permisos de Firebase.</span></div>';
+        });
+      }
+
+      function setSolCabecera(titulo, resumenTxt, conVolver) {
+        solTitulo.textContent = titulo;
+        solResumen.textContent = resumenTxt || '';
+        solBack.hidden = !conVolver;
+      }
+
+      function renderSolLista() {
+        solVista = 'lista';
+        solDetalleId = null;
+        solPie.hidden = true;
+        setSolCabecera('Pedir a otra sucursal', 'Solicitudes enviadas', false);
+        solAcciones.innerHTML = '<button type="button" class="is-primario" data-acc="nueva">' + IC_MAS + 'Nueva solicitud</button>';
+        if (!solCargadas) {
+          solList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando solicitudes...</div>';
+          return;
+        }
+        const ids = Object.keys(solDatos).sort((a, b) => (solDatos[b].creado || 0) - (solDatos[a].creado || 0));
+        if (!ids.length) {
+          solList.innerHTML = '<div class="nec-empty">' + IC_VACIO + '<b>Todavía no hay solicitudes</b><span>Tocá "Nueva solicitud" para armar un listado con los artículos sin OK.</span></div>';
+          return;
+        }
+        solList.innerHTML = ids.map(id => {
+          const s = solDatos[id];
+          const c = contarDisp(s);
+          return '<button type="button" class="sol-env" data-id="' + escapeHtml(id) + '">' +
+            '<div class="sol-env-info"><div class="sol-env-fecha">' + fechaSol(s.creado) + '</div>' +
+            '<div class="sol-env-sub"><b>' + c.disp + '</b> de ' + c.total + ' disponibles</div></div>' +
+            (s.terminado ? '<span class="sol-chip is-terminada">Respondida</span>' : '<span class="sol-chip">Esperando</span>') +
+            IC_FLECHA + '</button>';
+        }).join('');
+      }
+
+      function renderSolNueva() {
+        solVista = 'nueva';
+        setSolCabecera('Nueva solicitud', '', true);
+        solAcciones.innerHTML = '<button type="button" data-acc="todos">Todos</button><button type="button" data-acc="ninguno">Ninguno</button>';
+        if (!solCandidatos.length) {
+          solPie.hidden = true;
+          solList.innerHTML = '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>No hay artículos sin OK</b><span>Todo lo necesario ya está verificado.</span></div>';
+          return;
+        }
+        solPie.hidden = false;
+        solList.innerHTML = solCandidatos.map(a => {
+          const on = solElegidos.has(a.k);
+          return '<label class="sol-art nec-ped' + (on ? ' is-on' : ' is-off') + '" data-k="' + escapeHtml(a.k) + '">' +
+            '<input type="checkbox"' + (on ? ' checked' : '') + '><i>' + IC_CHECK + '</i>' +
+            imgSolHtml(a.imagen, a.imagenAlt) +
+            '<div class="sol-art-info"><div class="sol-art-nombre">' + escapeHtml(a.nombre) + '</div>' +
+            '<div class="sol-art-cod">' + escapeHtml(a.codigo) + (a.barras ? ' · ' + escapeHtml(a.barras) : '') + '</div></div>' +
+            '<span class="sol-art-cant">' + a.cantidad + '</span></label>';
+        }).join('');
+        actualizarSolNueva();
+      }
+      function actualizarSolNueva() {
+        const n = solElegidos.size;
+        solResumen.textContent = n + ' de ' + solCandidatos.length + ' artículos';
+        solGenerar.disabled = n === 0;
+        solGenerar.textContent = n ? 'Generar link (' + n + (n === 1 ? ' artículo)' : ' artículos)') : 'Elegí al menos un artículo';
+      }
+
+      function renderSolDetalle() {
+        const s = solDatos[solDetalleId];
+        solVista = 'detalle';
+        solPie.hidden = true;
+        if (!s) {
+          // Todavia no llego el eco de la que se acaba de crear, o la borraron.
+          setSolCabecera('Solicitud', '', true);
+          solAcciones.innerHTML = '';
+          solList.innerHTML = solCargadas
+            ? '<div class="nec-empty">' + IC_VACIO + '<b>La solicitud ya no existe</b></div>'
+            : '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando...</div>';
+          return;
+        }
+        const c = contarDisp(s);
+        setSolCabecera('Solicitud del ' + fechaSol(s.creado), c.disp + ' de ' + c.total + ' disponibles', true);
+        solAcciones.innerHTML =
+          '<button type="button" class="is-wa" data-acc="wa">' + IC_WA + 'WhatsApp</button>' +
+          '<button type="button" data-acc="copiar">' + IC_COPIAR + 'Copiar link</button>' +
+          '<button type="button" data-acc="abrir">' + IC_ABRIR + 'Abrir</button>' +
+          '<button type="button" class="is-peligro" data-acc="borrar" title="Eliminar solicitud">' + IC_BORRAR + '</button>';
+        const disp = s.disponibles || {};
+        const aviso = s.terminado
+          ? '<div class="sol-aviso">La otra sucursal terminó de revisar el ' + fechaSol(s.terminado) + '.</div>'
+          : '';
+        solList.innerHTML = aviso + itemsDe(s).map(it => {
+          const ok = !!disp[it.k];
+          return '<div class="sol-art' + (ok ? ' is-disp' : '') + '">' +
+            imgSolHtml(it.imagen, it.imagenAlt) +
+            '<div class="sol-art-info"><div class="sol-art-nombre">' + escapeHtml(it.nombre) + '</div>' +
+            '<div class="sol-art-cod">' + escapeHtml(it.codigo) + (it.barras ? ' · ' + escapeHtml(it.barras) : '') + '</div></div>' +
+            '<span class="sol-art-cant">' + it.cantidad + '</span>' +
+            '<span class="sol-estado' + (ok ? ' is-ok' : '') + '" title="' + (ok ? 'Disponible' : 'Sin marcar') + '">' + IC_CHECK + '</span></div>';
+        }).join('');
+      }
+
+      function abrirSol() {
+        if (!cargado) { showToast('Todavía no se cargaron los artículos'); return; }
+        sol.classList.add('active');
+        escucharSolicitudes();
+        renderSolLista();
+      }
+      function cerrarSol() {
+        if (!sol.classList.contains('active')) return;
+        sol.classList.remove('active');
+      }
+
+      // Articulos de la lista actual sin el OK manual, con todo lo que la otra
+      // sucursal necesita para reconocerlos. De un OK parcial se pide solo lo
+      // que falta.
+      function prepararNueva() {
+        solCandidatos = listaOrdenada()
+          .filter(a => !getVerificado(a.codigo))
+          .map(a => {
+            const si = sheetsData[a.codigo] || {};
+            const parcial = getParcial(a.codigo);
+            return {
+              k: claveSegura(a.codigo),
+              codigo: a.codigo,
+              nombre: a.nombre,
+              barras: (si.codigoBarras && si.codigoBarras.length) ? String(si.codigoBarras[0]) : '',
+              imagen: si.imagen || '',
+              imagenAlt: si.imagenAlt || '',
+              cantidad: parcial !== null ? a.cantidad - parcial : a.cantidad
+            };
+          });
+        solElegidos = new Set(solCandidatos.map(a => a.k));
+        renderSolNueva();
+      }
+
+      async function generarSolicitud() {
+        const elegidos = solCandidatos.filter(a => solElegidos.has(a.k));
+        if (!elegidos.length) return;
+        const items = {};
+        elegidos.forEach((a, i) => {
+          items[a.k] = { codigo: a.codigo, nombre: a.nombre, barras: a.barras, imagen: a.imagen, imagenAlt: a.imagenAlt, cantidad: a.cantidad, orden: i };
+        });
+        const user = firebase.auth().currentUser;
+        const ref = refSol.push();
+        solGenerar.disabled = true;
+        solGenerar.textContent = 'Generando...';
+        try {
+          await conTimeout(() => ref.set({
+            creado: firebase.database.ServerValue.TIMESTAMP,
+            creadoPor: (user && user.email) || '',
+            items
+          }));
+          solDetalleId = ref.key;
+          renderSolDetalle();
+          showToast('Link generado');
+        } catch (err) {
+          console.error('Error creando solicitud:', err);
+          showToast(err && err.esTimeout ? 'Sin conexión con el servidor' : 'No se pudo generar el link');
+          actualizarSolNueva();
+        }
+      }
+
+      async function copiarTexto(txt) {
+        try {
+          await navigator.clipboard.writeText(txt);
+          return true;
+        } catch (e) {
+          const ta = document.createElement('textarea');
+          ta.value = txt;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          let ok = false;
+          try { ok = document.execCommand('copy'); } catch (e2) { /* sin soporte */ }
+          ta.remove();
+          return ok;
+        }
+      }
+
+      document.getElementById('necBtnSol').addEventListener('click', abrirSol);
+      document.getElementById('necSolClose').addEventListener('click', cerrarSol);
+      sol.addEventListener('click', (e) => { if (e.target === sol) cerrarSol(); });
+      solBack.addEventListener('click', renderSolLista);
+      solGenerar.addEventListener('click', generarSolicitud);
+
+      solAcciones.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-acc]');
+        if (!btn) return;
+        const acc = btn.dataset.acc;
+        if (acc === 'nueva') { prepararNueva(); return; }
+        if (acc === 'todos' || acc === 'ninguno') {
+          solElegidos = acc === 'todos' ? new Set(solCandidatos.map(a => a.k)) : new Set();
+          renderSolNueva();
+          return;
+        }
+        if (!solDetalleId) return;
+        const link = linkSolicitud(solDetalleId);
+        if (acc === 'copiar') {
+          showToast(await copiarTexto(link) ? 'Link copiado' : 'No se pudo copiar el link');
+        } else if (acc === 'abrir') {
+          window.open(link, '_blank');
+        } else if (acc === 'wa') {
+          const n = contarDisp(solDatos[solDetalleId]).total;
+          const msg = 'Hola! Te paso el listado de mercadería que necesito (' + n + (n === 1 ? ' artículo' : ' artículos') + '). ' +
+            'Marcá lo que tengas disponible y al final tocá "Terminé":\n' + link;
+          // Sin telefono: WhatsApp deja elegir el contacto.
+          window.open('https://api.whatsapp.com/send/?text=' + encodeURIComponent(msg), '_blank');
+        } else if (acc === 'borrar') {
+          const ok = await confirmarAccion({
+            titulo: '¿Eliminar esta solicitud?',
+            texto: 'El link deja de funcionar y se pierde lo que marcó la otra sucursal.',
+            tono: 'peligro',
+            confirmar: 'Eliminar',
+            volver: 'Volver'
+          });
+          if (!ok) return;
+          const id = solDetalleId;
+          renderSolLista();
+          refSol.child(id).remove().catch(err => {
+            console.error('Error eliminando solicitud:', err);
+            showToast('No se pudo eliminar la solicitud');
+          });
+        }
+      });
+
+      solList.addEventListener('click', (e) => {
+        const img = e.target.closest('.nec-img');
+        if (img) {
+          // En "nueva" la foto esta dentro del label: que no cambie el tilde.
+          e.preventDefault();
+          openLightbox(img.src, img.dataset.alt || '');
+          return;
+        }
+        const env = e.target.closest('.sol-env');
+        if (env) {
+          solDetalleId = env.dataset.id;
+          renderSolDetalle();
+        }
+      });
+      solList.addEventListener('change', (e) => {
+        const fila = e.target.closest('.sol-art');
+        if (!fila || solVista !== 'nueva') return;
+        const k = fila.dataset.k;
+        if (e.target.checked) solElegidos.add(k); else solElegidos.delete(k);
+        fila.classList.toggle('is-on', e.target.checked);
+        fila.classList.toggle('is-off', !e.target.checked);
+        actualizarSolNueva();
       });
 
       // ---------- Limpiar tildes ----------
@@ -10971,7 +11741,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         // estan en la lista, para que no queden huerfanos.
         // Sin esperar al servidor: sin conexion queda encolado y se sube solo.
         const previos = verificados;
-        verificados = new Set();
+        verificados = new Map();
         refVerif.remove().catch(err => {
           console.error('Error limpiando verificados:', err);
           verificados = previos;
@@ -10987,7 +11757,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           }
           borrar.forEach(k => localStorage.removeItem(k));
         } catch (e) { /* modo privado */ }
-        excluidos.clear();
+        incluirTodos();
         abierta = null;
         construir();
         render();

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- Se abre por link compartido: fuera de los buscadores. -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Mercadería solicitada · HomePoint</title>
+  <meta name="theme-color" content="#f5f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* =========================================================================
+       SOLICITUD A SUCURSAL — pagina publica
+       -------------------------------------------------------------------------
+       La abre la otra sucursal desde el link que genera "Pedir a otra
+       sucursal" en Articulos necesarios (pedidosv2.html). Sin login: el id de
+       la solicitud es la llave. Pensada para el celular: tarjetas grandes y
+       un solo gesto (tocar la tarjeta) para marcar disponible.
+       Mismos tokens que pedidosv2.html; el tema sigue al sistema.
+       ========================================================================= */
+    :root {
+      --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+      --bg: #f5f5f2;
+      --surface: #ffffff;
+      --surface-2: #fafaf7;
+      --surface-3: #efefea;
+      --line: #e2e2dc;
+      --line-2: #edede7;
+
+      --ink: #17181a;
+      --ink-2: #4b4d51;
+      --ink-3: #75777d;
+      --ink-4: #9c9ea4;
+
+      --accent: #c2620f;
+      --ok: #2e7d5b;
+      --ok-soft: #eaf3ee;
+      --ok-ring: rgba(46, 125, 91, .28);
+      --warn: #a8730c;
+      --warn-soft: #faf2e2;
+      --bad: #b3453f;
+
+      --inverso-bg: #1b1d21;
+      --inverso-fg: #f3f3f1;
+      --scrim: rgba(15, 15, 14, .6);
+
+      --sh1: 0 1px 2px rgba(20,20,18,.05), 0 0 0 1px rgba(20,20,18,.05);
+      --sh2: 0 -6px 24px rgba(20,20,18,.08), 0 0 0 1px rgba(20,20,18,.045);
+
+      --r2: 12px;
+      --r3: 16px;
+      --ease-out: cubic-bezier(.22, 1, .36, 1);
+      --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111214;
+        --surface: #191b1e;
+        --surface-2: #202327;
+        --surface-3: #292c31;
+        --line: #2d3036;
+        --line-2: #232629;
+
+        --ink: #f0f0ee;
+        --ink-2: #c0c2c7;
+        --ink-3: #8b8e94;
+        --ink-4: #696c72;
+
+        --accent: #dd8438;
+        --ok: #4aa47c;
+        --ok-soft: rgba(74, 164, 124, .14);
+        --ok-ring: rgba(74, 164, 124, .34);
+        --warn: #cc9b3f;
+        --warn-soft: rgba(204, 155, 63, .13);
+        --bad: #d1706a;
+
+        --inverso-bg: #f0f0ee;
+        --inverso-fg: #17181a;
+        --scrim: rgba(0, 0, 0, .78);
+
+        --sh1: 0 1px 2px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.05);
+        --sh2: 0 -8px 24px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.055);
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button { font-family: inherit; cursor: pointer; }
+    svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .wrap { max-width: 640px; margin: 0 auto; }
+
+    /* ---------- Cabecera fija ---------- */
+    .head {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--bg);
+      padding: calc(14px + env(safe-area-inset-top)) 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .marca { font-size: 11px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+    .titulo { font-size: 21px; font-weight: 800; letter-spacing: -.5px; margin-top: 2px; }
+    .fecha { font-size: 12.5px; font-weight: 500; color: var(--ink-3); margin-top: 2px; }
+
+    .progreso { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .progreso-track { flex: 1; height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+    .progreso-fill { height: 100%; width: 0; border-radius: 99px; background: var(--ok); transition: width .35s var(--ease-out); }
+    .progreso-txt { flex: none; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+    .progreso-txt b { font-family: var(--font-mono); color: var(--ok); }
+
+    .buscar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 44px;
+      margin-top: 12px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface);
+      color: var(--ink-4);
+    }
+    .buscar svg { width: 17px; height: 17px; flex: none; }
+    .buscar input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      outline: none;
+      background: none;
+      font-family: inherit;
+      font-size: 16px;
+      color: var(--ink);
+    }
+    .buscar input::placeholder { color: var(--ink-4); }
+    .buscar:focus-within { border-color: var(--accent); }
+
+    .offline {
+      display: none;
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: var(--r2);
+      background: var(--warn-soft);
+      color: var(--warn);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .offline.visible { display: block; }
+
+    /* ---------- Lista ---------- */
+    .lista { padding: 12px 12px calc(110px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+
+    .card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: var(--r3);
+      background: var(--surface);
+      box-shadow: var(--sh1);
+      cursor: pointer;
+      user-select: none;
+      transition: background .18s, box-shadow .18s, transform .12s;
+    }
+    .card:active { transform: scale(.985); }
+    .card.is-ok { background: var(--ok-soft); box-shadow: 0 0 0 1.5px var(--ok-ring); }
+    .card[hidden] { display: none; }
+
+    .foto, .foto-ph {
+      width: 72px;
+      height: 72px;
+      flex: none;
+      border-radius: 12px;
+      background: var(--surface-3);
+      object-fit: cover;
+    }
+    .foto { cursor: zoom-in; }
+    .foto-ph { display: flex; align-items: center; justify-content: center; color: var(--ink-4); }
+    .foto-ph svg { width: 22px; height: 22px; }
+
+    .info { flex: 1; min-width: 0; }
+    .nombre {
+      font-size: 14.5px;
+      font-weight: 700;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .codigos { margin-top: 5px; display: flex; flex-direction: column; gap: 1px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+    .codigos span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .codigos .lbl { font-family: var(--font-ui); font-size: 10.5px; font-weight: 700; color: var(--ink-4); margin-right: 4px; }
+
+    .lado { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .cant { text-align: center; line-height: 1; }
+    .cant b { display: block; font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
+    .cant small { font-size: 10px; font-weight: 700; color: var(--ink-4); text-transform: uppercase; letter-spacing: .5px; }
+    .check {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2.5px solid var(--line);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: transparent;
+      transition: background .16s, border-color .16s, color .16s;
+    }
+    .check svg { width: 22px; height: 22px; stroke-width: 3; }
+    .card.is-ok .check { background: var(--ok); border-color: var(--ok); color: #fff; }
+    .card.is-rebote .check { animation: rebote .32s var(--ease-spring); }
+    @keyframes rebote { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
+
+    .vacio { padding: 64px 24px; text-align: center; color: var(--ink-3); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .vacio svg { width: 44px; height: 44px; color: var(--ink-4); }
+    .vacio b { font-size: 16px; color: var(--ink-2); }
+    .vacio span { font-size: 13.5px; line-height: 1.45; }
+    .spinner { width: 30px; height: 30px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Pie fijo ---------- */
+    .pie {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10;
+      background: var(--surface);
+      box-shadow: var(--sh2);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    }
+    .pie[hidden] { display: none; }
+    .pie .wrap { display: flex; flex-direction: column; gap: 6px; }
+    .pie-nota { font-size: 12px; font-weight: 500; color: var(--ink-3); text-align: center; }
+    .pie-nota.is-ok { color: var(--ok); font-weight: 700; }
+    .btn-terminar {
+      width: 100%;
+      height: 52px;
+      border: none;
+      border-radius: var(--r2);
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+      font-size: 15.5px;
+      font-weight: 800;
+      transition: transform .12s, opacity .14s;
+    }
+    .btn-terminar:active { transform: scale(.98); }
+    .btn-terminar:disabled { opacity: .5; }
+
+    /* ---------- Foto ampliada ---------- */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: var(--scrim);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .lightbox.active { display: flex; }
+    .lightbox img { max-width: 100%; max-height: 100%; border-radius: var(--r2); background: #fff; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(120px + env(safe-area-inset-bottom));
+      z-index: 60;
+      transform: translateX(-50%) translateY(10px);
+      max-width: calc(100% - 32px);
+      padding: 11px 16px;
+      border-radius: 99px;
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+      font-size: 13.5px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s var(--ease-out);
+    }
+    .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="head">
+    <div class="wrap">
+      <div class="marca">HomePoint</div>
+      <h1 class="titulo">Mercadería solicitada</h1>
+      <div class="fecha" id="fecha"></div>
+      <div class="progreso">
+        <div class="progreso-track"><div class="progreso-fill" id="progFill"></div></div>
+        <span class="progreso-txt" id="progTxt"></span>
+      </div>
+      <label class="buscar">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input type="search" id="buscar" placeholder="Buscar por nombre o código" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="offline" id="offline">Sin conexión. Lo que marques se guarda cuando vuelva la señal; no cierres la página.</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="lista" id="lista">
+      <div class="vacio"><div class="spinner"></div><span>Cargando el listado...</span></div>
+    </div>
+  </main>
+
+  <footer class="pie" id="pie" hidden>
+    <div class="wrap">
+      <div class="pie-nota" id="pieNota">Tocá cada artículo que tengas disponible.</div>
+      <button type="button" class="btn-terminar" id="btnTerminar">Terminé de revisar</button>
+    </div>
+  </footer>
+
+  <div class="lightbox" id="lightbox"><img id="lightboxImg" alt=""></div>
+  <div class="toast" id="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="config.js"></script>
+  <script>
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const IC_CHECK = '<svg viewBox="0 0 24 24"><path d="M4.5 12.6 9.4 17.5 19.5 7.4"></path></svg>';
+    const IC_FOTO = '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="12" cy="12" r="3.2"></circle><path d="M8 5l1.2-2h5.6L16 5"></path></svg>';
+    const IC_VACIO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M9 9l6 6M15 9l-6 6"></path></svg>';
+
+    const lista = document.getElementById('lista');
+    const pie = document.getElementById('pie');
+    const pieNota = document.getElementById('pieNota');
+    const btnTerminar = document.getElementById('btnTerminar');
+    const inputBuscar = document.getElementById('buscar');
+
+    const id = new URLSearchParams(location.search).get('id') || '';
+    const ref = id ? db.ref('solicitudesSucursal/' + id) : null;
+
+    let items = [];          // [{ k, codigo, nombre, barras, imagen, imagenAlt, cantidad }]
+    let disponibles = {};    // { k: true }
+    let terminado = null;
+    let armada = false;      // la lista de tarjetas ya esta en pantalla
+    let firmaItems = '';
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    let toastTimer = null;
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('visible'), 2400);
+    }
+
+    function vacio(titulo, texto) {
+      lista.innerHTML = '<div class="vacio">' + IC_VACIO + '<b>' + titulo + '</b><span>' + texto + '</span></div>';
+      pie.hidden = true;
+    }
+
+    const fechaTxt = (ts) => new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+    // 1er link -> link alternativo -> placeholder
+    function fotoError(img) {
+      const alt = img.dataset.alt;
+      if (alt && img.dataset.usoAlt !== '1') {
+        img.dataset.usoAlt = '1';
+        img.src = alt;
+        return;
+      }
+      img.onerror = null;
+      const ph = document.createElement('div');
+      ph.className = 'foto-ph';
+      ph.innerHTML = IC_FOTO;
+      img.replaceWith(ph);
+    }
+
+    function cardHtml(it) {
+      const src = it.imagen || it.imagenAlt;
+      const foto = src
+        ? '<img class="foto" src="' + escapeHtml(src) + '" alt="" loading="lazy" data-alt="' + escapeHtml(it.imagenAlt !== src ? (it.imagenAlt || '') : '') + '" onerror="fotoError(this)">'
+        : '<div class="foto-ph">' + IC_FOTO + '</div>';
+      return '<div class="card" data-k="' + escapeHtml(it.k) + '" role="checkbox" aria-checked="false" tabindex="0">' +
+        foto +
+        '<div class="info">' +
+          '<div class="nombre">' + escapeHtml(it.nombre) + '</div>' +
+          '<div class="codigos">' +
+            '<span><span class="lbl">Cód.</span>' + escapeHtml(it.codigo) + '</span>' +
+            (it.barras ? '<span><span class="lbl">Barras</span>' + escapeHtml(it.barras) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="lado">' +
+          '<div class="cant"><b>' + escapeHtml(it.cantidad) + '</b><small>unid.</small></div>' +
+          '<span class="check">' + IC_CHECK + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Las tarjetas se arman una sola vez; los cambios de disponible solo
+    // cambian clases, asi no parpadean las fotos ni salta el scroll.
+    function armar() {
+      lista.innerHTML = items.map(cardHtml).join('');
+      armada = true;
+      filtrar();
+    }
+
+    function pintarEstado() {
+      let n = 0;
+      lista.querySelectorAll('.card').forEach(c => {
+        const ok = !!disponibles[c.dataset.k];
+        if (ok) n++;
+        c.classList.toggle('is-ok', ok);
+        c.setAttribute('aria-checked', ok ? 'true' : 'false');
+      });
+      const total = items.length;
+      document.getElementById('progFill').style.width = (total ? Math.round(n / total * 100) : 0) + '%';
+      document.getElementById('progTxt').innerHTML = '<b>' + n + '</b> de ' + total + ' disponibles';
+
+      pie.hidden = false;
+      if (terminado) {
+        pieNota.textContent = 'Respuesta enviada el ' + fechaTxt(terminado) + '. Si cambiás algo se actualiza solo.';
+        pieNota.classList.add('is-ok');
+        btnTerminar.textContent = 'Enviado ✓';
+        btnTerminar.disabled = true;
+      } else {
+        pieNota.textContent = 'Tocá cada artículo que tengas disponible.';
+        pieNota.classList.remove('is-ok');
+        btnTerminar.textContent = 'Terminé de revisar';
+        btnTerminar.disabled = false;
+      }
+    }
+
+    function filtrar() {
+      const q = inputBuscar.value.trim().toLowerCase();
+      let visibles = 0;
+      lista.querySelectorAll('.card').forEach(c => {
+        const it = items.find(x => x.k === c.dataset.k);
+        const pasa = !q || [it.nombre, it.codigo, it.barras].some(v => String(v || '').toLowerCase().includes(q));
+        c.hidden = !pasa;
+        if (pasa) visibles++;
+      });
+      let sin = lista.querySelector('.sin-resultados');
+      if (!visibles && q) {
+        if (!sin) {
+          sin = document.createElement('div');
+          sin.className = 'vacio sin-resultados';
+          lista.appendChild(sin);
+        }
+        sin.innerHTML = '<b>Sin resultados</b><span>Ningún artículo coincide con "' + escapeHtml(q) + '".</span>';
+      } else if (sin) {
+        sin.remove();
+      }
+    }
+
+    // Se aplica al instante y se guarda en segundo plano; sin señal Firebase
+    // lo encola. Si el servidor lo rechaza, vuelve atras.
+    function alternar(card) {
+      const k = card.dataset.k;
+      const nuevo = !disponibles[k];
+      if (nuevo) disponibles[k] = true; else delete disponibles[k];
+      if (nuevo) {
+        card.classList.add('is-rebote');
+        setTimeout(() => card.classList.remove('is-rebote'), 340);
+      }
+      pintarEstado();
+      const op = nuevo ? ref.child('disponibles/' + k).set(true) : ref.child('disponibles/' + k).remove();
+      op.catch(err => {
+        console.error('Error guardando disponible:', err);
+        if (nuevo) delete disponibles[k]; else disponibles[k] = true;
+        pintarEstado();
+        toast('No se pudo guardar. Probá de nuevo.');
+      });
+    }
+
+    lista.addEventListener('click', (e) => {
+      const foto = e.target.closest('.foto');
+      if (foto) {
+        document.getElementById('lightboxImg').src = foto.src;
+        document.getElementById('lightbox').classList.add('active');
+        return;
+      }
+      const card = e.target.closest('.card');
+      if (card) alternar(card);
+    });
+    lista.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const card = e.target.closest('.card');
+      if (!card) return;
+      e.preventDefault();
+      alternar(card);
+    });
+    document.getElementById('lightbox').addEventListener('click', () => {
+      document.getElementById('lightbox').classList.remove('active');
+    });
+    inputBuscar.addEventListener('input', filtrar);
+
+    btnTerminar.addEventListener('click', () => {
+      const n = Object.keys(disponibles).length;
+      const msg = n
+        ? '¿Terminaste? Se avisa que hay ' + n + ' de ' + items.length + ' artículos disponibles.'
+        : 'No marcaste ningún artículo como disponible. ¿Avisar igual que terminaste?';
+      if (!confirm(msg)) return;
+      btnTerminar.disabled = true;
+      ref.child('terminado').set(firebase.database.ServerValue.TIMESTAMP)
+        .then(() => toast('¡Listo! Se avisó que terminaste.'))
+        .catch(err => {
+          console.error('Error marcando terminado:', err);
+          btnTerminar.disabled = false;
+          toast('No se pudo enviar. Probá de nuevo.');
+        });
+    });
+
+    // Aviso de conexion, solo despues de haber conectado una vez.
+    let conecto = false;
+    db.ref('.info/connected').on('value', snap => {
+      const on = snap.val() === true;
+      if (on) conecto = true;
+      document.getElementById('offline').classList.toggle('visible', conecto && !on);
+    });
+
+    if (!ref) {
+      vacio('Link incompleto', 'Pedile a quien te lo mandó que te lo vuelva a enviar.');
+    } else {
+      ref.on('value', snap => {
+        const s = snap.val();
+        if (!s || !s.items) {
+          armada = false;
+          vacio('Esta solicitud ya no existe', 'Puede que la hayan eliminado. Pedile a quien te mandó el link uno nuevo.');
+          return;
+        }
+        items = Object.keys(s.items)
+          .map(k => Object.assign({ k }, s.items[k]))
+          .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        disponibles = Object.assign({}, s.disponibles || {});
+        terminado = s.terminado || null;
+        document.getElementById('fecha').textContent = (s.creado ? 'Pedido del ' + fechaTxt(s.creado) + ' · ' : '') +
+          items.length + (items.length === 1 ? ' artículo' : ' artículos');
+
+        const firma = items.map(it => it.k).join('|');
+        if (!armada || firma !== firmaItems) {
+          firmaItems = firma;
+          armar();
+        }
+        pintarEstado();
+      }, err => {
+        console.error('Error cargando solicitud:', err);
+        vacio('No se pudo abrir el listado', 'Revisá la conexión y volvé a abrir el link.');
+      });
+    }
+  </script>
+</body>
+</html>
