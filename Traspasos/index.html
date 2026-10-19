@@ -49,7 +49,7 @@
   --amber-soft:#FDF1D6;
   --red:#E5484D;
   --red-soft:#FCE5E6;
-  --mine:var(--ink);       /* color de la sucursal de este teléfono (lo pisa JS) */
+  --mine:var(--ink);       /* color de la sucursal destino elegida en Pedir (lo pisa JS) */
   --other:var(--ink-2);
 
   --f-display:'Archivo',system-ui,sans-serif;
@@ -124,6 +124,14 @@ img{display:block}
 .hero .eyebrow{margin-bottom:12px}
 .hero-sub{margin-top:12px;font-size:.88rem;color:var(--ink-2);line-height:1.45}
 .hero-sub b{font-weight:700;color:var(--ink)}
+/* Selector de dirección del pedido: ruta grande + botón para invertirla */
+.ruta-sel{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);padding:18px 18px 12px}
+.ruta-swap{margin-top:14px;width:100%;height:46px;border-radius:12px;background:var(--fog);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:.88rem;color:var(--ink-2);transition:transform .12s}
+.ruta-swap:active{transform:scale(.98)}
+.ruta-swap svg{width:18px;height:18px}
+.ruta-sel.gira .ruta{animation:gira .32s var(--ease)}
+@keyframes gira{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.cart-ruta{padding:4px 0 14px;margin-bottom:6px;border-bottom:1px solid var(--line)}
 
 .seg{display:flex;padding:4px;gap:4px;background:var(--fog-2);border-radius:14px;margin:4px 0 16px}
 .seg button{flex:1;height:38px;border-radius:10px;font-weight:700;font-size:.84rem;color:var(--muted);transition:background .2s,color .2s,box-shadow .2s;display:inline-flex;align-items:center;justify-content:center;gap:7px}
@@ -226,7 +234,6 @@ img{display:block}
 .chip.PREPARANDO::before{animation:late 1.2s ease-in-out infinite}
 @keyframes late{50%{opacity:.25}}
 .chip.ENVIADO{background:var(--ink);color:#fff}
-.chip.RECIBIDO{background:var(--fog-2);color:var(--ink-2)}
 .chip.CANCELADO{background:var(--red-soft);color:#A3262B}
 
 /* ====== CAPAS (sheets y pantallas) ====== */
@@ -269,7 +276,7 @@ img{display:block}
 /* ====== DETALLE ====== */
 .det-route{padding:6px 0 18px;border-bottom:2px dashed var(--line);margin-bottom:16px}
 .det-route .remito-num{display:block;margin-bottom:12px}
-.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:4px 0 20px;position:relative}
+.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:4px 0 20px;position:relative}
 .tl{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;position:relative}
 .tl::before{content:"";position:absolute;top:8px;left:-50%;right:50%;height:2px;background:var(--line)}
 .tl:first-child::before{display:none}
@@ -368,15 +375,6 @@ img{display:block}
 .field input:focus{border-color:var(--ink)}
 .gate-err{min-height:22px;margin-top:12px;font-size:.84rem;font-weight:600;color:#A3262B}
 .gate .btn{width:100%;margin-top:6px}
-.suc-opts{display:flex;flex-direction:column;gap:12px;margin-top:28px}
-.suc-opt{display:flex;align-items:center;gap:16px;padding:20px;border-radius:var(--r-lg);background:var(--paper);box-shadow:var(--sh);text-align:left;border:2px solid transparent;transition:border-color .2s,transform .12s}
-.suc-opt:active{transform:scale(.99)}
-.suc-opt.on{border-color:var(--t)}
-.suc-opt .sw{width:52px;height:52px;border-radius:16px;background:var(--t);display:grid;place-items:center;color:#fff;flex-shrink:0}
-.suc-opt .sw svg{width:26px;height:26px}
-.suc-opt b{display:block;font-family:var(--f-display);font-stretch:125%;font-weight:850;font-size:1.25rem;text-transform:uppercase}
-.suc-opt small{font-size:.78rem;color:var(--muted);font-weight:600}
-.suc-opt .actual{margin-left:auto;font-size:.68rem;font-weight:700;color:var(--muted);background:var(--fog);padding:4px 9px;border-radius:999px}
 
 /* menú */
 .menu-user{display:flex;align-items:center;gap:12px;padding:4px 0 18px;border-bottom:1px solid var(--line);margin-bottom:8px}
@@ -445,22 +443,11 @@ img{display:block}
   </div>
 </div>
 
-<!-- ===================== ELECCIÓN DE SUCURSAL ===================== -->
-<div class="gate" id="sucGate">
-  <div class="gate-inner">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><b>TRASPASOS</b></div>
-    <h1 style="margin-top:34px" id="sucGateTitle">¿En qué sucursal está este teléfono?</h1>
-    <p class="lead" id="sucGateLead">Desde acá vas a pedir mercadería para esa sucursal y preparar lo que te pidan desde la otra. El teléfono lo recuerda.</p>
-    <div class="suc-opts" id="sucOpts" role="listbox" aria-labelledby="sucGateTitle"></div>
-    <button type="button" class="btn btn-ghost" id="sucGateCancel" style="margin-top:16px" hidden>Cancelar</button>
-  </div>
-</div>
-
 <!-- ===================== APP ===================== -->
 <div class="app" id="app" hidden>
   <header class="top">
     <div class="brand"><span class="brand-mark" aria-hidden="true"></span><b>TRASPASOS</b></div>
-    <button type="button" class="suc-pill" id="menuBtn" aria-label="Menú y sucursal del equipo">
+    <button type="button" class="suc-pill" id="menuBtn" aria-label="Menú">
       <span class="dot"></span><span id="sucPillName">—</span><span class="net" title="Conexión"></span>
     </button>
   </header>
@@ -469,7 +456,13 @@ img{display:block}
   <section class="view on" id="v-pedir" aria-label="Pedir mercadería">
     <div class="hero">
       <div class="eyebrow">Nuevo pedido</div>
-      <div id="pedirRoute"></div>
+      <div class="ruta-sel" id="rutaSel">
+        <div id="pedirRoute"></div>
+        <button type="button" class="ruta-swap" id="rutaSwap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+          <span id="rutaSwapTxt">Invertir dirección</span>
+        </button>
+      </div>
       <p class="hero-sub" id="pedirSub"></p>
     </div>
     <div class="search">
@@ -487,30 +480,22 @@ img{display:block}
     <div class="results" id="results"></div>
   </section>
 
-  <!-- MIS PEDIDOS -->
-  <section class="view" id="v-pedidos" aria-label="Mis pedidos">
-    <div class="hero">
-      <div class="eyebrow">Mis pedidos</div>
-      <p class="hero-sub" id="pedidosSub" style="margin-top:0"></p>
-    </div>
-    <div class="seg" role="tablist" id="segPedidos">
-      <button type="button" class="on" data-f="curso" role="tab">En curso <span class="n" id="nCurso">0</span></button>
-      <button type="button" data-f="hist" role="tab">Historial <span class="n" id="nHist">0</span></button>
-    </div>
-    <div class="remitos" id="listPedidos"></div>
-  </section>
-
-  <!-- PREPARAR -->
+  <!-- PREPARAR: pedidos pendientes de las dos direcciones -->
   <section class="view" id="v-preparar" aria-label="Preparar pedidos">
     <div class="hero">
       <div class="eyebrow">Para preparar</div>
-      <p class="hero-sub" id="prepSub" style="margin-top:0"></p>
-    </div>
-    <div class="seg" role="tablist" id="segPrep">
-      <button type="button" class="on" data-f="pend" role="tab">Por preparar <span class="n" id="nPend">0</span></button>
-      <button type="button" data-f="desp" role="tab">Despachados <span class="n" id="nDesp">0</span></button>
+      <p class="hero-sub" style="margin-top:0">Pedidos que todavía no salieron, de las dos sucursales. Tocá uno para juntar la mercadería, corregir lo que falte y despacharlo.</p>
     </div>
     <div class="remitos" id="listPrep"></div>
+  </section>
+
+  <!-- HISTORIAL: enviados y cancelados -->
+  <section class="view" id="v-historial" aria-label="Historial">
+    <div class="hero">
+      <div class="eyebrow">Historial</div>
+      <p class="hero-sub" style="margin-top:0">Pedidos enviados y cancelados, los más nuevos primero.</p>
+    </div>
+    <div class="remitos" id="listHist"></div>
   </section>
 
   <div class="dock" id="cartDock" hidden>
@@ -522,15 +507,14 @@ img{display:block}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="5"/></svg>
       Pedir
     </button>
-    <button type="button" class="tab" data-v="pedidos">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
-      Mis pedidos
-      <span class="badge" id="badgePedidos" hidden></span>
-    </button>
     <button type="button" class="tab" data-v="preparar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>
       Preparar
       <span class="badge" id="badgePrep" hidden></span>
+    </button>
+    <button type="button" class="tab" data-v="historial">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+      Historial
     </button>
   </nav>
 </div>
@@ -546,6 +530,7 @@ img{display:block}
     <button type="button" class="sheet-x" data-close aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
   <div class="sheet-body">
+    <div class="cart-ruta" id="cartRuta"></div>
     <div id="cartList"></div>
     <label class="lbl" for="cartNota">Nota para quien prepara <span style="font-weight:500">(opcional)</span></label>
     <textarea class="nota" id="cartNota" placeholder="Ej.: Lo necesitamos para el sábado" maxlength="300"></textarea>
@@ -580,14 +565,30 @@ img{display:block}
   </div>
 </div>
 
+<!-- Sesión en el proyecto de otra sucursal (se pide al despachar si falta) -->
+<div class="sheet" id="sucLoginSheet" role="dialog" aria-modal="true" aria-labelledby="sucLoginTitle">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <div><h2 id="sucLoginTitle">Iniciar sesión</h2><p id="sucLoginSub"></p></div>
+    <button type="button" class="sheet-x" data-close aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <form id="sucLoginForm" novalidate style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="sheet-body">
+      <div class="field" style="margin-top:0"><label for="sucLoginEmail">Email</label><input type="email" id="sucLoginEmail" autocomplete="username" inputmode="email" required></div>
+      <div class="field"><label for="sucLoginPass">Contraseña</label><input type="password" id="sucLoginPass" autocomplete="current-password" required></div>
+      <div class="gate-err" id="sucLoginErr" role="alert"></div>
+    </div>
+    <div class="sheet-foot">
+      <button type="submit" class="btn btn-ink" id="sucLoginBtn">Ingresar</button>
+    </div>
+  </form>
+</div>
+
 <!-- Menú -->
 <div class="sheet" id="menuSheet" role="dialog" aria-modal="true" aria-label="Menú">
   <div class="sheet-grip"></div>
   <div class="sheet-body" style="padding-top:14px;padding-bottom:calc(16px + var(--safe-b))">
     <div class="menu-user"><span class="avatar" id="menuAvatar"></span><div><b id="menuEmail"></b><span id="menuSuc"></span></div></div>
-    <button type="button" class="menu-item" id="menuCambiar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Cambiar la sucursal de este teléfono
-    </button>
     <button type="button" class="menu-item red" id="menuSalir">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/></svg>Cerrar sesión
     </button>
@@ -620,20 +621,25 @@ img{display:block}
 <script>
 // ============================================================
 //  Traspasos — pedidos y despachos de mercadería entre sucursales.
-//  Independiente del resto del panel: solo usa ../config.js (el de la raíz del repo).
+//  Independiente del resto del panel: solo usa ../config.js (proyecto principal) y
+//  ../config2.js (proyecto de Caseros), los de la raíz del repo.
 //
 //  Flujo: la sucursal que necesita mercadería (destino) arma un pedido; la otra
 //  (origen) lo prepara, corrige cantidades o quita artículos y lo despacha. Al
-//  despachar se escriben, en un único update atómico, los movimientos SALIDA-INT
-//  (salida interna, sucursal origen) y ENTRADA-INT (entrada interna, sucursal destino).
+//  despachar se escriben los movimientos SALIDA-INT (salida interna, sucursal origen)
+//  y ENTRADA-INT (entrada interna, sucursal destino), cada uno en el proyecto de
+//  Firebase de su sucursal. Catálogo y pedidos viven siempre en el principal.
 // ============================================================
 
 // Mismos ids que puntoVenta.js y que el campo `sucursal` de las ENTRADAS de articulos.html.
+// `config`: proyecto de Firebase propio de la sucursal (el mismo que usa su caja en
+// ../puntoVenta.js), donde van sus movimientos de stock. Sin `config`, van al principal.
 const SUCURSALES = [
   { id: '1', nombre: 'Munro',   tono: '#7cb342' },
-  { id: '2', nombre: 'Caseros', tono: '#3f8fe6' }
+  { id: '2', nombre: 'Caseros', tono: '#3f8fe6', config: '../config2.js' }
 ];
-const LS_SUC = 'hpTraspasoSucursal';
+const LS_RUTA = 'hpTraspasoDestino';   // última dirección elegida en Pedir (id de la sucursal destino)
+const LS_SUC_VIEJO = 'hpTraspasoSucursal';   // antes: sucursal fija del teléfono; solo da la dirección inicial
 const LS_CART = 'hpTraspasoCarrito';
 const LS_PICK = 'hpTraspasoPick_';      // + id del traspaso: avance de la preparación
 const LIMITE_TRASPASOS = 300;
@@ -739,6 +745,52 @@ function verificarConexionFirebase(timeoutMs = 5000){
 function conTimeout(promise, ms, msg){
   return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))]);
 }
+
+// ============================================================
+//  Proyectos de Firebase por sucursal (mismo patrón que articulos.html)
+// ============================================================
+const conexionesSuc = {};   // id de sucursal -> Promise<{ db, auth }>
+
+function conexionSucursal(s){
+  if (!s.config) return Promise.resolve({ db, auth });
+  if (!conexionesSuc[s.id]){
+    conexionesSuc[s.id] = abrirProyectoSucursal(s).catch(err => { delete conexionesSuc[s.id]; throw err; });
+  }
+  return conexionesSuc[s.id];
+}
+
+async function abrirProyectoSucursal(s){
+  const nombreApp = 'suc' + s.id;
+  let app = firebase.apps.find(a => a.name === nombreApp);
+  if (!app){
+    // El config de la sucursal declara `const firebaseConfig` igual que config.js: cargarlo
+    // con <script> chocaría con el que ya está. Se evalúa aislado y se toma solo ese objeto.
+    const res = await conTimeout(fetch(s.config, { cache: 'no-store' }), 10000, `No se pudo leer la configuración de ${s.nombre}.`);
+    if (!res.ok) throw new Error(`No se pudo leer la configuración de ${s.nombre} (HTTP ${res.status}).`);
+    const cfg = new Function(await res.text() + '\n;return firebaseConfig;')();
+    app = firebase.initializeApp(cfg, nombreApp);
+  }
+  const a = app.auth();
+  // Esperar a que Firebase recupere la sesión guardada antes de mirar currentUser.
+  await new Promise(resolve => { const off = a.onAuthStateChanged(() => { off(); resolve(); }); });
+  return { db: app.database(), auth: a };
+}
+
+function verificarConexionDe(dbX, timeoutMs = 5000){
+  return new Promise(resolve => {
+    const ref = dbX.ref('.info/connected');
+    const timer = setTimeout(() => { ref.off('value', cb); resolve(false); }, timeoutMs);
+    const cb = snap => { if (snap.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); } };
+    ref.on('value', cb);
+  });
+}
+
+async function cerrarSesionSucursales(){
+  for (const s of SUCURSALES.filter(x => x.config)){
+    try { const con = await conexionSucursal(s); await con.auth.signOut(); } catch(_){}
+  }
+}
+
 let procesoCritico = false;
 window.addEventListener('beforeunload', e => {
   if (procesoCritico){ e.preventDefault(); e.returnValue = 'Hay un guardado en curso.'; return e.returnValue; }
@@ -758,6 +810,7 @@ function ocultarCapa(el){
   el.classList.remove('open');
   if (!capas.some(c => c.classList.contains('sheet'))) $('scrim').classList.remove('on');
   if (el.id === 'pickScreen') alCerrarPick();
+  if (el.id === 'sucLoginSheet') alCerrarSucLogin();
 }
 function abrirCapa(el){
   if (capas.includes(el)) return;
@@ -797,20 +850,19 @@ document.addEventListener('keydown', e => {
 //  Estado
 // ============================================================
 let usuario = null;
-let miSuc = null;                  // id de la sucursal de este teléfono
+let pedirDestino = null;            // sucursal que recibe el pedido que se está armando en Pedir
 let articulos = [];                // [{codigo, nombre, foto, barras[], disponible, idx}]
 let articulosPorCodigo = new Map();
 let traspasos = {};                // id -> traspaso
 let traspasosCargados = false;
 let vistosPendientes = new Set();  // ids pendientes ya notificados
+let creadosAca = new Set();        // pedidos hechos desde este teléfono (no se avisan como nuevos)
 let vistaActual = 'pedir';
-let filtroPedidos = 'curso';
-let filtroPrep = 'pend';
 let carrito = {};                  // codigo -> {codigo, nombre, foto, cant}
 let pick = null;                   // {id, items:{cod:{enviar, ok, quitado}}}
 let detalleId = null;
 
-function otraSuc(){ return (SUCURSALES.find(s => s.id !== miSuc) || SUCURSALES[0]).id; }
+function pedirOrigen(){ return (SUCURSALES.find(s => s.id !== pedirDestino) || SUCURSALES[0]).id; }
 
 // ============================================================
 //  Login
@@ -826,69 +878,104 @@ $('loginForm').addEventListener('submit', async e => {
   try {
     await auth.signInWithEmailAndPassword(email, pass);
   } catch (err){
-    const m = {
-      'auth/invalid-email': 'El email no tiene un formato válido.',
-      'auth/user-not-found': 'Email o contraseña incorrectos.',
-      'auth/wrong-password': 'Email o contraseña incorrectos.',
-      'auth/invalid-credential': 'Email o contraseña incorrectos.',
-      'auth/invalid-login-credentials': 'Email o contraseña incorrectos.',
-      'auth/too-many-requests': 'Demasiados intentos. Esperá unos minutos y probá de nuevo.',
-      'auth/network-request-failed': 'Sin conexión. Revisá internet y probá de nuevo.'
-    };
-    $('loginErr').textContent = m[err.code] || 'No se pudo iniciar sesión (' + (err.code || err.message) + ').';
+    $('loginErr').textContent = mensajeErrorLogin(err);
   } finally {
     $('loginBtn').disabled = false;
     $('loginBtn').textContent = 'Iniciar sesión';
   }
 });
+function mensajeErrorLogin(err){
+  const m = {
+    'auth/invalid-email': 'El email no tiene un formato válido.',
+    'auth/user-not-found': 'Email o contraseña incorrectos.',
+    'auth/wrong-password': 'Email o contraseña incorrectos.',
+    'auth/invalid-credential': 'Email o contraseña incorrectos.',
+    'auth/invalid-login-credentials': 'Email o contraseña incorrectos.',
+    'auth/too-many-requests': 'Demasiados intentos. Esperá unos minutos y probá de nuevo.',
+    'auth/network-request-failed': 'Sin conexión. Revisá internet y probá de nuevo.'
+  };
+  return m[err.code] || 'No se pudo iniciar sesión (' + (err.code || err.message) + ').';
+}
+
+// Sesión en el proyecto de una sucursal: cada proyecto tiene su propio usuario y contraseña.
+// Se pide la primera vez que hace falta (al despachar) y Firebase la recuerda en el teléfono.
+let sucLoginPendiente = null;   // { s, con, resolve, reject }
+function pedirSesionSucursal(s, con){
+  return new Promise((resolve, reject) => {
+    sucLoginPendiente = { s, con, resolve, reject };
+    $('sucLoginTitle').textContent = 'Iniciar sesión en ' + s.nombre;
+    $('sucLoginSub').textContent = `Para registrar el stock de ${s.nombre} hay que entrar también a su sistema, con el usuario y la contraseña de ${s.nombre}. Se pide una sola vez.`;
+    $('sucLoginEmail').value = '';
+    $('sucLoginPass').value = '';
+    $('sucLoginErr').textContent = '';
+    $('sucLoginBtn').disabled = false;
+    $('sucLoginBtn').textContent = 'Ingresar';
+    abrirCapa($('sucLoginSheet'));
+    setTimeout(() => ($('sucLoginEmail').value ? $('sucLoginPass') : $('sucLoginEmail')).focus(), 320);
+  });
+}
+$('sucLoginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const p = sucLoginPendiente;
+  if (!p) return;
+  const email = $('sucLoginEmail').value.trim(), pass = $('sucLoginPass').value;
+  $('sucLoginErr').textContent = '';
+  if (!email || !pass){ $('sucLoginErr').textContent = 'Completá email y contraseña.'; return; }
+  $('sucLoginBtn').disabled = true;
+  $('sucLoginBtn').textContent = 'Ingresando…';
+  try {
+    await p.con.auth.signInWithEmailAndPassword(email, pass);
+  } catch (err){
+    $('sucLoginErr').textContent = mensajeErrorLogin(err);
+    $('sucLoginBtn').disabled = false;
+    $('sucLoginBtn').textContent = 'Ingresar';
+    return;
+  }
+  sucLoginPendiente = null;
+  await cerrarCapaAsync();
+  p.resolve();
+});
+// Cerrar la hoja (X, fondo o botón Atrás) cancela el despacho sin escribir nada.
+function alCerrarSucLogin(){
+  const p = sucLoginPendiente;
+  if (!p) return;
+  sucLoginPendiente = null;
+  p.reject(new Error(`falta iniciar sesión en ${p.s.nombre}. No se guardó nada.`));
+}
 
 auth.onAuthStateChanged(u => {
   usuario = u;
   if (!u){
     $('app').hidden = true;
-    $('sucGate').classList.remove('on');
     $('login').classList.add('on');
     detenerListeners();
     return;
   }
   $('login').classList.remove('on');
-  const guardada = lsGet(LS_SUC);
-  if (SUCURSALES.some(s => s.id === guardada)) iniciarApp(guardada);
-  else pedirSucursal(false);
+  iniciarApp();
 });
 
 // ============================================================
-//  Sucursal del equipo
+//  Dirección del pedido (Pedir): el teléfono no queda atado a una sucursal.
+//  Se elige hacia dónde va la mercadería y se recuerda la última elección.
 // ============================================================
-function pedirSucursal(cambio){
-  $('app').hidden = !cambio;
-  $('sucGateTitle').textContent = cambio ? 'Cambiar la sucursal de este teléfono' : '¿En qué sucursal está este teléfono?';
-  $('sucGateLead').textContent = cambio
-    ? 'Los pedidos que hagas desde ahora van a ser para la sucursal que elijas.'
-    : 'Desde acá vas a pedir mercadería para esa sucursal y preparar lo que te pidan desde la otra. El teléfono lo recuerda.';
-  $('sucGateCancel').hidden = !cambio;
-  $('sucOpts').innerHTML = SUCURSALES.map(s => `
-    <button type="button" class="suc-opt${s.id === miSuc ? ' on' : ''}" role="option" data-suc="${s.id}" style="--t:${s.tono}" aria-selected="${s.id === miSuc}">
-      <span class="sw">${ICON.local}</span>
-      <span><b>${escapeHtml(s.nombre)}</b><small>Sucursal ${escapeHtml(s.id)}</small></span>
-      ${s.id === miSuc ? '<span class="actual">Actual</span>' : ''}
-    </button>`).join('');
-  $('sucGate').classList.add('on');
+function elegirDestino(id, animar){
+  pedirDestino = SUCURSALES.some(s => s.id === id) ? id : SUCURSALES[0].id;
+  lsSet(LS_RUTA, pedirDestino);
+  const d = suc(pedirDestino), o = suc(pedirOrigen());
+  document.documentElement.style.setProperty('--mine', d.tono);
+  document.documentElement.style.setProperty('--other', o.tono);
+  $('pedirRoute').innerHTML = rutaHtml(o.id, d.id, 'lg');
+  $('rutaSwapTxt').textContent = `Invertir: de ${d.nombre} a ${o.nombre}`;
+  $('pedirSub').innerHTML = `Lo que falta en <b>${escapeHtml(d.nombre)}</b> y se lleva desde <b>${escapeHtml(o.nombre)}</b>.`;
+  if (animar){ const el = $('rutaSel'); el.classList.remove('gira'); void el.offsetWidth; el.classList.add('gira'); }
+  renderDock();
+  if ($('cartSheet').classList.contains('open')) renderCarrito();
 }
-$('sucOpts').addEventListener('click', e => {
-  const b = e.target.closest('.suc-opt');
-  if (!b) return;
-  const id = b.dataset.suc;
-  lsSet(LS_SUC, id);
-  $('sucGate').classList.remove('on');
-  if (id !== miSuc){
-    // El carrito era para la sucursal anterior.
-    carrito = {}; guardarCarrito();
-    iniciarApp(id);
-    toast('Este teléfono ahora es ' + suc(id).nombre);
-  }
+$('rutaSwap').addEventListener('click', () => {
+  elegirDestino(pedirOrigen(), true);
+  vibrar(15);
 });
-$('sucGateCancel').addEventListener('click', () => $('sucGate').classList.remove('on'));
 
 // ============================================================
 //  Arranque
@@ -898,16 +985,9 @@ function detenerListeners(){
   if (traspasosRef){ traspasosRef.off(); traspasosRef = null; }
 }
 
-function iniciarApp(sucId){
-  miSuc = sucId;
-  const s = suc(miSuc), o = suc(otraSuc());
-  document.documentElement.style.setProperty('--mine', s.tono);
-  document.documentElement.style.setProperty('--other', o.tono);
-  $('sucPillName').textContent = s.nombre;
-  $('pedirRoute').innerHTML = rutaHtml(o.id, s.id, 'lg');
-  $('pedirSub').innerHTML = `Pedís a <b>${escapeHtml(o.nombre)}</b> lo que falta en <b>${escapeHtml(s.nombre)}</b>. Lo preparan y te lo mandan.`;
-  $('pedidosSub').innerHTML = `Lo que <b>${escapeHtml(s.nombre)}</b> le pidió a ${escapeHtml(o.nombre)}.`;
-  $('prepSub').innerHTML = `Lo que ${escapeHtml(o.nombre)} le pide a <b>${escapeHtml(s.nombre)}</b>. Juntá la mercadería, corregí lo que falte y despachá.`;
+function iniciarApp(){
+  $('sucPillName').textContent = quien(usuario);
+  elegirDestino(lsGet(LS_RUTA) || lsGet(LS_SUC_VIEJO));
   $('app').hidden = false;
   cargarCarrito();
   traspasosCargados = false;
@@ -952,7 +1032,12 @@ function escucharTraspasos(){
   traspasosRef = db.ref('traspasos').limitToLast(LIMITE_TRASPASOS);
   traspasosRef.on('value', snap => {
     const nuevo = {};
-    snap.forEach(ch => { nuevo[ch.key] = Object.assign({ id: ch.key }, ch.val()); });
+    snap.forEach(ch => {
+      const t = Object.assign({ id: ch.key }, ch.val());
+      // Ya no existe el paso "Recibido": los pedidos viejos marcados así se muestran como enviados.
+      if (t.estado === 'RECIBIDO') t.estado = 'ENVIADO';
+      nuevo[ch.key] = t;
+    });
     const primeraCarga = !traspasosCargados;
     traspasos = nuevo;
     traspasosCargados = true;
@@ -969,11 +1054,11 @@ function escucharTraspasos(){
 // Pedido nuevo para preparar en esta sucursal → vibración + aviso (no en la carga inicial).
 function avisarNuevos(primeraCarga){
   Object.values(traspasos).forEach(t => {
-    if (t.origen !== miSuc || t.estado !== 'PENDIENTE' || vistosPendientes.has(t.id)) return;
+    if (t.estado !== 'PENDIENTE' || vistosPendientes.has(t.id)) return;
     vistosPendientes.add(t.id);
-    if (primeraCarga) return;
+    if (primeraCarga || creadosAca.has(t.id)) return;
     vibrar([90, 60, 90]);
-    toast('Nuevo pedido de ' + suc(t.destino).nombre + ' · ' + (t.numero || ''), 'aviso');
+    toast(`Nuevo pedido ${t.numero || ''} · ${suc(t.origen).nombre} → ${suc(t.destino).nombre}`, 'aviso');
     const b = $('badgePrep');
     b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
   });
@@ -988,41 +1073,27 @@ document.querySelector('.tabs').addEventListener('click', e => {
 });
 function irA(v){
   vistaActual = v;
-  $('segPedidos').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.f === filtroPedidos));
-  $('segPrep').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.f === filtroPrep));
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   window.scrollTo({ top: 0 });
   renderDock();
 }
-$('segPedidos').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  filtroPedidos = b.dataset.f;
-  $('segPedidos').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  renderPedidos();
-});
-$('segPrep').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  filtroPrep = b.dataset.f;
-  $('segPrep').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  renderPreparar();
-});
 $('menuBtn').addEventListener('click', () => {
   $('menuEmail').textContent = usuario ? usuario.email : '';
   $('menuAvatar').textContent = usuario ? quien(usuario).slice(0, 1).toUpperCase() : '?';
-  $('menuSuc').textContent = 'Este teléfono: ' + suc(miSuc).nombre;
+  $('menuSuc').textContent = firebaseConectado ? 'Conectado' : 'Sin conexión';
   abrirCapa($('menuSheet'));
 });
-$('menuCambiar').addEventListener('click', () => { cerrarCapa(); setTimeout(() => pedirSucursal(true), 200); });
 $('menuSalir').addEventListener('click', async () => {
   cerrarCapa();
+  await cerrarSesionSucursales();
   try { await auth.signOut(); } catch(_){}
 });
 
 function renderTodo(){
   renderResultados();
-  renderPedidos();
   renderPreparar();
+  renderHistorial();
   renderDock();
 }
 
@@ -1117,15 +1188,15 @@ function setCantCarrito(cod, n){
   if ($('cartSheet').classList.contains('open')) renderCarrito();
 }
 function guardarCarrito(){
-  if (!miSuc) return;
-  lsSet(LS_CART, JSON.stringify({ suc: miSuc, items: carrito, nota: $('cartNota').value }));
+  // El carrito no depende de la dirección: invertirla no pierde lo cargado.
+  lsSet(LS_CART, JSON.stringify({ items: carrito, nota: $('cartNota').value }));
 }
 function cargarCarrito(){
   carrito = {};
   $('cartNota').value = '';
   try {
     const d = JSON.parse(lsGet(LS_CART) || 'null');
-    if (d && d.suc === miSuc){ carrito = d.items || {}; $('cartNota').value = d.nota || ''; }
+    if (d){ carrito = d.items || {}; $('cartNota').value = d.nota || ''; }
   } catch(_){}
 }
 $('cartNota').addEventListener('input', guardarCarrito);
@@ -1141,14 +1212,16 @@ function renderDock(){
   const ver = vistaActual === 'pedir' && arts > 0;
   if (ver && dock.hidden){ dock.hidden = false; dock.classList.remove('dock-enter'); void dock.offsetWidth; dock.classList.add('dock-enter'); }
   if (!ver) dock.hidden = true;
-  $('cartCta').innerHTML = `<span>Revisar pedido</span><span class="cta-k">${plural(arts, 'artículo', 'artículos')} · ${unid(unidades)}</span>`;
+  $('cartCta').innerHTML = `<span>Pedido para ${escapeHtml(suc(pedirDestino).nombre)}</span><span class="cta-k">${plural(arts, 'artículo', 'artículos')} · ${unid(unidades)}</span>`;
 }
 $('cartCta').addEventListener('click', () => { renderCarrito(); abrirCapa($('cartSheet')); });
 
 function renderCarrito(){
   const items = Object.values(carrito);
   const { arts, unidades } = totalesCarrito();
-  const o = suc(otraSuc());
+  const o = suc(pedirOrigen()), d = suc(pedirDestino);
+  // La ruta encabeza el resumen: es lo último que se ve antes de pedir, para no errar la dirección.
+  $('cartRuta').innerHTML = rutaHtml(o.id, d.id, 'md');
   $('cartSub').textContent = arts ? plural(arts, 'artículo', 'artículos') + ' · ' + unid(unidades) : 'Todavía no agregaste artículos';
   $('cartList').innerHTML = items.length ? items.map(c => `
     <div class="cart-row">
@@ -1157,7 +1230,7 @@ function renderCarrito(){
       ${stepperHtml('cart', c.codigo, c.cant, 0)}
     </div>`).join('')
     : `<div class="empty" style="padding:24px 10px"><p>Buscá artículos y tocá + para sumarlos.</p></div>`;
-  $('sendBtn').textContent = unidades ? `Pedir ${unid(unidades)} a ${o.nombre}` : 'Pedir';
+  $('sendBtn').textContent = unidades ? `Pedir ${unid(unidades)} · ${o.nombre} → ${d.nombre}` : 'Pedir';
   $('sendBtn').disabled = !unidades;
   $('clearCartBtn').hidden = !unidades;
   if (!items.length && capas[capas.length - 1] === $('cartSheet')) cerrarCapa();
@@ -1188,14 +1261,15 @@ async function enviarPedido(){
     });
     const obj = {
       numero,
-      origen: otraSuc(),
-      destino: miSuc,
+      origen: pedirOrigen(),
+      destino: pedirDestino,
       estado: 'PENDIENTE',
       nota: $('cartNota').value.trim(),
       creadoPor: { uid: usuario.uid, email: usuario.email || '' },
       creadoEn: firebase.database.ServerValue.TIMESTAMP,
       items: itemsObj
     };
+    creadosAca.add(id);
     await conTimeout(db.ref('traspasos/' + id).set(obj), 15000, 'El envío tardó demasiado.');
     const check = await conTimeout(db.ref('traspasos/' + id + '/numero').once('value'), 10000, 'No se pudo verificar el envío.');
     if (check.val() !== numero) throw new Error('La verificación del envío falló.');
@@ -1207,10 +1281,10 @@ async function enviarPedido(){
     hideBlock();
     mostrarExito({
       titulo: 'Pedido enviado',
-      sub: `${suc(obj.origen).nombre} ya lo ve para preparar. Te avisamos acá cuando lo despachen.`,
+      sub: 'Quedó en Preparar. Podés armarlo ahora o más tarde.',
       numero, origen: obj.origen, destino: obj.destino, viaje: false,
       detalle: `${plural(items.length, 'artículo', 'artículos')} · ${unid(unidades)}`,
-      boton: 'Ver mis pedidos', accion: () => { filtroPedidos = 'curso'; irA('pedidos'); }
+      boton: 'Prepararlo ahora', accion: () => { irA('preparar'); abrirPick(id); }
     }, $('cartSheet'));
   } catch (err){
     console.error('Error enviando pedido:', err);
@@ -1274,7 +1348,7 @@ document.addEventListener('focusin', e => { if (e.target.classList && e.target.c
 // ============================================================
 function totalesTraspaso(t){
   const items = Object.values(t.items || {});
-  const enviado = t.estado === 'ENVIADO' || t.estado === 'RECIBIDO';
+  const enviado = t.estado === 'ENVIADO';
   return {
     arts: items.length,
     solicitadas: items.reduce((s, i) => s + (Number(i.solicitada) || 0), 0),
@@ -1282,11 +1356,11 @@ function totalesTraspaso(t){
     conDif: enviado ? items.filter(i => (Number(i.enviada) || 0) !== (Number(i.solicitada) || 0)).length : 0
   };
 }
-const ESTADO_TXT = { PENDIENTE: 'Pendiente', PREPARANDO: 'Preparando', ENVIADO: 'Enviado', RECIBIDO: 'Recibido', CANCELADO: 'Cancelado' };
+const ESTADO_TXT = { PENDIENTE: 'Pendiente', PREPARANDO: 'Preparando', ENVIADO: 'Enviado', CANCELADO: 'Cancelado' };
 
 function remitoHtml(t, modo){
   const tot = totalesTraspaso(t);
-  const enviado = t.estado === 'ENVIADO' || t.estado === 'RECIBIDO';
+  const enviado = t.estado === 'ENVIADO';
   const n = enviado ? tot.enviadas : tot.solicitadas;
   const nombres = Object.values(t.items || {}).map(i => i.nombre).filter(Boolean);
   let meta, go;
@@ -1300,7 +1374,7 @@ function remitoHtml(t, modo){
     go = 'Ver';
   }
   return `<button type="button" class="remito" data-tr="${escapeHtml(t.id)}" data-modo="${modo}">
-    <div class="remito-top">${rutaHtml(t.origen, t.destino, 'sm', t.estado === 'ENVIADO')}<span class="remito-num">${escapeHtml(t.numero || '')}</span></div>
+    <div class="remito-top">${rutaHtml(t.origen, t.destino, 'sm')}<span class="remito-num">${escapeHtml(t.numero || '')}</span></div>
     <div class="remito-body">
       <div class="remito-sum"><b>${n}</b><span>${n === 1 ? 'unidad' : 'unidades'} · ${plural(tot.arts, 'artículo', 'artículos')}${enviado && tot.enviadas !== tot.solicitadas ? ' · pedidas ' + tot.solicitadas : ''}</span></div>
       <div class="remito-items">${escapeHtml(nombres.join(' · '))}</div>
@@ -1308,43 +1382,25 @@ function remitoHtml(t, modo){
     <div class="remito-stub"><span class="chip ${t.estado}">${ESTADO_TXT[t.estado] || t.estado}</span><span class="remito-meta">${escapeHtml(meta)}</span><span class="remito-go">${go}${ICON.chev}</span></div>
   </button>`;
 }
-const porFechaDesc = (a, b) => (b.creadoEn || 0) - (a.creadoEn || 0);
 const skeletons = '<div class="skeleton"></div><div class="skeleton"></div>';
 
-function renderPedidos(){
-  if (!miSuc) return;
-  const mios = Object.values(traspasos).filter(t => t.destino === miSuc).sort(porFechaDesc);
-  const curso = mios.filter(t => ['PENDIENTE', 'PREPARANDO', 'ENVIADO'].includes(t.estado));
-  const hist = mios.filter(t => ['RECIBIDO', 'CANCELADO'].includes(t.estado));
-  $('nCurso').textContent = curso.length;
-  $('nHist').textContent = hist.length;
-  // Badge: despachados que todavía no se confirmaron como recibidos.
-  const porRecibir = curso.filter(t => t.estado === 'ENVIADO').length;
-  $('badgePedidos').hidden = !porRecibir;
-  $('badgePedidos').textContent = porRecibir;
-  const lista = filtroPedidos === 'curso' ? curso : hist;
-  if (!traspasosCargados){ $('listPedidos').innerHTML = skeletons; return; }
-  $('listPedidos').innerHTML = lista.length ? lista.map(t => remitoHtml(t, 'mio')).join('')
-    : filtroPedidos === 'curso'
-      ? `<div class="empty">${ICON.box}<b>No hay pedidos en curso</b><p>Cuando pidas mercadería a ${escapeHtml(suc(otraSuc()).nombre)}, vas a seguir su estado acá.</p><button type="button" class="btn btn-ink" style="margin-top:18px" data-ir="pedir">Hacer un pedido</button></div>`
-      : `<div class="empty">${ICON.box}<b>Sin historial todavía</b><p>Acá quedan los pedidos recibidos y los cancelados.</p></div>`;
-}
-
+// Sin sucursal fija: se ven los pedidos de las dos direcciones; cada tarjeta muestra su ruta.
 function renderPreparar(){
-  if (!miSuc) return;
-  const paraMi = Object.values(traspasos).filter(t => t.origen === miSuc);
-  const pend = paraMi.filter(t => t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO').sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
-  const desp = paraMi.filter(t => !['PENDIENTE', 'PREPARANDO'].includes(t.estado)).sort((a, b) => (b.enviadoEn || b.canceladoEn || b.creadoEn || 0) - (a.enviadoEn || a.canceladoEn || a.creadoEn || 0));
-  $('nPend').textContent = pend.length;
-  $('nDesp').textContent = desp.length;
+  const pend = Object.values(traspasos).filter(t => t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO')
+    .sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
   $('badgePrep').hidden = !pend.length;
   $('badgePrep').textContent = pend.length;
   if (!traspasosCargados){ $('listPrep').innerHTML = skeletons; return; }
-  const lista = filtroPrep === 'pend' ? pend : desp;
-  $('listPrep').innerHTML = lista.length ? lista.map(t => remitoHtml(t, 'prep')).join('')
-    : filtroPrep === 'pend'
-      ? `<div class="empty">${ICON.box}<b>Nada para preparar</b><p>Cuando ${escapeHtml(suc(otraSuc()).nombre)} te pida mercadería, el teléfono vibra y el pedido aparece acá.</p></div>`
-      : `<div class="empty">${ICON.box}<b>Todavía no despachaste pedidos</b></div>`;
+  $('listPrep').innerHTML = pend.length ? pend.map(t => remitoHtml(t, 'prep')).join('')
+    : `<div class="empty">${ICON.box}<b>Nada para preparar</b><p>Los pedidos que se hagan, desde este teléfono o desde otro, aparecen acá hasta que se despachan.</p><button type="button" class="btn btn-ink" style="margin-top:18px" data-ir="pedir">Hacer un pedido</button></div>`;
+}
+
+function renderHistorial(){
+  const hist = Object.values(traspasos).filter(t => ['ENVIADO', 'CANCELADO'].includes(t.estado))
+    .sort((a, b) => (b.enviadoEn || b.canceladoEn || b.creadoEn || 0) - (a.enviadoEn || a.canceladoEn || a.creadoEn || 0));
+  if (!traspasosCargados){ $('listHist').innerHTML = skeletons; return; }
+  $('listHist').innerHTML = hist.length ? hist.map(t => remitoHtml(t, 'hist')).join('')
+    : `<div class="empty">${ICON.box}<b>Sin historial todavía</b><p>Acá quedan los pedidos enviados y los cancelados.</p></div>`;
 }
 
 document.addEventListener('click', e => {
@@ -1372,9 +1428,9 @@ function timelineHtml(t){
     return `<div class="diff-note" style="background:var(--red-soft);color:#7A1C20">${ICON.alert}<div><b>Pedido cancelado</b> ${fmtHora(t.canceladoEn)}${t.canceladoPor ? ' por ' + escapeHtml(quien(t.canceladoPor)) : ''}${t.motivoCancelacion ? '. ' + escapeHtml(t.motivoCancelacion) : ''}</div></div>`;
   }
   const pasos = [
-    ['Pedido', t.creadoEn], ['Preparando', t.tomadoEn], ['Enviado', t.enviadoEn], ['Recibido', t.recibidoEn]
+    ['Pedido', t.creadoEn], ['Preparando', t.tomadoEn], ['Enviado', t.enviadoEn]
   ];
-  const nivel = { PENDIENTE: 0, PREPARANDO: 1, ENVIADO: 2, RECIBIDO: 3 }[t.estado] || 0;
+  const nivel = { PENDIENTE: 0, PREPARANDO: 1, ENVIADO: 2 }[t.estado] || 0;
   return `<div class="timeline">${pasos.map(([lbl, ts], i) =>
     `<div class="tl${i <= nivel ? ' done' : ''}${i === nivel + 1 ? ' cur' : ''}"><span class="tl-dot"></span><b>${lbl}</b><small>${i <= nivel && ts ? fmtHora(ts) : ''}</small></div>`).join('')}</div>`;
 }
@@ -1384,7 +1440,7 @@ const MOTIVO_TXT = { PARCIAL: 'Parcial', SIN_STOCK: 'Sin stock', QUITADO: 'Quita
 function renderDetalle(id){
   const t = traspasos[id];
   if (!t){ $('detBody').innerHTML = '<div class="empty"><b>El pedido ya no está disponible</b></div>'; $('detFoot').hidden = true; return; }
-  const enviado = t.estado === 'ENVIADO' || t.estado === 'RECIBIDO';
+  const enviado = t.estado === 'ENVIADO';
   const tot = totalesTraspaso(t);
   $('detTitle').textContent = 'Pedido ' + (t.numero || '');
   $('detSub').innerHTML = `<span class="chip ${t.estado}" style="height:22px;margin-top:4px">${ESTADO_TXT[t.estado] || t.estado}</span>`;
@@ -1404,11 +1460,10 @@ function renderDetalle(id){
   const meta = [
     ['Pidió', quien(t.creadoPor)],
     t.preparadoPor ? ['Preparó', quien(t.preparadoPor)] : null,
-    ['Unidades', enviado ? `${tot.enviadas} enviadas de ${tot.solicitadas}` : `${tot.solicitadas} pedidas`],
-    t.recibidoPor ? ['Recibió', quien(t.recibidoPor)] : null
+    ['Unidades', enviado ? `${tot.enviadas} enviadas de ${tot.solicitadas}` : `${tot.solicitadas} pedidas`]
   ].filter(Boolean);
   $('detBody').innerHTML = `
-    <div class="det-route">${rutaHtml(t.origen, t.destino, 'md', t.estado === 'ENVIADO')}</div>
+    <div class="det-route">${rutaHtml(t.origen, t.destino, 'md')}</div>
     ${timelineHtml(t)}
     ${enviado && tot.conDif ? `<div class="diff-note">${ICON.alert}<div>${escapeHtml(suc(t.origen).nombre)} envió distinto a lo pedido en ${plural(tot.conDif, 'artículo', 'artículos')}. Las cantidades tachadas son las que se pidieron.</div></div>` : ''}
     ${t.nota ? `<div class="det-nota"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
@@ -1416,36 +1471,9 @@ function renderDetalle(id){
     <div class="eyebrow" style="margin-bottom:2px">Artículos</div>
     ${filas}`;
 
-  // Acciones: solo quien pidió (sucursal destino) cancela un pendiente o confirma la llegada.
-  const foot = $('detFoot');
-  foot.innerHTML = '';
-  if (t.destino === miSuc && t.estado === 'ENVIADO'){
-    foot.innerHTML = `<button type="button" class="btn btn-ink" id="recibirBtn">${ICON.check.replace('<svg', '<svg width="20" height="20"')} Confirmar que llegó</button>`;
-    $('recibirBtn').addEventListener('click', () => confirmarRecibido(t.id));
-  } else if (t.destino === miSuc && t.estado === 'PENDIENTE'){
-    foot.innerHTML = `<button type="button" class="btn btn-red" id="cancelarBtn">Cancelar pedido</button>`;
-    $('cancelarBtn').addEventListener('click', () => cancelarPedido(t.id));
-  }
-  foot.hidden = !foot.innerHTML;
-}
-
-async function confirmarRecibido(id){
-  const btn = $('recibirBtn');
-  btn.disabled = true;
-  try {
-    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase.');
-    // Solo seguimiento: no escribe movimientos (SALIDA-INT/ENTRADA-INT ya se registraron al despachar).
-    await conTimeout(db.ref('traspasos/' + id).update({
-      estado: 'RECIBIDO',
-      recibidoEn: firebase.database.ServerValue.TIMESTAMP,
-      recibidoPor: { uid: usuario.uid, email: usuario.email || '' }
-    }), 10000, 'La confirmación tardó demasiado.');
-    vibrar(30);
-    toast('Recepción confirmada');
-  } catch (err){
-    toast('No se confirmó la recepción: ' + err.message, 'err');
-    btn.disabled = false;
-  }
+  // El detalle es solo de consulta (enviados y cancelados); un pendiente se cancela desde Preparar.
+  $('detFoot').innerHTML = '';
+  $('detFoot').hidden = true;
 }
 
 async function cancelarPedido(id){
@@ -1469,7 +1497,7 @@ async function cancelarPedido(id){
       t.canceladoPor = { uid: usuario.uid, email: usuario.email || '' };
       return t;
     }), 10000, 'La cancelación tardó demasiado.');
-    if (!res.committed) throw new Error('ya lo están preparando. Pedí a ' + suc(otraSuc()).nombre + ' que lo cierre sin envío.');
+    if (!res.committed) throw new Error('ya lo están preparando. Para anularlo, cerralo sin envío.');
     toast('Pedido cancelado');
     cerrarCapa();
   } catch (err){
@@ -1536,7 +1564,8 @@ function renderPick(){
   let cuerpo = '';
   if (!tomado){
     cuerpo = `<div class="pick-start"><button type="button" class="btn btn-ink" style="width:100%" id="tomarBtn">Empezar a preparar</button>
-      <p>Así ${escapeHtml(suc(t.destino).nombre)} ve que su pedido está en marcha y nadie más lo prepara a la vez.</p></div>`;
+      <p>Así queda marcado como en marcha y nadie más lo prepara a la vez.</p>
+      <button type="button" class="btn btn-ghost" style="width:100%;margin-top:14px;color:var(--red)" id="cancelarBtn">Cancelar pedido</button></div>`;
   } else if (!mio){
     cuerpo = `<div class="pick-lock">${ICON.alert.replace('<svg', '<svg width="20" height="20" style="flex-shrink:0"')}<span>Lo está preparando <b>${escapeHtml(quien(t.preparadoPor))}</b> desde ${fmtHora(t.tomadoEn)}.</span><button type="button" class="btn" id="tomarBtn">Tomar igual</button></div>`;
   }
@@ -1587,6 +1616,8 @@ function renderPick(){
 
   const tb = $('tomarBtn');
   if (tb) tb.addEventListener('click', () => tomarPedido(t.id, tomado));
+  const cb = $('cancelarBtn');
+  if (cb) cb.addEventListener('click', () => cancelarPedido(t.id));
 
   const dock = $('pickDock'), cta = $('pickCta');
   dock.hidden = !mio;
@@ -1733,9 +1764,28 @@ async function despachar(){
 
     const yo = { uid: usuario.uid, email: usuario.email || '' };
     const o = suc(actual.origen), d = suc(actual.destino);
+
+    // Cada sucursal registra su movimiento en su propio proyecto. Las que tienen proyecto
+    // propio se preparan ANTES de escribir nada (sesión y conexión): si algo falta se corta acá.
+    const cons = {};   // id de sucursal -> { db, auth }
+    for (const s of [o, d]){
+      if (!s.config){ cons[s.id] = { db, auth }; continue; }
+      showBlock(`Conectando con ${s.nombre}…`);
+      const con = await conexionSucursal(s);
+      if (!con.auth.currentUser){
+        hideBlock();
+        await pedirSesionSucursal(s, con);
+        showBlock(`Conectando con ${s.nombre}…`);
+      }
+      if (!(await verificarConexionDe(con.db, 8000))) throw new Error(`Sin conexión con ${s.nombre}. No se guardó nada.`);
+      cons[s.id] = con;
+    }
+    showBlock('Despachando…');
+
     const updates = {};
     const base = 'traspasos/' + id + '/';
-    const movKeys = [];
+    const movs = { [o.id]: {}, [d.id]: {} };   // id de sucursal -> updates de su proyecto
+    const movKeys = [];                         // [id de sucursal, clave] con unidades, para verificar
     const ts = Date.now();
     let unidades = 0;
 
@@ -1746,16 +1796,31 @@ async function despachar(){
       const env = p.quitado ? 0 : Math.min(sol, Math.max(0, p.enviar));
       updates[base + 'items/' + k + '/enviada'] = env;
       updates[base + 'items/' + k + '/motivo'] = motivoDe({ quitado: p.quitado, enviar: env }, sol);
-      if (env <= 0) return;
-      unidades += env;
       // Claves determinísticas: un reintento o doble despacho pisa las mismas claves (no duplica stock).
+      // Sin unidades se escribe null: borra lo que haya dejado un intento anterior a medias.
       // Sin traspasoId/traspasoNumero/sucursalNombre: el id va en la clave y el nombre sale de `sucursal` vía SUCURSALES.
-      const comun = { timestamp: ts, codigo: i.codigo, nombre: i.nombre, cantidad: env };
       const kSI = 'tr_' + id + '_' + k + '_SI', kEI = 'tr_' + id + '_' + k + '_EI';
-      updates['movimientos/' + kSI] = Object.assign({}, comun, { tipo: 'SALIDA-INT', sucursal: o.id });
-      updates['movimientos/' + kEI] = Object.assign({}, comun, { tipo: 'ENTRADA-INT', sucursal: d.id });
-      movKeys.push(kSI, kEI);
+      if (env <= 0){
+        movs[o.id]['movimientos/' + kSI] = null;
+        movs[d.id]['movimientos/' + kEI] = null;
+        return;
+      }
+      unidades += env;
+      const comun = { timestamp: ts, codigo: i.codigo, nombre: i.nombre, cantidad: env };
+      movs[o.id]['movimientos/' + kSI] = Object.assign({}, comun, { tipo: 'SALIDA-INT', sucursal: o.id });
+      movs[d.id]['movimientos/' + kEI] = Object.assign({}, comun, { tipo: 'ENTRADA-INT', sucursal: d.id });
+      movKeys.push([o.id, kSI], [d.id, kEI]);
     });
+
+    // Primero los proyectos de sucursal (otra base, no entra en el update atómico de abajo).
+    // Si después falla el principal, el pedido sigue en preparación y reintentar pisa las mismas claves.
+    for (const s of [o, d]){
+      if (!s.config || !Object.keys(movs[s.id]).length) continue;
+      showBlock(`Registrando stock en ${s.nombre}…`);
+      await conTimeout(cons[s.id].db.ref().update(movs[s.id]), 15000, `El registro de stock en ${s.nombre} tardó demasiado.`);
+    }
+    [o, d].forEach(s => { if (!s.config) Object.assign(updates, movs[s.id]); });
+    showBlock('Despachando…');
 
     if (unidades > 0){
       updates[base + 'estado'] = 'ENVIADO';
@@ -1769,14 +1834,15 @@ async function despachar(){
     updates[base + 'preparadoPor'] = yo;
     if (!actual.tomadoEn) updates[base + 'tomadoEn'] = firebase.database.ServerValue.TIMESTAMP;
 
-    // Todo o nada: estado del pedido + cantidades finales + movimientos SALIDA-INT/ENTRADA-INT.
+    // Todo o nada en el principal: estado del pedido + cantidades finales + movimientos de
+    // las sucursales sin proyecto propio.
     await conTimeout(db.ref().update(updates), 15000, 'El despacho tardó demasiado.');
 
     const check = await conTimeout(db.ref(base + 'estado').once('value'), 10000, 'No se pudo verificar el despacho.');
     if (check.val() !== updates[base + 'estado']) throw new Error('La verificación del despacho falló.');
-    for (const k of movKeys){
-      const m = await conTimeout(db.ref('movimientos/' + k).once('value'), 10000, 'No se pudo verificar el movimiento de stock.');
-      if (!m.exists()) throw new Error('La verificación de los movimientos falló.');
+    for (const [sId, k] of movKeys){
+      const m = await conTimeout(cons[sId].db.ref('movimientos/' + k).once('value'), 10000, `No se pudo verificar el movimiento de stock de ${suc(sId).nombre}.`);
+      if (!m.exists()) throw new Error(`La verificación de los movimientos de ${suc(sId).nombre} falló.`);
     }
 
     lsDel(LS_PICK + id);
@@ -1822,7 +1888,8 @@ function mostrarExito(o, reemplaza){
     <div class="done-card"><span class="remito-num">${escapeHtml(o.numero)}</span>${rutaHtml(o.origen, o.destino, 'md', o.viaje)}
       <p class="pick-who" style="margin-top:14px">${escapeHtml(o.detalle)}</p></div>
     <button type="button" class="btn btn-ink" id="doneBtn">${escapeHtml(o.boton)}</button>`;
-  $('doneBtn').addEventListener('click', () => { cerrarCapa(); if (accionExito) accionExito(); });
+  // Esperar a que se cierre la pantalla antes de la acción (puede abrir otra capa).
+  $('doneBtn').addEventListener('click', async () => { await cerrarCapaAsync(); if (accionExito) accionExito(); });
   if (reemplaza && capas[capas.length - 1] === reemplaza) cambiarCapa($('doneScreen'));
   else abrirCapa($('doneScreen'));
   $('doneScreen').scrollTop = 0;
@@ -1944,7 +2011,7 @@ function cerrarScanner(){
 }
 
 // Refresca los "hace X min" sin esperar cambios de datos.
-setInterval(() => { if (miSuc && traspasosCargados && !document.hidden) { renderPedidos(); renderPreparar(); } }, 60000);
+setInterval(() => { if (usuario && traspasosCargados && !document.hidden) { renderPreparar(); renderHistorial(); } }, 60000);
 </script>
 </body>
 </html>
