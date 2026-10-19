@@ -363,6 +363,11 @@
         .qty.low { background: var(--warn-soft); color: var(--warn); }
         .qty.zero { background: var(--bad-soft); color: var(--bad); }
 
+        /* Sucursal logueada remarcada; la otra, de referencia y más tenue */
+        th.is-local .sort-btn { color: var(--ink); }
+        .qty-otro { font-weight: 500; font-size: 0.875rem; color: var(--ink-3); }
+        .qty-otro.neg { color: var(--bad); opacity: 0.7; }
+
         .skeleton td { padding: 1rem; }
         .skeleton span {
             display: block;
@@ -392,6 +397,90 @@
         .error-banner.show { display: flex; }
         .error-banner svg { width: 18px; height: 18px; flex: none; }
 
+        /* Foto del artículo: miniatura que abre la imagen grande al tocarla */
+        td.c-img { width: 1%; padding-right: 0; }
+        .thumb, .thumb-ph {
+            display: block;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--surface-2);
+        }
+        .thumb {
+            object-fit: cover;
+            cursor: zoom-in;
+            transition: transform 160ms var(--ease-out);
+        }
+        .thumb:hover { transform: scale(1.06); }
+        .thumb:active { transform: scale(0.95); }
+        .thumb-ph { display: grid; place-items: center; color: var(--ink-3); }
+        .thumb-ph svg { width: 18px; height: 18px; }
+        .skeleton .sk-thumb { width: 44px; height: 44px; border-radius: 10px; }
+
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            place-items: center;
+            padding: 1.5rem;
+            background: rgba(35, 38, 43, 0.86);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            cursor: zoom-out;
+        }
+        .lightbox.show { display: grid; }
+        .lightbox img {
+            max-width: min(92vw, 720px);
+            max-height: 86vh;
+            border-radius: 14px;
+            background: var(--surface);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            animation: zoom-in 220ms var(--ease-out);
+        }
+        @keyframes zoom-in { from { opacity: 0; transform: scale(0.94); } }
+
+        /* Estado inicial: hasta 3 caracteres no se muestra el listado */
+        .panel.is-idle thead { display: none; }
+        .idle { padding: 3.5rem 1rem; text-align: center; color: var(--ink-3); }
+        .idle svg { display: block; width: 28px; height: 28px; margin: 0 auto; color: var(--ink-3); }
+
+        /* Paginación */
+        .pager {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.6rem 1rem;
+            border-top: 1px solid var(--line);
+            background: var(--surface-2);
+            font-size: 0.8125rem;
+            color: var(--ink-2);
+        }
+        .pager.show { display: flex; }
+        .pager strong { color: var(--ink); font-weight: 700; }
+        .pager-btns { display: flex; align-items: center; gap: 0.35rem; }
+        .pager-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            height: 32px;
+            padding: 0 0.75rem;
+            border-radius: 9px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 120ms ease-out, border-color 160ms ease, color 160ms ease;
+        }
+        .pager-btn:hover:not(:disabled) { border-color: var(--ink-3); color: var(--ink); }
+        .pager-btn:active:not(:disabled) { transform: scale(0.96); }
+        .pager-btn:disabled { opacity: 0.4; cursor: default; }
+        .pager-btn svg { width: 14px; height: 14px; }
+        .pager-page { min-width: 4.5rem; text-align: center; white-space: nowrap; }
+
         .print-head { display: none; }
 
         @keyframes rise {
@@ -414,24 +503,29 @@
             table, tbody { display: block; }
             tbody tr {
                 display: grid;
-                grid-template-columns: 1fr auto;
+                grid-template-columns: auto 1fr auto;
                 gap: 0.1rem 1rem;
                 padding: 0.85rem 1rem;
                 border-bottom: 1px solid var(--line);
             }
             tbody tr:last-child { border-bottom: none; }
             tbody td { padding: 0; border: none; }
-            td.c-codigo { grid-column: 1; grid-row: 1; }
-            td.c-nombre { grid-column: 1; grid-row: 2; }
-            td.c-stock { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-            td.c-total, td.c-fecha { grid-row: 3; font-size: 0.75rem; color: var(--ink-3); padding-top: 0.2rem; }
-            td.c-total { grid-column: 1; text-align: left; }
-            td.c-fecha { grid-column: 2; text-align: right; }
-            td.c-total::before { content: 'Total: '; }
+            td.c-img { grid-column: 1; grid-row: 1 / span 4; width: auto; padding: 0; }
+            td.c-codigo { grid-column: 2; grid-row: 1; }
+            td.c-nombre { grid-column: 2; grid-row: 2; }
+            td.c-stock { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+            td.c-otro, td.c-fecha { font-size: 0.75rem; color: var(--ink-3); padding-top: 0.2rem; }
+            td.c-otro { grid-column: 2 / -1; grid-row: 3; text-align: left; }
+            td.c-fecha { grid-column: 2 / -1; grid-row: 4; text-align: left; padding-top: 0; }
+            .thumb, .thumb-ph { width: 52px; height: 52px; }
+            td.c-otro::before { content: attr(data-label) ': '; }
+            td.c-fecha::before { content: 'Último ingreso: '; }
+            .qty-otro { font-size: inherit; }
             .date { font-size: 0.75rem; }
             .date-rel { display: none; }
             .skeleton, .empty-row { display: block !important; }
             .skeleton td, .empty-row td { display: block; }
+            .pager-label { display: none; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -448,7 +542,8 @@
         /* ------------------------------------------------------------ impresión -- */
         @media print {
             body { background: #fff; color: #000; font-size: 10pt; }
-            .top, .error-banner, .date-rel { display: none !important; }
+            .top, .error-banner, .date-rel, .lightbox, .pager { display: none !important; }
+            .thumb, .thumb-ph { width: 28pt; height: 28pt; border-radius: 4pt; }
             main { padding: 0; }
             .wrap { max-width: none; padding: 0; }
             .panel { border: none; box-shadow: none; border-radius: 0; }
@@ -463,7 +558,7 @@
             .qty { background: none !important; color: #000 !important; padding: 0; min-width: 0; font-size: inherit; }
             .qty.low::after { content: ' ⚠'; }
             .qty.zero::after { content: ' ✕'; }
-            .code, .total, .date { color: #000; }
+            .code, .total, .date, .qty-otro { color: #000 !important; opacity: 1 !important; }
         }
     </style>
 </head>
@@ -476,7 +571,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg>
                     </span>
                     <span class="brand-name">Consulta de stock</span>
-                    <span class="pv" id="puntoLabel">PV 1</span>
+                    <span class="pv" id="puntoLabel">Munro</span>
                 </div>
                 <div class="spacer"></div>
                 <div class="status" id="status" role="status" aria-live="polite">
@@ -525,7 +620,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
             <span id="errorText"></span>
         </div>
-        <section class="panel">
+        <section class="panel is-idle" id="panel">
             <div class="print-head">
                 <h2>Consulta de stock</h2>
                 <span id="printMeta"></span>
@@ -533,17 +628,49 @@
             <table id="stockTable">
                 <thead>
                     <tr>
+                        <th class="c-img"><span class="sr-only">Imagen</span></th>
                         <th data-column="codigo"><button class="sort-btn" type="button">Código<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
                         <th data-column="nombre"><button class="sort-btn" type="button">Artículo<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
-                        <th data-column="stock" class="num"><button class="sort-btn" type="button"><span id="thStockLocal">Stock PV 1</span><svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
-                        <th data-column="stockTotal" class="num"><button class="sort-btn" type="button">Total<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
+                        <th data-column="stock" class="num is-local"><button class="sort-btn" type="button"><span id="thStockLocal">Munro</span><svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
+                        <th data-column="stockOtro" class="num"><button class="sort-btn" type="button"><span id="thStockOtro">Caseros</span><svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
                         <th data-column="ultimaEntrada"><button class="sort-btn" type="button">Último ingreso<svg class="sort-icon" viewBox="0 0 10 10"><path d="M5 2 9 7H1z" fill="currentColor"/></svg></button></th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
             </table>
+            <nav class="pager" id="pager" aria-label="Páginas de resultados">
+                <span id="pagerInfo"></span>
+                <div class="pager-btns">
+                    <button class="pager-btn" id="pagerPrev" type="button" aria-label="Página anterior">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg><span class="pager-label">Anterior</span>
+                    </button>
+                    <span class="pager-page" id="pagerPage"></span>
+                    <button class="pager-btn" id="pagerNext" type="button" aria-label="Página siguiente">
+                        <span class="pager-label">Siguiente</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </nav>
         </section>
     </main>
+
+    <!-- Imagen grande del artículo: se cierra tocando en cualquier lado o con Esc -->
+    <div class="lightbox" id="lightbox" role="dialog" aria-label="Imagen del artículo">
+        <img id="lightboxImg" src="" alt="">
+    </div>
+
+    <!-- Caché local de las fotos (sw-imagenes.js, el mismo de ingresoPedidoV2):
+         cada foto se guarda en el navegador la primera vez que se ve y se sirve
+         desde ahí por 7 días. Si el navegador no lo soporta, las fotos se cargan
+         como siempre. -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw-imagenes.js').catch(err => {
+                    console.warn('Caché de imágenes no disponible:', err && err.message);
+                });
+            });
+        }
+    </script>
 
     <!-- Firebase Auth Check -->
     <script>
@@ -623,27 +750,47 @@
             const errorText = document.getElementById('errorText');
             const status = document.getElementById('status');
             const statusText = document.getElementById('statusText');
-            const tableHeaders = document.querySelectorAll('#stockTable thead th');
+            const tableHeaders = document.querySelectorAll('#stockTable thead th[data-column]');
+            const panel = document.getElementById('panel');
+            const topBar = document.querySelector('.top');
+            const pager = document.getElementById('pager');
+            const pagerInfo = document.getElementById('pagerInfo');
+            const pagerPage = document.getElementById('pagerPage');
+            const pagerPrev = document.getElementById('pagerPrev');
+            const pagerNext = document.getElementById('pagerNext');
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightboxImg');
             const chips = document.querySelectorAll('.chip');
 
             let stockData = [];
+            let imagenes = {}; // codigo -> { url, alt } desde la hoja Lista
             let currentSort = { column: 'nombre', order: 'asc' };
             let filtro = 'todos';
             let primeraCarga = true;
+            let pagina = 1;
+            const MIN_CARACTERES = 3;   // el listado aparece recién con 3 caracteres
+            const POR_PAGINA = 30;
             let cargando = false;
 
             // Punto de venta elegido en el panel (lo guarda puntoVenta.js).
-            // En StockPorSucursal la columna C es el stock del punto 1 y la D
-            // el del punto 2. Si no hay ninguno elegido se toma el 1.
+            // Si no hay ninguno elegido se toma el 1 (Munro).
+            // Columnas de StockPorSucursal (índice 0 = A): stock en C/D,
+            // último ingreso en F/G.
+            const SUCURSALES = {
+                '1': { nombre: 'Munro', colStock: 2, colFecha: 5 },   // C, F
+                '2': { nombre: 'Caseros', colStock: 3, colFecha: 6 }  // D, G
+            };
             function puntoVentaActual() {
                 try { const v = localStorage.getItem('hpPuntoVenta'); if (v) return v; } catch (_) {}
                 try { const v = sessionStorage.getItem('hpPuntoVenta'); if (v) return v; } catch (_) {}
                 return '1';
             }
             const puntoVenta = puntoVentaActual() === '2' ? '2' : '1';
-            const COL_STOCK_LOCAL = puntoVenta === '2' ? 3 : 2; // D : C
-            document.getElementById('thStockLocal').textContent = `Stock PV ${puntoVenta}`;
-            document.getElementById('puntoLabel').textContent = `PV ${puntoVenta}`;
+            const local = SUCURSALES[puntoVenta];
+            const otra = SUCURSALES[puntoVenta === '2' ? '1' : '2'];
+            document.getElementById('thStockLocal').textContent = local.nombre;
+            document.getElementById('thStockOtro').textContent = otra.nombre;
+            document.getElementById('puntoLabel').textContent = local.nombre;
 
             const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
             const fmt = n => n.toLocaleString('es-AR');
@@ -698,13 +845,68 @@
             }
 
             function renderSkeleton() {
-                const anchos = [[60, 70, 40, 40, 55], [50, 85, 40, 40, 50], [65, 60, 40, 40, 60]];
+                const anchos = [[60, 70, 40, 35, 55], [50, 85, 40, 35, 50], [65, 60, 40, 35, 60]];
                 let html = '';
                 for (let i = 0; i < 8; i++) {
                     const a = anchos[i % anchos.length];
-                    html += `<tr class="skeleton">${a.map(w => `<td><span style="width:${w}%"></span></td>`).join('')}</tr>`;
+                    html += `<tr class="skeleton"><td class="c-img"><span class="sk-thumb"></span></td>${a.map(w => `<td><span style="width:${w}%"></span></td>`).join('')}</tr>`;
                 }
                 tableBody.innerHTML = html;
+            }
+
+            // Imágenes: igual que necesarios.html. En la hoja Lista la columna B
+            // trae varias URLs separadas por comas; se usa la 1ª y, si no carga,
+            // la 4ª. Si tampoco carga (o no hay), queda un ícono.
+            const PLACEHOLDER = '<span class="thumb-ph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></span>';
+
+            function celdaImagen(codigo) {
+                const img = imagenes[String(codigo).trim()];
+                if (!img) return PLACEHOLDER;
+                const alt = img.alt && img.alt !== img.url ? ` data-alt="${esc(img.alt)}"` : '';
+                return `<img class="thumb" src="${esc(img.url)}"${alt} alt="" loading="lazy" decoding="async">`;
+            }
+
+            // El evento error no sube por el DOM: se escucha en fase de captura.
+            tableBody.addEventListener('error', e => {
+                const el = e.target;
+                if (!el.classList || !el.classList.contains('thumb')) return;
+                if (el.dataset.alt) {
+                    const alt = el.dataset.alt;
+                    delete el.dataset.alt;
+                    el.src = alt;
+                    return;
+                }
+                el.outerHTML = PLACEHOLDER;
+            }, true);
+
+            tableBody.addEventListener('click', e => {
+                const el = e.target.closest('.thumb');
+                if (!el) return;
+                lightboxImg.src = el.currentSrc || el.src;
+                lightbox.classList.add('show');
+            });
+            function cerrarLightbox() {
+                lightbox.classList.remove('show');
+                lightboxImg.src = '';
+            }
+            lightbox.addEventListener('click', cerrarLightbox);
+
+            async function fetchImagenes(SHEETS_ID, API_KEY) {
+                // Lista: B imagen(es), C código
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/Lista!B2:C?key=${API_KEY}`;
+                const response = await fetch(url, { cache: 'no-store' });
+                const { values } = await response.json();
+                if (!values) throw new Error('Sin datos en la hoja Lista');
+                const mapa = {};
+                values.forEach(row => {
+                    const codigo = String(row[1] || '').trim();
+                    if (!codigo) return;
+                    const partes = String(row[0] || '').split(',').map(u => u.trim());
+                    const url1 = partes[0] || '';
+                    const url4 = partes[3] || '';
+                    if (url1 || url4) mapa[codigo] = { url: url1 || url4, alt: url4 };
+                });
+                return mapa;
             }
 
             function claseStock(n) {
@@ -729,27 +931,59 @@
                 document.getElementById('kpiNegativo').textContent = fmt(stockData.filter(i => i.stock < 0).length);
             }
 
+            // Mientras el buscador tiene menos de 3 caracteres: solo una lupa
+            function renderIdle() {
+                panel.classList.add('is-idle');
+                pager.classList.remove('show');
+                resultCounter.textContent = '';
+                tableBody.innerHTML = `<tr class="empty-row"><td colspan="6"><div class="idle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    </div></td></tr>`;
+            }
+
+            function renderPager(total, totalPaginas) {
+                if (totalPaginas <= 1) {
+                    pager.classList.remove('show');
+                    return;
+                }
+                const desde = (pagina - 1) * POR_PAGINA + 1;
+                const hasta = Math.min(pagina * POR_PAGINA, total);
+                pagerInfo.innerHTML = `<strong>${fmt(desde)}–${fmt(hasta)}</strong> de ${fmt(total)}`;
+                pagerPage.textContent = `${pagina} / ${totalPaginas}`;
+                pagerPrev.disabled = pagina <= 1;
+                pagerNext.disabled = pagina >= totalPaginas;
+                pager.classList.add('show');
+            }
+
             function renderTable(data, q, animar) {
+                panel.classList.remove('is-idle');
                 resultCounter.innerHTML = `<strong>${fmt(data.length)}</strong> ${data.length === 1 ? 'resultado' : 'resultados'}`;
 
                 if (data.length === 0) {
+                    pager.classList.remove('show');
                     const texto = searchInput.value.trim();
-                    tableBody.innerHTML = `<tr class="empty-row"><td colspan="5"><div class="empty"><strong>Sin resultados</strong>${texto ? `Ningún artículo coincide con “${esc(texto)}”.` : 'No hay artículos en este filtro.'}</div></td></tr>`;
+                    tableBody.innerHTML = `<tr class="empty-row"><td colspan="6"><div class="empty"><strong>Sin resultados</strong>${texto ? `Ningún artículo coincide con “${esc(texto)}”.` : 'No hay artículos en este filtro.'}</div></td></tr>`;
                     return;
                 }
 
+                const totalPaginas = Math.ceil(data.length / POR_PAGINA);
+                pagina = Math.min(Math.max(pagina, 1), totalPaginas);
+                const visibles = data.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+                renderPager(data.length, totalPaginas);
+
                 const fragment = document.createDocumentFragment();
-                data.forEach((item, i) => {
+                visibles.forEach((item, i) => {
                     const row = document.createElement('tr');
                     if (animar && i < 20) {
                         row.className = 'enter';
                         row.style.setProperty('--i', i);
                     }
                     row.innerHTML = `
+                        <td class="c-img">${celdaImagen(item.codigo)}</td>
                         <td class="c-codigo"><span class="code">${resaltar(item.codigo, q)}</span></td>
                         <td class="c-nombre"><span class="name">${resaltar(item.nombre, q)}</span></td>
                         <td class="c-stock num"><span class="qty ${claseStock(item.stock)}">${fmt(item.stock)}</span></td>
-                        <td class="c-total num"><span class="total">${fmt(item.stockTotal)}</span></td>
+                        <td class="c-otro num" data-label="${esc(otra.nombre)}"><span class="qty-otro${item.stockOtro < 0 ? ' neg' : ''}">${fmt(item.stockOtro)}</span></td>
                         <td class="c-fecha"><span class="date">${esc(item.ultimaEntrada)}</span><span class="date-rel">${haceCuanto(item.fecha)}</span></td>
                     `;
                     fragment.appendChild(row);
@@ -761,7 +995,7 @@
             function sortData(data, column, order) {
                 const dir = order === 'asc' ? 1 : -1;
                 return [...data].sort((a, b) => {
-                    if (column === 'stock' || column === 'stockTotal') {
+                    if (column === 'stock' || column === 'stockOtro') {
                         return ((Number(a[column]) || 0) - (Number(b[column]) || 0)) * dir;
                     }
                     if (column === 'ultimaEntrada') {
@@ -787,9 +1021,24 @@
                 });
             }
 
-            function filterData(animar = false) {
+            // mantenerPagina: true en las recargas automáticas, para no sacar al
+            // usuario de la página en la que está. Buscar, filtrar u ordenar
+            // vuelve a la página 1.
+            function filterData(animar = false, mantenerPagina = false) {
                 const q = norm(searchInput.value.trim());
                 searchBox.classList.toggle('has-value', q.length > 0);
+                if (!mantenerPagina) pagina = 1;
+
+                if (q.length < MIN_CARACTERES) {
+                    renderIdle();
+                    updateSortIcons();
+                    return;
+                }
+                if (primeraCarga) {   // todavía no llegaron los datos
+                    panel.classList.remove('is-idle');
+                    renderSkeleton();
+                    return;
+                }
 
                 const filtered = stockData.filter(item =>
                     coincideFiltro(item) && (!q || item._busqueda.includes(q))
@@ -818,6 +1067,8 @@
                     e.preventDefault();
                     searchInput.focus();
                     searchInput.select();
+                } else if (e.key === 'Escape' && lightbox.classList.contains('show')) {
+                    cerrarLightbox();
                 } else if (e.key === 'Escape' && document.activeElement === searchInput) {
                     searchInput.value = '';
                     filterData();
@@ -834,9 +1085,19 @@
                 });
             });
 
+            function irAPagina(n) {
+                pagina = n;
+                filterData(true, true);
+                // Si la tabla quedó arriba de la pantalla, volver al comienzo de la lista
+                const y = panel.getBoundingClientRect().top + window.scrollY - topBar.offsetHeight - 12;
+                if (window.scrollY > y) window.scrollTo({ top: y, behavior: 'smooth' });
+            }
+            pagerPrev.addEventListener('click', () => irAPagina(pagina - 1));
+            pagerNext.addEventListener('click', () => irAPagina(pagina + 1));
+
             printBtn.addEventListener('click', () => {
                 const ahora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
-                document.getElementById('printMeta').textContent = `Punto de venta ${puntoVenta} · ${ahora}`;
+                document.getElementById('printMeta').textContent = `Punto de venta ${local.nombre} · ${ahora}`;
                 window.print();
             });
 
@@ -860,44 +1121,53 @@
                 if (cargando) return;
                 cargando = true;
                 setStatus('loading', 'Actualizando…');
-                if (primeraCarga) renderSkeleton();
                 try {
                     const SHEETS_ID = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID : '';
-                    const RANGE = 'StockPorSucursal!A2:F';
+                    const RANGE = 'StockPorSucursal!A2:G';
                     const API_KEY = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG.API_KEY : '';
                     if (!SHEETS_ID || !API_KEY) throw new Error('Faltan datos de configuración de Google Sheets');
 
                     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${RANGE}?key=${API_KEY}`;
-                    const response = await fetch(url, { cache: 'no-store' });
+                    // Stock e imágenes a la vez. Si las imágenes fallan, la tabla
+                    // igual se muestra (con las que ya se tenían o con íconos).
+                    const [response, resImagenes] = await Promise.all([
+                        fetch(url, { cache: 'no-store' }),
+                        fetchImagenes(SHEETS_ID, API_KEY).then(m => ({ ok: true, m }), err => ({ ok: false, err }))
+                    ]);
+                    if (resImagenes.ok) imagenes = resImagenes.m;
+                    else console.warn('No se pudieron cargar las imágenes:', resImagenes.err);
                     const { values } = await response.json();
                     if (!values || !values.length) throw new Error('No se encontraron datos en la hoja StockPorSucursal');
 
                     // StockPorSucursal (fila 1 = encabezado): A código, B nombre,
-                    // C stock punto 1, D stock punto 2, E stock total, F último ingreso
+                    // C stock Munro, D stock Caseros, E stock total,
+                    // F último ingreso Munro, G último ingreso Caseros
                     stockData = values.map(row => {
                         const codigo = row[0] || '';
                         const nombre = row[1] || '';
+                        const ultimaEntrada = row[local.colFecha] || '';
                         return {
                             codigo,
                             nombre,
-                            stock: Number(row[COL_STOCK_LOCAL]) || 0,
-                            stockTotal: Number(row[4]) || 0,
-                            ultimaEntrada: row[5] || '',
-                            fecha: parseFecha(row[5]),
+                            stock: Number(row[local.colStock]) || 0,
+                            stockOtro: Number(row[otra.colStock]) || 0,
+                            ultimaEntrada,
+                            fecha: parseFecha(ultimaEntrada),
                             _busqueda: norm(codigo) + ' ' + norm(nombre)
                         };
                     }).filter(item => item.nombre.trim() !== '');
 
                     clearError();
                     actualizarContadores();
-                    filterData(primeraCarga);
+                    const animar = primeraCarga;
                     primeraCarga = false;
+                    filterData(animar, true);
                     const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
                     setStatus('ok', `Actualizado ${hora}`);
                 } catch (error) {
                     console.error('Error al cargar datos de inventario:', error);
                     setStatus('error', 'Sin conexión');
-                    if (primeraCarga) tableBody.innerHTML = '';
+                    if (primeraCarga && !panel.classList.contains('is-idle')) tableBody.innerHTML = '';
                     showError('No se pudo cargar el inventario: ' + error.message);
                 } finally {
                     cargando = false;
@@ -906,6 +1176,7 @@
 
             refreshBtn.addEventListener('click', fetchStockData);
 
+            filterData();
             fetchStockData();
             setInterval(fetchStockData, 30000);
             document.addEventListener('visibilitychange', () => {
