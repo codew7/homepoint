@@ -1307,6 +1307,69 @@
        PANEL DERECHO · PAGO Y ENTREGA (segmentados)
        ========================================= */
     .pv-radio-group { flex: none; }
+
+    /* Botones de consulta (solo lectura): sucursales Via Cargo, pedidos del cliente */
+    /* #sidePanelCards separa con gap 16px: acercarlo a la tarjeta del cliente */
+    .pv-opcional-btn.pv-opcional-btn--pegado { margin-top: -10px; flex: none; }
+    .pv-opcional-btn {
+      width: 100%;
+      margin-top: 6px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px dashed var(--line);
+      border-radius: var(--r2);
+      background: transparent;
+      color: var(--ink-3);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .16s, color .16s, border-color .16s;
+    }
+    .pv-opcional-btn:hover { background: var(--ok-soft); border-color: var(--ok-ring); color: var(--ok); }
+    .vc-search-row { display: flex; gap: 8px; align-items: stretch; }
+    .vc-search-row .edit-client-field { flex: 1; margin-bottom: 0; }
+    .vc-search-row .btn-primary { flex: none; width: auto; height: auto; padding: 0 16px; }
+    .vc-result { margin-top: 14px; max-height: 50vh; overflow-y: auto; }
+    .vc-estado {
+      padding: 10px 12px;
+      border-radius: var(--r2);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      background: var(--surface-2);
+      color: var(--ink-2);
+    }
+    .vc-estado.ok { background: var(--ok-soft); color: var(--ok); }
+    .vc-estado.aviso { background: var(--warn-soft); color: var(--warn); }
+    .vc-estado.error { background: var(--bad-soft); color: var(--bad); }
+    .vc-agencia {
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface);
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      font-size: 12.5px;
+      color: var(--ink-3);
+      line-height: 1.45;
+    }
+    .vc-agencia strong { display: block; color: var(--ink); font-size: 13px; }
+    .pc-item { flex-wrap: wrap; row-gap: 2px; padding: 8px 10px; }
+    .pc-item.is-actual { background: var(--accent-soft); cursor: default; }
+    .pc-detalle { flex-basis: 100%; font-size: 12px; color: var(--ink-3); }
+    .pc-estado {
+      flex: none;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--ink-3);
+    }
+    .vc-link { display: block; margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--accent); text-align: center; }
     .pv-radio-title {
       font-size: 10px;
       font-weight: 700;
@@ -4165,6 +4228,33 @@
     </div>
   </div>
 
+  <!-- PEDIDOS DEL CLIENTE -->
+  <div class="pedidos-panel" id="pedidosClientePanel">
+    <div class="pedidos-panel-box">
+      <div class="pedidos-panel-header">
+        <h3 id="pedidosClienteTitulo">Pedidos del cliente</h3>
+        <button class="pedidos-panel-close" id="pedidosClienteClose">&times;</button>
+      </div>
+      <div class="pedidos-panel-list" id="pedidosClienteList"></div>
+    </div>
+  </div>
+
+  <!-- VIA CARGO: CONSULTA DE SUCURSALES -->
+  <div class="modal-backdrop" id="viaCargoModal">
+    <div class="modal-box modal-box--form">
+      <p class="modal-titulo">Sucursales V&iacute;a Cargo</p>
+      <form class="vc-search-row" id="viaCargoForm">
+        <input class="edit-client-field" id="viaCargoLocalidad" type="text" placeholder="Localidad" autocomplete="off">
+        <button class="btn-primary" type="submit">Buscar</button>
+      </form>
+      <div class="vc-result" id="viaCargoResult"></div>
+      <a class="vc-link" href="https://viacargo.com.ar/agencies/" target="_blank" rel="noopener">Ver en el sitio de V&iacute;a Cargo</a>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="viaCargoCerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PEDIDOS PANEL -->
   <div class="pedidos-panel" id="pedidosPanel">
     <div class="pedidos-panel-box">
@@ -5226,6 +5316,9 @@
 
         // Activar listener en tiempo real
         activarListenerTiempoReal(id);
+
+        // En segundo plano: no frena la carga y maneja sus propios errores
+        heredarTiposPedidoAnterior(id);
       } catch (err) {
         console.error('Error cargando pedido:', err);
         mainContent.innerHTML = '<div class="error-screen"><div class="error-icon">&#9888;</div>' +
@@ -5484,6 +5577,7 @@
     const IC_MOTO = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17.5" r="3"></circle><circle cx="18.5" cy="17.5" r="3"></circle><path d="M8.5 17.5h6.8l-3.1-9.2H10"></path><path d="M15.6 8.3h3l2.2 9.2"></path></svg>';
     const IC_SOBRE = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><polyline points="3.5 7 12 13 20.5 7"></polyline></svg>';
     const IC_CAMION = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="6.5" width="12" height="9.5" rx="1.5"></rect><path d="M13.5 9.5h4l3 3.5V16h-7z"></path><circle cx="6" cy="18.5" r="1.9"></circle><circle cx="17" cy="18.5" r="1.9"></circle></svg>';
+    const IC_LISTA = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><circle cx="4.5" cy="6" r="1.2"></circle><circle cx="4.5" cy="12" r="1.2"></circle><circle cx="4.5" cy="18" r="1.2"></circle></svg>';
 
     // Iniciales para el avatar del cliente: como mucho dos.
     // Unico armador del link de WhatsApp: lo usan la tarjeta del cliente y el
@@ -5691,6 +5785,7 @@
         ? '<a class="cli-wa" href="' + whatsappLink + '" target="_blank" rel="noopener" title="Abrir WhatsApp">' + IC_CHAT + '</a>'
         : '<span class="cli-wa disabled" title="Sin teléfono">' + IC_CHAT + '</span>';
       panel += '</div>';
+      panel += '<button type="button" class="pv-opcional-btn pv-opcional-btn--pegado" onclick="abrirPedidosCliente()">' + IC_LISTA + '<span>Pedidos de este cliente</span></button>';
 
       // Totales
       let totalSubtotal = 0;
@@ -5759,6 +5854,8 @@
         panel += '<label><input type="radio" name="pvTipoEntrega" value="' + opt.valor + '"' + (pedidoActual.tipoEntrega === opt.valor ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '>' + opt.icono + '<span>' + opt.texto + '</span></label>';
       });
       panel += '</div>';
+      // Solo consulta: disponible aunque el pedido este bloqueado
+      panel += '<button type="button" class="pv-opcional-btn" onclick="abrirViaCargoModal()">' + IC_CAMION + '<span>&iquest;Hay sucursal V&iacute;a Cargo?</span></button>';
       panel += '</div>';
 
       sidePanel.innerHTML = panel;
@@ -10597,6 +10694,240 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
       window.open('https://api.whatsapp.com/send/?phone=' + tel + '&text=' + encodeURIComponent(msg), '_blank');
     }
+
+    // ==========================================
+    // PEDIDOS DEL CLIENTE
+    // ==========================================
+    // Un cliente se reconoce por su email y, si no tiene, por su telefono.
+    // Para que Firebase filtre del lado del servidor (y no descargue todos los
+    // pedidos) las reglas necesitan:
+    //   "pedidos": { ".indexOn": ["cliente/email", "cliente/telefono"] }
+    async function buscarPedidosCliente(cliente) {
+      const email = String((cliente && cliente.email) || '').trim();
+      const tel = String((cliente && cliente.telefono) || '').trim();
+      const campo = email ? 'cliente/email' : (tel ? 'cliente/telefono' : null);
+      if (!campo) return null;  // sin dato para identificarlo
+
+      const snap = await conTimeout(() => db.ref('pedidos')
+        .orderByChild(campo)
+        .equalTo(email || tel)
+        .once('value'));
+      const lista = [];
+      snap.forEach(child => {
+        const p = child.val();
+        if (p) { p.id = child.key; lista.push(p); }
+      });
+      lista.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      return lista;
+    }
+
+    const pedidosClientePanel = document.getElementById('pedidosClientePanel');
+    const pedidosClienteList = document.getElementById('pedidosClienteList');
+
+    async function abrirPedidosCliente() {
+      if (!pedidoActual) return;
+      const cliente = pedidoActual.cliente || {};
+      document.getElementById('pedidosClienteTitulo').textContent = 'Pedidos de ' + (cliente.nombre || 'este cliente');
+      pedidosClientePanel.classList.add('active');
+      pedidosClienteList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Buscando pedidos...</div>';
+
+      let lista;
+      try {
+        lista = await buscarPedidosCliente(cliente);
+      } catch (err) {
+        console.error('Error buscando pedidos del cliente:', err);
+        pedidosClienteList.innerHTML = htmlErrorReintento(err, 'abrirPedidosCliente()');
+        return;
+      }
+      if (lista === null) {
+        pedidosClienteList.innerHTML = '<div class="pedidos-panel-empty">El cliente no tiene email ni tel&eacute;fono para buscar sus pedidos</div>';
+        return;
+      }
+      if (lista.length === 0) {
+        pedidosClienteList.innerHTML = '<div class="pedidos-panel-empty">Sin pedidos</div>';
+        return;
+      }
+
+      pedidosClienteList.innerHTML = lista.map(p => {
+        const actual = p.id === pedidoId;
+        const fecha = p.timestamp ? new Date(p.timestamp).toLocaleDateString('es-AR') : '';
+        const total = p.pagos && p.pagos.totalFinal ? '$ ' + Number(p.pagos.totalFinal).toLocaleString('es-AR') : '';
+        const detalle = [
+          (p.items || []).length + ' art.',
+          p.tipoEntrega || 'Sin entrega',
+          p.tipoPago || 'Sin pago',
+          total
+        ].filter(Boolean).join(' · ');
+        return '<div class="pedidos-panel-item pc-item' + (actual ? ' is-actual' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+          '<span class="pedidos-panel-nombre">' + escapeHtml(fecha || 'Sin fecha') + (actual ? ' (este pedido)' : '') + '</span>' +
+          '<span class="pc-estado">' + escapeHtml(p.status || '') + '</span>' +
+          '<span class="pc-detalle">' + escapeHtml(detalle) + '</span>' +
+          '</div>';
+      }).join('');
+    }
+
+    document.getElementById('pedidosClienteClose').addEventListener('click', () => {
+      pedidosClientePanel.classList.remove('active');
+    });
+    pedidosClientePanel.addEventListener('click', (e) => {
+      if (e.target === pedidosClientePanel) { pedidosClientePanel.classList.remove('active'); return; }
+      const item = e.target.closest('.pc-item');
+      if (!item || item.dataset.id === pedidoId) return;
+      pedidosClientePanel.classList.remove('active');
+      cargarPedido(item.dataset.id);
+    });
+
+    // Al abrir un pedido ABIERTO, copia entrega y pago del pedido anterior del
+    // mismo cliente. Se hace una sola vez por pedido: tiposCopiadosDe queda
+    // guardado para no pisar despues lo que se cambie a mano.
+    async function heredarTiposPedidoAnterior(id) {
+      const p = pedidoActual;
+      if (!admin || !p || p.id !== id) return;
+      if (p.status !== 'ABIERTO' || p.locked || p.tiposCopiadosDe) return;
+
+      let lista;
+      try {
+        lista = await buscarPedidosCliente(p.cliente);
+      } catch (err) {
+        console.warn('No se pudo buscar el pedido anterior del cliente:', err);
+        return;
+      }
+      // El usuario pudo cambiar de pedido mientras se consultaba
+      if (!lista || pedidoId !== id || !pedidoActual || pedidoActual.tiposCopiadosDe) return;
+
+      const tsActual = pedidoActual.timestamp || Infinity;
+      const anterior = lista.find(o =>
+        o.id !== id && o.status !== 'CANCELADO' &&
+        (o.timestamp || 0) < tsActual &&
+        (o.tipoEntrega || o.tipoPago));
+      if (!anterior) return;
+
+      const cambios = { tiposCopiadosDe: anterior.id };
+      if (anterior.tipoEntrega && anterior.tipoEntrega !== pedidoActual.tipoEntrega) {
+        cambios.tipoEntrega = anterior.tipoEntrega;
+        cambios.entrega = anterior.tipoEntrega !== 'Retiro en local' ? 'Envios' : '';
+      }
+      if (anterior.tipoPago && anterior.tipoPago !== pedidoActual.tipoPago) {
+        cambios.tipoPago = anterior.tipoPago;
+      }
+
+      programarActualizacion('pedidos/' + id, cambios);
+      Object.assign(pedidoActual, cambios);
+      if (cambios.tipoEntrega || cambios.tipoPago) {
+        renderUnificado();
+        actualizarEstadoBtnDespachar();
+        showToast('Entrega y pago copiados del pedido anterior');
+      }
+    }
+
+    // ==========================================
+    // VIA CARGO: CONSULTA DE SUCURSALES
+    // ==========================================
+    // Mismo servicio que usa viacargo.com.ar/agencies (la clave es publica,
+    // la expone la propia web en miGlobal.claveAcceso). Si deja de andar,
+    // revisar esos valores en el codigo fuente de esa pagina.
+    const VC_API_URL = 'https://ws.busplus.com.ar/agencias/agencias_datos_mapas?TipoAgencias=2';
+    const VC_API_KEY = 'ikh&/54g.Op';
+    let vcAgencias = null;  // cache de la sesion: se descarga una sola vez
+
+    async function viaCargoCargarAgencias() {
+      if (vcAgencias) return vcAgencias;
+      const res = await fetch(VC_API_URL, { headers: { 'PUBLIC-KEY': VC_API_KEY } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error('Respuesta inesperada');
+      vcAgencias = data;
+      return vcAgencias;
+    }
+
+    // La app guarda "Cordoba" y la API "Córdoba": comparar sin acentos ni signos
+    function vcNormalizar(txt) {
+      return String(txt || '')
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9ñ ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function vcTarjeta(a) {
+      // escapeHtml solo acepta strings y la API puede mandar numeros
+      const esc = v => escapeHtml(v == null ? '' : String(v));
+      const razon = !a.RazonSocial || /^\*+$/.test(a.RazonSocial) ? 'Agencia ' + (a.Localidad || '') : a.RazonSocial;
+      let html = '<div class="vc-agencia"><strong>' + esc(razon) + '</strong>';
+      html += esc(a.Direccion) + '<br>';
+      html += esc([a.Localidad, a.Provincia].filter(Boolean).join(', '));
+      if (a.IdCodigoPostal) html += ' (CP ' + esc(a.IdCodigoPostal) + ')';
+      if (a.Telefono) html += '<br>Tel: ' + esc(a.Telefono);
+      if (a.Horarios) html += '<br>' + esc(a.Horarios);
+      return html + '</div>';
+    }
+
+    async function viaCargoBuscar() {
+      const cont = document.getElementById('viaCargoResult');
+      const buscado = vcNormalizar(document.getElementById('viaCargoLocalidad').value);
+      if (!buscado) {
+        cont.innerHTML = '<div class="vc-estado">Escrib&iacute; una localidad para buscar</div>';
+        return;
+      }
+      cont.innerHTML = '<div class="vc-estado">Buscando&hellip;</div>';
+
+      let agencias;
+      try {
+        agencias = await viaCargoCargarAgencias();
+      } catch (e) {
+        console.error('Via Cargo:', e);
+        cont.innerHTML = '<div class="vc-estado error">No se pudo consultar V&iacute;a Cargo. Revis&aacute; la conexi&oacute;n o us&aacute; el link al sitio.</div>';
+        showToast('No se pudo consultar Vía Cargo');
+        return;
+      }
+
+      const exactas = agencias.filter(a => vcNormalizar(a.Localidad) === buscado);
+      const parciales = exactas.length ? [] : agencias.filter(a => {
+        const loc = vcNormalizar(a.Localidad);
+        return loc && (loc.includes(buscado) || buscado.includes(loc));
+      });
+      const lista = exactas.length ? exactas : parciales;
+
+      // Primero las de la provincia del cliente, sin descartar el resto
+      // ("CABA" o "Gran Buenos Aires" no coinciden 1:1 con la API)
+      const prov = vcNormalizar(pedidoActual && pedidoActual.cliente && pedidoActual.cliente.provincia);
+      if (prov) {
+        lista.sort((a, b) => (vcNormalizar(b.Provincia) === prov) - (vcNormalizar(a.Provincia) === prov));
+      }
+
+      let html;
+      if (exactas.length) {
+        html = '<div class="vc-estado ok">S&iacute; hay sucursal (' + exactas.length + ')</div>';
+      } else if (parciales.length) {
+        html = '<div class="vc-estado aviso">Sin coincidencia exacta. Posibles coincidencias (' + parciales.length + '):</div>';
+      } else {
+        html = '<div class="vc-estado error">No se encontr&oacute; sucursal en esa localidad</div>';
+      }
+      html += lista.map(vcTarjeta).join('');
+      cont.innerHTML = html;
+    }
+
+    function abrirViaCargoModal() {
+      const c = (pedidoActual && pedidoActual.cliente) || {};
+      document.getElementById('viaCargoLocalidad').value = c.localidad || '';
+      document.getElementById('viaCargoResult').innerHTML = '';
+      document.getElementById('viaCargoModal').classList.add('active');
+      if (c.localidad) viaCargoBuscar();
+      else document.getElementById('viaCargoLocalidad').focus();
+    }
+
+    document.getElementById('viaCargoForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      viaCargoBuscar();
+    });
+    document.getElementById('viaCargoCerrar').addEventListener('click', () => {
+      document.getElementById('viaCargoModal').classList.remove('active');
+    });
+    document.getElementById('viaCargoModal').addEventListener('click', (e) => {
+      if (e.target.id === 'viaCargoModal') document.getElementById('viaCargoModal').classList.remove('active');
+    });
 
     // ==========================================
     // EDIT CLIENT MODAL
