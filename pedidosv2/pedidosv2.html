@@ -4038,6 +4038,566 @@
       .cli-tel { display: none; }
     }
 
+    /* =========================================
+       MODO CONTROL (verificacion con pistola lectora)
+       ========================================= */
+    /* Boton de entrada, en la cabecera de articulos. Mismo cuerpo que
+       "Agregar articulo"; cambia de piel cuando el pedido esta cerrado y sin
+       controlar (sugerido) o ya controlado (ok). */
+    .btn-control {
+      height: 34px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 0 13px 0 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--r1);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      flex: none;
+      transition: background .14s, border-color .14s, color .14s, box-shadow .2s;
+    }
+    .btn-control.is-visible { display: flex; }
+    .btn-control:hover { background: var(--surface-2); border-color: var(--ink-4); color: var(--ink); }
+    .btn-control:active { transform: scale(.97); }
+    .btn-control.is-sugerido {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      animation: ctlSugerido 2.4s var(--ease-out) infinite;
+    }
+    .btn-control.is-sugerido:hover { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+    .btn-control.is-ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+    .btn-control.is-ok:hover { background: var(--ok-soft); border-color: var(--ok-ring); color: var(--ok); }
+    @keyframes ctlSugerido {
+      0%, 100% { box-shadow: 0 0 0 0 var(--accent-ring); }
+      50% { box-shadow: 0 0 0 6px transparent; }
+    }
+
+    /* Chip de la franja de contexto */
+    .ctl-chip {
+      height: 23px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 9px 0 7px;
+      border: none;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--ink-2);
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      white-space: nowrap;
+      flex: none;
+      cursor: pointer;
+    }
+    .ctl-chip[hidden] { display: none; }
+    .ctl-chip .ic-sm { width: 13px; height: 13px; stroke-width: 2.2; }
+    .ctl-chip--ok { background: var(--ok-soft); color: var(--ok); }
+    .ctl-chip--warn { background: var(--warn-soft); color: var(--warn); }
+    .ctl-chip-num { font-family: var(--font-mono); font-size: 11px; }
+
+    /* Hoja */
+    .ctl-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 220;   /* debajo de #confirmModal (230) y del toast (500) */
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      background: var(--scrim);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .ctl-overlay.active { display: flex; animation: fadeIn .2s ease-out both; }
+    .ctl-sheet {
+      position: relative;
+      width: min(100%, 820px);
+      height: min(100%, 96dvh);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      border-radius: var(--r4) var(--r4) 0 0;
+      box-shadow: var(--sh3);
+      overflow: hidden;
+      outline: none;
+      animation: ctlSheetIn .52s cubic-bezier(.32, .72, 0, 1) both;
+    }
+    @media (min-width: 1024px) {
+      .ctl-overlay { align-items: center; }
+      .ctl-sheet { height: min(92dvh, 900px); border-radius: var(--r4); }
+    }
+    @keyframes ctlSheetIn {
+      from { transform: translateY(40px); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    .ctl-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 18px 14px 20px;
+    }
+    .ctl-ring { position: relative; width: 56px; height: 56px; flex: none; }
+    .ctl-ring svg { width: 56px; height: 56px; transform: rotate(-90deg); }
+    .ctl-ring circle { fill: none; stroke-width: 5; }
+    .ctl-ring-track { stroke: var(--surface-3); }
+    .ctl-ring-fill {
+      stroke: var(--accent);
+      stroke-linecap: round;
+      transition: stroke-dashoffset .5s var(--ease-out), stroke .3s;
+    }
+    .ctl-ring.is-ok .ctl-ring-fill { stroke: var(--ok); }
+    .ctl-ring-tx {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: -.3px;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+    .ctl-head-tx { flex: 1; min-width: 0; }
+    .ctl-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .ctl-titulo {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -.4px;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ctl-sub {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+    .ctl-close {
+      width: 40px;
+      height: 40px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--ink-2);
+      transition: background .14s, transform .14s;
+    }
+    .ctl-close:hover { background: var(--line); }
+    .ctl-close:active { transform: scale(.94); }
+
+    /* Tarjeta de lectura */
+    .ctl-hero {
+      --tono: var(--ink-3);
+      --tono-soft: var(--surface);
+      flex: none;
+      margin: 0 16px;
+      padding: 16px;
+      border-radius: var(--r4);
+      background: var(--tono-soft);
+      border: 1.5px solid var(--line);
+      box-shadow: var(--sh1);
+      transition: background .35s, border-color .35s;
+    }
+    .ctl-hero[data-estado="ok"],
+    .ctl-hero[data-estado="completo"],
+    .ctl-hero[data-estado="fin"] { --tono: var(--ok); --tono-soft: var(--ok-soft); border-color: var(--ok-ring); }
+    .ctl-hero[data-estado="sobra"],
+    .ctl-hero[data-estado="elegir"] { --tono: var(--warn); --tono-soft: var(--warn-soft); border-color: var(--warn); }
+    .ctl-hero[data-estado="error"] { --tono: var(--bad); --tono-soft: var(--bad-soft); border-color: var(--bad); }
+    .ctl-hero.is-flash { animation: ctlFlash .5s var(--ease-out); }
+    .ctl-hero[data-estado="error"].is-flash { animation: ctlShake .42s var(--ease-out); }
+    @keyframes ctlFlash {
+      0% { transform: scale(.985); box-shadow: 0 0 0 0 var(--tono); }
+      40% { transform: scale(1.006); }
+      100% { transform: none; box-shadow: 0 0 0 10px transparent; }
+    }
+    @keyframes ctlShake {
+      0%, 100% { transform: none; }
+      20% { transform: translateX(-7px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(2px); }
+    }
+
+    .ctl-hero-body {
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .ctl-hero-ic {
+      width: 64px;
+      height: 64px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--r3);
+      background: var(--surface-3);
+      color: var(--tono);
+    }
+    .ctl-hero[data-estado]:not([data-estado="idle"]) .ctl-hero-ic { background: var(--surface); }
+    .ctl-hero-ic svg {
+      width: 34px; height: 34px; fill: none; stroke: currentColor;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .ctl-hero[data-estado="idle"] .ctl-hero-ic { animation: ctlRespira 2.6s ease-in-out infinite; }
+    @keyframes ctlRespira {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(.94); opacity: .72; }
+    }
+    .ctl-hero-img {
+      width: 64px;
+      height: 64px;
+      flex: none;
+      border-radius: var(--r3);
+      object-fit: cover;
+      background: var(--surface);
+      box-shadow: var(--sh1);
+    }
+    .ctl-hero-tx { flex: 1; min-width: 0; }
+    .ctl-hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      color: var(--tono);
+    }
+    .ctl-hero-tag svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    .ctl-hero-t {
+      margin-top: 2px;
+      font-size: 17px;
+      font-weight: 750;
+      letter-spacing: -.3px;
+      line-height: 1.25;
+      color: var(--ink);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .ctl-hero-s { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--ink-3); }
+    .ctl-hero-s code { font-family: var(--font-mono); font-size: 12px; }
+    .ctl-hero-n {
+      flex: none;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1;
+      color: var(--tono);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .ctl-hero-n small { font-size: 16px; font-weight: 700; color: var(--ink-4); letter-spacing: -.2px; }
+    .ctl-hero-n.is-pop { animation: necRebote .38s var(--ease-spring); }
+    .ctl-elegir { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .ctl-elegir button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 650;
+      text-align: left;
+    }
+    .ctl-elegir button:hover { border-color: var(--warn); }
+    .ctl-elegir img, .ctl-elegir .ctl-ph { width: 36px; height: 36px; border-radius: var(--r1); object-fit: cover; flex: none; }
+
+    .ctl-hero-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line-2);
+    }
+    .ctl-input {
+      flex: 1;
+      min-width: 0;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+    }
+    .ctl-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); background: var(--surface); }
+    .ctl-btn-ghost {
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 13px;
+      font-weight: 700;
+      flex: none;
+      transition: background .14s, opacity .2s;
+    }
+    .ctl-btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+    .ctl-btn-ghost:disabled { opacity: .4; cursor: default; }
+
+    /* Lista */
+    .ctl-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 6px 16px 18px;
+    }
+    .ctl-sec {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 16px 4px 8px;
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .ctl-sec-n {
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0;
+    }
+    .ctl-sec--revisar { color: var(--bad); }
+    .ctl-sec--revisar .ctl-sec-n { background: var(--bad-soft); color: var(--bad); }
+    .ctl-sec--ok { cursor: pointer; border: none; background: none; padding: 0; width: calc(100% - 8px); }
+    .ctl-sec--ok .ctl-sec-n { background: var(--ok-soft); color: var(--ok); }
+    .ctl-sec-chev { margin-left: auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform .25s var(--ease-out); }
+    .ctl-sec--ok[aria-expanded="true"] .ctl-sec-chev { transform: rotate(180deg); }
+
+    .ctl-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      padding: 10px 10px 10px 10px;
+      background: var(--surface);
+      border-radius: var(--r3);
+      box-shadow: var(--sh1);
+      transition: background .3s, box-shadow .3s;
+    }
+    .ctl-row-img, .ctl-ph {
+      width: 48px;
+      height: 48px;
+      flex: none;
+      border-radius: var(--r2);
+      object-fit: cover;
+      background: var(--surface-3);
+    }
+    .ctl-ph { display: flex; align-items: center; justify-content: center; color: var(--ink-4); }
+    .ctl-row-tx { flex: 1; min-width: 0; }
+    .ctl-row-nom {
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: -.15px;
+      line-height: 1.3;
+      color: var(--ink);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .ctl-row-cod {
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--ink-4);
+    }
+    .ctl-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 99px;
+      font-family: var(--font-ui);
+      font-size: 10.5px;
+      font-weight: 750;
+      background: var(--surface-3);
+      color: var(--ink-3);
+    }
+    .ctl-tag svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .ctl-tag--warn { background: var(--warn-soft); color: var(--warn); }
+    .ctl-tag--bad { background: var(--bad-soft); color: var(--bad); }
+
+    .ctl-cnt { flex: none; width: 58px; text-align: right; }
+    .ctl-cnt-n { font-size: 15px; font-weight: 600; color: var(--ink-4); font-variant-numeric: tabular-nums; letter-spacing: -.2px; }
+    .ctl-cnt-n b { font-size: 19px; font-weight: 800; color: var(--ink); }
+    .ctl-cnt-bar { display: block; height: 4px; margin-top: 5px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+    .ctl-cnt-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .4s var(--ease-out); }
+    .ctl-row.is-ok .ctl-cnt-bar i { background: var(--ok); }
+    .ctl-row.is-ok .ctl-cnt-n b { color: var(--ok); }
+    .ctl-row.is-sobra .ctl-cnt-n b { color: var(--warn); }
+    .ctl-row.is-sobra .ctl-cnt-bar i { background: var(--warn); }
+    .ctl-row.is-extra { box-shadow: inset 3px 0 0 var(--bad), var(--sh1); }
+    .ctl-row.is-sobra { box-shadow: inset 3px 0 0 var(--warn), var(--sh1); }
+    .ctl-row.is-ok { background: var(--surface-2); box-shadow: none; }
+    .ctl-row.is-ok .ctl-row-img { opacity: .75; }
+    .ctl-row.is-pulso { animation: ctlRowPulso .9s var(--ease-out); }
+    @keyframes ctlRowPulso {
+      0% { box-shadow: 0 0 0 3px var(--accent-ring), var(--sh2); }
+      100% { box-shadow: 0 0 0 0 transparent, var(--sh1); }
+    }
+
+    .ctl-acc { flex: none; display: flex; align-items: center; gap: 6px; }
+    .ctl-ab {
+      height: 40px;
+      min-width: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 750;
+      transition: background .14s, border-color .14s, transform .12s;
+    }
+    .ctl-ab:hover { background: var(--surface-2); border-color: var(--ink-4); color: var(--ink); }
+    .ctl-ab:active { transform: scale(.95); }
+    .ctl-ab--ico { padding: 0; font-size: 18px; font-weight: 600; }
+    .ctl-ab--pri { background: var(--inverso-bg); border-color: var(--inverso-bg); color: var(--inverso-fg); }
+    .ctl-ab--pri:hover { background: var(--inverso-bg-hover); border-color: var(--inverso-bg-hover); color: var(--inverso-fg); }
+    .ctl-ab svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .ctl-vacio { padding: 26px 8px; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--ink-4); }
+
+    /* Pie */
+    .ctl-foot {
+      flex: none;
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+      background: var(--surface);
+      border-top: 1px solid var(--line);
+    }
+    .ctl-foot button {
+      height: 52px;
+      border-radius: var(--r3);
+      font-size: 15px;
+      font-weight: 750;
+      letter-spacing: -.2px;
+      transition: background .15s, transform .12s, opacity .2s;
+    }
+    .ctl-foot button:active { transform: scale(.98); }
+    .ctl-btn-sec { flex: none; padding: 0 18px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+    .ctl-btn-sec:hover:not(:disabled) { background: var(--surface-2); }
+    .ctl-btn-sec:disabled { opacity: .45; }
+    .ctl-btn-pri {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: none;
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+    }
+    .ctl-btn-pri:hover { background: var(--inverso-bg-hover); }
+    .ctl-btn-pri.is-listo { background: var(--ok); color: #fff; }
+    .ctl-btn-pri svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Pantalla de exito */
+    .ctl-fin {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 24px;
+      background: var(--bg);
+      text-align: center;
+    }
+    .ctl-fin.active { display: flex; animation: fadeIn .25s ease-out both; }
+    .ctl-fin-sello {
+      width: 112px;
+      height: 112px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 99px;
+      background: var(--ok);
+      color: #fff;
+      box-shadow: 0 0 0 10px var(--ok-soft);
+      animation: selloIn .55s var(--ease-spring) both;
+    }
+    .ctl-fin.is-dif .ctl-fin-sello { background: var(--warn); box-shadow: 0 0 0 10px var(--warn-soft); }
+    .ctl-fin-sello svg { width: 56px; height: 56px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    .ctl-fin-sello path { stroke-dasharray: 30; stroke-dashoffset: 30; animation: ctlTraza .45s .25s var(--ease-out) forwards; }
+    @keyframes ctlTraza { to { stroke-dashoffset: 0; } }
+    .ctl-fin-t { font-size: 24px; font-weight: 800; letter-spacing: -.5px; color: var(--ink); }
+    .ctl-fin-s { font-size: 14px; font-weight: 600; color: var(--ink-3); }
+    .ctl-fin button { margin-top: 22px; height: 50px; padding: 0 34px; border: none; border-radius: 99px; background: var(--inverso-bg); color: var(--inverso-fg); font-size: 15px; font-weight: 750; }
+
+    @media (max-width: 560px) {
+      .ctl-head { padding: 14px 14px 12px 16px; gap: 12px; }
+      .ctl-titulo { font-size: 18px; }
+      .ctl-hero { margin: 0 12px; padding: 14px; }
+      .ctl-hero-img, .ctl-hero-ic { width: 54px; height: 54px; }
+      .ctl-hero-n { font-size: 28px; }
+      .ctl-list { padding: 4px 12px 16px; }
+      .ctl-row { flex-wrap: wrap; gap: 10px; }
+      .ctl-row-tx { flex-basis: calc(100% - 130px); }
+      .ctl-acc { width: 100%; justify-content: flex-end; }
+      .btn-control span { display: none; }
+      .btn-control { padding: 0 10px; }
+    }
+
     /* Respetar la preferencia de movimiento reducido del sistema */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -4110,6 +4670,7 @@
     <span class="ctx-id" id="ctxId"></span>
     <span class="status-badge" id="ctxEstado"></span>
     <span class="badge-int" id="ctxCatInt" role="img" title="Pedido int" aria-label="Pedido int" hidden></span>
+    <button type="button" class="ctl-chip" id="ctxControl" title="Abrir el control del pedido" hidden></button>
     <span class="ctx-dot"></span>
     <span class="ctx-fecha" id="ctxFecha"></span>
     <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
@@ -4136,6 +4697,8 @@
         <h2>Art&iacute;culos</h2>
         <span class="items-counter" style="cursor:pointer" onclick="copiarLinkPedido()">0 items</span>
         <span class="items-header-spacer"></span>
+        <!-- Modo control: lo muestra/oculta controlActualizarUI() -->
+        <button class="btn-control" id="btnControlar" type="button" title="Controlar el pedido con la pistola lectora"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5V5.5a2 2 0 0 1 2-2h2.5"></path><path d="M16.5 3.5H19a2 2 0 0 1 2 2v2"></path><path d="M21 16.5v2a2 2 0 0 1-2 2h-2.5"></path><path d="M7.5 20.5H5a2 2 0 0 1-2-2v-2"></path><line x1="7.5" y1="8" x2="7.5" y2="16"></line><line x1="10.5" y1="8" x2="10.5" y2="16"></line><line x1="13.5" y1="8" x2="13.5" y2="16"></line><line x1="16.5" y1="8" x2="16.5" y2="16"></line></svg><span>Controlar</span></button>
         <button class="btn-add-item" id="btnAddItem" type="button"><svg class="ic-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Agregar art&iacute;culo</button>
       </div>
 
@@ -4608,6 +5171,49 @@
       <div class="articulo-footer" id="articuloFooter" style="display:none">
         <button class="articulo-btn-sec" id="btnArticuloTodos">Todos</button>
         <button class="articulo-btn-confirmar" id="btnArticuloConfirmar" disabled>Marcar listo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODO CONTROL
+       Verificacion final del casillero con la pistola lectora. La lista y la
+       tarjeta de lectura las pinta controlRender(); el resto es estatico para
+       que el campo de codigo conserve foco y valor entre lecturas. -->
+  <div class="ctl-overlay" id="controlModal" aria-hidden="true">
+    <div class="ctl-sheet" role="dialog" aria-modal="true" aria-labelledby="ctlTitulo" tabindex="-1">
+      <header class="ctl-head">
+        <div class="ctl-ring" id="ctlRing">
+          <svg viewBox="0 0 56 56" aria-hidden="true"><circle class="ctl-ring-track" cx="28" cy="28" r="24"></circle><circle class="ctl-ring-fill" id="ctlRingFill" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="150.8"></circle></svg>
+          <span class="ctl-ring-tx" id="ctlRingTx">0%</span>
+        </div>
+        <div class="ctl-head-tx">
+          <div class="ctl-eyebrow">Control de pedido</div>
+          <div class="ctl-titulo" id="ctlTitulo"></div>
+          <div class="ctl-sub" id="ctlSub"></div>
+        </div>
+        <button type="button" class="ctl-close" id="ctlCerrar" aria-label="Cerrar control"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg></button>
+      </header>
+
+      <section class="ctl-hero" id="ctlHero" data-estado="idle" aria-live="polite">
+        <div id="ctlHeroBody"></div>
+        <div class="ctl-hero-bar">
+          <input type="text" class="ctl-input" id="ctlInput" placeholder="Escribir c&oacute;digo y Enter" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Codigo de barras o de producto">
+          <button type="button" class="ctl-btn-ghost" id="ctlDeshacer" disabled><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>Deshacer</button>
+        </div>
+      </section>
+
+      <div class="ctl-list" id="ctlList"></div>
+
+      <footer class="ctl-foot">
+        <button type="button" class="ctl-btn-sec" id="ctlReiniciar">Reiniciar</button>
+        <button type="button" class="ctl-btn-pri" id="ctlFinalizar">Finalizar control</button>
+      </footer>
+
+      <div class="ctl-fin" id="ctlFin">
+        <div class="ctl-fin-sello"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"></path></svg></div>
+        <div class="ctl-fin-t" id="ctlFinT">Pedido controlado</div>
+        <div class="ctl-fin-s" id="ctlFinS"></div>
+        <button type="button" id="ctlFinListo">Listo</button>
       </div>
     </div>
   </div>
@@ -5246,6 +5852,7 @@
       '</div>';
 
     function resetView() {
+      controlCerrar();
       if (realtimeListener && pedidoId) {
         db.ref('pedidos/' + pedidoId).off('value', realtimeListener);
         realtimeListener = null;
@@ -5324,6 +5931,7 @@
     // CARGAR PEDIDO DESDE FIREBASE
     // ==========================================
     async function cargarPedido(id) {
+      controlCerrar();
       // Desconectar listener del pedido anterior si existe
       if (realtimeListener) {
         db.ref('pedidos/' + pedidoId).off('value', realtimeListener);
@@ -5936,6 +6544,7 @@
       actualizarContador();
       colapsarQty();  // el DOM anterior se descarta: resetear indice y timer
       actualizarProgreso();
+      controlActualizarUI();
 
       // Wire up financial event listeners
       setTimeout(() => { pvWireEvents(bloqueado); actualizarCalculosPV(); actualizarEstadoBtnImpresion(); }, 0);
@@ -7956,6 +8565,8 @@
       if (document.getElementById('blockingOverlay').classList.contains('active')) return;
       // Con un dialogo de confirmacion abierto (accion irreversible) no se abre nada encima.
       if (confirmResolver) return;
+      // Con el modo control abierto, cada lectura es una unidad del casillero.
+      if (controlAbierto()) { controlLectura(texto); return; }
 
       if (navigator.vibrate) navigator.vibrate(60);
       pistolaModo = true;
@@ -7988,6 +8599,717 @@
         articuloSearch.focus();
       }
     }
+
+    // ==========================================
+    // MODO CONTROL (verificacion del casillero con la pistola lectora)
+    // ==========================================
+    // Segunda instancia del armado: con el pedido ya juntado se escanea cada
+    // unidad del casillero y la pantalla dice si corresponde, cuanto falta y
+    // que sobra. Reemplaza el repaso a mano contra el ticket impreso.
+    //
+    // Se guarda en pedidos/<id>/control para que el avance sobreviva a cerrar
+    // la pantalla y se vea igual en todos los equipos:
+    //   conteo/<clave>: n                     unidades contadas del articulo
+    //   manual/<clave>: true                  linea completada o confirmada a mano
+    //   extras/<clave>: { n, texto, codigo }  lecturas que no son del pedido
+    //   final: { por, ts, firma, conDiferencias }
+    // El estado de cada linea no se guarda: se deriva de conteo contra items,
+    // asi un cambio de cantidad posterior se refleja solo. `firma` congela los
+    // items al finalizar; si deja de coincidir, el control quedo desactualizado.
+    const controlModal = document.getElementById('controlModal');
+    const ctlList = document.getElementById('ctlList');
+    const ctlHero = document.getElementById('ctlHero');
+    const ctlHeroBody = document.getElementById('ctlHeroBody');
+    const ctlInput = document.getElementById('ctlInput');
+    const ctlDeshacerBtn = document.getElementById('ctlDeshacer');
+    const ctlFin = document.getElementById('ctlFin');
+    const CTL_RING = 150.8;          // perimetro del anillo (2 * PI * 24)
+    const CTL_AUTOFIN_MS = 650;      // pausa antes de cerrar solo cuando todo coincide
+
+    const IC_SCAN_LG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5V5.5a2 2 0 0 1 2-2h2.5"></path><path d="M16.5 3.5H19a2 2 0 0 1 2 2v2"></path><path d="M21 16.5v2a2 2 0 0 1-2 2h-2.5"></path><path d="M7.5 20.5H5a2 2 0 0 1-2-2v-2"></path><line x1="7.5" y1="8" x2="7.5" y2="16"></line><line x1="10.5" y1="8" x2="10.5" y2="16"></line><line x1="13.5" y1="8" x2="13.5" y2="16"></line><line x1="16.5" y1="8" x2="16.5" y2="16"></line></svg>';
+    const IC_MANO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"></path><path d="M11 11.5v-7a1.5 1.5 0 0 1 3 0V12"></path><path d="M14 11.5V6a1.5 1.5 0 0 1 3 0v8.5a6.5 6.5 0 0 1-6.5 6.5h-.6a6 6 0 0 1-4.6-2.2L3.4 15.6a1.6 1.6 0 0 1 2.5-2L8 15.5"></path></svg>';
+    const IC_CTL_OK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 7.4"></path></svg>';
+    const IC_CTL_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 2.6 20h18.8L12 3.6z"></path><path d="M12 10v4.4"></path><path d="M12 17.4h.01"></path></svg>';
+    const IC_CTL_DESHACER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>';
+    const IC_CTL_CHEV = '<svg class="ctl-sec-chev" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+    let ctlDeshacerPila = [];   // acciones de la sesion, para "Deshacer"
+    let ctlUltimo = null;       // ultima lectura: la dibuja la tarjeta de arriba
+    let ctlVerOk = false;       // seccion "Controlados" desplegada
+    let ctlPulsoClave = '';     // fila a resaltar en el proximo pintado
+    let ctlFinTimer = null;
+    let ctlAutoFinTimer = null;
+    let ctlAudio = null;
+
+    function controlAbierto() { return controlModal.classList.contains('active'); }
+
+    // Las claves de Firebase no admiten . # $ [ ] /: se codifican (y el % para
+    // que la codificacion no colisione con un codigo que ya lo traiga).
+    function controlClave(v) {
+      const s = String(v == null ? '' : v).trim();
+      return s ? s.replace(/[.#$\[\]\/%]/g, ch => '%' + ch.charCodeAt(0).toString(16).toUpperCase()) : '_';
+    }
+
+    function controlItems(p) {
+      if (!p || !p.items) return [];
+      return (Array.isArray(p.items) ? p.items : Object.values(p.items)).filter(it => it && it.codigo);
+    }
+
+    // Comparacion estable para el listener: el orden de claves que devuelve
+    // Firebase no es el mismo que el de los objetos armados en memoria, y
+    // inicio/ultimo (timestamps de servidor) no cambian nada en pantalla.
+    function controlHuella(c) {
+      const ord = (o) => (o && typeof o === 'object')
+        ? '{' + Object.keys(o).sort().map(k => k + '=' + ord(o[k])).join(',') + '}'
+        : String(o == null ? '' : o);
+      c = c || {};
+      return ord({ conteo: c.conteo, manual: c.manual, extras: c.extras, final: c.final });
+    }
+
+    // Estado derivado del control. Lo usan la hoja, el chip de la franja, el
+    // boton de la cabecera y el aviso de "Entregado".
+    function controlEstado(p) {
+      const ctl = (p && p.control) || {};
+      const conteo = ctl.conteo || {};
+      const manual = ctl.manual || {};
+
+      // Un mismo codigo puede venir en dos renglones del pedido: se suma.
+      const porCodigo = new Map();
+      controlItems(p).forEach(it => {
+        const cant = parseInt(it.cantidad) || 1;
+        const l = porCodigo.get(it.codigo);
+        if (l) l.cantidad += cant;
+        else porCodigo.set(it.codigo, { codigo: it.codigo, nombre: it.nombre || it.codigo, cantidad: cant });
+      });
+
+      const lineas = [...porCodigo.values()].map(l => {
+        const clave = controlClave(l.codigo);
+        const info = sheetsData[l.codigo] || {};
+        const imagen = info.imagen || info.imagenAlt || '';
+        return Object.assign(l, {
+          clave,
+          contado: Math.max(0, parseInt(conteo[clave]) || 0),
+          manual: manual[clave] === true,
+          sinCodigo: !(info.codigoBarras && info.codigoBarras.length),
+          imagen,
+          imagenAlt: (info.imagenAlt && info.imagenAlt !== imagen) ? info.imagenAlt : ''
+        });
+      });
+
+      const extras = Object.keys(ctl.extras || {})
+        .map(k => Object.assign({ clave: k }, ctl.extras[k]))
+        .filter(x => (parseInt(x.n) || 0) > 0);
+
+      const faltantes = lineas.filter(l => l.contado < l.cantidad);
+      const sobrantes = lineas.filter(l => l.contado > l.cantidad);
+      const firma = lineas.map(l => l.codigo + ':' + l.cantidad).sort().join('|');
+      const final = ctl.final || null;
+
+      return {
+        lineas, extras, faltantes, sobrantes, firma, final,
+        totalU: lineas.reduce((s, l) => s + l.cantidad, 0),
+        contadoU: lineas.reduce((s, l) => s + Math.min(l.contado, l.cantidad), 0),
+        lineasOk: lineas.filter(l => l.contado === l.cantidad).length,
+        completo: lineas.length > 0 && !faltantes.length && !sobrantes.length && !extras.length,
+        iniciado: lineas.some(l => l.contado > 0) || extras.length > 0,
+        finalValido: !!(final && final.firma === firma)
+      };
+    }
+
+    // --- Escritura -------------------------------------------------------
+    // Todo cambio se aplica primero en memoria (la pantalla responde sin
+    // esperar a la red) y se manda como update granular sobre /control, sin
+    // tocar items ni el resto del pedido. Cualquier cambio anula el cierre.
+    function controlLocal() {
+      if (!pedidoActual.control) pedidoActual.control = {};
+      return pedidoActual.control;
+    }
+
+    function controlGuardar(updates) {
+      if (!pedidoId) return;
+      const ctl = controlLocal();
+      const TS = firebase.database.ServerValue.TIMESTAMP;
+      if (ctl.final) { delete ctl.final; updates.final = null; }
+      if (!ctl.inicio) { ctl.inicio = Date.now(); updates.inicio = TS; }
+      updates.ultimo = TS;
+      db.ref('pedidos/' + pedidoId + '/control').update(updates).catch(err => {
+        console.error('Error al guardar el control:', err);
+        showToast('No se pudo guardar el control');
+      });
+    }
+
+    // Lecturas de la pistola: incremento atomico, asi dos equipos controlando
+    // el mismo pedido a la vez no se pisan.
+    function controlSumar(clave, delta) {
+      const ctl = controlLocal();
+      ctl.conteo = ctl.conteo || {};
+      const antes = parseInt(ctl.conteo[clave]) || 0;
+      const despues = Math.max(0, antes + delta);
+      if (despues === antes) return;
+      ctl.conteo[clave] = despues;
+      const up = {};
+      up['conteo/' + clave] = firebase.database.ServerValue.increment(despues - antes);
+      controlGuardar(up);
+    }
+
+    // Acciones a mano (botones de la fila): valor absoluto.
+    function controlFijar(clave, conteo, manual) {
+      const ctl = controlLocal();
+      ctl.conteo = ctl.conteo || {};
+      ctl.manual = ctl.manual || {};
+      ctl.conteo[clave] = conteo;
+      if (manual) ctl.manual[clave] = true;
+      else delete ctl.manual[clave];
+      const up = {};
+      up['conteo/' + clave] = conteo;
+      up['manual/' + clave] = manual ? true : null;
+      controlGuardar(up);
+    }
+
+    function controlSumarExtra(clave, delta, texto, codigo) {
+      const ctl = controlLocal();
+      ctl.extras = ctl.extras || {};
+      const prev = ctl.extras[clave];
+      const n = Math.max(0, (prev ? parseInt(prev.n) || 0 : 0) + delta);
+      const up = {};
+      if (n === 0) {
+        delete ctl.extras[clave];
+        up['extras/' + clave] = null;
+      } else {
+        ctl.extras[clave] = { n, texto: texto || (prev && prev.texto) || '', codigo: codigo || (prev && prev.codigo) || '' };
+        up['extras/' + clave] = ctl.extras[clave];
+      }
+      controlGuardar(up);
+    }
+
+    // --- Lecturas --------------------------------------------------------
+    async function controlLectura(texto) {
+      texto = String(texto || '').trim();
+      if (!texto || !pedidoActual) return;
+      if (!sheetsLoaded) await sheetsInicial;
+      clearTimeout(ctlAutoFinTimer);
+      ctlFin.classList.remove('active');
+
+      const e = controlEstado(pedidoActual);
+      const candidatos = articuloBuscarCandidatos(texto);
+      let delPedido = e.lineas.filter(l => candidatos.includes(l.codigo));
+      // Articulo del pedido que no esta en el catalogo: se acepta su codigo de producto.
+      if (!delPedido.length) {
+        const k = articuloNormBarcode(texto);
+        delPedido = e.lineas.filter(l => articuloNormBarcode(l.codigo) === k);
+      }
+
+      if (delPedido.length === 1) { controlContar(delPedido[0].codigo); return; }
+      if (delPedido.length > 1) {
+        // Codigo de barras compartido por dos articulos del pedido: elige el operador.
+        controlFeedback({ estado: 'elegir', texto, opciones: delPedido.map(l => l.codigo) });
+        return;
+      }
+
+      const codigo = candidatos[0] || '';
+      const clave = controlClave(articuloNormBarcode(texto));
+      controlSumarExtra(clave, 1, texto, codigo);
+      ctlDeshacerPila.push({ tipo: 'extra', clave });
+      ctlPulsoClave = 'x:' + clave;
+      controlFeedback({ estado: 'error', texto, codigo });
+    }
+
+    function controlLinea(codigo) {
+      return controlEstado(pedidoActual).lineas.find(l => l.codigo === codigo) || null;
+    }
+
+    function controlContar(codigo) {
+      const l = controlLinea(codigo);
+      if (!l) return;
+      controlSumar(l.clave, 1);
+      ctlDeshacerPila.push({ tipo: 'conteo', clave: l.clave });
+      const n = l.contado + 1;
+      ctlPulsoClave = l.clave;
+      controlFeedback({
+        estado: n > l.cantidad ? 'sobra' : n === l.cantidad ? 'completo' : 'ok',
+        codigo, n, cantidad: l.cantidad
+      });
+    }
+
+    function controlCompletar(codigo) {
+      const l = controlLinea(codigo);
+      if (!l || l.contado >= l.cantidad) return;
+      ctlDeshacerPila.push({ tipo: 'fijar', clave: l.clave, conteo: l.contado, manual: l.manual });
+      controlFijar(l.clave, l.cantidad, true);
+      ctlPulsoClave = l.clave;
+      controlFeedback({ estado: 'completo', codigo, n: l.cantidad, cantidad: l.cantidad, manual: true });
+    }
+
+    // +1 a mano (articulos sin codigo con mas de una unidad).
+    function controlMas(codigo) {
+      const l = controlLinea(codigo);
+      if (!l || l.contado >= l.cantidad) return;
+      ctlDeshacerPila.push({ tipo: 'fijar', clave: l.clave, conteo: l.contado, manual: l.manual });
+      const n = l.contado + 1;
+      controlFijar(l.clave, n, true);
+      ctlPulsoClave = l.clave;
+      controlFeedback({ estado: n === l.cantidad ? 'completo' : 'ok', codigo, n, cantidad: l.cantidad, manual: true });
+    }
+
+    // -1: correccion directa sobre la fila. Si la linea deja de estar
+    // completa pierde la marca de "a mano".
+    function controlMenos(codigo) {
+      const l = controlLinea(codigo);
+      if (!l || l.contado <= 0) return;
+      ctlDeshacerPila.push({ tipo: 'fijar', clave: l.clave, conteo: l.contado, manual: l.manual });
+      const n = l.contado - 1;
+      controlFijar(l.clave, n, l.manual && n >= l.cantidad);
+      ctlUltimo = null;
+      controlRender();
+    }
+
+    function controlDeshacer() {
+      const a = ctlDeshacerPila.pop();
+      if (!a || !pedidoActual) return;
+      if (a.tipo === 'conteo') controlSumar(a.clave, -1);
+      else if (a.tipo === 'extra') controlSumarExtra(a.clave, -1);
+      else if (a.tipo === 'fijar') controlFijar(a.clave, a.conteo, a.manual);
+      clearTimeout(ctlAutoFinTimer);
+      ctlPulsoClave = a.tipo === 'extra' ? '' : a.clave;
+      ctlUltimo = { estado: 'deshecho' };
+      controlRender();
+    }
+
+    // --- Respuesta: sonido, vibracion y tarjeta --------------------------
+    // Tonos generados con WebAudio: no hay archivos que cargar. Agudo y corto
+    // para lo correcto, doble al completar, grave para lo que no corresponde.
+    function controlBeep(tipo) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!ctlAudio) ctlAudio = new AC();
+        if (ctlAudio.state === 'suspended') ctlAudio.resume();
+        const tonos = {
+          ok:       [[1568, 0, .07]],
+          completo: [[1318, 0, .07], [1976, .085, .13]],
+          sobra:    [[740, 0, .16]],
+          error:    [[196, 0, .14], [165, .17, .24]],
+          fin:      [[1046, 0, .09], [1318, .1, .09], [1568, .2, .24]]
+        }[tipo];
+        if (!tonos) return;
+        const t0 = ctlAudio.currentTime + .01;
+        const vol = tipo === 'error' ? .08 : .18;
+        tonos.forEach(([f, d, dur]) => {
+          const o = ctlAudio.createOscillator();
+          const g = ctlAudio.createGain();
+          o.type = tipo === 'error' ? 'square' : 'sine';
+          o.frequency.value = f;
+          g.gain.setValueAtTime(.0001, t0 + d);
+          g.gain.exponentialRampToValueAtTime(vol, t0 + d + .012);
+          g.gain.exponentialRampToValueAtTime(.0001, t0 + d + dur);
+          o.connect(g);
+          g.connect(ctlAudio.destination);
+          o.start(t0 + d);
+          o.stop(t0 + d + dur + .03);
+        });
+      } catch (_) {}
+    }
+
+    const CTL_VIBRA = { ok: 35, completo: [35, 40, 60], sobra: 90, elegir: 90, error: [120, 60, 120], fin: [40, 40, 40, 40, 120] };
+
+    function controlFeedback(ultimo) {
+      ctlUltimo = ultimo;
+      const sonido = ultimo.estado === 'elegir' ? 'sobra' : ultimo.estado;
+      controlBeep(sonido);
+      if (navigator.vibrate && CTL_VIBRA[ultimo.estado]) navigator.vibrate(CTL_VIBRA[ultimo.estado]);
+      controlRender({ flash: true });
+
+      // Todo coincide: se cierra solo, sin pedirle un toque mas al operador.
+      const e = controlEstado(pedidoActual);
+      if (e.completo && !e.finalValido) {
+        clearTimeout(ctlAutoFinTimer);
+        ctlAutoFinTimer = setTimeout(() => {
+          if (!controlAbierto() || !pedidoActual) return;
+          const ahora = controlEstado(pedidoActual);
+          if (ahora.completo && !ahora.finalValido) controlFinalizar();
+        }, CTL_AUTOFIN_MS);
+      }
+    }
+
+    // --- Pintado ---------------------------------------------------------
+    function controlImgHtml(src, alt, clase) {
+      return src
+        ? '<img class="' + clase + '" src="' + escapeHtml(src) + '" alt="" loading="lazy" onerror="imgFallback(this, \'' + escapeHtml(alt || '') + '\', \'ctl-ph\')">'
+        : '<div class="ctl-ph">' + IC_PAQUETE + '</div>';
+    }
+
+    function controlHeroHtml(e) {
+      const u = ctlUltimo;
+      const tag = (ic, txt) => '<div class="ctl-hero-tag">' + ic + escapeHtml(txt) + '</div>';
+
+      if (!u || u.estado === 'deshecho') {
+        if (!u && e.finalValido) {
+          const f = e.final;
+          const cuando = f.ts ? new Date(f.ts).toLocaleString('es-AR', { hour12: false, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+          return '<div class="ctl-hero-body"><div class="ctl-hero-ic">' + IC_CTL_OK + '</div><div class="ctl-hero-tx">' +
+            tag('', f.conDiferencias ? 'Controlado con diferencias' : 'Pedido controlado') +
+            '<div class="ctl-hero-t">' + escapeHtml([f.por, cuando].filter(Boolean).join(' · ') || 'Control finalizado') + '</div>' +
+            '<div class="ctl-hero-s">Cualquier lectura nueva reabre el control.</div></div></div>';
+        }
+        return '<div class="ctl-hero-body"><div class="ctl-hero-ic">' + (u ? IC_CTL_DESHACER : IC_SCAN_LG) + '</div><div class="ctl-hero-tx">' +
+          '<div class="ctl-hero-t">' + (u ? 'Lectura deshecha' : 'Escane&aacute; un art&iacute;culo') + '</div>' +
+          '<div class="ctl-hero-s">' + (u ? 'Segu&iacute; escaneando cuando quieras.' : 'Pas&aacute; la pistola por cada unidad del casillero. Lo que no tiene c&oacute;digo se confirma a mano en la lista.') + '</div>' +
+          '</div></div>';
+      }
+
+      if (u.estado === 'elegir') {
+        return '<div class="ctl-hero-body"><div class="ctl-hero-ic">' + IC_SCAN_LG + '</div><div class="ctl-hero-tx">' +
+          tag('', 'Codigo compartido') +
+          '<div class="ctl-hero-t">&iquest;Cu&aacute;l de estos art&iacute;culos es?</div>' +
+          '<div class="ctl-hero-s"><code>' + escapeHtml(u.texto) + '</code></div></div></div>' +
+          '<div class="ctl-elegir">' + u.opciones.map(c => {
+            const info = sheetsData[c] || {};
+            const l = controlLinea(c);
+            const src = info.imagen || info.imagenAlt || '';
+            return '<button type="button" data-elegir="' + escapeHtml(c) + '">' + controlImgHtml(src, info.imagenAlt, '') +
+              '<span>' + escapeHtml((l && l.nombre) || info.nombre || c) + '</span></button>';
+          }).join('') + '</div>';
+      }
+
+      if (u.estado === 'error') {
+        const info = u.codigo ? (sheetsData[u.codigo] || {}) : {};
+        const src = info.imagen || info.imagenAlt || '';
+        return '<div class="ctl-hero-body">' +
+          (src ? controlImgHtml(src, info.imagenAlt, 'ctl-hero-img') : '<div class="ctl-hero-ic">' + IC_CTL_X + '</div>') +
+          '<div class="ctl-hero-tx">' + tag(IC_CTL_X, 'No pertenece al pedido') +
+          '<div class="ctl-hero-t">' + escapeHtml(info.nombre || 'Codigo desconocido') + '</div>' +
+          '<div class="ctl-hero-s"><code>' + escapeHtml(u.texto) + '</code> &middot; Retiralo del casillero</div></div></div>';
+      }
+
+      // ok / completo / sobra
+      const l = controlLinea(u.codigo) || { nombre: u.codigo, imagen: '', imagenAlt: '' };
+      const textos = {
+        ok: u.manual ? 'Sumado a mano' : 'Correcto',
+        completo: u.manual ? 'Confirmado a mano' : 'Completo',
+        sobra: 'Sobra · ya estaba completo'
+      };
+      const ic = u.estado === 'sobra' ? IC_CTL_X : u.manual ? IC_MANO : IC_CTL_OK;
+      return '<div class="ctl-hero-body">' + controlImgHtml(l.imagen, l.imagenAlt, 'ctl-hero-img') +
+        '<div class="ctl-hero-tx">' + tag(ic, textos[u.estado] || '') +
+        '<div class="ctl-hero-t">' + escapeHtml(l.nombre) + '</div>' +
+        '<div class="ctl-hero-s"><code>' + escapeHtml(u.codigo) + '</code></div></div>' +
+        '<div class="ctl-hero-n is-pop">' + u.n + '<small>/' + u.cantidad + '</small></div></div>';
+    }
+
+    function controlFilaHtml(l) {
+      const ok = l.contado === l.cantidad;
+      const sobra = l.contado > l.cantidad;
+      const pct = Math.min(100, Math.round(l.contado / l.cantidad * 100));
+      let tags = '';
+      if (l.sinCodigo) tags += '<span class="ctl-tag">Sin c&oacute;digo</span>';
+      if (l.manual) tags += '<span class="ctl-tag">' + IC_MANO + 'a mano</span>';
+      if (sobra) tags += '<span class="ctl-tag ctl-tag--warn">Sobra ' + (l.contado - l.cantidad) + '</span>';
+
+      let acc = '';
+      if (l.contado > 0) acc += '<button type="button" class="ctl-ab ctl-ab--ico" data-acc="menos" aria-label="Restar una unidad">&minus;</button>';
+      if (!ok && !sobra) {
+        if (l.sinCodigo) {
+          if (l.cantidad - l.contado > 1) acc += '<button type="button" class="ctl-ab" data-acc="mas" aria-label="Sumar una unidad">+1</button>';
+          acc += '<button type="button" class="ctl-ab ctl-ab--pri" data-acc="completar">' + IC_CTL_OK + 'Confirmar</button>';
+        } else {
+          acc += '<button type="button" class="ctl-ab" data-acc="completar" title="Marcar todas las unidades a mano">Completar</button>';
+        }
+      }
+
+      return '<div class="ctl-row' + (ok ? ' is-ok' : '') + (sobra ? ' is-sobra' : '') + '" data-k="' + escapeHtml(l.clave) + '" data-codigo="' + escapeHtml(l.codigo) + '">' +
+        controlImgHtml(l.imagen, l.imagenAlt, 'ctl-row-img') +
+        '<div class="ctl-row-tx"><div class="ctl-row-nom">' + escapeHtml(l.nombre) + '</div>' +
+        '<div class="ctl-row-cod">' + escapeHtml(l.codigo) + tags + '</div></div>' +
+        '<div class="ctl-cnt"><div class="ctl-cnt-n"><b>' + l.contado + '</b>/' + l.cantidad + '</div>' +
+        '<span class="ctl-cnt-bar"><i style="width:' + pct + '%"></i></span></div>' +
+        (acc ? '<div class="ctl-acc">' + acc + '</div>' : '') +
+        '</div>';
+    }
+
+    function controlExtraHtml(x) {
+      const info = x.codigo ? (sheetsData[x.codigo] || {}) : {};
+      const src = info.imagen || info.imagenAlt || '';
+      return '<div class="ctl-row is-extra" data-k="x:' + escapeHtml(x.clave) + '" data-extra="' + escapeHtml(x.clave) + '">' +
+        controlImgHtml(src, info.imagenAlt, 'ctl-row-img') +
+        '<div class="ctl-row-tx"><div class="ctl-row-nom">' + escapeHtml(info.nombre || 'Codigo desconocido') + '</div>' +
+        '<div class="ctl-row-cod">' + escapeHtml(x.texto || '') + '<span class="ctl-tag ctl-tag--bad">No es del pedido</span></div></div>' +
+        '<div class="ctl-cnt"><div class="ctl-cnt-n"><b>' + (parseInt(x.n) || 0) + '</b> u.</div></div>' +
+        '<div class="ctl-acc"><button type="button" class="ctl-ab" data-acc="quitar-extra">Ya lo retir&eacute;</button></div>' +
+        '</div>';
+    }
+
+    function controlListaHtml(e) {
+      if (!e.lineas.length) return '<div class="ctl-vacio">Este pedido no tiene art&iacute;culos</div>';
+      const sec = (titulo, n, clase) => '<div class="ctl-sec' + (clase ? ' ' + clase : '') + '">' + titulo + '<span class="ctl-sec-n">' + n + '</span></div>';
+      const pend = e.lineas.filter(l => l.contado < l.cantidad && !l.sinCodigo);
+      const aMano = e.lineas.filter(l => l.contado < l.cantidad && l.sinCodigo);
+      const ok = e.lineas.filter(l => l.contado === l.cantidad);
+      let html = '';
+
+      const revisar = e.extras.length + e.sobrantes.length;
+      if (revisar) {
+        html += sec('Revisar', revisar, 'ctl-sec--revisar');
+        html += e.extras.map(controlExtraHtml).join('') + e.sobrantes.map(controlFilaHtml).join('');
+      }
+      if (pend.length) html += sec('Por escanear', pend.length) + pend.map(controlFilaHtml).join('');
+      if (aMano.length) html += sec('Sin c&oacute;digo &middot; confirmar a mano', aMano.length) + aMano.map(controlFilaHtml).join('');
+      if (ok.length) {
+        html += '<button type="button" class="ctl-sec ctl-sec--ok" data-acc="ver-ok" aria-expanded="' + ctlVerOk + '">Controlados<span class="ctl-sec-n">' + ok.length + '</span>' + IC_CTL_CHEV + '</button>';
+        if (ctlVerOk) html += ok.map(controlFilaHtml).join('');
+      }
+      return html;
+    }
+
+    // Repinta la lista animando el cambio de lugar de cada fila (FLIP): al
+    // completarse, un articulo se desliza hacia su nueva seccion en vez de saltar.
+    function controlPintarLista(html) {
+      const reducir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const antes = new Map();
+      if (!reducir) ctlList.querySelectorAll('.ctl-row[data-k]').forEach(el => antes.set(el.dataset.k, el.getBoundingClientRect().top));
+      ctlList.innerHTML = html;
+      if (!reducir) {
+        ctlList.querySelectorAll('.ctl-row[data-k]').forEach(el => {
+          const a = antes.get(el.dataset.k);
+          if (a === undefined) return;
+          const d = a - el.getBoundingClientRect().top;
+          if (Math.abs(d) < 1) return;
+          el.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+        });
+      }
+      if (ctlPulsoClave) {
+        const fila = ctlList.querySelector('.ctl-row[data-k="' + CSS.escape(ctlPulsoClave) + '"]');
+        ctlPulsoClave = '';
+        if (fila) {
+          fila.classList.add('is-pulso');
+          fila.scrollIntoView({ block: 'nearest', behavior: reducir ? 'auto' : 'smooth' });
+        }
+      }
+    }
+
+    function controlRender(opciones) {
+      if (!controlAbierto() || !pedidoActual) return;
+      const e = controlEstado(pedidoActual);
+      const cliente = pedidoActual.cliente || {};
+
+      document.getElementById('ctlTitulo').textContent = cliente.nombre || ('#' + (pedidoId || ''));
+      document.getElementById('ctlSub').textContent =
+        e.contadoU + ' de ' + e.totalU + ' u. · ' + e.lineasOk + ' de ' + e.lineas.length + ' artículos';
+      const pct = e.totalU ? e.contadoU / e.totalU : 0;
+      document.getElementById('ctlRingFill').setAttribute('stroke-dashoffset', (CTL_RING * (1 - pct)).toFixed(1));
+      document.getElementById('ctlRingTx').textContent = Math.round(pct * 100) + '%';
+      document.getElementById('ctlRing').classList.toggle('is-ok', e.completo);
+
+      // Tarjeta de lectura: el estado colorea el borde y el fondo; el destello
+      // se reinicia en cada lectura nueva.
+      const estado = !ctlUltimo ? (e.finalValido ? 'fin' : 'idle')
+        : ctlUltimo.estado === 'deshecho' ? 'idle' : ctlUltimo.estado;
+      ctlHero.dataset.estado = estado;
+      ctlHeroBody.innerHTML = controlHeroHtml(e);
+      if (opciones && opciones.flash) {
+        ctlHero.classList.remove('is-flash');
+        void ctlHero.offsetWidth;
+        ctlHero.classList.add('is-flash');
+      }
+      ctlDeshacerBtn.disabled = ctlDeshacerPila.length === 0;
+
+      controlPintarLista(controlListaHtml(e));
+
+      const fin = document.getElementById('ctlFinalizar');
+      fin.classList.toggle('is-listo', e.completo || e.finalValido);
+      fin.innerHTML = e.finalValido ? IC_CTL_OK + 'Listo'
+        : e.completo ? IC_CTL_OK + 'Finalizar &middot; todo coincide'
+        : 'Finalizar control';
+      document.getElementById('ctlReiniciar').disabled = !e.iniciado && !e.final;
+
+      controlActualizarUI();
+    }
+
+    // Boton de la cabecera de articulos y chip de la franja de contexto.
+    function controlActualizarUI() {
+      const btn = document.getElementById('btnControlar');
+      const chip = document.getElementById('ctxControl');
+      if (!btn || !chip) return;
+      const p = pedidoActual;
+      const visible = !!p && p.status !== 'CANCELADO' && controlItems(p).length > 0;
+      btn.classList.toggle('is-visible', visible);
+      if (!visible) { chip.hidden = true; return; }
+
+      const e = controlEstado(p);
+      btn.classList.toggle('is-sugerido', p.locked === true && p.status === 'CERRADO' && !e.finalValido);
+      btn.classList.toggle('is-ok', e.finalValido);
+      btn.querySelector('span').textContent = e.finalValido ? 'Controlado' : e.iniciado ? 'Seguir control' : 'Controlar';
+
+      const ic = (svg) => svg.replace('<svg ', '<svg class="ic-sm" ');
+      if (e.finalValido) {
+        chip.className = 'ctl-chip ' + (e.final.conDiferencias ? 'ctl-chip--warn' : 'ctl-chip--ok');
+        chip.innerHTML = ic(e.final.conDiferencias ? IC_CTL_X : IC_CTL_OK) + (e.final.conDiferencias ? 'Controlado c/ diferencias' : 'Controlado');
+      } else if (e.final) {
+        chip.className = 'ctl-chip ctl-chip--warn';
+        chip.innerHTML = ic(IC_CTL_X) + 'Control desactualizado';
+      } else if (e.iniciado) {
+        chip.className = 'ctl-chip';
+        chip.innerHTML = ic(IC_SCAN_LG) + 'Control <span class="ctl-chip-num">' + e.contadoU + '/' + e.totalU + '</span>';
+      } else {
+        chip.hidden = true;
+        return;
+      }
+      chip.hidden = false;
+    }
+
+    // --- Abrir, cerrar, finalizar ----------------------------------------
+    async function controlAbrir() {
+      if (!pedidoActual || !pedidoId || pedidoActual.status === 'CANCELADO') return;
+      ctlUltimo = null;
+      ctlDeshacerPila = [];
+      ctlVerOk = false;
+      clearTimeout(ctlFinTimer);
+      clearTimeout(ctlAutoFinTimer);
+      ctlFin.classList.remove('active');
+      ctlInput.value = '';
+      controlModal.classList.add('active');
+      controlModal.setAttribute('aria-hidden', 'false');
+      // El foco va a la hoja y no al campo: en tablet el campo abriria el
+      // teclado en pantalla. La pistola se escucha a nivel documento igual.
+      controlModal.querySelector('.ctl-sheet').focus({ preventScroll: true });
+      controlRender();
+      if (!sheetsLoaded) {
+        await sheetsInicial;
+        controlRender();
+      }
+    }
+
+    function controlCerrar() {
+      clearTimeout(ctlFinTimer);
+      clearTimeout(ctlAutoFinTimer);
+      if (!controlAbierto()) return;
+      controlModal.classList.remove('active');
+      controlModal.setAttribute('aria-hidden', 'true');
+      ctlFin.classList.remove('active');
+      ctlInput.value = '';
+      ctlInput.blur();
+    }
+
+    function controlNombres(lineas) {
+      const n = lineas.slice(0, 2).map(l => l.nombre.length > 28 ? l.nombre.slice(0, 27) + '…' : l.nombre);
+      return n.join(', ') + (lineas.length > 2 ? ' y ' + (lineas.length - 2) + ' más' : '');
+    }
+
+    async function controlFinalizar() {
+      if (!pedidoActual || !pedidoId) return;
+      clearTimeout(ctlAutoFinTimer);
+      const e = controlEstado(pedidoActual);
+      if (e.finalValido) { controlCerrar(); return; }
+
+      let conDiferencias = false;
+      if (!e.completo) {
+        const partes = [];
+        const faltan = e.faltantes.reduce((s, l) => s + l.cantidad - l.contado, 0);
+        const sobran = e.sobrantes.reduce((s, l) => s + l.contado - l.cantidad, 0);
+        const ajenos = e.extras.reduce((s, x) => s + (parseInt(x.n) || 0), 0);
+        if (faltan) partes.push('Faltan ' + faltan + ' u. (' + controlNombres(e.faltantes) + ')');
+        if (sobran) partes.push('Sobran ' + sobran + ' u. (' + controlNombres(e.sobrantes) + ')');
+        if (ajenos) partes.push(ajenos + (ajenos === 1 ? ' lectura que no es' : ' lecturas que no son') + ' del pedido');
+        const seguir = await confirmarAccion({
+          titulo: 'Finalizar con diferencias?',
+          texto: partes.join(' · ') + '. Queda registrado como controlado con diferencias.',
+          confirmar: 'Finalizar igual',
+          volver: 'Seguir controlando',
+          tono: 'aviso'
+        });
+        if (!seguir || !controlAbierto() || !pedidoActual) return;
+        conDiferencias = true;
+      }
+
+      const user = firebase.auth().currentUser;
+      const final = { por: (user && user.email) || '', ts: Date.now(), firma: e.firma, conDiferencias };
+      controlLocal().final = final;
+      db.ref('pedidos/' + pedidoId + '/control/final').set(final).catch(err => {
+        console.error('Error al finalizar el control:', err);
+        showToast('No se pudo guardar el control');
+      });
+
+      controlBeep('fin');
+      if (navigator.vibrate) navigator.vibrate(CTL_VIBRA.fin);
+      ctlUltimo = null;
+      controlRender();
+      ctlFin.classList.toggle('is-dif', conDiferencias);
+      document.getElementById('ctlFinT').textContent = conDiferencias ? 'Controlado con diferencias' : 'Pedido controlado';
+      document.getElementById('ctlFinS').textContent = e.contadoU + ' unidades · ' + e.lineas.length + ' artículos';
+      ctlFin.classList.remove('active');
+      void ctlFin.offsetWidth;   // reinicia las animaciones del sello
+      ctlFin.classList.add('active');
+      if (!conDiferencias) ctlFinTimer = setTimeout(controlCerrar, 2200);
+    }
+
+    async function controlReiniciar() {
+      if (!pedidoActual || !pedidoId) return;
+      const ok = await confirmarAccion({
+        titulo: 'Reiniciar el control?',
+        texto: 'Se borran todas las lecturas de este pedido y el control empieza de cero.',
+        confirmar: 'Si, reiniciar',
+        volver: 'Volver',
+        tono: 'peligro'
+      });
+      if (!ok || !pedidoActual || !pedidoId) return;
+      delete pedidoActual.control;
+      db.ref('pedidos/' + pedidoId + '/control').remove().catch(err => {
+        console.error('Error al reiniciar el control:', err);
+        showToast('No se pudo reiniciar el control');
+      });
+      ctlUltimo = null;
+      ctlDeshacerPila = [];
+      controlRender();
+    }
+
+    // --- Eventos ---------------------------------------------------------
+    document.getElementById('btnControlar').addEventListener('click', controlAbrir);
+    document.getElementById('ctxControl').addEventListener('click', controlAbrir);
+    document.getElementById('ctlCerrar').addEventListener('click', controlCerrar);
+    document.getElementById('ctlFinalizar').addEventListener('click', () => controlFinalizar());
+    document.getElementById('ctlReiniciar').addEventListener('click', controlReiniciar);
+    document.getElementById('ctlFinListo').addEventListener('click', controlCerrar);
+    ctlDeshacerBtn.addEventListener('click', controlDeshacer);
+    controlModal.addEventListener('click', (e) => { if (e.target === controlModal) controlCerrar(); });
+
+    // Campo manual: Enter toma lo escrito como una lectura. Si la pistola cae
+    // con el foco aca, el detector global ya la proceso y limpio el campo.
+    ctlInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const texto = ctlInput.value.trim();
+      ctlInput.value = '';
+      if (texto) controlLectura(texto);
+    });
+
+    ctlHeroBody.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-elegir]');
+      if (b) controlContar(b.dataset.elegir);
+    });
+
+    ctlList.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-acc]');
+      if (!b) return;
+      const acc = b.dataset.acc;
+      if (acc === 'ver-ok') { ctlVerOk = !ctlVerOk; controlRender(); return; }
+      const fila = b.closest('.ctl-row');
+      if (!fila) return;
+      if (acc === 'quitar-extra') {
+        controlSumarExtra(fila.dataset.extra, -Infinity);
+        ctlUltimo = null;
+        controlRender();
+        return;
+      }
+      const codigo = fila.dataset.codigo;
+      if (acc === 'completar') controlCompletar(codigo);
+      else if (acc === 'mas') controlMas(codigo);
+      else if (acc === 'menos') controlMenos(codigo);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !controlAbierto() || confirmResolver) return;
+      e.preventDefault();
+      controlCerrar();
+    });
 
     // ==========================================
     // BOTON TERMINAR (integrado en btnToggleEstado)
@@ -10335,7 +11657,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           db.ref('pedidos/' + pedidoId).update(updateData),
           db.ref('pedidos/' + pedidoId + '/pagos').update(pagosUpdate)
         ]);
-        if (!silencioso) showToast('Pedido cerrado');
+        if (!silencioso) showToast('Pedido cerrado · listo para controlar');
         return true;
       } catch (e) { showToast('Error al cerrar'); return false; }
     }
@@ -10615,13 +11937,36 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!puedeEjecutarAccionesCriticas()) { showToast('Accion no permitida para este usuario'); return; }
       if (despachoYaEjecutado) { showToast('Ya fue procesado'); return; }
 
-      const okEntregar = await confirmarAccion({
-        titulo: 'Marcar el pedido como entregado?',
-        texto: 'Se registran los movimientos de stock y el pedido queda cerrado.',
-        confirmar: 'Si, entregar',
-        volver: 'Volver',
-        tono: 'ok'
-      });
+      // El control es opcional, pero entregar sin controlar se avisa. "Volver"
+      // abre el control; cerrar el dialogo de otra forma solo cancela.
+      const ctlE = controlEstado(pedidoActual);
+      let okEntregar = false;
+      if (!ctlE.finalValido) {
+        const btnNo = document.getElementById('confirmNo');
+        let pidioControl = false;
+        const marcar = () => { pidioControl = true; };
+        btnNo.addEventListener('click', marcar, true);
+        const entregarIgual = await confirmarAccion({
+          titulo: 'Este pedido no fue controlado',
+          texto: ctlE.final
+            ? 'El control quedo desactualizado: cambiaron los articulos despues de controlarlo. Si entregas igual, se registran los movimientos de stock y el pedido queda cerrado.'
+            : 'La mercaderia todavia no se verifico con la pistola. Si entregas igual, se registran los movimientos de stock y el pedido queda cerrado.',
+          confirmar: 'Entregar igual',
+          volver: 'Controlar ahora',
+          tono: 'aviso'
+        });
+        btnNo.removeEventListener('click', marcar, true);
+        if (!entregarIgual) { if (pidioControl) controlAbrir(); return; }
+        okEntregar = true;
+      } else {
+        okEntregar = await confirmarAccion({
+          titulo: 'Marcar el pedido como entregado?',
+          texto: 'Se registran los movimientos de stock y el pedido queda cerrado.',
+          confirmar: 'Si, entregar',
+          volver: 'Volver',
+          tono: 'ok'
+        });
+      }
       if (!okEntregar) return;
       // El sello se pone recien despues de confirmar: mientras el modal estaba
       // abierto el boton debia seguir sirviendo si el operador decia que no.
@@ -11189,7 +12534,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const clienteChanged = JSON.stringify(nuevoPedido.cliente) !== JSON.stringify(pedidoActual.cliente) || nuevoPedido.tipoPago !== pedidoActual.tipoPago || nuevoPedido.tipoEntrega !== pedidoActual.tipoEntrega;
         const enPreparacionChanged = nuevoPedido.enPreparacion !== pedidoActual.enPreparacion;
         const pagosChanged = JSON.stringify(nuevoPedido.pagos) !== JSON.stringify(pedidoActual.pagos);
-        if (!itemsChanged && !statusChanged && !notaChanged && !clienteChanged && !enPreparacionChanged && !pagosChanged) return;
+        const controlChanged = controlHuella(nuevoPedido.control) !== controlHuella(pedidoActual.control);
+        if (!itemsChanged && !statusChanged && !notaChanged && !clienteChanged && !enPreparacionChanged && !pagosChanged && !controlChanged) return;
 
         pedidoActual = nuevoPedido;
         pedidoActual.id = id;
@@ -11219,6 +12565,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           if (ns) ns.value = nuevoPedido.nota || '';
         }
         if (enPreparacionChanged) actualizarBtnTerminar();
+        // Lecturas de otro equipo o items editados con el control abierto.
+        if (controlChanged || itemsChanged || statusChanged) {
+          controlActualizarUI();
+          if (controlAbierto()) controlRender();
+        }
         configurarPedidoFooterState();
       };
 
