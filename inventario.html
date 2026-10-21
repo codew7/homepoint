@@ -842,7 +842,7 @@
             </div>
           </div>
           <div id="stockDisplay" style="display:none;">
-            <i class="bi bi-box-seam"></i> Stock: <span id="stockCantidad">-</span>
+            <i class="bi bi-box-seam"></i> <span id="stockEtiqueta">Stock</span>: <span id="stockCantidad">-</span>
           </div>
         </div>
 
@@ -1386,6 +1386,12 @@
     }
 
     // Función para cargar y mostrar el stock disponible de un artículo (desde Google Sheets)
+    // Se muestra el stock de la sucursal de este punto de venta, no el total.
+    // Hoja StockPorSucursal (fila 1 = encabezado): A código, B nombre,
+    // C stock Munro, D stock Caseros, E stock total (igual que consultaStock.html).
+    const STOCK_SUCURSAL_URL = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/StockPorSucursal!A2:E?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+    const COL_STOCK_SUCURSAL = { '1': 2, '2': 3 }; // C Munro, D Caseros
+    const SUCURSAL_STOCK = (window.PuntoVenta && PuntoVenta.actual()) || '1';
     // Cache local para evitar llamadas repetidas a la API
     let stockCache = null;
     let stockCacheTimestamp = 0;
@@ -1404,24 +1410,25 @@
       stockDisplay.style.display = 'block';
       stockDisplay.className = 'stock-cargando';
       stockCantidad.textContent = 'Cargando...';
+      document.getElementById('stockEtiqueta').textContent = 'Stock ' + nombreSucursal(SUCURSAL_STOCK);
       
       try {
         // Verificar si tenemos cache válido
         const ahora = Date.now();
         if (!stockCache || (ahora - stockCacheTimestamp) > STOCK_CACHE_DURATION) {
-          // Consultar Google Sheets
-          const response = await fetch(SHEETS_URL);
+          // Consultar Google Sheets (hoja StockPorSucursal)
+          const response = await fetch(STOCK_SUCURSAL_URL, { cache: 'no-store' });
+          if (!response.ok) throw new Error('HTTP ' + response.status);
           const data = await response.json();
           const rows = data.values || [];
           
-          // Crear mapa de stock por código (columna 2 = código, columna 10 = stock)
+          // Crear mapa de stock por código con la columna de esta sucursal
+          const col = COL_STOCK_SUCURSAL[SUCURSAL_STOCK] ?? COL_STOCK_SUCURSAL['1'];
           stockCache = {};
-          for (let i = 1; i < rows.length; i++) { // Empezar desde 1 para saltar header
-            const row = rows[i];
-            const codigoProducto = row[2] || '';
-            const stockActual = Number(row[10]) || 0;
+          for (const row of rows) {
+            const codigoProducto = String(row[0] || '').trim();
             if (codigoProducto) {
-              stockCache[codigoProducto] = stockActual;
+              stockCache[codigoProducto] = Number(row[col]) || 0;
             }
           }
           stockCacheTimestamp = ahora;
@@ -1429,7 +1436,7 @@
         }
         
         // Buscar el stock del código solicitado
-        const stockActual = stockCache[codigo] || 0;
+        const stockActual = stockCache[String(codigo).trim()] || 0;
         stockCantidad.textContent = stockActual;
         
         // Aplicar clase CSS según el stock disponible
@@ -1452,9 +1459,8 @@
     // Cargar productos desde Google Sheets
     // Optimizaciones:
     //   1. Cache en localStorage (TTL 10 min) → evita el fetch en cada recarga
-    //   2. Rellena stockCache con los mismos datos → elimina el segundo fetch a Sheets
     //   3. Construye el HTML como string y lo asigna una sola vez → evita O(n²) en DOM
-    const PRODUCTOS_CACHE_KEY = 'inv_productos_v3';
+    const PRODUCTOS_CACHE_KEY = 'inv_productos_v4';
     const PRODUCTOS_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
     // Normaliza el contenido de la columna L (puede traer varios códigos separados por comas)
@@ -1471,27 +1477,24 @@
       const select = document.getElementById('producto');
       try {
         let productosArr = null;
-        let nuevoStockCache = null;
 
         // 1. Intentar usar caché de localStorage
         try {
           const cached = localStorage.getItem(PRODUCTOS_CACHE_KEY);
           if (cached) {
-            const { data, stockData, timestamp } = JSON.parse(cached);
+            const { data, timestamp } = JSON.parse(cached);
             if (Date.now() - timestamp < PRODUCTOS_CACHE_TTL) {
               productosArr = data;
-              nuevoStockCache = stockData;
             }
           }
         } catch (_) { /* ignorar errores de localStorage */ }
 
-        // 2. Si no hay caché válido, hacer fetch y construir ambos caches en una sola pasada
+        // 2. Si no hay caché válido, hacer fetch
         if (!productosArr) {
           const res = await fetch(SHEETS_URL);
           const data = await res.json();
           const rows = data.values || [];
           productosArr = [];
-          nuevoStockCache = {};
 
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -1503,26 +1506,15 @@
             if (codigo && nombre) {
               productosArr.push({ codigo, nombre, valorUSD, imgRaw, codigoBarras });
             }
-            // Aprovechar la misma pasada para construir el mapa de stock (col 10)
-            if (codigo) {
-              nuevoStockCache[codigo] = Number(row[10]) || 0;
-            }
           }
 
           // Guardar en localStorage para próximas cargas
           try {
             localStorage.setItem(PRODUCTOS_CACHE_KEY, JSON.stringify({
               data: productosArr,
-              stockData: nuevoStockCache,
               timestamp: Date.now()
             }));
           } catch (_) { /* ignorar si localStorage está lleno */ }
-        }
-
-        // Rellenar stockCache global para que cargarStockDisponible no necesite otro fetch
-        if (nuevoStockCache && !stockCache) {
-          stockCache = nuevoStockCache;
-          stockCacheTimestamp = Date.now();
         }
 
         productos = productosArr;

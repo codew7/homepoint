@@ -149,6 +149,42 @@
             border-color: rgba(255, 255, 255, 0.28);
         }
 
+        /* Selector de punto de venta dentro de la barra oscura */
+        .select-punto {
+            font-family: var(--font-sans);
+            font-size: 12px;
+            font-weight: 500;
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: var(--r-md);
+            height: 30px;
+            padding: 0 28px 0 11px;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23cbd5e1' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            transition: background-color .15s, border-color .15s;
+        }
+
+        .select-punto:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        /* Las opciones se despliegan sobre fondo claro del sistema */
+        .select-punto option {
+            color: var(--text);
+            background: var(--surface);
+        }
+
+        .select-punto:disabled {
+            opacity: .6;
+            cursor: wait;
+        }
+
         /* ============================================================
            ÁREA DE TRABAJO
            ============================================================ */
@@ -681,6 +717,70 @@
         }
 
         /* ============================================================
+           INICIO DE SESIÓN DE OTRO PUNTO DE VENTA
+           ============================================================ */
+        .login-punto {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .login-punto[hidden] {
+            display: none;
+        }
+
+        .login-punto-card {
+            width: 100%;
+            max-width: 360px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-top: 3px solid var(--accent);
+            border-radius: var(--r-md);
+            box-shadow: var(--shadow-md);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .login-punto-card h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .login-punto-card p {
+            color: var(--text-2);
+            margin-bottom: 14px;
+        }
+
+        .login-punto-card .filter-input {
+            margin-bottom: 10px;
+        }
+
+        .login-punto-error {
+            min-height: 18px;
+            font-size: 12px;
+            color: var(--danger);
+        }
+
+        .login-punto-acciones {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .login-punto-acciones button:disabled {
+            opacity: .6;
+            cursor: wait;
+        }
+
+        /* ============================================================
            RESPONSIVE
            ============================================================ */
         @media (max-width: 980px) {
@@ -740,6 +840,10 @@
             th { background: #fff; border-bottom: 1px solid #000; }
         }
     </style>
+
+    <!-- Punto de venta del equipo (puntoVenta.js): carga el config (Firebase) que le toca,
+         o pide elegirlo si es la primera vez. Cada punto de venta tiene su propia base. -->
+    <script src="puntoVenta.js"></script>
 </head>
 <body>
     <header class="topbar">
@@ -749,6 +853,7 @@
         </div>
         <div class="topbar-right">
             <p id="subtituloVentana" class="scope-label">Pedidos con método de pago por transferencia — últimos 7 días y pedidos sin fecha</p>
+            <select id="selectorPunto" class="select-punto" aria-label="Punto de venta a consultar" hidden></select>
             <button type="button" id="ventana30Btn" class="btn-scope">Últimos 30 días</button>
         </div>
     </header>
@@ -853,25 +958,133 @@
         </div>
     </main>
 
+    <!-- Inicio de sesión para consultar otro punto de venta (cada uno tiene sus usuarios) -->
+    <div id="loginPunto" class="login-punto" role="dialog" aria-modal="true" aria-labelledby="loginPuntoTitulo" hidden>
+        <form id="loginPuntoForm" class="login-punto-card" novalidate>
+            <h2 id="loginPuntoTitulo">Iniciar sesión</h2>
+            <p>Para consultar <strong id="loginPuntoNombre"></strong> ingresá con un usuario de ese punto de venta.</p>
+            <label class="filter-label" for="loginPuntoEmail">Email</label>
+            <input type="email" id="loginPuntoEmail" class="filter-input" autocomplete="username" required>
+            <label class="filter-label" for="loginPuntoClave">Contraseña</label>
+            <input type="password" id="loginPuntoClave" class="filter-input" autocomplete="current-password" required>
+            <div id="loginPuntoError" class="login-punto-error" role="alert"></div>
+            <div class="login-punto-acciones">
+                <button type="button" id="loginPuntoCancelar" class="clear-filters">Cancelar</button>
+                <button type="submit" id="loginPuntoOk" class="clear-filters is-accent">Ingresar</button>
+            </div>
+        </form>
+    </div>
+
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
     <script>
-        // Configuración de Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyA4fVBCRgkhbTAaOyWg4cAkw7UXokF2uu8",
-            authDomain: "pedidos-87064.firebaseapp.com",
-            databaseURL: "https://pedidos-87064-default-rtdb.firebaseio.com",
-            projectId: "pedidos-87064",
-            storageBucket: "pedidos-87064.firebasestorage.app",
-            messagingSenderId: "294352872886",
-            appId: "1:294352872886:web:a5ffe0a214f23dca73cd17"
-        };
-
-        // Inicializar Firebase
+        // Inicializar Firebase con el config del punto de venta (firebaseConfig lo define
+        // el configN.js que cargó puntoVenta.js)
         firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
+        let database = firebase.database();
+
+        // Punto de venta consultado. Arranca en el del equipo (o en ?pv= de la URL) y se
+        // cambia desde el selector de la barra, sin tocar el punto de venta del equipo.
+        const puntoEquipo = window.PuntoVenta ? PuntoVenta.actual() : null;
+        let puntoConsultado = puntoEquipo;
+        const basesPorPunto = {};
+        if (puntoEquipo) basesPorPunto[puntoEquipo] = database;
+
+        // Devuelve la base del punto de venta pedido. Para un punto distinto al del equipo
+        // lee su configN.js como texto y crea una app de Firebase aparte (el archivo declara
+        // `const firebaseConfig`, que no se puede volver a cargar como <script>).
+        // Cada punto de venta es otro proyecto de Firebase con sus propios usuarios: si en
+        // este navegador no hay sesión en ese proyecto, se pide iniciarla (una sola vez,
+        // después Firebase la recuerda).
+        async function obtenerBase(id) {
+            if (basesPorPunto[id]) return basesPorPunto[id];
+            const punto = PuntoVenta.lista.find(p => p.id === id);
+            if (!punto) throw new Error('Punto de venta desconocido: ' + id);
+            let app = firebase.apps.find(a => a.name === 'pv-' + id);
+            if (!app) {
+                const resp = await fetch(punto.config, { cache: 'no-store' });
+                if (!resp.ok) throw new Error('No se pudo leer ' + punto.config);
+                const config = new Function(await resp.text() + '\nreturn firebaseConfig;')();
+                app = firebase.initializeApp(config, 'pv-' + id);
+            }
+            if (!(await usuarioDe(app))) await pedirLogin(app, punto.nombre);
+            basesPorPunto[id] = app.database();
+            return basesPorPunto[id];
+        }
+
+        // ------------------------------------------------------------ Sesión --
+        const LOGIN_CANCELADO = 'login-cancelado';
+
+        // Usuario con sesión en la app indicada (espera a que Firebase la restaure)
+        function usuarioDe(app) {
+            return new Promise(resolve => {
+                const dejar = app.auth().onAuthStateChanged(usuario => { dejar(); resolve(usuario); });
+            });
+        }
+
+        // Tarjeta de inicio de sesión para otro punto de venta. Resuelve al entrar y
+        // rechaza con LOGIN_CANCELADO si se cancela.
+        function pedirLogin(app, nombre) {
+            return new Promise((resolve, reject) => {
+                const overlay = document.getElementById('loginPunto');
+                const form = document.getElementById('loginPuntoForm');
+                const email = document.getElementById('loginPuntoEmail');
+                const clave = document.getElementById('loginPuntoClave');
+                const error = document.getElementById('loginPuntoError');
+                const ingresar = document.getElementById('loginPuntoOk');
+                const cancelar = document.getElementById('loginPuntoCancelar');
+                const foco = document.activeElement;
+
+                document.getElementById('loginPuntoNombre').textContent = nombre;
+                form.reset();
+                error.textContent = '';
+                overlay.hidden = false;
+                setTimeout(() => email.focus(), 30);
+
+                function cerrar() {
+                    overlay.hidden = true;
+                    form.removeEventListener('submit', alEnviar);
+                    cancelar.removeEventListener('click', alCancelar);
+                    overlay.removeEventListener('keydown', alTecla);
+                    if (foco && foco.focus) foco.focus();
+                }
+                async function alEnviar(e) {
+                    e.preventDefault();
+                    error.textContent = '';
+                    ingresar.disabled = true;
+                    try {
+                        await app.auth().signInWithEmailAndPassword(email.value.trim(), clave.value);
+                        cerrar();
+                        resolve();
+                    } catch (err) {
+                        console.error('Error al iniciar sesión en el punto de venta:', err);
+                        error.textContent = 'Usuario o contraseña incorrectos.';
+                        clave.value = '';
+                        clave.focus();
+                    } finally {
+                        ingresar.disabled = false;
+                    }
+                }
+                function alCancelar() {
+                    cerrar();
+                    reject(new Error(LOGIN_CANCELADO));
+                }
+                function alTecla(e) {
+                    if (e.key === 'Escape') alCancelar();
+                }
+                form.addEventListener('submit', alEnviar);
+                cancelar.addEventListener('click', alCancelar);
+                overlay.addEventListener('keydown', alTecla);
+            });
+        }
+
+        function nombrePunto(id) {
+            const punto = window.PuntoVenta && PuntoVenta.lista.find(p => p.id === id);
+            return punto ? punto.nombre : '';
+        }
 
         // Variables globales
     let transferenciasData = [];
@@ -888,20 +1101,85 @@
     const REGISTROS_POR_PAGINA = 100;
     let paginaActual = 1;
 
-        // Funciones para manejo de localStorage
-        function getCheckedItems() {
-            const stored = localStorage.getItem('transferenciasVerificadas');
-            return stored ? JSON.parse(stored) : {};
+        // ---------------------------------------------- Verificados (Firebase) --
+        // Nodo 'transferenciasVerificadas' de la base del punto de venta consultado.
+        // Cada registro es { <pedidoId>: <fecha de verificación en ms> }: si existe, el
+        // pedido está verificado; al destildar se borra. Se guarda solo lo verificado.
+        // Los registros de más de 60 días se borran al abrir la página (no hace falta
+        // Cloud Functions): como el nodo ya se descarga entero, no suma lecturas.
+        const NODO_VERIFICADOS = 'transferenciasVerificadas';
+        const DIAS_RETENCION_VERIFICADOS = 60;
+        let verificados = {};
+        let refVerificados = null;
+
+        // Marca o desmarca el checkbox de un pedido si está en la página visible
+        function pintarVerificado(pedidoId, marcado) {
+            const checkbox = document.querySelector(`.custom-checkbox[data-pedido-id="${CSS.escape(pedidoId)}"]`);
+            if (checkbox) checkbox.checked = marcado;
         }
 
-        function saveCheckedItem(pedidoId, checked) {
-            const checkedItems = getCheckedItems();
-            if (checked) {
-                checkedItems[pedidoId] = true;
-            } else {
-                delete checkedItems[pedidoId];
+        // Escucha los verificados de la base actual. Los eventos child_* solo traen lo que
+        // cambia, así que lo que verifica otro equipo aparece al instante sin recargar.
+        function escucharVerificados() {
+            if (refVerificados) refVerificados.off();
+            verificados = {};
+            document.querySelectorAll('.custom-checkbox').forEach(c => { c.checked = false; });
+
+            const ref = database.ref(NODO_VERIFICADOS);
+            refVerificados = ref;
+            ref.on('child_added', snap => {
+                verificados[snap.key] = snap.val();
+                pintarVerificado(snap.key, true);
+            });
+            ref.on('child_removed', snap => {
+                delete verificados[snap.key];
+                pintarVerificado(snap.key, false);
+            });
+
+            // Limpieza: usa los mismos datos que ya trajo el listener (no se descargan de nuevo)
+            ref.once('value').then(snap => {
+                const limite = Date.now() - DIAS_RETENCION_VERIFICADOS * 24 * 60 * 60 * 1000;
+                const vencidos = {};
+                snap.forEach(child => {
+                    const fecha = child.val();
+                    if (typeof fecha !== 'number' || fecha < limite) vencidos[child.key] = null;
+                });
+                if (Object.keys(vencidos).length) return ref.update(vencidos);
+            }).catch(error => console.error('Error al limpiar verificados vencidos:', error));
+        }
+
+        function guardarVerificado(pedidoId, marcado) {
+            const ref = database.ref(`${NODO_VERIFICADOS}/${pedidoId}`);
+            return marcado ? ref.set(firebase.database.ServerValue.TIMESTAMP) : ref.remove();
+        }
+
+        // Una sola vez: sube los verificados que quedaron guardados en este equipo
+        // (localStorage) y los borra de ahí. Esos pedidos son de la base del punto 1,
+        // que era la única que consultaba la página.
+        async function migrarVerificadosLocales() {
+            let locales;
+            try {
+                locales = JSON.parse(localStorage.getItem('transferenciasVerificadas') || '{}');
+            } catch (_) {
+                return;
             }
-            localStorage.setItem('transferenciasVerificadas', JSON.stringify(checkedItems));
+            const ids = Object.keys(locales || {});
+            if (!ids.length) {
+                try { localStorage.removeItem('transferenciasVerificadas'); } catch (_) {}
+                return;
+            }
+            // Solo si ya hay sesión en la base del punto 1 (no se pide login para esto):
+            // si no, quedan en el equipo hasta que se abra la página consultando ese punto.
+            const base = window.PuntoVenta ? basesPorPunto['1'] : database;
+            if (!base) return;
+            try {
+                const cambios = {};
+                ids.forEach(id => { cambios[id] = firebase.database.ServerValue.TIMESTAMP; });
+                await base.ref(NODO_VERIFICADOS).update(cambios);
+                localStorage.removeItem('transferenciasVerificadas');
+            } catch (error) {
+                console.error('Error al migrar verificados locales:', error);
+            }
         }
 
         // Conversaciones de WhatsApp ya abiertas (persisten entre recargas)
@@ -1097,8 +1375,7 @@
 
         // Función para crear fila de tabla
         function crearFilaTabla(pedido) {
-            const checkedItems = getCheckedItems();
-            const isChecked = checkedItems[pedido.id] || false;
+            const isChecked = Boolean(verificados[pedido.id]);
             // Resaltar pagos parciales
             const esParcial = medioPagoDe(pedido) === 'parcial';
             // Preparar número de WhatsApp
@@ -1189,7 +1466,13 @@
             tableBody.querySelectorAll('.custom-checkbox').forEach(checkbox => {
                 checkbox.addEventListener('change', function() {
                     const pedidoId = this.getAttribute('data-pedido-id');
-                    saveCheckedItem(pedidoId, this.checked);
+                    const marcado = this.checked;
+                    guardarVerificado(pedidoId, marcado).catch(error => {
+                        // Si no se pudo guardar, el checkbox vuelve a como estaba
+                        console.error('Error al guardar verificado:', error);
+                        this.checked = !marcado;
+                        alert('No se pudo guardar la verificación: ' + error.message);
+                    });
                 });
             });
 
@@ -1271,8 +1554,13 @@
             document.getElementById('loading').style.display = 'none';
         }
 
+        // Cada carga lleva un número: si se cambia de punto de venta mientras otra carga
+        // sigue en curso, la respuesta vieja se descarta.
+        let cargaVigente = 0;
+
         // Función principal para cargar datos
         async function cargarDatos() {
+            const estaCarga = ++cargaVigente;
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
@@ -1293,6 +1581,7 @@
                     database.ref('pedidos').orderByChild('fecha').endAt(null).once('value'),
                     database.ref('pedidos').orderByChild('fecha').equalTo('').once('value')
                 ]);
+                if (estaCarga !== cargaVigente) return;
 
                 const pedidosCombinados = {};
                 // Nota: el callback de snapshot.forEach debe devolver undefined; si devuelve un
@@ -1321,6 +1610,7 @@
                 aplicarFiltros();
 
             } catch (error) {
+                if (estaCarga !== cargaVigente) return;
                 console.error('Error al cargar datos:', error);
                 mostrarError('Error al conectar con la base de datos: ' + error.message);
             }
@@ -1367,6 +1657,31 @@
                 recargarDesdeServidor();
             });
 
+            // Cambia el punto de venta consultado (solo en esta página) y vuelve a consultar
+            const selectorPunto = document.getElementById('selectorPunto');
+            selectorPunto.addEventListener('change', async function() {
+                const id = selectorPunto.value;
+                selectorPunto.disabled = true;
+                try {
+                    database = await obtenerBase(id);
+                    puntoConsultado = id;
+                    // La URL recuerda el punto elegido para que recargar no lo pierda
+                    const url = new URL(location.href);
+                    if (id === puntoEquipo) url.searchParams.delete('pv'); else url.searchParams.set('pv', id);
+                    history.replaceState(null, '', url);
+                    escucharVerificados();
+                    actualizarEtiquetaVentana();
+                    recargarDesdeServidor();
+                } catch (error) {
+                    selectorPunto.value = puntoConsultado;
+                    if (error.message === LOGIN_CANCELADO) return;
+                    console.error('Error al cambiar de punto de venta:', error);
+                    mostrarError('No se pudo cambiar de punto de venta: ' + error.message);
+                } finally {
+                    selectorPunto.disabled = false;
+                }
+            });
+
             // Paginación
             document.getElementById('paginaAnterior').addEventListener('click', function() {
                 if (paginaActual > 1) irAPagina(paginaActual - 1);
@@ -1384,19 +1699,64 @@
                 extendido ? `Últimos ${DIAS_POR_DEFECTO} días` : `Últimos ${DIAS_EXTENDIDO} días`;
             document.getElementById('subtituloVentana').textContent =
                 `Pedidos con método de pago por transferencia — últimos ${diasVentana} días y pedidos sin fecha`;
+            if (window.PuntoVenta && PuntoVenta.multiple()) {
+                document.title = 'Control de Transferencias · ' + nombrePunto(puntoConsultado);
+            }
+        }
+
+        // Llena el selector de punto de venta (solo si hay más de uno)
+        function poblarSelectorPunto() {
+            if (!window.PuntoVenta || !PuntoVenta.multiple()) return;
+            const selector = document.getElementById('selectorPunto');
+            selector.innerHTML = PuntoVenta.lista
+                .map(p => `<option value="${p.id}">${p.nombre}</option>`)
+                .join('');
+            selector.value = puntoConsultado;
+            selector.hidden = false;
         }
 
         // Inicializar la aplicación cuando se carga la página
-        document.addEventListener('DOMContentLoaded', function() {
+        // Verificar autenticación, igual que el resto del panel. La sesión es la del proyecto
+        // del punto de venta del equipo: si ya se entró desde index.html, no se pide de nuevo.
+        let appIniciada = false;
+        firebase.auth().onAuthStateChanged(user => {
+            if (!user) {
+                // Con ?redirect= el login entra al proyecto del punto de venta del equipo.
+                window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (appIniciada) return;
+            appIniciada = true;
+            inicializarApp();
+        });
+
+        async function inicializarApp() {
             mostrarTodos = false;
             diasVentana = DIAS_POR_DEFECTO;
             paginaActual = 1;
             document.getElementById('verTodosBtn').textContent = 'Ver todos';
+            // Si la URL trae ?pv= de otro punto de venta, se arranca consultando ese
+            const pvUrl = new URLSearchParams(location.search).get('pv');
+            if (pvUrl && pvUrl !== puntoEquipo && window.PuntoVenta && PuntoVenta.lista.some(p => p.id === pvUrl)) {
+                try {
+                    database = await obtenerBase(pvUrl);
+                    puntoConsultado = pvUrl;
+                } catch (error) {
+                    if (error.message !== LOGIN_CANCELADO) console.error('Error al abrir el punto de venta de la URL:', error);
+                    // Se queda en el punto de venta del equipo
+                    const url = new URL(location.href);
+                    url.searchParams.delete('pv');
+                    history.replaceState(null, '', url);
+                }
+            }
+            poblarSelectorPunto();
+            escucharVerificados();
+            migrarVerificadosLocales();
             actualizarEtiquetaVentana();
             // Configurar event listeners una sola vez
             configurarFiltros();
             cargarDatos();
-        });
+        }
     </script>
 </body>
 </html>
