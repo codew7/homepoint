@@ -4333,24 +4333,12 @@
     .ctl-hero-bar {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 8px;
       margin-top: 14px;
       padding-top: 12px;
       border-top: 1px solid var(--line-2);
     }
-    .ctl-input {
-      flex: 1;
-      min-width: 0;
-      height: 40px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--r2);
-      background: var(--surface-2);
-      color: var(--ink);
-      font-family: var(--font-mono);
-      font-size: 13.5px;
-    }
-    .ctl-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); background: var(--surface); }
     .ctl-btn-ghost {
       height: 40px;
       display: inline-flex;
@@ -4583,6 +4571,103 @@
     .ctl-fin-t { font-size: 24px; font-weight: 800; letter-spacing: -.5px; color: var(--ink); }
     .ctl-fin-s { font-size: 14px; font-weight: 600; color: var(--ink-3); }
     .ctl-fin button { margin-top: 22px; height: 50px; padding: 0 34px; border: none; border-radius: 99px; background: var(--inverso-bg); color: var(--inverso-fg); font-size: 15px; font-weight: 750; }
+
+    /* Quien hizo el control: hoja chica que sube dentro de la hoja de control
+       al finalizar, sobre la lista (z 3, por encima de la pantalla de exito). */
+    .ctl-quien {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      background: var(--scrim);
+    }
+    .ctl-quien.active { display: flex; animation: fadeIn .2s ease-out both; }
+    .ctl-quien-panel {
+      width: 100%;
+      max-width: 560px;
+      padding: 10px 20px calc(20px + env(safe-area-inset-bottom));
+      background: var(--surface);
+      border-radius: var(--r4) var(--r4) 0 0;
+      box-shadow: var(--sh3);
+      animation: ctlSheetIn .46s cubic-bezier(.32, .72, 0, 1) both;
+    }
+    @media (min-width: 1024px) {
+      .ctl-quien { align-items: center; }
+      .ctl-quien-panel { border-radius: var(--r4); padding-bottom: 20px; }
+    }
+    .ctl-quien-grip { width: 38px; height: 5px; margin: 0 auto 14px; border-radius: 99px; background: var(--line); }
+    .ctl-quien-t { font-size: 20px; font-weight: 800; letter-spacing: -.4px; color: var(--ink); text-align: center; }
+    .ctl-quien-s { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--ink-3); text-align: center; }
+    .ctl-quien-ops { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+    .ctl-quien-ops button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 6px 14px;
+      border: 1.5px solid var(--line);
+      border-radius: var(--r3);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: 14.5px;
+      font-weight: 750;
+      letter-spacing: -.2px;
+      transition: border-color .15s, background .15s, transform .12s;
+    }
+    .ctl-quien-ops button:hover { border-color: var(--ink-4); background: var(--surface); }
+    .ctl-quien-ops button:active { transform: scale(.96); }
+    .ctl-quien-ops button.is-sel { border-color: var(--accent); background: var(--accent-soft); }
+    .ctl-quien-av {
+      width: 46px;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 99px;
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .ctl-quien-ops button.is-sel .ctl-quien-av { background: var(--accent); color: #fff; }
+    .ctl-quien-otro { display: flex; gap: 8px; margin-top: 12px; }
+    .ctl-quien-otro[hidden] { display: none; }
+    .ctl-quien-otro input {
+      flex: 1;
+      min-width: 0;
+      height: 48px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: 15px;
+    }
+    .ctl-quien-otro input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); background: var(--surface); }
+    .ctl-quien-otro button {
+      height: 48px;
+      padding: 0 20px;
+      border: none;
+      border-radius: var(--r2);
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+      font-size: 14.5px;
+      font-weight: 750;
+    }
+    .ctl-quien-volver {
+      display: block;
+      width: 100%;
+      height: 44px;
+      margin-top: 10px;
+      border: none;
+      background: none;
+      color: var(--ink-3);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .ctl-quien-volver:hover { color: var(--ink); }
 
     @media (max-width: 560px) {
       .ctl-head { padding: 14px 14px 12px 16px; gap: 12px; }
@@ -5177,8 +5262,7 @@
 
   <!-- MODO CONTROL
        Verificacion final del casillero con la pistola lectora. La lista y la
-       tarjeta de lectura las pinta controlRender(); el resto es estatico para
-       que el campo de codigo conserve foco y valor entre lecturas. -->
+       tarjeta de lectura las pinta controlRender(); el resto es estatico. -->
   <div class="ctl-overlay" id="controlModal" aria-hidden="true">
     <div class="ctl-sheet" role="dialog" aria-modal="true" aria-labelledby="ctlTitulo" tabindex="-1">
       <header class="ctl-head">
@@ -5197,7 +5281,6 @@
       <section class="ctl-hero" id="ctlHero" data-estado="idle" aria-live="polite">
         <div id="ctlHeroBody"></div>
         <div class="ctl-hero-bar">
-          <input type="text" class="ctl-input" id="ctlInput" placeholder="Escribir c&oacute;digo y Enter" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Codigo de barras o de producto">
           <button type="button" class="ctl-btn-ghost" id="ctlDeshacer" disabled><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>Deshacer</button>
         </div>
       </section>
@@ -5214,6 +5297,24 @@
         <div class="ctl-fin-t" id="ctlFinT">Pedido controlado</div>
         <div class="ctl-fin-s" id="ctlFinS"></div>
         <button type="button" id="ctlFinListo">Listo</button>
+      </div>
+
+      <div class="ctl-quien" id="ctlQuien" aria-hidden="true">
+        <div class="ctl-quien-panel" role="dialog" aria-modal="true" aria-labelledby="ctlQuienT">
+          <div class="ctl-quien-grip" aria-hidden="true"></div>
+          <div class="ctl-quien-t" id="ctlQuienT">&iquest;Qui&eacute;n hizo el control?</div>
+          <div class="ctl-quien-s" id="ctlQuienS"></div>
+          <div class="ctl-quien-ops">
+            <button type="button" data-quien="Gonzalo"><span class="ctl-quien-av">G</span>Gonzalo</button>
+            <button type="button" data-quien="Alejandro"><span class="ctl-quien-av">A</span>Alejandro</button>
+            <button type="button" data-quien="Otro"><span class="ctl-quien-av">+</span>Otro</button>
+          </div>
+          <div class="ctl-quien-otro" id="ctlQuienOtro" hidden>
+            <input type="text" id="ctlQuienNombre" placeholder="Nombre (opcional)" maxlength="40" autocomplete="off" aria-label="Nombre de quien controlo">
+            <button type="button" id="ctlQuienOk">Guardar</button>
+          </div>
+          <button type="button" class="ctl-quien-volver" id="ctlQuienVolver">Volver al control</button>
+        </div>
       </div>
     </div>
   </div>
@@ -8612,7 +8713,9 @@
     //   conteo/<clave>: n                     unidades contadas del articulo
     //   manual/<clave>: true                  linea completada o confirmada a mano
     //   extras/<clave>: { n, texto, codigo }  lecturas que no son del pedido
-    //   final: { por, ts, firma, conDiferencias }
+    //   final: { por, controlador, ts, firma, conDiferencias }
+    //     por = email de la sesion; controlador = quien hizo el control
+    //     (Gonzalo, Alejandro, "Otro" u "Otro: <nombre>")
     // El estado de cada linea no se guarda: se deriva de conteo contra items,
     // asi un cambio de cantidad posterior se refleja solo. `firma` congela los
     // items al finalizar; si deja de coincidir, el control quedo desactualizado.
@@ -8620,7 +8723,6 @@
     const ctlList = document.getElementById('ctlList');
     const ctlHero = document.getElementById('ctlHero');
     const ctlHeroBody = document.getElementById('ctlHeroBody');
-    const ctlInput = document.getElementById('ctlInput');
     const ctlDeshacerBtn = document.getElementById('ctlDeshacer');
     const ctlFin = document.getElementById('ctlFin');
     const CTL_RING = 150.8;          // perimetro del anillo (2 * PI * 24)
@@ -8786,6 +8888,8 @@
     async function controlLectura(texto) {
       texto = String(texto || '').trim();
       if (!texto || !pedidoActual) return;
+      // Eligiendo quien controlo: una lectura reabriria el control a medio cerrar.
+      if (ctlQuienResolver) return;
       if (!sheetsLoaded) await sheetsInicial;
       clearTimeout(ctlAutoFinTimer);
       ctlFin.classList.remove('active');
@@ -8948,7 +9052,7 @@
           const cuando = f.ts ? new Date(f.ts).toLocaleString('es-AR', { hour12: false, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
           return '<div class="ctl-hero-body"><div class="ctl-hero-ic">' + IC_CTL_OK + '</div><div class="ctl-hero-tx">' +
             tag('', f.conDiferencias ? 'Controlado con diferencias' : 'Pedido controlado') +
-            '<div class="ctl-hero-t">' + escapeHtml([f.por, cuando].filter(Boolean).join(' · ') || 'Control finalizado') + '</div>' +
+            '<div class="ctl-hero-t">' + escapeHtml([f.controlador || f.por, cuando].filter(Boolean).join(' · ') || 'Control finalizado') + '</div>' +
             '<div class="ctl-hero-s">Cualquier lectura nueva reabre el control.</div></div></div>';
         }
         return '<div class="ctl-hero-body"><div class="ctl-hero-ic">' + (u ? IC_CTL_DESHACER : IC_SCAN_LG) + '</div><div class="ctl-hero-tx">' +
@@ -9143,6 +9247,7 @@
       if (e.finalValido) {
         chip.className = 'ctl-chip ' + (e.final.conDiferencias ? 'ctl-chip--warn' : 'ctl-chip--ok');
         chip.innerHTML = ic(e.final.conDiferencias ? IC_CTL_X : IC_CTL_OK) + (e.final.conDiferencias ? 'Controlado c/ diferencias' : 'Controlado');
+        chip.title = e.final.controlador ? 'Controlado por ' + e.final.controlador : 'Abrir el control del pedido';
       } else if (e.final) {
         chip.className = 'ctl-chip ctl-chip--warn';
         chip.innerHTML = ic(IC_CTL_X) + 'Control desactualizado';
@@ -9165,11 +9270,9 @@
       clearTimeout(ctlFinTimer);
       clearTimeout(ctlAutoFinTimer);
       ctlFin.classList.remove('active');
-      ctlInput.value = '';
       controlModal.classList.add('active');
       controlModal.setAttribute('aria-hidden', 'false');
-      // El foco va a la hoja y no al campo: en tablet el campo abriria el
-      // teclado en pantalla. La pistola se escucha a nivel documento igual.
+      // La pistola se escucha a nivel documento: alcanza con el foco en la hoja.
       controlModal.querySelector('.ctl-sheet').focus({ preventScroll: true });
       controlRender();
       if (!sheetsLoaded) {
@@ -9181,12 +9284,11 @@
     function controlCerrar() {
       clearTimeout(ctlFinTimer);
       clearTimeout(ctlAutoFinTimer);
+      controlQuienResolver(null);
       if (!controlAbierto()) return;
       controlModal.classList.remove('active');
       controlModal.setAttribute('aria-hidden', 'true');
       ctlFin.classList.remove('active');
-      ctlInput.value = '';
-      ctlInput.blur();
     }
 
     function controlNombres(lineas) {
@@ -9220,10 +9322,23 @@
         conDiferencias = true;
       }
 
+      const controlador = await controlPedirControlador(e, conDiferencias);
+      if (!controlador || !controlAbierto() || !pedidoActual) return;
+
       const user = firebase.auth().currentUser;
-      const final = { por: (user && user.email) || '', ts: Date.now(), firma: e.firma, conDiferencias };
+      const final = { por: (user && user.email) || '', controlador, ts: Date.now(), firma: e.firma, conDiferencias };
       controlLocal().final = final;
-      db.ref('pedidos/' + pedidoId + '/control/final').set(final).catch(err => {
+      // Controlado = embalado: se marca el mismo campo que el boton de la caja
+      // en Pedidos pendientes, en el mismo update que el cierre del control.
+      pedidoActual.embalado = true;
+      const cacheado = pedidosCache.find(x => x.id === pedidoId);
+      if (cacheado) cacheado.embalado = true;
+      const up = {};
+      up['control/final'] = final;
+      up.embalado = true;
+      up.embaladoFecha = final.ts;
+      up.lastUpdated = final.ts;
+      db.ref('pedidos/' + pedidoId).update(up).catch(err => {
         console.error('Error al finalizar el control:', err);
         showToast('No se pudo guardar el control');
       });
@@ -9234,25 +9349,95 @@
       controlRender();
       ctlFin.classList.toggle('is-dif', conDiferencias);
       document.getElementById('ctlFinT').textContent = conDiferencias ? 'Controlado con diferencias' : 'Pedido controlado';
-      document.getElementById('ctlFinS').textContent = e.contadoU + ' unidades · ' + e.lineas.length + ' artículos';
+      document.getElementById('ctlFinS').textContent = 'Por ' + controlador + ' \u00B7 ' + e.contadoU + ' unidades · ' + e.lineas.length + ' artículos';
       ctlFin.classList.remove('active');
       void ctlFin.offsetWidth;   // reinicia las animaciones del sello
       ctlFin.classList.add('active');
       if (!conDiferencias) ctlFinTimer = setTimeout(controlCerrar, 2200);
     }
 
+    // --- Quien hizo el control -------------------------------------------
+    // Se pide al finalizar, dentro de la misma hoja. Resuelve con el nombre o
+    // null si se vuelve al control. Se marca el ultimo elegido en este equipo
+    // (suele ser la misma persona toda la jornada), pero siempre hay que tocarlo.
+    const ctlQuien = document.getElementById('ctlQuien');
+    const ctlQuienOtro = document.getElementById('ctlQuienOtro');
+    const ctlQuienNombre = document.getElementById('ctlQuienNombre');
+    const CTL_QUIEN_KEY = 'pedidosv2.controlador';
+    let ctlQuienResolver = null;
+
+    function controlPedirControlador(e, conDiferencias) {
+      controlQuienResolver(null);
+      document.getElementById('ctlQuienS').textContent = (conDiferencias ? 'Con diferencias \u00B7 ' : '') +
+        e.contadoU + ' unidades \u00B7 ' + e.lineas.length + ' art\u00EDculos';
+      let ultimo = '';
+      try { ultimo = localStorage.getItem(CTL_QUIEN_KEY) || ''; } catch (_) {}
+      ctlQuien.querySelectorAll('[data-quien]').forEach(b => {
+        b.classList.toggle('is-sel', b.dataset.quien === ultimo);
+      });
+      ctlQuienOtro.hidden = true;
+      ctlQuienNombre.value = '';
+      ctlQuien.classList.add('active');
+      ctlQuien.setAttribute('aria-hidden', 'false');
+      return new Promise(resolve => { ctlQuienResolver = resolve; });
+    }
+
+    function controlQuienResolver(valor) {
+      if (!ctlQuienResolver) return;
+      const r = ctlQuienResolver;
+      ctlQuienResolver = null;
+      ctlQuien.classList.remove('active');
+      ctlQuien.setAttribute('aria-hidden', 'true');
+      ctlQuienNombre.blur();
+      if (valor) {
+        try { localStorage.setItem(CTL_QUIEN_KEY, valor === 'Gonzalo' || valor === 'Alejandro' ? valor : 'Otro'); } catch (_) {}
+      }
+      r(valor);
+    }
+
+    function controlQuienOtroOk() {
+      const nombre = ctlQuienNombre.value.trim();
+      controlQuienResolver(nombre ? 'Otro: ' + nombre : 'Otro');
+    }
+
+    ctlQuien.querySelectorAll('[data-quien]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.quien !== 'Otro') { controlQuienResolver(b.dataset.quien); return; }
+      ctlQuien.querySelectorAll('[data-quien]').forEach(x => x.classList.toggle('is-sel', x === b));
+      ctlQuienOtro.hidden = false;
+      ctlQuienNombre.focus();
+    }));
+    document.getElementById('ctlQuienOk').addEventListener('click', controlQuienOtroOk);
+    ctlQuienNombre.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      controlQuienOtroOk();
+    });
+    document.getElementById('ctlQuienVolver').addEventListener('click', () => controlQuienResolver(null));
+    ctlQuien.addEventListener('click', (e) => { if (e.target === ctlQuien) controlQuienResolver(null); });
+
     async function controlReiniciar() {
       if (!pedidoActual || !pedidoId) return;
       const ok = await confirmarAccion({
         titulo: 'Reiniciar el control?',
-        texto: 'Se borran todas las lecturas de este pedido y el control empieza de cero.',
+        texto: 'Se borran todas las lecturas de este pedido y el control empieza de cero.' +
+          (pedidoActual.embalado === true ? ' El pedido deja de figurar como embalado.' : ''),
         confirmar: 'Si, reiniciar',
         volver: 'Volver',
         tono: 'peligro'
       });
       if (!ok || !pedidoActual || !pedidoId) return;
       delete pedidoActual.control;
-      db.ref('pedidos/' + pedidoId + '/control').remove().catch(err => {
+      // Reiniciar deshace tambien el embalado que marca el cierre del control.
+      pedidoActual.embalado = false;
+      const cacheado = pedidosCache.find(x => x.id === pedidoId);
+      if (cacheado) cacheado.embalado = false;
+      const ahora = Date.now();
+      db.ref('pedidos/' + pedidoId).update({
+        control: null,
+        embalado: false,
+        embaladoFecha: ahora,
+        lastUpdated: ahora
+      }).catch(err => {
         console.error('Error al reiniciar el control:', err);
         showToast('No se pudo reiniciar el control');
       });
@@ -9270,16 +9455,6 @@
     document.getElementById('ctlFinListo').addEventListener('click', controlCerrar);
     ctlDeshacerBtn.addEventListener('click', controlDeshacer);
     controlModal.addEventListener('click', (e) => { if (e.target === controlModal) controlCerrar(); });
-
-    // Campo manual: Enter toma lo escrito como una lectura. Si la pistola cae
-    // con el foco aca, el detector global ya la proceso y limpio el campo.
-    ctlInput.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const texto = ctlInput.value.trim();
-      ctlInput.value = '';
-      if (texto) controlLectura(texto);
-    });
 
     ctlHeroBody.addEventListener('click', (e) => {
       const b = e.target.closest('[data-elegir]');
@@ -9308,7 +9483,8 @@
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !controlAbierto() || confirmResolver) return;
       e.preventDefault();
-      controlCerrar();
+      if (ctlQuienResolver) controlQuienResolver(null);
+      else controlCerrar();
     });
 
     // ==========================================

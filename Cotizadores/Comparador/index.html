@@ -954,17 +954,31 @@
     $("dest_nombre").value = c.nombre; $("dest_email").value = c.email;
     $("dest_cod_area").value = tel.cod_area; $("dest_celular").value = tel.celular;
     renderPedido(); cerrarLaterales();
-    if (sugerir) sugerirDestino(c);
+    if (sugerir) sugerirDestino(c, fresco.tipo_entrega);
     if (ACTUAL) renderPaneles();
   }
   function quitarPedido() { PEDIDO = null; renderPedido(); if (ACTUAL) renderPaneles(); }
   // Propone el destino según la localidad del cliente: si hay una única coincidencia exacta, la elige.
-  function sugerirDestino(c) {
+  // Los nombres de sucursal del Correo traen sufijo («VALLE MARIA - MUNICIPALIDAD»): se compara lo previo a « - ».
+  const sinSufijo = (s) => s.split(" - ")[0].trim();
+  function sugerirDestino(c, tipoEntrega) {
     const n = normalizar(c.localidad); if (!n || !DESTINOS) return;
-    const prov = provinciaPedido(c.provincia), coincide = (d) => d.nombre === n || d.alias.includes(n);
+    const prov = provinciaPedido(c.provincia), igual = (s) => s === n || sinSufijo(s) === n;
+    const coincide = (d) => igual(d.nombre) || d.alias.some(igual);
+    const sucursalDe = (d) => (d.correo.sucursales.find((s) => igual(normalizar(s.nombre)))
+      || d.correo.sucursales.find((s) => normalizar(s.nombre).startsWith(n + " ")) || {}).codigo;
     if (destinoElegido && coincide(destinoElegido)) return;
-    const exactos = buscarDestinos(c.localidad, 60).filter((d) => coincide(d) && (!prov || !d.provincia || d.provincia === prov));
-    if (exactos.length === 1) { elegirDestino(exactos[0]); toast(`Destino según el pedido: ${exactos[0].nombre_bonito} (${exactos[0].cp}).`); return; }
+    const candidatos = buscarDestinos(c.localidad, 200).filter((d) => !prov || !d.provincia || d.provincia === prov);
+    let exactos = candidatos.filter(coincide);
+    // Sin coincidencia exacta: sucursales cuyo nombre arranca con la localidad («LANUS OESTE BURBUJAS»).
+    if (!exactos.length) exactos = candidatos.filter((d) => d.alias.some((a) => a.startsWith(n + " ")));
+    // Varios CPs con el mismo nombre (Mar del Plata, Monteros): solo sirven los que tienen sucursal o agencia,
+    // y si aún quedan varios, los que cubre la empresa elegida en el pedido.
+    const filtrar = (f) => { const r = exactos.filter(f); if (r.length) exactos = r; };
+    if (exactos.length > 1) filtrar((d) => d.correo.sucursales.length || d.viacargo);
+    if (exactos.length > 1 && tipoEntrega === "Correo Argentino") filtrar((d) => d.correo.sucursales.length);
+    if (exactos.length > 1 && tipoEntrega === "Via Cargo") filtrar((d) => d.viacargo);
+    if (exactos.length === 1) { elegirDestino(exactos[0], sucursalDe(exactos[0])); toast(`Destino según el pedido: ${exactos[0].nombre_bonito} (${exactos[0].cp}).`); return; }
     // Sin coincidencias se respeta el destino ya elegido; con varias, hay que elegir el CP.
     if (destinoElegido && !exactos.length) return;
     elegirDestino(null);

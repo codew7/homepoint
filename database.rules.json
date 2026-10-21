@@ -1,0 +1,116 @@
+{
+"rules": {
+
+    "pedidos": {
+      ".indexOn": ["timestamp", "createdby", "cliente/email", "status", "entrega", "fecha", "vendedor"],
+      ".read": true,
+      "$id": {
+        ".read": true,
+        ".write": "(auth == null || auth.token.email !== 'homepoint2@homepoint.com') && ((!data.exists()) || (data.child('locked').val() === false) || (auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()))"
+      }
+    },
+
+    "clientes": {
+      ".indexOn": ["email", "nombre"],
+      ".read": true,
+      ".write": "newData.exists() && (auth == null || auth.token.email !== 'homepoint2@homepoint.com')"
+    },
+
+    "articulos": {
+      ".indexOn": ["Disponible", "Codigo", "CodigoBarras"],
+      ".read": true,
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "admins": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "movimientos": {
+      ".indexOn": ["timestamp", "tipo", "pedidoId", "codigo"],
+      ".read": true,
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      "$mov": {
+        ".write": "auth != null && $mov.beginsWith('tr_') && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+      }
+    },
+
+    "gastos": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "armadoVerificados": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com'",
+      "$codigo": {
+        ".validate": "newData.isBoolean() || (newData.isNumber() && newData.val() >= 0)"
+      }
+    },
+
+    "armadoIncluidos": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com'"
+    },
+
+    "solicitudesSucursal": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com'",
+      ".indexOn": "creado",
+      "$id": {
+        ".read": true,
+        "disponibles": { "$k": { ".write": "auth == null || auth.token.email !== 'homepoint2@homepoint.com'", ".validate": "newData.isBoolean()" } },
+        "terminado": { ".write": "auth == null || auth.token.email !== 'homepoint2@homepoint.com'", ".validate": "newData.isNumber()" }
+      }
+    },
+
+    "alias": {
+      ".indexOn": ["alias"],
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "traspasos": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".indexOn": ["enviadoEn"],
+      "$id": {
+        ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists() && (newData.exists() || root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root')"
+      }
+    },
+
+    "traspasosMeta": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "movimientos2": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "facturacion": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "chat": { ".read": "auth != null", ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com'" },
+
+    "transferenciasVerificadas": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com'",
+      "$pedidoId": {
+        ".validate": "newData.isNumber()"
+      }
+    },
+
+    "2026": { ".read": "auth != null" },
+    "2027": { ".read": "auth != null" },
+    "2028": { ".read": "auth != null" },
+
+    "dolar": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    }
+  }
+}
