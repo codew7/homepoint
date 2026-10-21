@@ -2224,9 +2224,27 @@
       transition: background .12s;
     }
     .pedidos-panel-item:hover { background: var(--surface-2); }
-    .pedidos-panel-item.is-listo { background: var(--ok-soft); }
-    .pedidos-panel-item.is-listo:hover { background: var(--ok-soft); filter: brightness(.98); }
+    /* Listo para despachar: en vez de teñir la fila, se la levanta como una
+       tarjeta (filete + sombra corta) y se marca con un sello junto al nombre. */
+    .pedidos-panel-item.is-listo {
+      background: var(--surface);
+      box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, .04), 0 6px 14px -8px rgba(0, 0, 0, .14);
+      margin-bottom: 6px;
+    }
+    .pedidos-panel-item.is-listo:hover { background: var(--surface-2); }
     .pedidos-panel-item.is-listo .pedidos-panel-nombre { font-weight: 700; }
+    .pp-listo-sello {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 99px;
+      background: var(--ok);
+      color: #fff;
+    }
+    .pp-listo-sello svg { width: 10px; height: 10px; stroke: currentColor; stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
     .pedidos-panel-nombre {
       flex: 1;
@@ -2254,12 +2272,19 @@
       border-radius: 99px;
     }
 
-    /* Nombre + marca "int" + nota, en ese orden y pegados al nombre: el wrap
-       toma el flex: 1 que antes tenia el nombre solo, asi las marcas quedan a
-       la derecha del texto y no empujadas contra la fecha. El nombre y la nota
-       cortan con ellipsis; la nota cede tres veces mas rapido que el nombre. */
-    .pp-nombre-wrap {
+    /* Cuerpo de la fila en dos lineas: arriba el nombre (con sello y marca
+       "int"), abajo la nota y la antiguedad en gris, como un unico dato
+       secundario ("Retira · 3d"). Toma el flex: 1 de la fila. */
+    .pp-cuerpo {
       flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px 0;
+    }
+    .pp-nombre-wrap {
       min-width: 0;
       display: flex;
       align-items: center;
@@ -2267,25 +2292,45 @@
     }
     .pp-nombre-wrap .pedidos-panel-nombre { flex: 0 1 auto; }
 
-    /* Nota del pedido con su texto completo ("esperando respuesta"). Sutil a
-       proposito: pastilla gris sin borde para no competir con el riel ni con la
-       fecha vencida. Doble toque abre el menu para cambiarla (.pp-nota-menu). */
+    .pp-meta {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      font-size: 11.5px;
+      line-height: 16px;
+      color: var(--ink-4);
+    }
+    .pp-meta .pedidos-panel-fecha { font-size: 11px; }
+    /* Separador entre antiguedad y nota; se emite solo si estan las dos. */
+    .pp-meta-sep {
+      flex: none;
+      margin: 0 6px;
+      color: var(--ink-4);
+      font-weight: 600;
+    }
+    /* Vencido: en esta linea alcanza con el rojo, sin pastilla. */
+    .pp-meta .pedidos-panel-fecha.is-viejo {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+    }
+
+    /* Nota del pedido con su texto completo ("esperando respuesta"), como
+       texto de la linea secundaria: sin pastilla, un tono mas oscuro que la
+       antiguedad. Doble toque abre el menu para cambiarla (.pp-nota-menu). */
     .pp-nota {
-      flex: 0 3 auto;
+      flex: 0 1 auto;
       min-width: 0;
       display: block;
-      height: 18px;
-      padding: 0 7px;
-      border-radius: 99px;
-      font-size: 10.5px;
+      padding: 0;
+      border-radius: 4px;
+      font: inherit;
       font-weight: 500;
-      letter-spacing: .1px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      line-height: 18px;
       color: var(--ink-3);
-      background: var(--surface-3);
+      background: none;
       border: 0;
       cursor: pointer;
       user-select: none;
@@ -2295,7 +2340,7 @@
     }
     .pp-nota:hover { color: var(--ink); }
     .pp-nota:active { transform: scale(.96); }
-    .pp-nota.is-open { color: var(--on-g); background: var(--graphite); }
+    .pp-nota.is-open { color: var(--on-g); background: var(--graphite); padding: 0 5px; }
     .pp-nota[disabled] { opacity: .5; cursor: default; }
 
     /* Menu de notas. Vive fuera de la lista (position: fixed, un solo nodo en
@@ -2409,6 +2454,29 @@
     .pp-btn-wa:hover { background: var(--ok-soft); border-color: var(--ok-ring); }
     .pp-btn-wa:active { transform: scale(.92); }
     .pp-btn-wa.disabled { color: var(--ink-4); pointer-events: none; opacity: .45; }
+
+    /* Embalado: toggle de dos estados con la misma caja que el boton de pago.
+       Apagado gris; encendido relleno con el acento. */
+    .pp-btn-embalado {
+      width: 38px;
+      height: 38px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ink-4);
+      touch-action: manipulation;
+      transition: background .14s, color .14s, border-color .14s, transform .12s;
+    }
+    .pp-btn-embalado:active { transform: scale(.92); }
+    .pp-btn-embalado.is-embalado {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
 
     .pedidos-panel-empty, .faltantes-panel-empty {
       padding: 44px 20px;
@@ -5557,7 +5625,7 @@
       const dias = Math.floor((Date.now() - ts) / 86400000);
       if (dias <= 0) return { texto: 'hoy', viejo: false };
       return {
-        texto: dias + (dias === 1 ? ' día' : ' días'),
+        texto: dias + 'd',
         viejo: dias >= PEDIDO_VIEJO_DIAS
       };
     }
@@ -5568,6 +5636,7 @@
     // renderUnificado(). Son decorativos: la etiqueta la da el texto vecino.
     // ==========================================
     const IC_CAJA = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
+    const IC_PAQUETE = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
     const IC_MENOS = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9.5 12 15.5 18 9.5"></polyline></svg>';
     const IC_MAS = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 14.5 12 8.5 18 14.5"></polyline></svg>';
     const IC_LAPIZ = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>';
@@ -6701,6 +6770,8 @@
             todosListos: todosListos,
             algunoListo: algunoListo,
             nota: p.nota || '',
+            embalado: p.embalado === true,
+            tipoEntrega: p.tipoEntrega || '',
             cat: p.cat || '',
             timestamp: p.timestamp || 0
           };
@@ -6777,6 +6848,15 @@
       return '<button type="button" class="pp-btn-pago' + clase + '"' +
         ' data-pago-id="' + escapeHtml(p.id) + '"' +
         ' title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">$</button>';
+    }
+
+    // Marca de pedido embalado. Escribe el campo `embalado` (true/false); no
+    // participa del riel ni del orden de la lista.
+    function ppBotonEmbaladoHtml(p) {
+      const titulo = p.embalado ? 'Embalado. Tocar para desmarcar' : 'Tocar para marcar como embalado';
+      return '<button type="button" class="pp-btn-embalado' + (p.embalado ? ' is-embalado' : '') + '"' +
+        ' data-embalado-id="' + escapeHtml(p.id) + '" aria-pressed="' + (p.embalado ? 'true' : 'false') + '"' +
+        ' title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">' + IC_PAQUETE + '</button>';
     }
 
     // Contacto por WhatsApp sin abrir el pedido. Mismo link y mismo estado
@@ -6925,16 +7005,41 @@
       const listo = p.score === 2;
       return '<div class="pedidos-panel-item pp-item--rail' + (listo ? ' is-listo' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
         ppRailHtml(p) +
-        '<span class="pp-nombre-wrap">' +
-          '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
-          (esCatInt(p) ? '<span class="badge-int badge-int--sm" role="img" title="Pedido int" aria-label="Pedido int"></span>' : '') +
-          ppNotaHtml(p) +
+        '<span class="pp-cuerpo">' +
+          '<span class="pp-nombre-wrap">' +
+            (listo ? '<span class="pp-listo-sello" role="img" title="Listo para despachar" aria-label="Listo para despachar"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"></polyline></svg></span>' : '') +
+            '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+            (esCatInt(p) ? '<span class="badge-int badge-int--sm" role="img" title="Pedido int" aria-label="Pedido int"></span>' : '') +
+          '</span>' +
+          '<span class="pp-meta">' +
+            (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
+            (ant.texto && notaVisibleEnPanel(p.nota) ? '<span class="pp-meta-sep" aria-hidden="true">&middot;</span>' : '') +
+            ppNotaHtml(p) +
+          '</span>' +
         '</span>' +
-        (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
-        ppBotonWaHtml(p) +
         ppBotonPagoHtml(p) +
+        ppBotonEmbaladoHtml(p) +
+        ppBotonWaHtml(p) +
         '</div>';
     }
+
+    // Clave y titulo del grupo por nota. Clave '' = sin nota ("Nuevos"). Con
+    // distintas capitalizaciones de una misma nota, el titulo es el del primer
+    // pedido que cae en el grupo.
+    function ppGrupoNota(nota) {
+      const pago = estadoPago(nota);
+      if (pago === 'pagado') return { clave: '#pagado', titulo: 'Pagado' };
+      if (pago === 'espera') return { clave: '#espera', titulo: 'Pago solicitado' };
+      const texto = String(nota || '').trim();
+      if (!texto) return { clave: '', titulo: 'Nuevos' };
+      return { clave: normalizarNota(texto), titulo: texto };
+    }
+
+    // Grupos fijos debajo de "Para despachar"; el resto va despues.
+    const PP_GRUPOS_PRIMEROS = new Map([
+      ['#espera', 0],
+      [normalizarNota('Pedido Confirmado'), 1]
+    ]);
 
     function renderPedidosPendientes() {
       ppNotaCerrar();
@@ -6959,21 +7064,59 @@
 
       // El conteo sale de los mismos rank que agrupan la lista, asi que el
       // resumen y los encabezados de grupo no pueden discrepar.
+      // Desglose por entrega de los listos para despachar. Mismos value que los
+      // radios de Entrega del panel; solo se muestran los que tienen pedidos.
+      const porEntrega = { 'Via Cargo': 0, 'Correo Argentino': 0, 'Motomensajeria': 0, '': 0 };
+      pedidosCache.forEach(p => {
+        if (p.rank !== 3) return;
+        porEntrega[p.tipoEntrega in porEntrega ? p.tipoEntrega : '']++;
+      });
+      const desglose = [
+        [porEntrega['Via Cargo'], 'Vía Cargo'],
+        [porEntrega['Correo Argentino'], 'Correo'],
+        [porEntrega['Motomensajeria'], 'Moto'],
+        [porEntrega[''], 'sin entrega']
+      ].filter(([n]) => n > 0).map(([n, txt]) => n + ' ' + txt).join(' · ');
+
       pedidosResumen.innerHTML = pedidosCache.length + ' pedidos · ' +
-        '<b>' + conteo[3] + ' para despachar</b>';
+        '<b>' + conteo[3] + ' para despachar</b>' +
+        (desglose ? ' (' + desglose + ')' : '');
+
+      // Arriba los listos para despachar; el resto se agrupa por nota. Las
+      // notas de pago se unifican por estado (el Sheet escribe variantes) y las
+      // demas por su texto normalizado. Primero Pago solicitado y Pedido
+      // Confirmado (PP_GRUPOS_PRIMEROS), luego el resto alfabetico y "Nuevos"
+      // (sin nota) siempre al final. Dentro de cada grupo se respeta el orden
+      // de pedidosCache (etapa y antiguedad).
+      const listos = [];
+      const porNota = new Map();
+      pedidosCache.forEach(p => {
+        if (p.rank === 3) { listos.push(p); return; }
+        const g = ppGrupoNota(p.nota);
+        if (!porNota.has(g.clave)) {
+          porNota.set(g.clave, {
+            titulo: g.titulo,
+            pos: g.clave === '' ? Infinity
+               : PP_GRUPOS_PRIMEROS.has(g.clave) ? PP_GRUPOS_PRIMEROS.get(g.clave)
+               : PP_GRUPOS_PRIMEROS.size,
+            pedidos: []
+          });
+        }
+        porNota.get(g.clave).pedidos.push(p);
+      });
+      const gruposNota = Array.from(porNota.values())
+        .sort((a, b) => (a.pos - b.pos) || a.titulo.localeCompare(b.titulo, 'es'));
+
+      const grupoHtml = (titulo, pedidos, claseExtra) =>
+        '<div class="pp-grupo' + (claseExtra || '') + '">' +
+          '<span>' + escapeHtml(titulo) + '</span>' +
+          '<span class="pp-grupo-count">' + pedidos.length + '</span>' +
+        '</div>' +
+        pedidos.map(ppFilaHtml).join('');
 
       let html = '';
-      let grupoActual = null;
-      pedidosCache.forEach(p => {
-        if (p.rank !== grupoActual) {
-          grupoActual = p.rank;
-          html += '<div class="pp-grupo' + (grupoActual === 3 ? ' pp-grupo--listo' : '') + '">' +
-                  '<span>' + PP_GRUPOS[grupoActual] + '</span>' +
-                  '<span class="pp-grupo-count">' + conteo[grupoActual] + '</span>' +
-                  '</div>';
-        }
-        html += ppFilaHtml(p);
-      });
+      if (listos.length) html += grupoHtml(PP_GRUPOS[3], listos, ' pp-grupo--listo');
+      gruposNota.forEach(g => { html += grupoHtml(g.titulo, g.pedidos); });
 
       pedidosPanelList.innerHTML = html;
     }
@@ -6984,6 +7127,11 @@
       const btnPago = e.target.closest('.pp-btn-pago');
       if (btnPago) {
         ppToggleNotaPago(btnPago);
+        return;
+      }
+      const btnEmbalado = e.target.closest('.pp-btn-embalado');
+      if (btnEmbalado) {
+        ppToggleEmbalado(btnEmbalado);
         return;
       }
       // La pastilla de nota abre su menu con doble toque; tampoco debe cargar
@@ -7010,6 +7158,30 @@
       const p = pedidosCache.find(x => x.id === id);
       if (!p) return;
       await ppEscribirNota(p, siguienteNotaPago(p.nota), btn);
+    }
+
+    // Igual que ppEscribirNota: se repinta solo la fila, sin toast de exito.
+    async function ppToggleEmbalado(btn) {
+      if (btn.disabled) return;
+      const p = pedidosCache.find(x => x.id === btn.dataset.embaladoId);
+      if (!p) return;
+      const nuevo = !p.embalado;
+      btn.disabled = true;
+      try {
+        const ahora = Date.now();
+        await db.ref('pedidos/' + p.id).update({
+          embalado: nuevo,
+          embaladoFecha: ahora,
+          lastUpdated: ahora
+        });
+        p.embalado = nuevo;
+        const fila = btn.closest('.pedidos-panel-item');
+        if (fila) fila.outerHTML = ppFilaHtml(p);
+      } catch (err) {
+        console.error('Error actualizando embalado:', err);
+        btn.disabled = false;
+        showToast('No se pudo marcar el embalado');
+      }
     }
 
     // ==========================================
