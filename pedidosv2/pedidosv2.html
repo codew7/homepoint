@@ -9363,6 +9363,7 @@
     const PISTOLA_MIN_LEN = 3;        // largo minimo con sufijo Enter/Tab
     const PISTOLA_MIN_LEN_SIN_FIN = 6; // largo minimo si la pistola no manda sufijo (cierre por silencio)
     let pistolaBuffer = '';
+    let pistolaBufferUS = '';         // la misma lectura, leida como teclado US (ver pistolaCharUS)
     let pistolaUltimaTecla = 0;
     let pistolaTimer = null;
     let pistolaTragarEnterHasta = 0;  // tras cerrar por silencio, ignora un Enter tardio del sufijo
@@ -9380,8 +9381,33 @@
       return m[2] || m[3];
     }
 
+    // Caracter que quiso mandar la pistola, leido desde la TECLA FISICA
+    // (e.code) con la distribucion US. Las pistolas emulan un teclado US: con
+    // la tablet en espanol/latinoamericano la tecla del guion llega como ' y el
+    // guion bajo como ?, y los numeros de pedido de Firebase ("-OAb3_x...")
+    // empiezan siempre con guion. Letras y numeros salen iguales en las dos.
+    const PISTOLA_US = {
+      Minus: ['-', '_'], Equal: ['=', '+'], Period: ['.', '>'], Comma: [',', '<'],
+      Slash: ['/', '?'], Semicolon: [';', ':'], Quote: ["'", '"'], Backslash: ['\\', '|'],
+      BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backquote: ['`', '~'],
+      NumpadSubtract: ['-', '-'], NumpadAdd: ['+', '+'], NumpadDecimal: ['.', '.'],
+      NumpadDivide: ['/', '/'], NumpadMultiply: ['*', '*'], Space: [' ', ' ']
+    };
+    function pistolaCharUS(e, ch) {
+      const code = e.code || '';
+      const m = /^(?:Key([A-Z])|Digit(\d)|Numpad(\d))$/.exec(code);
+      if (m) {
+        if (m[1]) return e.shiftKey ? m[1] : m[1].toLowerCase();
+        if (m[3]) return m[3];
+        return e.shiftKey ? ch : m[2];   // Shift+digito: simbolo, se deja el del sistema
+      }
+      const par = PISTOLA_US[code];
+      return par ? par[e.shiftKey ? 1 : 0] : ch;
+    }
+
     function pistolaReset() {
       pistolaBuffer = '';
+      pistolaBufferUS = '';
       if (pistolaTimer) { clearTimeout(pistolaTimer); pistolaTimer = null; }
     }
 
@@ -9404,16 +9430,17 @@
         if (ahora < pistolaTragarEnterHasta) { e.preventDefault(); e.stopPropagation(); return; }
         const rapido = ahora - pistolaUltimaTecla <= PISTOLA_GAP_MS;
         const texto = pistolaBuffer;
+        const textoUS = pistolaBufferUS;
         pistolaReset();
         if (!rapido || texto.length < PISTOLA_MIN_LEN) return; // Enter humano: sigue su curso
         e.preventDefault(); e.stopPropagation();               // que no dispare botones ni formularios
         pistolaLimpiarInput(texto);
-        pistolaLectura(texto);
+        pistolaLectura(texto, textoUS);
         return;
       }
 
       const ch = pistolaCharDe(e);
-      if (ch) { pistolaTeclaSinChar = false; pistolaAgregarChar(ch, ahora); return; }
+      if (ch) { pistolaTeclaSinChar = false; pistolaAgregarChar(ch, ahora, pistolaCharUS(e, ch)); return; }
       if (e.key === 'Shift') return;
       // Android con un campo enfocado: Chrome/WebView reporta la tecla fisica
       // como 'Unidentified' (keyCode 229) y el caracter recien aparece en el
@@ -9435,10 +9462,11 @@
       pistolaAgregarChar(e.data, Date.now());
     }, true);
 
-    function pistolaAgregarChar(ch, ahora) {
+    function pistolaAgregarChar(ch, ahora, chUS) {
       // Una tecla lenta arranca una secuencia nueva: descarta lo anterior.
-      if (ahora - pistolaUltimaTecla > PISTOLA_GAP_MS) pistolaBuffer = '';
+      if (ahora - pistolaUltimaTecla > PISTOLA_GAP_MS) { pistolaBuffer = ''; pistolaBufferUS = ''; }
       pistolaBuffer += ch;
+      pistolaBufferUS += chUS || ch;
       pistolaUltimaTecla = ahora;
 
       // Pistolas sin sufijo: se cierra la lectura al primer silencio.
@@ -9446,11 +9474,13 @@
       pistolaTimer = setTimeout(() => {
         pistolaTimer = null;
         const texto = pistolaBuffer;
+        const textoUS = pistolaBufferUS;
         pistolaBuffer = '';
+        pistolaBufferUS = '';
         if (texto.length < PISTOLA_MIN_LEN_SIN_FIN) return;
         pistolaTragarEnterHasta = Date.now() + 300;
         pistolaLimpiarInput(texto);
-        pistolaLectura(texto);
+        pistolaLectura(texto, textoUS);
       }, PISTOLA_GAP_MS * 2);
     }
 
@@ -9458,7 +9488,7 @@
     // casillero y con "Buscar articulo" abierto, un articulo. En cualquier otra
     // pantalla se toma como el QR de un pedido y abre su control, igual que el
     // boton Escanear del header.
-    async function pistolaLectura(texto) {
+    async function pistolaLectura(texto, textoUS) {
       // Sin sesion o con la app bloqueada no se hace nada.
       if (document.getElementById('loginScreen').classList.contains('active')) return;
       if (document.getElementById('blockingOverlay').classList.contains('active')) return;
@@ -9467,14 +9497,24 @@
       // Con el modo control abierto, cada lectura es una unidad del casillero.
       if (controlAbierto()) { controlLectura(texto); return; }
       if (articuloModal.classList.contains('active')) { pistolaArticulo(texto); return; }
-      pistolaPedido(texto);
+      pistolaPedido(texto, textoUS);
+    }
+
+    // Ids posibles para una lectura: tal cual llego, reconstruida desde las
+    // teclas fisicas (US) y, para el camino de Android sin e.code, con los dos
+    // reemplazos tipicos de la distribucion en espanol (' -> -, ? -> _).
+    function pistolaIdsCandidatos(texto, textoUS) {
+      const ids = [texto, textoUS, String(texto || '').replace(/'/g, '-').replace(/\?/g, '_')]
+        .map(idPedidoDeLectura)
+        .filter(Boolean);
+      return [...new Set(ids)];
     }
 
     // Lectura fuera del control y del buscador: se confirma que el codigo sea
     // un pedido (consulta liviana, solo el status) antes de tocar la pantalla,
     // asi un codigo que no es de pedido no deja la vista en "no encontrado".
     let pistolaPedidoEnCurso = false;
-    async function pistolaPedido(texto) {
+    async function pistolaPedido(texto, textoUS) {
       // Formularios abiertos (agregar articulo, rotulos, peso y tamano...): la
       // lectura ya se retiro del campo; no se abre nada encima de lo que se edita.
       if (document.querySelector('.modal-backdrop.active, #addItemModal.active')) {
@@ -9483,15 +9523,17 @@
       }
       if (pistolaPedidoEnCurso) return;
 
-      const id = idPedidoDeLectura(texto);
-      let existe = false;
-      if (id && pedidoId === id && pedidoActual) {
-        existe = true;
-      } else if (id) {
+      const candidatos = pistolaIdsCandidatos(texto, textoUS);
+      let id = candidatos.find(c => pedidoId === c && pedidoActual) || '';
+      let existe = !!id;
+      if (!existe && candidatos.length) {
         pistolaPedidoEnCurso = true;
         try {
-          const snap = await conTimeout(() => db.ref('pedidos/' + id + '/status').once('value'));
-          existe = snap.exists();
+          // Casi siempre resuelve el primero o el segundo: van de a uno.
+          for (const c of candidatos) {
+            const snap = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
+            if (snap.exists()) { id = c; existe = true; break; }
+          }
         } catch (err) {
           console.error('Error buscando el pedido escaneado:', err);
           showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
@@ -9517,7 +9559,9 @@
       if (!sheetsLoaded) await sheetsInicial;
       if (articuloBuscarCandidatos(texto).length) { pistolaArticulo(texto); return; }
       if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
-      showToast('El código leído no corresponde a ningún pedido');
+      // Se muestra lo leido: si algun dia vuelve a fallar, deja ver que llego.
+      const leido = String(texto).length > 24 ? String(texto).slice(0, 23) + '…' : String(texto);
+      showToast('No hay ningún pedido con el código «' + leido + '»');
     }
 
     // Lectura de un articulo: abre "Buscar articulo" si hace falta y resuelve el codigo.
