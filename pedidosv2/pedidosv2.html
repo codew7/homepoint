@@ -9500,6 +9500,67 @@
       pistolaPedido(texto, textoUS);
     }
 
+    // Muchas pistolas vienen configuradas para mandar todo en MAYUSCULAS, y
+    // los numeros de pedido de Firebase distinguen mayusculas de minusculas
+    // ("-P4tMsMPcaOqF-4wV2zR" llega como "-P4TMSMPCAOQF-4WV2ZR"). La base no
+    // busca sin distinguirlas, asi que se aprovecha como esta armado el numero:
+    // los primeros 8 caracteres son la fecha de creacion en base 64
+    // (PUSH_CHARS). Se prueban las variantes de mayuscula/minuscula de esos 8,
+    // se descartan las que dan una fecha imposible (futura o de hace mas de
+    // PUSH_ANTIGUEDAD_MAX) y se consulta cada prefijo que queda: casi siempre
+    // solo uno trae un pedido, y se compara el numero completo ignorando
+    // mayusculas.
+    const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+    const PUSH_ANTIGUEDAD_MAX = 6 * 365 * 86400000;
+    const PUSH_PREFIJOS_MAX = 64;
+
+    function pushIdTs(prefijo) {
+      let ts = 0;
+      for (const c of prefijo) {
+        const i = PUSH_CHARS.indexOf(c);
+        if (i < 0) return NaN;
+        ts = ts * 64 + i;
+      }
+      return ts;
+    }
+
+    function pistolaPrefijosPosibles(id) {
+      if (id.length !== 20) return [];
+      let combos = [''];
+      for (const c of id.slice(0, 8)) {
+        const opciones = /[a-z]/i.test(c) ? [c.toUpperCase(), c.toLowerCase()] : [c];
+        combos = combos.flatMap(p => opciones.map(o => p + o));
+      }
+      const ahora = Date.now();
+      return combos.filter(p => {
+        const ts = pushIdTs(p);
+        return ts >= ahora - PUSH_ANTIGUEDAD_MAX && ts <= ahora + 3600000;
+      });
+    }
+
+    async function pistolaBuscarSinMayusculas(id) {
+      if (!/[a-z]/i.test(id)) return '';
+      const objetivo = id.toLowerCase();
+      // Primero lo que ya esta en memoria: el pedido abierto y la lista de pendientes.
+      if (pedidoId && pedidoId.toLowerCase() === objetivo) return pedidoId;
+      const enLista = pedidosCache.find(p => p.id.toLowerCase() === objetivo);
+      if (enLista) return enLista.id;
+
+      const prefijos = pistolaPrefijosPosibles(id);
+      if (!prefijos.length || prefijos.length > PUSH_PREFIJOS_MAX) return '';
+      const snaps = await conTimeout(() => Promise.all(prefijos.map(p =>
+        db.ref('pedidos').orderByKey().startAt(p).endAt(p + '').limitToFirst(3).once('value')
+      )));
+      for (const snap of snaps) {
+        let hallado = '';
+        snap.forEach(ch => {
+          if (ch.key.toLowerCase() === objetivo) { hallado = ch.key; return true; }
+        });
+        if (hallado) return hallado;
+      }
+      return '';
+    }
+
     // Ids posibles para una lectura: tal cual llego, reconstruida desde las
     // teclas fisicas (US) y, para el camino de Android sin e.code, con los dos
     // reemplazos tipicos de la distribucion en espanol (' -> -, ? -> _).
@@ -9533,6 +9594,13 @@
           for (const c of candidatos) {
             const snap = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
             if (snap.exists()) { id = c; existe = true; break; }
+          }
+          // Pistola configurada en mayusculas: se busca sin distinguirlas.
+          if (!existe) {
+            for (const c of candidatos) {
+              const real = await pistolaBuscarSinMayusculas(c);
+              if (real) { id = real; existe = true; break; }
+            }
           }
         } catch (err) {
           console.error('Error buscando el pedido escaneado:', err);
