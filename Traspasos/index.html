@@ -959,6 +959,9 @@ let vistaActual = 'pedir';
 let carrito = {};                  // codigo -> {codigo, nombre, foto, cant}
 let pick = null;                   // {id, items:{cod:{enviar, ok, quitado}}}
 let detalleId = null;
+// Link directo a un pedido (?tr=<id>, lo comparte Pedidos por WhatsApp): se abre al llegar la primera carga.
+let trDelLink = null;
+try { trDelLink = new URLSearchParams(location.search).get('tr'); } catch(_){}
 
 function pedirOrigen(){ return (SUCURSALES.find(s => s.id !== pedirDestino) || SUCURSALES[0]).id; }
 
@@ -1172,10 +1175,24 @@ function escucharTraspasos(){
     renderTodo();
     sincronizarPickAbierto();
     if (detalleId && $('detSheet').classList.contains('open')) renderDetalle(detalleId);
+    if (primeraCarga) abrirDesdeLink();
   }, err => {
     console.error('Error escuchando traspasos:', err);
     toast('No se pudieron leer los pedidos: ' + err.message, 'err');
   });
+}
+
+// Abre el pedido del link una sola vez: abierto → a preparar; despachado o cancelado → su detalle.
+// El parámetro se saca de la URL antes de apilar capas, para que recargar o volver no lo reabra.
+function abrirDesdeLink(){
+  const id = trDelLink;
+  if (!id) return;
+  trDelLink = null;
+  try { history.replaceState(history.state, '', location.pathname + location.hash); } catch(_){}
+  const t = traspasos[id];
+  if (!t){ toast('No se encontró el pedido del link', 'aviso'); return; }
+  if (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO'){ irA('preparar'); abrirPick(id); }
+  else { irA('historial'); abrirDetalle(id); }
 }
 
 // Pedido nuevo para preparar en esta sucursal → vibración + aviso (no en la carga inicial).
@@ -1458,9 +1475,7 @@ async function enviarPedido(){
   try {
     if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase. Revisá internet.');
     // Número correlativo de remito. Si después falla el guardado queda un número salteado: es inocuo.
-    const tx = await conTimeout(db.ref('traspasosMeta/ultimoNumero').transaction(n => (Number(n) || 0) + 1), 10000, 'No se pudo numerar el pedido.');
-    if (!tx.committed) throw new Error('No se pudo numerar el pedido.');
-    const numero = 'TR-' + String(tx.snapshot.val()).padStart(4, '0');
+    const numero = 'TR-' + String(await tomarNumero()).padStart(4, '0');
     const id = db.ref('traspasos').push().key;
     const itemsObj = {};
     let costoTotal = 0;
@@ -1896,12 +1911,17 @@ async function eliminarPedido(id){
   try {
     if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase.');
     // Transacción: se borra si sigue abierto o cancelado. Un enviado no, porque ya registró stock.
+    let numero = null;
     const res = await conTimeout(db.ref('traspasos/' + id).transaction(t => {
       if (!t) return t;
       if (t.estado === 'ENVIADO') return;   // aborta
+      numero = t.numero;
       return null;
     }), 10000, 'La eliminación tardó demasiado.');
     if (!res.committed) throw new Error('el pedido ya fue despachado.');
+    // El TR- vuelve a estar disponible, como si el pedido nunca hubiese existido. Si falla, el
+    // pedido ya está borrado y solo queda un número salteado.
+    try { await liberarNumero(numero); } catch (e){ console.warn('No se liberó el número', numero, e); }
     lsDel(LS_PICK + id);
     // Sin pick, un eco tardío del listener no vuelve a cerrar la pantalla.
     if (pick && pick.id === id) pick = null;
@@ -1913,6 +1933,49 @@ async function eliminarPedido(id){
   } finally {
     procesoCritico = false;
   }
+}
+
+// Numeración TR: traspasosMeta = { ultimoNumero, libres: { n: true } }. "libres" son números de
+// pedidos eliminados por root; se reusan primero (el menor) para que no queden huecos.
+// pedidosv2 numera con la misma lógica: si se cambia acá, cambiarla también allá.
+async function tomarNumero(){
+  let tomado = null;
+  const tx = await conTimeout(db.ref('traspasosMeta').transaction(m => {
+    m = m || {};
+    const libres = Object.keys(m.libres || {}).map(Number).filter(n => n > 0).sort((a, b) => a - b);
+    if (libres.length){
+      tomado = libres[0];
+      delete m.libres[String(tomado)];
+    } else {
+      tomado = (Number(m.ultimoNumero) || 0) + 1;
+      m.ultimoNumero = tomado;
+    }
+    return m;
+  }), 10000, 'No se pudo numerar el pedido.');
+  if (!tx.committed || !tomado) throw new Error('No se pudo numerar el pedido.');
+  return tomado;
+}
+
+// Devuelve el número de un pedido eliminado. Si era el último, baja el contador (y sigue bajando
+// mientras el anterior también esté libre); si no, queda en "libres" para el próximo pedido.
+async function liberarNumero(numero){
+  const m0 = /^TR-(\d+)$/.exec(String(numero || ''));
+  const n = m0 ? Number(m0[1]) : 0;
+  if (!n) return;
+  await conTimeout(db.ref('traspasosMeta').transaction(m => {
+    m = m || {};
+    m.libres = m.libres || {};
+    let ultimo = Number(m.ultimoNumero) || 0;
+    if (n > ultimo) return m;
+    if (n === ultimo){
+      ultimo--;
+      while (ultimo > 0 && m.libres[String(ultimo)]){ delete m.libres[String(ultimo)]; ultimo--; }
+      m.ultimoNumero = ultimo;
+    } else {
+      m.libres[String(n)] = true;
+    }
+    return m;
+  }), 10000, 'No se pudo liberar el número.');
 }
 
 // ============================================================
