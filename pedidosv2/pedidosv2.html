@@ -3542,6 +3542,29 @@
     .nec-ped-conf { flex: none; display: inline-flex; margin-left: -6px; color: var(--ok); }
     .nec-ped-conf .ic-sm { width: 15px; height: 15px; stroke-width: 2.8; }
     .nec-ped-n { flex: none; margin-left: auto; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-4); }
+    /* Nota del pedido: pastilla chica a la derecha, pegada al conteo. Se
+       recorta con puntos suspensivos antes que apretar el nombre. */
+    .nec-ped-nota {
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 45%;
+      margin-left: auto;
+      padding: 3px 8px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: opacity .14s;
+    }
+    .nec-ped-nota.is-pagado { background: var(--ok-soft); color: var(--ok); }
+    .nec-ped-nota.is-espera { background: var(--accent-soft); color: var(--accent); }
+    .nec-ped-nota + .nec-ped-n { margin-left: 0; }
+    .nec-ped:not(.is-on) .nec-ped-nota { opacity: .55; }
 
     /* Hoja "Pedir a Caseros": misma caja que la sub-hoja de pedidos, un poco
        mas ancha porque las filas llevan foto. Tres vistas (traspasos creados,
@@ -3693,6 +3716,9 @@
     .sol-stk.is-ok { color: var(--ok); }
     .sol-stk.is-poco { color: var(--warn); }
     .sol-stk.is-sin { color: var(--bad); }
+    /* Munro es informativo: gris oscuro con stock, rojo sin stock */
+    .sol-stk--munro { color: var(--ink-3); }
+    .sol-stk--munro.is-sin { color: var(--bad); }
 
     @media (max-width: 720px) {
       .nec-panel { padding: 0; }
@@ -14237,6 +14263,16 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         if (sub.classList.contains('active')) renderSub();
       }
 
+      // ---------- Nota del pedido en la sub-hoja ----------
+      // A la derecha, antes del conteo. Las de pago llevan el color de su
+      // estado (verde pagado, naranja esperando), como en Pedidos pendientes.
+      function htmlNotaSub(nota) {
+        if (!nota) return '';
+        const pago = estadoPago(nota);
+        const clase = pago === 'pagado' ? ' is-pagado' : pago === 'espera' ? ' is-espera' : '';
+        return '<span class="nec-ped-nota' + clase + '" title="' + escapeHtml(nota) + '">' + escapeHtml(nota) + '</span>';
+      }
+
       // ---------- Tilde de "Pedido Confirmado" ----------
       const htmlConfirmado = () => '<span class="nec-ped-conf" title="Pedido Confirmado" aria-label="Pedido Confirmado">' + IC_CHECK + '</span>';
 
@@ -14271,6 +14307,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             id: child.key,
             cliente: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key),
             confirmado: normalizarNota(p.nota) === NOTA_CONFIRMADO,
+            nota: String(p.nota || '').trim(),
             items
           });
         };
@@ -14648,6 +14685,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             '<input type="checkbox"' + (on ? ' checked' : '') + '><i>' + IC_CHECK + '</i>' +
             '<span class="nec-ped-nombre">' + escapeHtml(p.cliente) + '</span>' +
             (p.confirmado ? htmlConfirmado() : '') +
+            htmlNotaSub(p.nota) +
             '<span class="nec-ped-n">' + n + ' art.</span></label>';
         });
         subList.innerHTML = html || '<div class="pedidos-panel-empty">No hay pedidos con artículos pendientes</div>';
@@ -14774,6 +14812,23 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       function stockCas(codigo) {
         const n = (sheetsData[codigo] || {}).stockCaseros;
         return n !== null && n !== undefined && Number.isFinite(n) ? n : null;
+      }
+      // Stock de Munro (columna R, el stock total que usa toda la app).
+      function stockMunro(codigo) {
+        const n = (sheetsData[codigo] || {}).stock;
+        return n !== null && n !== undefined && Number.isFinite(n) ? n : null;
+      }
+      // En rojo cuando Munro no tiene: es justamente lo que hay que pedir.
+      function stockMunroHtml(codigo) {
+        const n = stockMunro(codigo);
+        const lbl = 'Stock en Munro: ';
+        if (n === null) return '<span class="sol-stk">' + lbl + 'sin datos</span>';
+        return '<span class="sol-stk sol-stk--munro' + (n <= 0 ? ' is-sin' : '') + '">' + lbl + '<b>' + n + '</b></span>';
+      }
+      // Se pide por defecto lo que falta en Munro y Caseros puede mandar.
+      function solTildadoPorDefecto(a) {
+        const m = stockMunro(a.codigo);
+        return !a.yaPedido && m !== null && m <= 0 && stockCas(a.codigo) > 0;
       }
       function stockSolHtml(codigo, cant) {
         const n = stockCas(codigo);
@@ -14904,7 +14959,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             imgSolHtml(a.imagen, a.imagenAlt) +
             '<div class="sol-art-info"><div class="sol-art-nombre">' + escapeHtml(a.nombre) + '</div>' +
             '<div class="sol-art-cod">' + escapeHtml(a.codigo) + (a.barras ? ' · ' + escapeHtml(a.barras) : '') + '</div>' +
-            '<div class="sol-art-tags">' + stockSolHtml(a.codigo, a.cantidad) +
+            '<div class="sol-art-tags">' + stockMunroHtml(a.codigo) + stockSolHtml(a.codigo, a.cantidad) +
             (a.yaPedido ? '<span class="sol-ya">' + IC_ENVIO + 'Ya pedido ' + escapeHtml(a.yaPedido) + '</span>' : '') + '</div></div>' +
             '<span class="sol-art-cant">' + a.cantidad + '</span></label>';
         }).join('');
@@ -15005,8 +15060,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
               yaPedido: abiertos[k] || ''
             };
           });
-        // Arranca sin nada tildado: se eligen a mano (o con Todos / Con stock en Caseros).
-        solElegidos = new Set();
+        // Arranca tildado lo que Munro no tiene (stock <= 0) y Caseros si
+        // (stock > 0), salvo lo que ya esta en un traspaso abierto. El resto
+        // se elige a mano (o con Todos / Con stock en Caseros).
+        solElegidos = new Set(solCandidatos.filter(solTildadoPorDefecto).map(a => a.k));
         renderSolNueva();
         // Stock de Caseros al dia: si cambia, necRenderSiAbierto repinta esta vista.
         if (typeof actualizarStock === 'function') actualizarStock();
