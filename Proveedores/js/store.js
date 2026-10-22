@@ -11,7 +11,7 @@ const state = {
   facturas: [],
   pagos: [],
   filtros: { proveedorId: '', moneda: '', desde: '', hasta: '' },
-  filtrosFacturas: { proveedorId: '', moneda: '', estado: '' },
+  filtrosFacturas: { proveedorId: '', sucursal: '', moneda: '', estado: '' },
   verInactivos: false,
   cargando: true,
 };
@@ -69,7 +69,7 @@ export function setFiltrosFacturas(parciales) {
 }
 
 export function limpiarFiltrosFacturas() {
-  state.filtrosFacturas = { proveedorId: '', moneda: '', estado: '' };
+  state.filtrosFacturas = { proveedorId: '', sucursal: '', moneda: '', estado: '' };
   notificar();
 }
 
@@ -248,12 +248,13 @@ export function getFacturasConSaldo(proveedorId, ignorarPagoId = null) {
 
 /** Facturas que pasan los filtros de esa vista, ya con su saldo calculado. */
 export function getFacturasFiltradas() {
-  const { proveedorId, moneda, estado } = state.filtrosFacturas;
+  const { proveedorId, sucursal, moneda, estado } = state.filtrosFacturas;
 
   return state.facturas
     .map((factura) => ({ factura, ...calcularSaldoFactura(factura) }))
     .filter((fila) => {
       if (proveedorId && fila.factura.proveedorId !== proveedorId) return false;
+      if (sucursal && fila.factura.sucursal !== sucursal) return false;
       if (moneda && fila.factura.moneda !== moneda) return false;
       if (estado && fila.estado !== estado) return false;
       return true;

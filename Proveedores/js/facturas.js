@@ -62,6 +62,9 @@ export function renderFacturas() {
           <td class="num">${formatearMonto(pagado, m)}</td>
           <td class="num"><strong>${formatearMonto(Math.max(saldo, 0), m)}</strong></td>
           <td><span class="chip chip--${estado}">${ETIQUETA_ESTADO[estado]}</span></td>
+          <td>${factura.sucursal
+            ? escaparHtml(factura.sucursal)
+            : '<span class="texto-suave">—</span>'}</td>
           <td>
             <div class="acciones">
               <button type="button" class="btn-icono" data-editar="${factura.id}">Editar</button>
@@ -321,6 +324,9 @@ export function initFacturas() {
   document.getElementById('filtro-factura-proveedor').addEventListener('change', (e) =>
     setFiltrosFacturas({ proveedorId: e.target.value })
   );
+  document.getElementById('filtro-factura-sucursal').addEventListener('change', (e) =>
+    setFiltrosFacturas({ sucursal: e.target.value })
+  );
   document.getElementById('filtro-factura-moneda').addEventListener('change', (e) =>
     setFiltrosFacturas({ moneda: e.target.value })
   );
@@ -329,9 +335,12 @@ export function initFacturas() {
   );
 
   document.getElementById('btn-limpiar-filtros-facturas').addEventListener('click', () => {
-    ['filtro-factura-proveedor', 'filtro-factura-moneda', 'filtro-factura-estado'].forEach(
-      (id) => (document.getElementById(id).value = '')
-    );
+    [
+      'filtro-factura-proveedor',
+      'filtro-factura-sucursal',
+      'filtro-factura-moneda',
+      'filtro-factura-estado',
+    ].forEach((id) => (document.getElementById(id).value = ''));
     limpiarFiltrosFacturas();
   });
 }
