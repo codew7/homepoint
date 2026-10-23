@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes Mayoristas · HomePoint</title>
+    <link rel="icon" href="faviconnegro.png" type="image/png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="config.js"></script>
+
+    <style>
+        :root {
+            --primary: #6c4eb6;
+            --primary-dark: #5a3d9b;
+            --primary-light: #ede7f6;
+            --primary-subtle: #f5f1fb;
+            --success: #16a34a;
+            --success-light: #dcfce7;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --danger: #dc2626;
+            --danger-light: #fee2e2;
+            --wa: #25d366;
+            --wa-dark: #128c4a;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --radius: 10px;
+            --radius-lg: 14px;
+            --shadow: 0 1px 3px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04);
+            --shadow-lg: 0 12px 36px rgba(15,23,42,0.12);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-800);
+            line-height: 1.5;
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== TOPBAR ===== */
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid var(--gray-200);
+            padding: .9rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-wrap: wrap;
+        }
+        .topbar-brand { display: flex; align-items: center; gap: .8rem; }
+        .brand-icon {
+            width: 40px; height: 40px; border-radius: var(--radius);
+            background: var(--primary-light); color: var(--primary);
+            display: grid; place-items: center; font-size: 1.2rem;
+        }
+        .topbar h1 { font-size: 1.1rem; font-weight: 700; }
+        .topbar p { font-size: .8rem; color: var(--gray-500); }
+
+        .tabs { display: flex; gap: .25rem; background: var(--gray-100); padding: .25rem; border-radius: var(--radius); }
+        .tab {
+            border: none; background: transparent; font: inherit; font-weight: 600;
+            padding: .5rem 1rem; border-radius: 8px; cursor: pointer; color: var(--gray-600);
+            display: flex; align-items: center; gap: .4rem;
+        }
+        .tab.active { background: #fff; color: var(--primary); box-shadow: var(--shadow); }
+        .tab .count {
+            background: var(--primary); color: #fff; font-size: .7rem;
+            padding: 0 .45rem; border-radius: 999px; min-width: 1.3rem; text-align: center;
+        }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: .4rem;
+            padding: .5rem .9rem; border-radius: 8px; border: 1px solid transparent;
+            font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer;
+            white-space: nowrap; text-decoration: none;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-outline { background: #fff; color: var(--gray-700); border-color: var(--gray-300); }
+        .btn-outline:hover { background: var(--gray-100); }
+        .btn-wa { background: var(--wa); color: #fff; }
+        .btn-wa:hover { background: var(--wa-dark); }
+        .btn-danger-ghost { background: transparent; color: var(--danger); }
+        .btn-danger-ghost:hover { background: var(--danger-light); }
+        .btn-sm { padding: .35rem .6rem; font-size: .8rem; }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+        main { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
+        .vista { display: none; }
+        .vista.active { display: block; }
+
+        .toolbar { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.25rem; }
+        .search {
+            flex: 1; min-width: 220px; position: relative;
+        }
+        .search i { position: absolute; left: .8rem; top: 50%; transform: translateY(-50%); color: var(--gray-400); }
+        .search input {
+            width: 100%; padding: .6rem .8rem .6rem 2.2rem; font: inherit;
+            border: 1px solid var(--gray-300); border-radius: 8px; background: #fff;
+        }
+        .search input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .filtros { display: flex; gap: .25rem; flex-wrap: wrap; }
+        .filtro {
+            border: 1px solid var(--gray-300); background: #fff; font: inherit; font-size: .8rem; font-weight: 600;
+            padding: .45rem .8rem; border-radius: 999px; cursor: pointer; color: var(--gray-600);
+        }
+        .filtro.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+        /* ===== TARJETAS POTENCIALES =====
+           Todas las tarjetas comparten la misma grilla, así cada dato cae
+           siempre en la misma columna y la lista se lee de arriba abajo
+           como una tabla: Cliente · Contacto · Perfil · Acciones. */
+        :root { --cols-pot: 44px minmax(210px, 1.35fr) minmax(200px, 1fr) minmax(230px, 1.2fr) 300px; }
+
+        .lista { display: flex; flex-direction: column; gap: .6rem; }
+        .lista-head {
+            display: grid; grid-template-columns: var(--cols-pot); gap: 1.25rem;
+            padding: 0 1.25rem .15rem calc(1.25rem + 4px);
+            font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-400);
+        }
+        .lista-head span:first-child { grid-column: span 2; }
+        .lista-head span:last-child { text-align: right; }
+
+        .pcard {
+            position: relative;
+            display: grid; grid-template-columns: var(--cols-pot); gap: 1.25rem; align-items: center;
+            background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg);
+            padding: .9rem 1.25rem .9rem calc(1.25rem + 4px);
+            box-shadow: var(--shadow); overflow: hidden;
+            transition: box-shadow 200ms ease, border-color 200ms ease;
+        }
+        .pcard::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--warning);
+        }
+        .pcard:hover { box-shadow: 0 6px 20px rgba(15,23,42,.08); border-color: var(--gray-300); }
+        .pcard.importado::before { background: var(--success); }
+        .pcard.descartado::before { background: var(--gray-300); }
+        .pcard.descartado { background: var(--gray-50); }
+        .pcard.descartado .pcard-name, .pcard.descartado .avatar { opacity: .55; }
+
+        /* Cliente */
+        .avatar {
+            width: 44px; height: 44px; border-radius: 50%;
+            display: grid; place-items: center;
+            font-weight: 700; font-size: .9rem; letter-spacing: .02em;
+            background: var(--warning-light); color: #92400e;
+        }
+        .importado .avatar { background: var(--success-light); color: #166534; }
+        .descartado .avatar { background: var(--gray-200); color: var(--gray-600); }
+        .cliente { min-width: 0; }
+        .pcard-name {
+            font-weight: 700; font-size: 1rem; line-height: 1.25; color: var(--gray-900); letter-spacing: -.01em;
+            display: flex; align-items: center; gap: .4rem; min-width: 0;
+        }
+        .pcard-name span.txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .meta {
+            display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .5rem;
+            margin-top: .2rem; font-size: .8rem; color: var(--gray-500);
+        }
+        .meta i { color: var(--gray-400); margin-right: .15rem; }
+        .meta .sep { color: var(--gray-300); }
+        .nuevo {
+            flex-shrink: 0; font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+            color: #fff; background: var(--primary); padding: .12rem .45rem; border-radius: 999px;
+        }
+        .badge { font-size: .62rem; font-weight: 700; padding: .12rem .45rem; border-radius: 999px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; flex-shrink: 0; }
+        .badge-importado { background: var(--success-light); color: #166534; }
+        .badge-descartado { background: var(--gray-200); color: var(--gray-600); }
+
+        /* Contacto */
+        .contacto { display: grid; gap: .3rem; min-width: 0; font-size: .85rem; }
+        .contacto a, .contacto span {
+            display: flex; align-items: center; gap: .45rem; min-width: 0;
+            color: var(--gray-700); text-decoration: none;
+        }
+        .contacto a:hover { color: var(--primary); }
+        .contacto i { color: var(--gray-400); flex-shrink: 0; }
+        .contacto .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .contacto .tel { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+        /* Perfil: tres indicadores siempre en el mismo orden, para comparar de un vistazo */
+        .perfil { display: grid; gap: .45rem; min-width: 0; }
+        .canales { display: flex; gap: .3rem; }
+        .canal {
+            display: inline-flex; align-items: center; gap: .3rem;
+            font-size: .72rem; font-weight: 600; padding: .22rem .5rem; border-radius: 6px;
+            border: 1px solid var(--gray-200); color: var(--gray-400); background: #fff;
+        }
+        .canal.on { background: var(--primary-subtle); border-color: var(--primary-light); color: var(--primary-dark); }
+        .canal.off i { opacity: .6; }
+        .perfil-extra { font-size: .78rem; color: var(--gray-500); line-height: 1.4; overflow-wrap: anywhere; }
+        .perfil-extra b { color: var(--gray-700); font-weight: 600; }
+
+        /* Acciones: la principal con texto, las secundarias como íconos */
+        .pcard-actions { display: flex; align-items: center; justify-content: flex-end; gap: .35rem; }
+        .pcard-actions .grupo { display: flex; gap: .35rem; }
+        .btn:active:not(:disabled) { transform: scale(.97); }
+        .btn { transition: background 150ms, border-color 150ms, color 150ms, transform 100ms ease-out; }
+        .btn-icon {
+            width: 32px; height: 32px; padding: 0; justify-content: center;
+            background: #fff; border: 1px solid var(--gray-200); color: var(--gray-500); border-radius: 8px;
+        }
+        .btn-icon:hover { border-color: var(--gray-300); color: var(--gray-800); background: var(--gray-50); }
+        .btn-icon.danger:hover { color: var(--danger); border-color: #fecaca; background: var(--danger-light); }
+        .hecho { font-size: .78rem; color: var(--success); font-weight: 600; display: inline-flex; align-items: center; gap: .3rem; padding: 0 .3rem; }
+
+        @media (max-width: 1180px) {
+            :root { --cols-pot: 44px minmax(0, 1.3fr) minmax(0, 1fr) auto; }
+            .lista-head { display: none; }
+            .pcard { row-gap: .75rem; }
+            .perfil { grid-column: 2 / 4; grid-row: 2; }
+            .pcard-actions { grid-column: 4; grid-row: 1 / 3; flex-direction: column; align-items: stretch; }
+            .pcard-actions .grupo { display: flex; gap: .35rem; justify-content: flex-end; }
+        }
+        @media (max-width: 700px) {
+            .pcard { grid-template-columns: 40px minmax(0, 1fr); gap: .75rem; padding: 1rem 1rem 1rem calc(1rem + 4px); }
+            .avatar { width: 40px; height: 40px; }
+            .contacto, .perfil { grid-column: 1 / -1; grid-row: auto; }
+            .pcard-actions {
+                grid-column: 1 / -1; grid-row: auto; flex-direction: row; align-items: center; justify-content: flex-start;
+                border-top: 1px solid var(--gray-100); padding-top: .75rem; flex-wrap: wrap;
+            }
+            .pcard-actions .grupo { margin-left: auto; }
+        }
+
+        /* ===== DASHBOARD ===== */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+        .stat { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1rem 1.2rem; box-shadow: var(--shadow); }
+        .stat-label { font-size: .75rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+        .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+
+        .table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); overflow-x: auto; box-shadow: var(--shadow); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: .7rem .9rem; text-align: left; border-bottom: 1px solid var(--gray-100); white-space: nowrap; }
+        th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); background: var(--gray-50); user-select: none; }
+        th.sortable { cursor: pointer; }
+        th.sortable:hover { color: var(--primary); }
+        th.sorted { color: var(--primary); }
+        td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+        tbody tr { cursor: pointer; }
+        tbody tr:hover { background: var(--primary-subtle); }
+        .muted { color: var(--gray-400); }
+        .dias-alerta { color: var(--danger); font-weight: 600; }
+
+        .empty { text-align: center; padding: 3rem 1rem; color: var(--gray-500); }
+        .empty i { font-size: 2.5rem; color: var(--gray-300); display: block; margin-bottom: .5rem; }
+
+        /* ===== MODAL ===== */
+        .modal-bg {
+            position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none;
+            align-items: center; justify-content: center; z-index: 200; padding: 16px;
+        }
+        .modal-bg.open { display: flex; }
+        .modal {
+            background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+            width: 100%; max-width: 640px; max-height: 90vh; overflow: auto; padding: 1.5rem;
+        }
+        .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; }
+        .modal-head h2 { font-size: 1.1rem; }
+        .modal-close { border: none; background: none; font-size: 1.4rem; cursor: pointer; color: var(--gray-500); }
+        .mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1rem; }
+        .mini-stats .stat { padding: .7rem .9rem; }
+        .mini-stats .stat-value { font-size: 1.15rem; }
+        .barras { display: flex; align-items: flex-end; gap: 3px; height: 90px; margin: .5rem 0 1rem; border-bottom: 1px solid var(--gray-200); }
+        .barras div { flex: 1; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+        .barras div:hover { background: var(--primary-dark); }
+
+        /* ===== AFICHE QR (vista previa del A3) =====
+           El iframe mide lo mismo que la hoja A3 a 96 dpi (1123 × 1587 px)
+           y se achica con transform para entrar en el modal. */
+        .modal.modal-qr { max-width: 520px; }
+        .afiche-preview {
+            --escala: .4;
+            width: calc(1123px * var(--escala)); height: calc(1587px * var(--escala));
+            margin: 0 auto; border-radius: 6px; overflow: hidden;
+            box-shadow: 0 0 0 1px var(--gray-200), 0 12px 30px rgba(15,23,42,.14);
+            background: #fff;
+        }
+        .afiche-preview iframe {
+            width: 1123px; height: 1587px; border: 0; display: block;
+            transform: scale(var(--escala)); transform-origin: 0 0;
+        }
+        .print-tips {
+            margin-top: 1rem; padding: .75rem .9rem; border-radius: var(--radius);
+            background: var(--primary-subtle); color: var(--gray-700); font-size: .8rem; line-height: 1.5;
+        }
+        .print-tips b { color: var(--primary-dark); }
+        .modo-afiche {
+            display: flex; gap: .25rem; width: fit-content; margin: 0 auto 1rem;
+            background: var(--gray-100); padding: .25rem; border-radius: var(--radius);
+        }
+        .modo-afiche button {
+            border: none; background: transparent; font: inherit; font-weight: 600; font-size: .85rem;
+            padding: .45rem .9rem; border-radius: 8px; cursor: pointer; color: var(--gray-600);
+            display: flex; align-items: center; gap: .4rem;
+        }
+        .modo-afiche button.active { background: #fff; color: var(--primary); box-shadow: var(--shadow); }
+        .qr-actions { display: flex; gap: .5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
+        @media (max-width: 560px) { .afiche-preview { --escala: .27; } }
+
+        @media (max-width: 700px) {
+            .topbar { padding: .8rem 16px; }
+            main { padding: 1rem 16px; }
+            .mini-stats { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (!user) {
+                window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            iniciar();
+        });
+    </script>
+
+    <header class="topbar">
+        <div class="topbar-brand">
+            <div class="brand-icon"><i class="bi bi-shop"></i></div>
+            <div>
+                <h1>Clientes Mayoristas</h1>
+                <p>Captación y seguimiento</p>
+            </div>
+        </div>
+        <nav class="tabs">
+            <button class="tab active" data-vista="potenciales"><i class="bi bi-person-plus"></i> Potenciales <span class="count" id="countPendientes">0</span></button>
+            <button class="tab" data-vista="dashboard"><i class="bi bi-graph-up"></i> Dashboard</button>
+        </nav>
+        <button class="btn btn-outline" onclick="abrirQR()"><i class="bi bi-qr-code"></i> Imprimir QR</button>
+    </header>
+
+    <main>
+        <!-- ===== POTENCIALES ===== -->
+        <section class="vista active" id="vista-potenciales">
+            <div class="toolbar">
+                <div class="search">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="buscarPot" placeholder="Buscar por nombre, teléfono, email, localidad, provincia o rubro…">
+                </div>
+                <div class="filtros" id="filtrosPot">
+                    <button class="filtro active" data-estado="pendiente">Pendientes</button>
+                    <button class="filtro" data-estado="importado">Importados</button>
+                    <button class="filtro" data-estado="descartado">Descartados</button>
+                    <button class="filtro" data-estado="">Todos</button>
+                </div>
+            </div>
+            <div class="lista" id="gridPot"></div>
+            <div class="empty" id="emptyPot" style="display:none"><i class="bi bi-inbox"></i>No hay registros en esta vista.</div>
+        </section>
+
+        <!-- ===== DASHBOARD ===== -->
+        <section class="vista" id="vista-dashboard">
+            <div class="stats">
+                <div class="stat"><div class="stat-label">Mayoristas</div><div class="stat-value" id="stMayoristas">–</div></div>
+                <div class="stat"><div class="stat-label">Con compras</div><div class="stat-value" id="stConCompras">–</div></div>
+                <div class="stat"><div class="stat-label">Total facturado</div><div class="stat-value" id="stTotal">–</div></div>
+                <div class="stat"><div class="stat-label">Ticket promedio</div><div class="stat-value" id="stTicket">–</div></div>
+            </div>
+            <div class="toolbar">
+                <div class="search">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="buscarDash" placeholder="Buscar mayorista…">
+                </div>
+                <button class="btn btn-outline" onclick="cargarDashboard(true)"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="nombre">Cliente</th>
+                            <th>Contacto</th>
+                            <th class="sortable num" data-sort="pedidos">Pedidos</th>
+                            <th class="sortable num" data-sort="total">Total acumulado</th>
+                            <th class="sortable num" data-sort="ticket">Ticket prom.</th>
+                            <th class="sortable" data-sort="primero">Primer pedido</th>
+                            <th class="sortable" data-sort="ultimo">Último pedido</th>
+                            <th class="sortable num" data-sort="dias">Días sin comprar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyDash"></tbody>
+                </table>
+                <div class="empty" id="emptyDash"><i class="bi bi-hourglass-split"></i>Cargando…</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Detalle de un mayorista -->
+    <div class="modal-bg" id="modalDetalle">
+        <div class="modal">
+            <div class="modal-head">
+                <h2 id="detNombre"></h2>
+                <button class="modal-close" onclick="cerrarModal('modalDetalle')">&times;</button>
+            </div>
+            <div class="mini-stats">
+                <div class="stat"><div class="stat-label">Pedidos</div><div class="stat-value" id="detPedidos"></div></div>
+                <div class="stat"><div class="stat-label">Total</div><div class="stat-value" id="detTotal"></div></div>
+                <div class="stat"><div class="stat-label">Ticket prom.</div><div class="stat-value" id="detTicket"></div></div>
+            </div>
+            <div class="stat-label">Compras por mes (últimos 12)</div>
+            <div class="barras" id="detBarras"></div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Pedido</th><th class="num">Total</th></tr></thead>
+                    <tbody id="detTabla"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Afiche QR A3 -->
+    <div class="modal-bg" id="modalQR">
+        <div class="modal modal-qr">
+            <div class="modal-head">
+                <h2>Afiche QR · A3 vertical</h2>
+                <button class="modal-close" onclick="cerrarModal('modalQR')">&times;</button>
+            </div>
+            <div class="modo-afiche" id="modoAfiche">
+                <button class="active" data-modo="color"><i class="bi bi-palette"></i> Color</button>
+                <button data-modo="mono"><i class="bi bi-circle-half"></i> Blanco y negro</button>
+            </div>
+            <div class="afiche-preview"><iframe id="afiche" title="Vista previa del afiche"></iframe></div>
+            <div class="print-tips" id="tipsAfiche"></div>
+            <div class="qr-actions">
+                <a class="btn btn-outline" id="abrirAfiche" href="qrMayorista.html" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Abrir aparte</a>
+                <button class="btn btn-primary" id="btnImprimirQR" onclick="imprimirAfiche()" disabled><i class="bi bi-printer"></i> Imprimir A3</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ===================================================== utilidades = */
+        const $ = id => document.getElementById(id);
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const num = v => {
+            if (typeof v === 'number') return isFinite(v) ? v : 0;
+            if (v == null || v === '') return 0;
+            const n = parseFloat(String(v).replace(/[^\d.,-]/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'));
+            return isFinite(n) ? n : 0;
+        };
+        const pesos = n => '$' + Math.round(n).toLocaleString('es-AR');
+        const fechaCorta = ts => ts ? new Date(ts).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+        const fechaHora = ts => ts ? fechaCorta(ts) + ' ' + new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+        const normNombre = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        // Para comparar teléfonos alcanza con los últimos 8 dígitos: evita falsos
+        // distintos por 0, 15, 54 o 9 delante.
+        const normTel = s => (s || '').replace(/\D/g, '').slice(-8);
+        const normEmail = s => (s || '').trim().toLowerCase();
+
+        // Arma el número para wa.me en formato internacional argentino (549 + área + número).
+        function telWhatsApp(tel) {
+            let d = (tel || '').replace(/\D/g, '');
+            if (d.startsWith('54')) d = d.slice(2);
+            if (d.startsWith('9') && d.length === 11) d = d.slice(1);
+            if (d.startsWith('0')) d = d.slice(1);
+            // "15" después del código de área (2, 3 o 4 dígitos) sobra en WhatsApp.
+            if (d.length === 12) {
+                for (const a of [2, 3, 4]) {
+                    if (d.substr(a, 2) === '15') { d = d.slice(0, a) + d.slice(a + 2); break; }
+                }
+            }
+            return '549' + d;
+        }
+
+        function abrirWhatsApp(tel, nombre) {
+            const primerNombre = (nombre || '').trim().split(/\s+/)[0] || '';
+            const texto = `¡Hola ${primerNombre}! Te escribimos de HomePoint por tu registro como cliente mayorista.`;
+            window.open(`https://wa.me/${telWhatsApp(tel)}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+        }
+
+        function waPotencial(id) { const p = potenciales.find(x => x.id === id); if (p) abrirWhatsApp(p.telefono, p.nombre); }
+        function waMayorista(id) { const f = filasDash.find(x => x.id === id); if (f) abrirWhatsApp(f.telefono, f.nombre); }
+
+        function cerrarModal(id) { $(id).classList.remove('open'); }
+        document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open')); });
+
+        /* ========================================================= pestañas = */
+        let dashboardCargado = false;
+        document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+            document.querySelectorAll('.vista').forEach(v => v.classList.toggle('active', v.id === 'vista-' + t.dataset.vista));
+            if (t.dataset.vista === 'dashboard' && !dashboardCargado) cargarDashboard();
+        }));
+
+        let iniciado = false;
+        function iniciar() {
+            if (iniciado) return;
+            iniciado = true;
+            escucharPotenciales();
+        }
+
+        /* ===================================================== potenciales = */
+        let potenciales = [];
+        let filtroEstado = 'pendiente';
+
+        function escucharPotenciales() {
+            db.ref('clientesPotenciales').on('value', snap => {
+                potenciales = [];
+                snap.forEach(ch => { potenciales.push({ id: ch.key, ...ch.val() }); });
+                potenciales.sort((a, b) => (b.creado || 0) - (a.creado || 0));
+                $('countPendientes').textContent = potenciales.filter(p => (p.estado || 'pendiente') === 'pendiente').length;
+                renderPotenciales();
+            }, err => {
+                console.error('Error al leer clientesPotenciales:', err);
+                $('gridPot').innerHTML = '';
+                $('emptyPot').style.display = 'block';
+                $('emptyPot').innerHTML = '<i class="bi bi-shield-lock"></i>No tenés permiso para ver los registros (solo administradores).';
+            });
+        }
+
+        $('filtrosPot').addEventListener('click', e => {
+            const b = e.target.closest('.filtro');
+            if (!b) return;
+            filtroEstado = b.dataset.estado;
+            document.querySelectorAll('#filtrosPot .filtro').forEach(x => x.classList.toggle('active', x === b));
+            renderPotenciales();
+        });
+        $('buscarPot').addEventListener('input', renderPotenciales);
+
+        const iniciales = n => (n || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+
+        // "hace 5 min", "hace 3 h", "ayer" o la fecha; la fecha exacta queda en el tooltip.
+        function haceCuanto(ts) {
+            if (!ts) return '';
+            const min = Math.floor((Date.now() - ts) / 60000);
+            if (min < 1) return 'recién';
+            if (min < 60) return `hace ${min} min`;
+            const h = Math.floor(min / 60);
+            if (h < 24) return `hace ${h} h`;
+            const d = Math.floor(h / 24);
+            if (d === 1) return 'ayer';
+            if (d < 7) return `hace ${d} días`;
+            return fechaCorta(ts);
+        }
+
+        function canal(valor, icono, texto) {
+            const on = valor === 'si';
+            const estado = on ? 'Sí' : valor === 'no' ? 'No' : 'Sin respuesta';
+            return `<span class="canal ${on ? 'on' : 'off'}" title="${texto}: ${estado}"><i class="bi ${on ? icono : 'bi-dash'}"></i>${texto}</span>`;
+        }
+
+        function renderPotenciales() {
+            const q = $('buscarPot').value.trim().toLowerCase();
+            const lista = potenciales.filter(p => {
+                if (filtroEstado && (p.estado || 'pendiente') !== filtroEstado) return false;
+                if (!q) return true;
+                return [p.nombre, p.telefono, p.email, p.localidad, p.provincia, p.rubro].some(v => (v || '').toLowerCase().includes(q));
+            });
+
+            $('emptyPot').style.display = lista.length ? 'none' : 'block';
+            if (!lista.length) { $('gridPot').innerHTML = ''; return; }
+
+            const cabecera = '<div class="lista-head" aria-hidden="true"><span>Cliente</span><span>Contacto</span><span>Perfil</span><span>Acciones</span></div>';
+            $('gridPot').innerHTML = cabecera + lista.map(p => {
+                const estado = p.estado || 'pendiente';
+                const esNuevo = estado === 'pendiente' && p.creado && (Date.now() - p.creado) < 86400000;
+                const lugar = [p.localidad, p.provincia].filter(Boolean).map(esc).join(', ');
+
+                const principal = estado === 'importado'
+                    ? `<span class="hecho" title="Importado el ${fechaCorta(p.importadoEn)}"><i class="bi bi-check-circle-fill"></i> Importado</span>`
+                    : `<button class="btn btn-primary btn-sm" onclick="importar('${p.id}', this)"><i class="bi bi-box-arrow-in-right"></i> Importar</button>`;
+                const estadoBtn = estado === 'pendiente'
+                    ? `<button class="btn btn-icon" onclick="cambiarEstado('${p.id}','descartado')" title="Descartar" aria-label="Descartar"><i class="bi bi-x-lg"></i></button>`
+                    : estado === 'descartado'
+                        ? `<button class="btn btn-icon" onclick="cambiarEstado('${p.id}','pendiente')" title="Volver a pendiente" aria-label="Volver a pendiente"><i class="bi bi-arrow-counterclockwise"></i></button>`
+                        : '';
+
+                return `
+                <article class="pcard ${estado}">
+                    <div class="avatar" aria-hidden="true">${esc(iniciales(p.nombre))}</div>
+                    <div class="cliente">
+                        <div class="pcard-name">
+                            <span class="txt" title="${esc(p.nombre)}">${esc(p.nombre)}</span>
+                            ${esNuevo ? '<span class="nuevo">Nuevo</span>' : ''}
+                            ${estado !== 'pendiente' ? `<span class="badge badge-${estado}">${estado}</span>` : ''}
+                        </div>
+                        <div class="meta">
+                            ${lugar ? `<span><i class="bi bi-geo-alt"></i>${lugar}</span><span class="sep">·</span>` : ''}
+                            <span title="${fechaHora(p.creado)}">${haceCuanto(p.creado)}</span>
+                        </div>
+                    </div>
+                    <div class="contacto">
+                        <span><i class="bi bi-telephone"></i><span class="txt tel">${esc(p.telefono)}</span></span>
+                        <a href="mailto:${esc(p.email)}" title="${esc(p.email)}"><i class="bi bi-envelope"></i><span class="txt">${esc(p.email)}</span></a>
+                    </div>
+                    <div class="perfil">
+                        <div class="canales">
+                            ${canal(p.ecommerce, 'bi-globe2', 'Online')}
+                            ${canal(p.localFisico, 'bi-shop', 'Local')}
+                            ${canal(p.redes, 'bi-instagram', 'Redes')}
+                        </div>
+                        ${p.rubro || p.conocio ? `<div class="perfil-extra">
+                            ${p.rubro ? `<b>${esc(p.rubro)}</b>` : ''}${p.rubro && p.conocio ? ' · ' : ''}${p.conocio ? `vía ${esc(p.conocio)}` : ''}
+                        </div>` : ''}
+                    </div>
+                    <div class="pcard-actions">
+                        <button class="btn btn-wa btn-sm" onclick="waPotencial('${p.id}')"><i class="bi bi-whatsapp"></i> WhatsApp</button>
+                        ${principal}
+                        <div class="grupo">
+                            ${estadoBtn}
+                            <button class="btn btn-icon danger" onclick="eliminarPotencial('${p.id}')" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash3"></i></button>
+                        </div>
+                    </div>
+                </article>`;
+            }).join('');
+        }
+
+        function cambiarEstado(id, estado) {
+            db.ref('clientesPotenciales/' + id).update({ estado })
+                .catch(err => { console.error(err); alert('No se pudo actualizar el estado.'); });
+        }
+
+        function eliminarPotencial(id) {
+            const p = potenciales.find(x => x.id === id);
+            if (!p || !confirm(`¿Eliminar el registro de "${p.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
+            db.ref('clientesPotenciales/' + id).remove()
+                .catch(err => { console.error(err); alert('No se pudo eliminar.'); });
+        }
+
+        // Importa solo nombre, teléfono y email al nodo clientes como mayorista.
+        // Si ya existe un cliente con el mismo email o teléfono, se ofrece
+        // marcarlo como mayorista en vez de duplicarlo.
+        async function importar(id, btn) {
+            const p = potenciales.find(x => x.id === id);
+            if (!p) return;
+            btn.disabled = true;
+            try {
+                const snap = await db.ref('clientes').once('value');
+                const email = normEmail(p.email);
+                const tel = normTel(p.telefono);
+                let existente = null;
+                snap.forEach(ch => {
+                    if (existente) return;
+                    const c = ch.val() || {};
+                    if ((email && normEmail(c.email) === email) || (tel.length === 8 && normTel(c.telefono) === tel)) {
+                        existente = { id: ch.key, ...c };
+                    }
+                });
+
+                let clienteId;
+                if (existente) {
+                    const ok = confirm(
+                        `Ya existe un cliente parecido:\n\n${existente.nombre || '(sin nombre)'}\n${existente.telefono || ''}  ${existente.email || ''}\nTipo actual: ${existente.tipoCliente || 'sin especificar'}\n\n¿Marcarlo como mayorista y vincularlo a este registro?`
+                    );
+                    if (!ok) { btn.disabled = false; return; }
+                    const cambios = { tipoCliente: 'mayorista' };
+                    if (!existente.email && p.email) cambios.email = normEmail(p.email);
+                    if (!existente.telefono && p.telefono) cambios.telefono = p.telefono.trim();
+                    await db.ref('clientes/' + existente.id).update(cambios);
+                    clienteId = existente.id;
+                } else {
+                    if (!confirm(`¿Importar a "${p.nombre}" como cliente mayorista?`)) { btn.disabled = false; return; }
+                    const ref = await db.ref('clientes').push({
+                        nombre: p.nombre.trim(),
+                        telefono: p.telefono.trim(),
+                        email: normEmail(p.email),
+                        tipoCliente: 'mayorista',
+                        registro: 'QR'
+                    });
+                    clienteId = ref.key;
+                }
+
+                await db.ref('clientesPotenciales/' + id).update({
+                    estado: 'importado',
+                    clienteId,
+                    importadoEn: firebase.database.ServerValue.TIMESTAMP
+                });
+                dashboardCargado = false;
+            } catch (err) {
+                console.error('Error al importar:', err);
+                alert('No se pudo importar el cliente.');
+                btn.disabled = false;
+            }
+        }
+
+        /* ======================================================= dashboard = */
+        const ESTADO_VALIDO = 'DESPACHADO/ENTREGADO';
+        let filasDash = [];
+        let ordenDash = { campo: 'total', asc: false };
+
+        async function cargarDashboard(forzar) {
+            if (dashboardCargado && !forzar) return;
+            $('tbodyDash').innerHTML = '';
+            $('emptyDash').style.display = 'block';
+            $('emptyDash').innerHTML = '<i class="bi bi-hourglass-split"></i>Cargando pedidos…';
+            try {
+                const [cliSnap, pedSnap] = await Promise.all([
+                    db.ref('clientes').once('value'),
+                    db.ref('pedidos').once('value')
+                ]);
+
+                // Índices de mayoristas por email, nombre+teléfono y nombre.
+                const mayoristas = [];
+                const porEmail = new Map(), porNomTel = new Map(), porNombre = new Map();
+                cliSnap.forEach(ch => {
+                    const c = ch.val() || {};
+                    if ((c.tipoCliente || '').toLowerCase() !== 'mayorista') return;
+                    const fila = { id: ch.key, nombre: c.nombre || '(sin nombre)', telefono: c.telefono || '', email: c.email || '', pedidosLista: [] };
+                    mayoristas.push(fila);
+                    const e = normEmail(c.email), n = normNombre(c.nombre), t = normTel(c.telefono);
+                    if (e && !porEmail.has(e)) porEmail.set(e, fila);
+                    if (n && t && !porNomTel.has(n + '|' + t)) porNomTel.set(n + '|' + t, fila);
+                    if (n && !porNombre.has(n)) porNombre.set(n, fila);
+                });
+
+                // Cada pedido entregado se asigna a un solo mayorista, probando
+                // primero la coincidencia más confiable.
+                pedSnap.forEach(ch => {
+                    const p = ch.val() || {};
+                    if ((p.status || '').toUpperCase() !== ESTADO_VALIDO) return;
+                    const cl = p.cliente || {};
+                    const e = normEmail(cl.email), n = normNombre(cl.nombre), t = normTel(cl.telefono);
+                    const fila = (e && porEmail.get(e)) || (n && t && porNomTel.get(n + '|' + t)) || (n && porNombre.get(n));
+                    if (!fila) return;
+                    fila.pedidosLista.push({
+                        id: ch.key,
+                        ts: fechaPedido(p),
+                        total: num((p.pagos || {}).totalFinal)
+                    });
+                });
+
+                const hoy = Date.now();
+                filasDash = mayoristas.map(m => {
+                    const lista = m.pedidosLista.sort((a, b) => a.ts - b.ts);
+                    const total = lista.reduce((s, x) => s + x.total, 0);
+                    const primero = lista.length ? lista[0].ts : 0;
+                    const ultimo = lista.length ? lista[lista.length - 1].ts : 0;
+                    return {
+                        ...m,
+                        pedidos: lista.length,
+                        total,
+                        ticket: lista.length ? total / lista.length : 0,
+                        primero, ultimo,
+                        dias: ultimo ? Math.floor((hoy - ultimo) / 86400000) : null
+                    };
+                });
+
+                const conCompras = filasDash.filter(f => f.pedidos > 0);
+                const totalGral = conCompras.reduce((s, f) => s + f.total, 0);
+                const pedidosGral = conCompras.reduce((s, f) => s + f.pedidos, 0);
+                $('stMayoristas').textContent = filasDash.length;
+                $('stConCompras').textContent = conCompras.length;
+                $('stTotal').textContent = pesos(totalGral);
+                $('stTicket').textContent = pedidosGral ? pesos(totalGral / pedidosGral) : '–';
+
+                dashboardCargado = true;
+                renderDashboard();
+            } catch (err) {
+                console.error('Error al cargar dashboard:', err);
+                $('emptyDash').innerHTML = '<i class="bi bi-exclamation-triangle"></i>No se pudieron cargar los datos.';
+            }
+        }
+
+        // "fecha" viene como "YYYY-MM-DD HH:MM:SS"; si falta se usa timestamp.
+        function fechaPedido(p) {
+            if (p.fecha && /^\d{4}-\d{2}-\d{2}/.test(p.fecha)) {
+                const [y, m, d] = p.fecha.slice(0, 10).split('-').map(Number);
+                return new Date(y, m - 1, d).getTime();
+            }
+            return num(p.timestamp);
+        }
+
+        $('buscarDash').addEventListener('input', renderDashboard);
+        document.querySelectorAll('#vista-dashboard th.sortable').forEach(th => th.addEventListener('click', () => {
+            const campo = th.dataset.sort;
+            ordenDash = { campo, asc: ordenDash.campo === campo ? !ordenDash.asc : campo === 'nombre' };
+            renderDashboard();
+        }));
+
+        function renderDashboard() {
+            const q = $('buscarDash').value.trim().toLowerCase();
+            const { campo, asc } = ordenDash;
+            const lista = filasDash
+                .filter(f => !q || [f.nombre, f.telefono, f.email].some(v => (v || '').toLowerCase().includes(q)))
+                .sort((a, b) => {
+                    let va = a[campo], vb = b[campo];
+                    if (campo === 'nombre') return asc ? va.localeCompare(vb, 'es') : vb.localeCompare(va, 'es');
+                    // Los que nunca compraron van siempre al final.
+                    if (va == null || va === 0) va = asc ? Infinity : -Infinity;
+                    if (vb == null || vb === 0) vb = asc ? Infinity : -Infinity;
+                    return asc ? va - vb : vb - va;
+                });
+
+            document.querySelectorAll('#vista-dashboard th.sortable').forEach(th => {
+                th.classList.toggle('sorted', th.dataset.sort === campo);
+                th.querySelector('i')?.remove();
+                if (th.dataset.sort === campo) th.insertAdjacentHTML('beforeend', ` <i class="bi bi-caret-${asc ? 'up' : 'down'}-fill"></i>`);
+            });
+
+            $('emptyDash').style.display = lista.length ? 'none' : 'block';
+            if (!lista.length) $('emptyDash').innerHTML = '<i class="bi bi-people"></i>No hay mayoristas para mostrar.';
+
+            $('tbodyDash').innerHTML = lista.map(f => `
+                <tr onclick="verDetalle('${f.id}')">
+                    <td><strong>${esc(f.nombre)}</strong><br><span class="muted">${esc(f.email)}</span></td>
+                    <td>${f.telefono ? `<button class="btn btn-wa btn-sm" onclick="event.stopPropagation(); waMayorista('${f.id}')"><i class="bi bi-whatsapp"></i> ${esc(f.telefono)}</button>` : '<span class="muted">—</span>'}</td>
+                    <td class="num">${f.pedidos || '<span class="muted">0</span>'}</td>
+                    <td class="num"><strong>${f.total ? pesos(f.total) : '<span class="muted">—</span>'}</strong></td>
+                    <td class="num">${f.ticket ? pesos(f.ticket) : '<span class="muted">—</span>'}</td>
+                    <td>${fechaCorta(f.primero) || '<span class="muted">—</span>'}</td>
+                    <td>${fechaCorta(f.ultimo) || '<span class="muted">—</span>'}</td>
+                    <td class="num ${f.dias > 60 ? 'dias-alerta' : ''}">${f.dias == null ? '<span class="muted">—</span>' : f.dias}</td>
+                </tr>`).join('');
+        }
+
+        function verDetalle(id) {
+            const f = filasDash.find(x => x.id === id);
+            if (!f) return;
+            $('detNombre').textContent = f.nombre;
+            $('detPedidos').textContent = f.pedidos;
+            $('detTotal').textContent = pesos(f.total);
+            $('detTicket').textContent = f.pedidos ? pesos(f.ticket) : '–';
+
+            // Barras de los últimos 12 meses para ver la evolución.
+            const meses = [];
+            const ahora = new Date();
+            for (let i = 11; i >= 0; i--) {
+                const d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
+                meses.push({ clave: d.getFullYear() + '-' + d.getMonth(), etiqueta: d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' }), total: 0 });
+            }
+            f.pedidosLista.forEach(p => {
+                const d = new Date(p.ts);
+                const m = meses.find(x => x.clave === d.getFullYear() + '-' + d.getMonth());
+                if (m) m.total += p.total;
+            });
+            const max = Math.max(1, ...meses.map(m => m.total));
+            $('detBarras').innerHTML = meses.map(m =>
+                `<div style="height:${(m.total / max) * 100}%" title="${m.etiqueta}: ${pesos(m.total)}"></div>`).join('');
+
+            $('detTabla').innerHTML = f.pedidosLista.length
+                ? [...f.pedidosLista].reverse().map(p => `<tr><td>${fechaCorta(p.ts)}</td><td class="muted">${esc(p.id)}</td><td class="num">${pesos(p.total)}</td></tr>`).join('')
+                : '<tr><td colspan="3" class="muted" style="text-align:center">Sin pedidos entregados</td></tr>';
+            $('modalDetalle').classList.add('open');
+        }
+
+        /* ============================================================== QR = */
+        // El afiche vive en qrMayorista.html; acá se carga en un iframe para
+        // verlo e imprimirlo tal cual sale en la hoja.
+        const TIPS_AFICHE = {
+            color: 'En la ventana de impresión elegí: <b>Tamaño A3</b>, <b>Vertical</b>, <b>Márgenes: Ninguno</b> y activá <b>Gráficos de fondo</b> (en "Más opciones"), si no el panel oscuro sale en blanco.',
+            mono: 'Versión en blanco y negro, sin fondos: sale bien en cualquier impresora. En la ventana de impresión elegí <b>Tamaño A3</b>, <b>Vertical</b>, <b>Márgenes: Ninguno</b> y <b>Blanco y negro</b>.'
+        };
+
+        function cargarAfiche(modo) {
+            const src = modo === 'mono' ? 'qrMayorista.html?modo=mono' : 'qrMayorista.html';
+            const iframe = $('afiche');
+            $('btnImprimirQR').disabled = true;
+            iframe.addEventListener('load', async () => {
+                try { await iframe.contentDocument.fonts.ready; } catch (e) { /* sin acceso: igual se habilita */ }
+                $('btnImprimirQR').disabled = false;
+            }, { once: true });
+            iframe.src = src;
+            $('abrirAfiche').href = src;
+            $('tipsAfiche').innerHTML = TIPS_AFICHE[modo];
+            document.querySelectorAll('#modoAfiche button').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
+        }
+
+        $('modoAfiche').addEventListener('click', e => {
+            const b = e.target.closest('button');
+            if (b && !b.classList.contains('active')) cargarAfiche(b.dataset.modo);
+        });
+
+        function abrirQR() {
+            if (!$('afiche').getAttribute('src')) cargarAfiche('color');
+            $('modalQR').classList.add('open');
+        }
+
+        function imprimirAfiche() {
+            const win = $('afiche').contentWindow;
+            win.focus();
+            win.print();
+        }
+    </script>
+</body>
+</html>

@@ -174,6 +174,23 @@ def _leer(ruta: str, **query):
         raise RuntimeError(f"Firebase respondió {e.codigo}: {e.mensaje}") from None
 
 
+def _paquete(x):
+    """Peso y tamano cargados en pedidosv2 (pedidos/<id>/paquete: alto, ancho, profundo en cm y peso en kg).
+    Solo si estan los cuatro con numeros positivos, como paqueteValido() de pedidosv2."""
+    if not isinstance(x, dict):
+        return None
+    r = {}
+    for k in ("alto", "ancho", "profundo", "peso"):
+        try:
+            n = float(x.get(k))
+        except (TypeError, ValueError):
+            return None
+        if not n > 0:
+            return None
+        r[k] = n
+    return r
+
+
 def _resumen(pid: str, p: dict) -> dict:
     c = p.get("cliente") or {}
     items = p.get("items") or []
@@ -187,6 +204,7 @@ def _resumen(pid: str, p: dict) -> dict:
         "tipo_entrega": p.get("tipoEntrega") or "",
         "nota": p.get("nota") or "",
         "items": len([i for i in items if i]),
+        "paquete": _paquete(p.get("paquete")),
         "cliente": {k: str(c.get(k) or "").strip() for k in ("nombre", "telefono", "email", "dni", "direccion", "localidad", "provincia")},
     }
 

@@ -339,36 +339,35 @@ def abrir_en_micorreo(
                     break
                 except Exception:
                     continue
-            if abierto is None:
-                # Hubo navegador pero la sesion no sirve (o no se pudo lanzar ninguno).
-                if intento == 0:
-                    ensure_logged_in(force=True)
-                    continue
-                raise RuntimeError("No se pudo abrir MiCorreo con la sesion guardada.")
-            browser, page = abierto
-            try:
-                resultado = _completar_formulario(
-                    page, provincia, cp, peso_kg, largo_cm, ancho_cm, alto_cm, valor,
-                    tipo_entrega, sucursal_destino, sucursal_origen,
-                )
-                if destinatario:
+            if abierto is not None:
+                browser, page = abierto
+                try:
+                    resultado = _completar_formulario(
+                        page, provincia, cp, peso_kg, largo_cm, ancho_cm, alto_cm, valor,
+                        tipo_entrega, sucursal_destino, sucursal_origen,
+                    )
+                    if destinatario:
+                        try:
+                            resultado["destinatario"] = _completar_destinatario(page, tipo_entrega, destinatario)
+                        except Exception as e:
+                            # El envio igual se puede seguir a mano: no se cierra la ventana.
+                            resultado["_advertencia_destinatario"] = f"No se pudo completar el destinatario: {e}"
+                    page.bring_to_front()
                     try:
-                        resultado["destinatario"] = _completar_destinatario(page, tipo_entrega, destinatario)
-                    except Exception as e:
-                        # El envio igual se puede seguir a mano: no se cierra la ventana.
-                        resultado["_advertencia_destinatario"] = f"No se pudo completar el destinatario: {e}"
-                page.bring_to_front()
-                try:
-                    page.wait_for_event("close", timeout=0)  # hasta que el usuario cierre la pestana
-                except Exception:
-                    pass
-                return resultado
-            finally:
-                try:
-                    browser.close()
-                except Exception:
-                    pass
-    raise RuntimeError("No se pudo abrir MiCorreo.")
+                        page.wait_for_event("close", timeout=0)  # hasta que el usuario cierre la pestana
+                    except Exception:
+                        pass
+                    return resultado
+                finally:
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
+        # Hubo navegador pero la sesion no sirve (o no se pudo lanzar ninguno). El relogin va
+        # fuera del bloque del navegador: Playwright sync no permite anidar instancias.
+        if intento == 0:
+            ensure_logged_in(force=True)
+    raise RuntimeError("No se pudo abrir MiCorreo con la sesion guardada.")
 
 
 # ---------------------------------------------------------------------------

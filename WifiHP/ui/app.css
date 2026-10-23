@@ -1,0 +1,346 @@
+/* WiFi Clientes — un instrumento sobrio: superficie calma, un solo acento "senal". */
+
+:root {
+  --bg: #F3F4F1;
+  --superficie: #FFFFFF;
+  --superficie-2: #ECEEEA;
+  --tinta: #101614;
+  --tinta-2: #59625E;
+  --tinta-3: #8E9692;
+  --linea: rgba(16, 22, 20, 0.08);
+  --acento: #0E9F78;
+  --acento-tinta: #FFFFFF;
+  --acento-suave: rgba(14, 159, 120, 0.12);
+  --alerta: #D9480F;
+  --alerta-suave: rgba(217, 72, 15, 0.1);
+  --aviso: #B7791F;
+  --aviso-suave: rgba(183, 121, 31, 0.12);
+  --sombra: 0 1px 2px rgba(16, 22, 20, 0.04), 0 8px 24px -8px rgba(16, 22, 20, 0.12);
+  --velo: rgba(16, 22, 20, 0.28);
+
+  --resorte: cubic-bezier(0.2, 0.9, 0.25, 1);     /* critico, sin rebote */
+  --salida: cubic-bezier(0.4, 0, 0.7, 0.2);
+  --t: 340ms;
+
+  --texto: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0B0E0D;
+    --superficie: #141917;
+    --superficie-2: #1C2220;
+    --tinta: #EAF0ED;
+    --tinta-2: #97A19C;
+    --tinta-3: #66706B;
+    --linea: rgba(234, 240, 237, 0.08);
+    --acento: #34D399;
+    --acento-tinta: #062218;
+    --acento-suave: rgba(52, 211, 153, 0.14);
+    --alerta: #FF7A45;
+    --alerta-suave: rgba(255, 122, 69, 0.14);
+    --aviso: #F0B455;
+    --aviso-suave: rgba(240, 180, 85, 0.14);
+    --sombra: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+    --velo: rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--tinta);
+  font: 400 14px/1.45 var(--texto);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+svg { display: block; }
+[hidden] { display: none !important; }
+
+.app { height: 100%; display: flex; flex-direction: column; position: relative; }
+
+/* --- barra de titulo ---------------------------------------------------------------------- */
+
+.barra {
+  height: 44px; flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 6px 0 16px;
+}
+.marca { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--tinta-2); letter-spacing: 0.01em; }
+.marca-punto {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--tinta-3);
+  transition: background var(--t) var(--resorte), box-shadow var(--t) var(--resorte);
+}
+[data-vista="encendida"] .marca-punto { background: var(--acento); box-shadow: 0 0 0 3px var(--acento-suave); }
+.barra-botones { display: flex; gap: 2px; }
+.icono {
+  width: 34px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; color: var(--tinta-2);
+  transition: background 120ms ease, color 120ms ease, transform 100ms ease-out;
+}
+.icono svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.icono:hover { background: var(--superficie-2); color: var(--tinta); }
+.icono:active { transform: scale(0.94); }
+#btn-cerrar:hover { background: var(--alerta); color: #fff; }
+
+/* --- aviso (errores en lenguaje simple) --------------------------------------------------- */
+
+.aviso {
+  margin: 0 14px 6px; padding: 10px 8px 10px 14px;
+  display: flex; gap: 8px; align-items: flex-start;
+  border-radius: 12px; font-size: 13px; line-height: 1.4;
+  background: var(--alerta-suave); color: var(--alerta);
+  animation: aparecer var(--t) var(--resorte);
+}
+.aviso.es-aviso { background: var(--aviso-suave); color: var(--aviso); }
+.aviso span { flex: 1; }
+.aviso-cerrar { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; opacity: 0.7; }
+.aviso-cerrar:hover { opacity: 1; background: rgba(127, 127, 127, 0.12); }
+.aviso-cerrar svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+
+/* --- escenario y vistas ------------------------------------------------------------------- */
+
+.escenario { flex: 1; position: relative; min-height: 0; }
+.vista {
+  position: absolute; inset: 0;
+  transition: opacity var(--t) var(--resorte), transform var(--t) var(--resorte), filter var(--t) var(--resorte);
+}
+.vista[aria-hidden="true"] { opacity: 0; pointer-events: none; }
+
+/* La tarjeta nace donde estaba el boton (centro), el boton se recoge hacia el mismo punto. */
+.vista-apagada { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 28px 24px; text-align: center; }
+.vista-apagada[aria-hidden="true"] { transform: scale(0.92); filter: blur(4px); }
+.vista-encendida {
+  overflow-y: auto; padding: 4px 14px 28px; scrollbar-width: none;
+  /* borde de desplazamiento: la lista se disuelve contra el pie en vez de cortarse */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+.vista-encendida::-webkit-scrollbar { display: none; }
+.vista-encendida[aria-hidden="true"] { transform: scale(0.96) translateY(10px); filter: blur(4px); }
+
+/* --- boton grande de encendido ------------------------------------------------------------ */
+
+.encender {
+  --d: 168px;
+  position: relative; width: var(--d); height: var(--d);
+  border-radius: 50%; display: grid; place-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.encender-halo {
+  position: absolute; inset: -14px; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--acento-suave), transparent);
+  opacity: 0.0; transform: scale(0.9);
+  transition: opacity 260ms ease, transform var(--t) var(--resorte);
+}
+.encender:hover .encender-halo { opacity: 1; transform: scale(1); }
+.encender-disco {
+  position: relative; width: 100%; height: 100%; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--superficie);
+  box-shadow: var(--sombra), 0 0 0 1px var(--linea);
+  transition: transform 140ms ease-out, background var(--t) var(--resorte), box-shadow var(--t) var(--resorte);
+}
+.encender:hover .encender-disco { box-shadow: var(--sombra), 0 0 0 1px var(--acento); }
+.encender:active .encender-disco { transform: scale(0.965); transition-duration: 90ms; }
+.encender-glifo { width: 64px; height: 64px; fill: none; stroke: var(--acento); stroke-width: 3; stroke-linecap: round; }
+.encender-glifo circle { fill: var(--acento); stroke: none; }
+.encender-glifo path { transition: opacity 200ms ease; }
+
+/* Encendiendo: el disco se llena de acento, las ondas se van dibujando, gira un arco fino. */
+.encender-giro { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); opacity: 0; transition: opacity 200ms ease; }
+.encender-giro circle { fill: none; stroke: var(--acento); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 60 240; transform-origin: 50% 50%; }
+[data-ocupado="encendiendo"] .encender { pointer-events: none; }
+[data-ocupado="encendiendo"] .encender-disco { background: var(--acento-suave); }
+[data-ocupado="encendiendo"] .encender-giro { opacity: 1; }
+[data-ocupado="encendiendo"] .encender-giro circle { animation: girar 1.1s linear infinite; }
+[data-ocupado="encendiendo"] .encender-glifo path { animation: onda 1.4s var(--resorte) infinite both; }
+[data-ocupado="encendiendo"] .encender-glifo path:nth-of-type(2) { animation-delay: 0.15s; }
+[data-ocupado="encendiendo"] .encender-glifo path:nth-of-type(1) { animation-delay: 0.3s; }
+
+.encender[disabled] { pointer-events: none; }
+.encender[disabled] .encender-glifo { stroke: var(--tinta-3); }
+.encender[disabled] .encender-glifo circle { fill: var(--tinta-3); }
+
+.titular {
+  margin-top: 30px;
+  font: 600 22px/1.15 var(--display);
+  letter-spacing: -0.015em;
+}
+.subtitulo { margin-top: 8px; color: var(--tinta-2); font-size: 13.5px; }
+.subtitulo b { color: var(--tinta); font-weight: 600; }
+
+/* --- tarjeta con QR ------------------------------------------------------------------------ */
+
+.tarjeta {
+  background: var(--superficie); border-radius: 20px;
+  box-shadow: var(--sombra), 0 0 0 1px var(--linea);
+  padding: 14px 16px 6px;
+}
+.tarjeta-cabeza { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.en-vivo { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--acento); }
+.en-vivo-punto { width: 7px; height: 7px; border-radius: 50%; background: currentColor; position: relative; }
+.en-vivo-punto::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 1.5px solid currentColor; animation: latido 2s ease-out infinite;
+}
+.tarjeta-ayuda { color: var(--tinta-3); }
+
+/* El QR siempre sobre blanco: las camaras lo leen mejor que invertido. */
+.qr {
+  margin: 12px auto 4px; width: 196px; height: 196px; padding: 12px;
+  background: #fff; color: #0B0F0E; border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(16, 22, 20, 0.06);
+}
+.qr svg { width: 100%; height: 100%; shape-rendering: crispEdges; }
+
+.datos { display: grid; grid-template-columns: 1fr 1fr; }
+.datos > div { padding: 10px 2px 8px; min-width: 0; }
+.datos > div + div { padding-left: 14px; border-left: 1px solid var(--linea); }
+.datos dt { font-size: 11px; font-weight: 600; color: var(--tinta-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.datos dd { margin-top: 2px; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.mono { font-family: var(--mono); font-size: 15.5px !important; letter-spacing: 0.02em; }
+
+/* --- lista de clientes -------------------------------------------------------------------- */
+
+.clientes { margin-top: 18px; }
+.clientes-cabeza { display: flex; align-items: center; gap: 8px; padding: 0 4px 8px; }
+.clientes-cabeza h2 { font: 600 13px/1 var(--texto); color: var(--tinta-2); }
+.contador {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  display: inline-grid; place-items: center;
+  font: 600 11.5px/1 var(--texto); font-variant-numeric: tabular-nums;
+  background: var(--superficie-2); color: var(--tinta-2);
+}
+.lista { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cliente {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 8px 9px 10px; border-radius: 14px;
+  background: var(--superficie); box-shadow: 0 0 0 1px var(--linea);
+  animation: entrar var(--t) var(--resorte) both;
+  transition: opacity var(--t) var(--resorte);
+}
+.cliente.saliendo { animation: salir 220ms var(--salida) both; }
+.anillo { width: 34px; height: 34px; flex: none; transform: rotate(-90deg); }
+.anillo circle { fill: none; stroke-width: 3; }
+.anillo .pista { stroke: var(--superficie-2); }
+.anillo .progreso { stroke: var(--acento); stroke-linecap: round; transition: stroke 300ms ease; }
+.cliente.poco .anillo .progreso { stroke: var(--aviso); }
+.cliente-info { flex: 1; min-width: 0; }
+.cliente-nombre { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cliente-detalle { font-size: 12px; color: var(--tinta-3); }
+.tiempo { font: 600 17px/1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.cliente.poco .tiempo { color: var(--aviso); }
+.cortar {
+  height: 30px; padding: 0 12px; border-radius: 9px;
+  font-size: 12.5px; font-weight: 600; color: var(--tinta-2);
+  transition: background 120ms ease, color 120ms ease, transform 100ms ease-out;
+}
+.cortar:hover { background: var(--alerta-suave); color: var(--alerta); }
+.cortar:active { transform: scale(0.95); }
+.cliente.fin { opacity: 0.62; }
+.cliente.fin .anillo .progreso { stroke: transparent; }
+.cliente.fin .tiempo { font-size: 12px; font-family: var(--texto); color: var(--tinta-3); }
+
+.vacio {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 12px; border-radius: 14px;
+  border: 1px dashed var(--linea); color: var(--tinta-3); font-size: 13px;
+}
+.vacio::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--tinta-3);
+  animation: respirar 2.4s ease-in-out infinite;
+}
+
+/* --- pie ----------------------------------------------------------------------------------- */
+
+.pie { flex: none; padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.estado-linea { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--tinta-3); }
+.estado-punto { width: 6px; height: 6px; border-radius: 50%; background: var(--acento); }
+.estado-linea.mal .estado-punto { background: var(--alerta); }
+.estado-linea.mal { color: var(--alerta); }
+.apagar {
+  height: 44px; border-radius: 13px;
+  font-weight: 600; font-size: 14px;
+  background: var(--superficie); color: var(--tinta);
+  box-shadow: 0 0 0 1px var(--linea);
+  transition: background 140ms ease, color 140ms ease, transform 100ms ease-out, opacity var(--t) var(--resorte);
+}
+.apagar:hover { background: var(--alerta-suave); color: var(--alerta); box-shadow: 0 0 0 1px transparent; }
+.apagar:active { transform: scale(0.98); }
+[data-vista="apagada"] .apagar { display: none; }
+[data-ocupado="apagando"] .apagar { opacity: 0.5; pointer-events: none; }
+
+/* --- hoja de ajustes ----------------------------------------------------------------------- */
+
+.velo {
+  position: absolute; inset: 0; background: var(--velo);
+  animation: fundido 240ms ease both;
+}
+.velo.saliendo { animation: fundido 200ms ease reverse both; }
+.hoja {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 10px 18px 16px;
+  border-radius: 22px 22px 0 0;
+  background: var(--superficie);
+  box-shadow: 0 -12px 40px -12px rgba(0, 0, 0, 0.3);
+  animation: subir 380ms var(--resorte) both;
+}
+.hoja.saliendo { animation: bajar 240ms var(--salida) both; }
+.hoja-asa { width: 36px; height: 4px; border-radius: 2px; background: var(--superficie-2); margin: 0 auto 12px; }
+.hoja h2 { font: 600 17px/1.2 var(--display); letter-spacing: -0.01em; margin-bottom: 14px; }
+.campo { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+.campo > span { font-size: 12px; font-weight: 600; color: var(--tinta-2); }
+.campo input {
+  height: 40px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--linea); background: var(--bg); color: var(--tinta);
+  font: 500 14px var(--texto); user-select: text;
+}
+.paso { display: flex; align-items: center; height: 40px; border-radius: 10px; background: var(--bg); border: 1px solid var(--linea); width: max-content; }
+.paso-btn { width: 44px; height: 100%; font-size: 18px; color: var(--tinta-2); border-radius: 10px; }
+.paso-btn:hover { color: var(--tinta); background: var(--superficie-2); }
+.paso-btn:active { transform: scale(0.94); }
+.paso output { min-width: 44px; text-align: center; font: 600 16px var(--display); font-variant-numeric: tabular-nums; }
+.segmentos { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: 11px; background: var(--bg); border: 1px solid var(--linea); }
+.segmentos button { height: 32px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--tinta-2); transition: background 160ms var(--resorte), color 160ms ease; }
+.segmentos button[aria-checked="true"] { background: var(--superficie); color: var(--tinta); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--linea); }
+.hoja-nota { font-size: 12px; color: var(--tinta-3); margin: -2px 0 14px; }
+.hoja-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.boton-pri, .boton-sec { height: 42px; border-radius: 12px; font-weight: 600; transition: transform 100ms ease-out, filter 120ms ease; }
+.boton-pri { background: var(--acento); color: var(--acento-tinta); }
+.boton-pri:hover { filter: brightness(1.06); }
+.boton-sec { background: var(--superficie-2); }
+.boton-pri:active, .boton-sec:active { transform: scale(0.97); }
+
+/* --- animaciones ---------------------------------------------------------------------------- */
+
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes onda { 0% { opacity: 0.2; } 40%, 100% { opacity: 1; } }
+@keyframes latido { 0% { transform: scale(0.6); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
+@keyframes respirar { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes aparecer { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes entrar { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes salir { to { opacity: 0; transform: scale(0.97); } }
+@keyframes fundido { from { opacity: 0; } }
+@keyframes subir { from { transform: translateY(100%); } }
+@keyframes bajar { to { transform: translateY(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+  .vista, .vista[aria-hidden="true"] { transform: none !important; filter: none !important; transition: opacity 180ms ease; }
+  .hoja, .hoja.saliendo { animation: fundido 180ms ease both !important; }
+  [data-ocupado="encendiendo"] .encender-giro circle { animation: none !important; stroke-dasharray: none; opacity: 0.5; }
+}
+@media (prefers-contrast: more) {
+  :root { --linea: rgba(127, 127, 127, 0.5); }
+}

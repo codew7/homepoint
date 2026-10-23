@@ -12,11 +12,20 @@ agregan al sys.path) y expone una unica API para la interfaz (index.html):
     GET  /api/agencias?cp=&localidad=   -> agencias de Via Cargo en un CP / localidad
     POST /api/correo/cotizar            -> cotizador.cotizar(...)  (Playwright, serializado con lock)
     POST /api/viacargo/cotizar          -> viacargo.cotizar(...)   (HTTP directo)
-    POST /api/correo/abrir              -> abre MiCorreo visible con el formulario cargado (+ destinatario opcional)
+    POST /api/correo/abrir              -> continuar el envio en MiCorreo con el formulario cargado (+ destinatario):
+                                           modo "navegador" (Brave del usuario + extension-micorreo) o
+                                           "ventana" (navegador aparte de Playwright, cotizador.py --abrir)
+    GET  /api/micorreo/pendiente        -> (extension) envio esperando a ser cargado en MiCorreo
+    POST /api/micorreo/tomar | resultado -> (extension) lo toma / informa como quedo
+    GET  /api/micorreo/encargo?id=      -> (interfaz) en que quedo un envio pedido en modo navegador
+    POST /api/micorreo/cancelar         -> (interfaz) descarta un envio que nadie tomo
     GET  /api/pedidos                   -> pedidos pendientes de pedidosv2 (pedidos.py, solo lectura)
     GET  /api/pedido?id=                -> un pedido (datos frescos del cliente)
     POST /api/pedidos/login             -> {"email", "password"} de pedidosv2
     POST /api/pedidos/salir             -> borra la sesion de pedidosv2
+    POST /api/correo/credenciales       -> {"email", "password"} de MiCorreo (se guardan en .env)
+    POST /api/latido | /api/adios       -> la ventana sigue abierta / se cerro (la app instalada
+                                           se apaga sola cuando no quedan ventanas)
 
 Uso:
     ..\Correo\venv\Scripts\python.exe servidor.py [puerto]     (o Cotizador.bat)
@@ -30,6 +39,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -44,11 +54,13 @@ for d in (CORREO_DIR, VIACARGO_DIR):
         sys.path.insert(0, str(d))
 
 # cotizador/auth/sucursales del Correo usan rutas relativas (.env, auth_state.json,
-# browser_profile/, sucursales.json): el proceso trabaja con cwd = ../Correo.
-os.chdir(CORREO_DIR)
+# browser_profile/, sucursales.json): el proceso trabaja con cwd = ../Correo, o con la
+# carpeta de datos del usuario cuando corre como app instalada (COTIZADOR_DATOS, ver ../Instalador).
+DATOS_DIR = Path(os.environ.get("COTIZADOR_DATOS") or CORREO_DIR)
+os.chdir(DATOS_DIR)
 
 import auth as correo_auth  # noqa: E402
-from cotizador import cotizar as cotizar_correo  # noqa: E402
+from cotizador import ENVIO_CLA_URL, _fmt_entero, _fmt_peso, cotizar as cotizar_correo  # noqa: E402
 from sucursales import cargar_sucursales, detalle_sucursal  # noqa: E402
 from viacargo import (  # noqa: E402
     agencias_en,
@@ -63,14 +75,31 @@ import pedidos  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = 8613
+# Sin latidos durante LATIDO_LIMITE segundos la app instalada se cierra. Es largo porque el navegador
+# espacia los timers de las ventanas minimizadas a uno por minuto.
+LATIDO_LIMITE = 150
 
 # El Correo se cotiza con un navegador que comparte auth_state.json: de a uno.
 _lock_correo = threading.Lock()
 # Las descargas de catalogos escriben en disco: de a una.
 _lock_catalogos = threading.Lock()
 
+# Ultima senal de vida de la interfaz (/api/latido). La app instalada lo vigila para cerrarse.
+ultimo_latido = time.time()
+
+# Extension de Brave/Chrome que completa envioCla en el navegador del usuario (con sus cuentas).
+# La app instalada la copia a la carpeta de datos (ver ../Instalador/app.py).
+EXTENSION_DIR = BASE_DIR / "extension-micorreo"
+# Envios pedidos en modo "navegador": la extension los toma desde MiCorreo. Solo en memoria.
+ENCARGO_VIGENCIA = 15 * 60
+_encargos = {}
+_lock_encargos = threading.Lock()
+# Ultima vez que la extension pregunto por envios (para mostrar en Configuracion si esta instalada).
+extension_contacto = None
+
 ESTATICOS = {
     "/index.html": BASE_DIR / "index.html",
+    "/icono.png": BASE_DIR / "icono.png",
     "/logo-correo.png": CORREO_DIR / "logo-correo.png",
     "/logo-viacargo.png": VIACARGO_DIR / "logo-viacargo.png",
 }
@@ -141,6 +170,18 @@ class Handler(SimpleHTTPRequestHandler):
         if ruta == "/api/limites":
             self._json(HTTPStatus.OK, limites_valor_declarado())
             return
+        if ruta == "/api/micorreo/pendiente":
+            self._micorreo_pendiente((query.get("version") or [""])[0])
+            return
+        if ruta == "/api/micorreo/encargo":
+            with _lock_encargos:
+                e = _encargos.get((query.get("id") or [""])[0])
+                vista = {k: e[k] for k in ("estado", "visto", "mensaje", "avisos")} if e else None
+            if vista is None:
+                self._json(HTTPStatus.NOT_FOUND, {"error": "envio desconocido"})
+            else:
+                self._json(HTTPStatus.OK, vista)
+            return
         if ruta == "/api/pedidos":
             self._pedidos(lambda: {"pedidos": pedidos.listar_pendientes(), **pedidos.estado()})
             return
@@ -177,6 +218,7 @@ class Handler(SimpleHTTPRequestHandler):
         return {
             "correo": {
                 "credenciales": bool(os.environ.get("MICORREO_EMAIL") and os.environ.get("MICORREO_PASSWORD")),
+                "email": os.environ.get("MICORREO_EMAIL") or "",
                 "sesion_guardada": sesion.exists(),
                 "sesion_fresca": correo_auth._session_is_fresh(),
                 "sesion_minutos": round(edad / 60) if edad is not None else None,
@@ -193,12 +235,21 @@ class Handler(SimpleHTTPRequestHandler):
             "provincias": PROVINCIAS,
             "ocupado_correo": _lock_correo.locked(),
             "pedidos": pedidos.estado(),
+            "extension": extension_contacto and {**extension_contacto, "hace_segundos": round(time.time() - extension_contacto["cuando"])},
+            "extension_carpeta": str(EXTENSION_DIR),
         }
 
     # ---------- POST ----------
 
     def do_POST(self):
+        global ultimo_latido
         ruta = urlparse(self.path).path
+        if ruta in ("/api/latido", "/api/adios"):
+            # Al cerrar la ventana llega "adios": se adelanta el reloj para que la app se apague
+            # en unos segundos salvo que vuelva un latido (recarga o segunda ventana).
+            ultimo_latido = time.time() - (LATIDO_LIMITE - 8 if ruta == "/api/adios" else 0)
+            self._json(HTTPStatus.OK, {"ok": True})
+            return
         datos = self._leer_json()
         if datos is None:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "JSON invalido"})
@@ -216,6 +267,10 @@ class Handler(SimpleHTTPRequestHandler):
         elif ruta == "/api/pedidos/salir":
             pedidos.cerrar_sesion()
             self._json(HTTPStatus.OK, pedidos.estado())
+        elif ruta == "/api/correo/credenciales":
+            self._correo_credenciales(datos)
+        elif ruta in ("/api/micorreo/tomar", "/api/micorreo/resultado", "/api/micorreo/cancelar"):
+            self._micorreo_encargo(ruta.rsplit("/", 1)[1], datos)
         else:
             self._json(HTTPStatus.NOT_FOUND, {"error": "no encontrado"})
 
@@ -286,8 +341,11 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(HTTPStatus.OK, resultado)
 
     def _correo_abrir(self, datos):
-        # Igual que el cotizador del Correo: proceso aparte para que la ventana visible
-        # no bloquee al servidor (queda abierta hasta que el usuario la cierra).
+        if datos.get("modo") != "ventana":
+            self._correo_abrir_navegador(datos)
+            return
+        # Modo ventana, igual que el cotizador del Correo: proceso aparte para que la ventana
+        # visible no bloquee al servidor (queda abierta hasta que el usuario la cierra).
         try:
             p = self._params_paquete(datos)
             args = [
@@ -314,9 +372,109 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(HTTPStatus.BAD_REQUEST, {"error": f"Parametros invalidos: {e}"})
             return
         flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-        subprocess.Popen(args, cwd=str(CORREO_DIR), creationflags=flags, stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+        try:
+            # cwd = carpeta de trabajo (../Correo o, en la app instalada, la de datos: ahi no existe ../Correo).
+            subprocess.Popen(args, cwd=str(DATOS_DIR), creationflags=flags, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+        except OSError as e:
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"No se pudo iniciar el navegador de MiCorreo: {e}"})
+            return
         self._json(HTTPStatus.OK, {"ok": True})
+
+    def _correo_abrir_navegador(self, datos):
+        # Modo navegador: se guarda el envio y se abre envioCla en el Brave del usuario, con sus
+        # cuentas (Mercado Pago, etc.). extension-micorreo lo toma y completa el formulario con los
+        # mismos pasos que cotizador._completar_formulario. Sin extension, el envio vence solo.
+        try:
+            p = self._params_paquete(datos)
+            entrega = str(datos.get("entrega") or "sucursal")
+            if entrega not in ("sucursal", "domicilio"):
+                raise ValueError(f"entrega desconocida: {entrega}")
+            dest = datos.get("destinatario") or {}
+            encargo = {
+                "provincia": normalizar(datos["provincia"]),
+                "entrega": entrega,
+                "cp": str(datos.get("cp") or "").strip(),
+                "sucursal_destino": str(datos.get("sucursal_destino") or "").strip(),
+                "sucursal_origen": str(datos.get("sucursal_origen") or "").strip(),
+                "largo": _fmt_entero(p["largo_cm"]), "ancho": _fmt_entero(p["ancho_cm"]), "alto": _fmt_entero(p["alto_cm"]),
+                "peso": _fmt_peso(p["peso_kg"]), "valor": _fmt_entero(p["valor"]),
+                "destinatario": {k: str(dest.get(k) or "").strip()
+                                 for k in ("nombre", "email", "cod_area", "celular", "nro_orden") if dest.get(k)},
+            }
+        except (KeyError, TypeError, ValueError) as e:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": f"Parametros invalidos: {e}"})
+            return
+        lugar = encargo["sucursal_destino"] or f"CP {encargo['cp']}"
+        resumen = f"{lugar} · {encargo['largo']}×{encargo['ancho']}×{encargo['alto']} cm · {encargo['peso']} kg"
+        id_ = uuid.uuid4().hex[:12]
+        with _lock_encargos:
+            ahora = time.time()
+            # Un envio nuevo reemplaza a los que nadie tomo (si no, la extension podria cargar uno viejo).
+            for e in _encargos.values():
+                if e["estado"] == "esperando":
+                    e["estado"] = "reemplazado"
+            for k in [k for k, e in _encargos.items() if ahora - e["creado"] > ENCARGO_VIGENCIA]:
+                del _encargos[k]
+            _encargos[id_] = {"id": id_, "datos": {"id": id_, **encargo}, "resumen": resumen, "creado": ahora,
+                              "estado": "esperando", "visto": False, "mensaje": "", "avisos": []}
+        try:
+            _abrir_navegador_usuario(ENVIO_CLA_URL)
+        except OSError as e:
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"No se pudo abrir el navegador: {e}"})
+            return
+        self._json(HTTPStatus.OK, {"ok": True, "id": id_})
+
+    def _micorreo_pendiente(self, version):
+        global extension_contacto
+        extension_contacto = {"version": version, "cuando": time.time()}
+        with _lock_encargos:
+            ahora = time.time()
+            vivos = [e for e in _encargos.values() if e["estado"] == "esperando" and ahora - e["creado"] < ENCARGO_VIGENCIA]
+            ultimo = max(vivos, key=lambda e: e["creado"], default=None)
+            if ultimo:
+                ultimo["visto"] = True
+        self._json(HTTPStatus.OK, {"encargo": {"id": ultimo["id"], "resumen": ultimo["resumen"]} if ultimo else None})
+
+    def _micorreo_encargo(self, accion, datos):
+        with _lock_encargos:
+            e = _encargos.get(str(datos.get("id") or ""))
+            if e is None:
+                self._json(HTTPStatus.NOT_FOUND, {"error": "envio desconocido"})
+            elif accion == "tomar":
+                if e["estado"] != "esperando" or time.time() - e["creado"] > ENCARGO_VIGENCIA:
+                    self._json(HTTPStatus.CONFLICT, {"error": "ese envio ya no esta disponible"})
+                else:
+                    e["estado"] = "tomado"
+                    self._json(HTTPStatus.OK, {"encargo": e["datos"]})
+            elif accion == "resultado":
+                e["estado"] = "listo" if datos.get("ok") else "error"
+                e["mensaje"] = str(datos.get("mensaje") or "")
+                e["avisos"] = [str(a) for a in (datos.get("avisos") or [])]
+                self._json(HTTPStatus.OK, {"ok": True})
+            else:  # cancelar
+                if e["estado"] == "esperando":
+                    e["estado"] = "cancelado"
+                self._json(HTTPStatus.OK, {"ok": True})
+
+    def _correo_credenciales(self, datos):
+        # Se guardan en el .env de la carpeta de trabajo (el mismo que lee auth.py) y se
+        # aplican al proceso. Con otra cuenta, la sesion guardada ya no sirve.
+        email = str(datos.get("email") or "").strip()
+        password = str(datos.get("password") or "")
+        if not email or not password:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "Falta el email o la contraseña."})
+            return
+        if "\n" in email + password or '"' in email + password:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "El email o la contraseña tienen caracteres no admitidos."})
+            return
+        with _lock_correo:
+            cambio_cuenta = os.environ.get("MICORREO_EMAIL") != email
+            Path(".env").write_text(f'MICORREO_EMAIL="{email}"\nMICORREO_PASSWORD="{password}"\n', encoding="utf-8")
+            os.environ["MICORREO_EMAIL"], os.environ["MICORREO_PASSWORD"] = email, password
+            if cambio_cuenta:
+                correo_auth.STATE_FILE.unlink(missing_ok=True)
+        self._json(HTTPStatus.OK, {"ok": True, "email": email})
 
     def _actualizar(self, datos):
         cual = str(datos.get("catalogo") or "todos")
@@ -369,6 +527,18 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(cuerpo)))
         self.end_headers()
         self.wfile.write(cuerpo)
+
+
+def _abrir_navegador_usuario(url):
+    # Brave si esta instalado (el navegador de trabajo, con las cuentas abiertas); si no, el predeterminado.
+    # Con Brave abierto, el proceso nuevo solo le pasa la URL y termina: se abre como pestana.
+    brave = next((r for r in correo_auth.BRAVE_RUTAS if r.is_file()), None)
+    if brave is None:
+        webbrowser.open(url)
+        return
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen([str(brave), url], creationflags=flags, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
 
 
 def main():

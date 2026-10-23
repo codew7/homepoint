@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comparador de envíos</title>
+<link rel="icon" type="image/png" href="icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -508,6 +509,43 @@
     <div class="ayuda">MiCorreo no informa el plazo al cotizar. Si querés mostrar uno orientativo en la comparativa y la ficha, escribilo acá (ej. "3 a 6 días hábiles").</div>
     <label for="cfg_plazo_clasico">Paq.ar Clásico</label><input id="cfg_plazo_clasico" type="text" placeholder="—">
 
+    <h3>Cuenta de MiCorreo</h3>
+    <div class="ayuda" id="cfgMicorreo">Con tu usuario de MiCorreo se cotiza el Correo con tus tarifas. Queda guardado solo en esta PC.</div>
+    <div class="grid g2">
+      <div><label for="cfg_mc_email">Email</label><input id="cfg_mc_email" type="email" autocomplete="off"></div>
+      <div><label for="cfg_mc_password">Contraseña</label><input id="cfg_mc_password" type="password" autocomplete="new-password"></div>
+    </div>
+    <div class="acciones" style="justify-content:flex-start; margin-top:8px"><button type="button" class="sec chico" id="guardarMicorreo">Guardar cuenta</button></div>
+
+    <h3>Continuar en MiCorreo</h3>
+    <label for="cfg_micorreo_modo">Abrir el envío en</label>
+    <select id="cfg_micorreo_modo">
+      <option value="navegador">Mi navegador (Brave), con mis cuentas · requiere la extensión</option>
+      <option value="ventana">Una ventana aparte, sin mis cuentas</option>
+    </select>
+    <div class="ayuda" id="cfgExtension"></div>
+    <details class="crudo"><summary>Cómo instalar la extensión en Brave (una sola vez)</summary>
+      <ol class="ayuda" style="padding-left:18px; margin:6px 0 0">
+        <li>Tocá <b>Copiar dirección</b> (abajo), pegala en la barra de direcciones de Brave y apretá Enter.</li>
+        <li>Arriba a la derecha, activá <b>Modo de desarrollador</b>.</li>
+        <li>Volvé acá y tocá <b>Copiar ruta de la carpeta</b>.</li>
+        <li>En Brave, tocá <b>Cargar descomprimida</b>. En la ventana que se abre, pegá la ruta en la barra de arriba (Ctrl+V), apretá Enter y tocá <b>Seleccionar carpeta</b>.</li>
+        <li>Abrí MiCorreo en Brave: arriba de esta ayuda va a aparecer «✓ Extensión conectada».</li>
+      </ol>
+    </details>
+    <div class="acciones" style="justify-content:flex-start; margin-top:8px">
+      <button type="button" class="sec chico" id="copiarDirExt">Copiar dirección</button>
+      <button type="button" class="sec chico" id="copiarRutaExt">Copiar ruta de la carpeta</button>
+    </div>
+
+    <h3>Respaldo</h3>
+    <div class="ayuda">Guarda en un archivo la configuración, el historial y la caché, para pasarlos a otra PC o a otra versión del cotizador.</div>
+    <div class="acciones" style="justify-content:flex-start; margin-top:8px">
+      <button type="button" class="sec chico" id="exportRespaldo">Exportar respaldo</button>
+      <button type="button" class="sec chico" id="importRespaldo">Importar respaldo…</button>
+      <input type="file" id="archivoRespaldo" accept=".json,application/json" hidden>
+    </div>
+
     <h3>Catálogos</h3>
     <div class="ayuda" id="cfgCatalogos"></div>
     <div class="acciones" style="justify-content:flex-start; margin-top:8px">
@@ -581,7 +619,7 @@
   }
 
   // ---------- Configuración ----------
-  const CFG_DEF = { negocio: "", contacto: "", firma: "", recargo_pct: 0, recargo_fijo: 0, redondeo: 100, origen_cp: "1602", sucursal_origen: "", valor: 100000, validez: 3, plazo_clasico: "" };
+  const CFG_DEF = { negocio: "", contacto: "", firma: "", recargo_pct: 0, recargo_fijo: 0, redondeo: 100, origen_cp: "1602", sucursal_origen: "", valor: 100000, validez: 3, plazo_clasico: "", micorreo_modo: "navegador" };
   let CFG = { ...CFG_DEF, ...load("comparador:config", {}) };
   const hayRecargo = () => +CFG.recargo_pct > 0 || +CFG.recargo_fijo > 0;
   function alCliente(p) {
@@ -779,7 +817,6 @@
       const json = await api("/api/destinos");
       DESTINOS = json.destinos; porCp = new Map(DESTINOS.map((d) => [d.cp, d]));
       $("infoCatalogo").textContent = `${DESTINOS.length.toLocaleString("es-AR")} destinos`;
-      if (guardado && guardado.destino_cp && !destinoElegido) elegirDestino(porCp.get(guardado.destino_cp), guardado.sucursal_destino);
       resolverOrigen();
     } catch (e) {
       $("infoCatalogo").textContent = "sin catálogo: " + e.message;
@@ -927,7 +964,7 @@
     if (!p) return;
     const c = p.cliente;
     $("pedNombre").textContent = c.nombre || "Sin nombre";
-    $("pedMeta").innerHTML = `<span class="num">${escapar(p.codigo)}</span> · ${escapar(ESTADO_PED[p.status] || p.status.toLowerCase())}${c.localidad || c.provincia ? " · " + escapar([c.localidad, c.provincia].filter(Boolean).join(", ")) : ""}${p.tipo_entrega ? " · " + escapar(p.tipo_entrega) : ""}`;
+    $("pedMeta").innerHTML = `<span class="num">${escapar(p.codigo)}</span> · ${escapar(ESTADO_PED[p.status] || p.status.toLowerCase())}${c.localidad || c.provincia ? " · " + escapar([c.localidad, c.provincia].filter(Boolean).join(", ")) : ""}${p.tipo_entrega ? " · " + escapar(p.tipo_entrega) : ""}${p.paquete ? ` · <span class="num">${Math.ceil(p.paquete.profundo)}×${Math.ceil(p.paquete.ancho)}×${Math.ceil(p.paquete.alto)} cm · ${p.paquete.peso.toLocaleString("es-AR", { maximumFractionDigits: 2 })} kg</span>` : ""}`;
     validarDestinatario();
   }
   function validarDestinatario() {
@@ -953,9 +990,18 @@
     PEDIDO = { ...fresco, tel_supuesto: !!tel.supuesto };
     $("dest_nombre").value = c.nombre; $("dest_email").value = c.email;
     $("dest_cod_area").value = tel.cod_area; $("dest_celular").value = tel.celular;
+    if (sugerir && fresco.paquete) cargarPaquetePedido(fresco.paquete);
     renderPedido(); cerrarLaterales();
     if (sugerir) sugerirDestino(c, fresco.tipo_entrega);
     if (ACTUAL) renderPaneles();
+  }
+  // Peso y tamaño cargados en pedidosv2 ({alto, ancho, profundo} en cm, peso en kg): el profundo va a Largo.
+  // Los cm se redondean hacia arriba porque el formulario usa medidas enteras.
+  function cargarPaquetePedido(pq) {
+    form.elements.modo.value = "medidas"; actualizarModo(false);
+    $("largo").value = Math.ceil(pq.profundo); $("ancho").value = Math.ceil(pq.ancho); $("alto").value = Math.ceil(pq.alto);
+    $("peso").value = String(Math.round(pq.peso * 100) / 100).replace(".", ",");
+    renderAnalisis();
   }
   function quitarPedido() { PEDIDO = null; renderPedido(); if (ACTUAL) renderPaneles(); }
   // Propone el destino según la localidad del cliente: si hay una única coincidencia exacta, la elige.
@@ -1326,13 +1372,43 @@
   const destinatarioPara = (c) => destinatarioActual() || c.datos.destinatario || null;
   async function abrirMiCorreo(entrega, c, boton) {
     const datos = c.datos, dst = destinatarioPara(c);
+    const cuerpo = { provincia: datos.provincia, entrega, cp: datos.destino_cp, sucursal_destino: datos.sucursal_destino, sucursal_origen: datos.sucursal_origen, peso: datos.peso, largo: datos.largo, ancho: datos.ancho, alto: datos.alto, valor: datos.valor,
+      destinatario: dst ? { nombre: dst.nombre, email: dst.email, cod_area: dst.cod_area, celular: dst.celular } : null };
     const original = boton.textContent; boton.disabled = true; boton.textContent = "Abriendo…";
     try {
-      await api("/api/correo/abrir", { provincia: datos.provincia, entrega, cp: datos.destino_cp, sucursal_destino: datos.sucursal_destino, sucursal_origen: datos.sucursal_origen, peso: datos.peso, largo: datos.largo, ancho: datos.ancho, alto: datos.alto, valor: datos.valor,
-        destinatario: dst ? { nombre: dst.nombre, email: dst.email, cod_area: dst.cod_area, celular: dst.celular } : null });
-      toast(`Se abre MiCorreo en una ventana nueva con el formulario${dst ? " y el destinatario" : ""} cargado (unos 15 s).`);
+      if (CFG.micorreo_modo === "ventana") await abrirEnVentana(cuerpo);
+      else {
+        const r = await api("/api/correo/abrir", { ...cuerpo, modo: "navegador" });
+        toast("Se abre MiCorreo en Brave: la extensión completa el formulario.");
+        seguirEnvio(r.id, cuerpo);
+      }
     } catch (e) { alert("No se pudo abrir MiCorreo: " + e.message); }
     finally { boton.disabled = false; boton.textContent = original; }
+  }
+  async function abrirEnVentana(cuerpo) {
+    await api("/api/correo/abrir", { ...cuerpo, modo: "ventana" });
+    toast(`Se abre MiCorreo en una ventana aparte con el formulario${cuerpo.destinatario ? " y el destinatario" : ""} cargado (unos 15 s).`);
+  }
+  // Modo navegador: sigue el envío hasta que la extensión de Brave informa cómo quedó. Si en 25 s
+  // ninguna página de MiCorreo lo vio, probablemente falta la extensión: se ofrece la ventana aparte.
+  async function seguirEnvio(id, cuerpo) {
+    const inicio = Date.now();
+    let esperandoSesion = 0;
+    while (Date.now() - inicio < 15 * 60 * 1000) {
+      await new Promise((r) => setTimeout(r, 1500));
+      let e;
+      try { e = await api(`/api/micorreo/encargo?id=${id}`); } catch (err) { if (/desconocido/.test(err.message)) return; continue; }
+      if (e.estado === "listo") { toast(e.avisos.length ? "MiCorreo quedó cargado en Brave. Ojo: " + e.avisos.join(" ") : "MiCorreo quedó cargado en Brave: elegí el servicio y seguí con el pago."); return; }
+      if (e.estado === "error") { alert("La extensión no pudo completar todo el formulario de MiCorreo: " + e.mensaje + "\n\nLo que falte se puede cargar a mano en Brave."); return; }
+      if (e.estado !== "esperando" && e.estado !== "tomado") return;  // reemplazado por otro envío o cancelado
+      if (e.estado === "esperando" && e.visto && ++esperandoSesion === 3) toast("Iniciá sesión en MiCorreo en Brave: después el formulario se completa solo.");
+      if (e.estado === "esperando" && !e.visto && Date.now() - inicio > 25000) {
+        await api("/api/micorreo/cancelar", { id }).catch(() => {});
+        if (confirm("Brave no avisó que haya recibido el envío. Puede faltar la extensión del cotizador (Configuración → Continuar en MiCorreo).\n\n¿Abrirlo ahora en una ventana aparte?"))
+          abrirEnVentana(cuerpo).catch((err) => alert("No se pudo abrir MiCorreo: " + err.message));
+        return;
+      }
+    }
   }
 
   // =====================================================================
@@ -1449,8 +1525,49 @@
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarLaterales(); if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { form.requestSubmit(); } });
   $("btnHistorial").addEventListener("click", () => { renderHistorial(); abrirLateral("drawerHist"); });
   $("btnConfig").addEventListener("click", () => { cargarCfgEnForm(); abrirLateral("drawerCfg"); });
-  const CFG_CAMPOS = ["negocio", "contacto", "firma", "recargo_pct", "recargo_fijo", "redondeo", "origen_cp", "sucursal_origen", "valor", "validez", "plazo_clasico"];
-  function cargarCfgEnForm() { for (const k of CFG_CAMPOS) $("cfg_" + k).value = CFG[k] ?? ""; renderCfgCatalogos(); }
+  const CFG_CAMPOS = ["negocio", "contacto", "firma", "recargo_pct", "recargo_fijo", "redondeo", "origen_cp", "sucursal_origen", "valor", "validez", "plazo_clasico", "micorreo_modo"];
+  function cargarCfgEnForm() { for (const k of CFG_CAMPOS) $("cfg_" + k).value = CFG[k] ?? ""; renderCfgCatalogos(); renderCfgMicorreo(); renderCfgExtension(); cargarEstado().then(renderCfgExtension); }
+  function renderCfgExtension() {
+    const x = ESTADO && ESTADO.extension;
+    $("cfgExtension").className = "ayuda" + (x ? " ok" : "");
+    $("cfgExtension").textContent = x
+      ? `✓ Extensión conectada (versión ${x.version}): respondió hace ${x.hace_segundos < 90 ? "un momento" : Math.round(x.hace_segundos / 60) + " min"}.`
+      : "La extensión completa MiCorreo en tu Brave, donde tenés abiertas tus cuentas (Mercado Pago, etc.). Todavía no se conectó desde que abriste el cotizador: se conecta cuando abrís MiCorreo en Brave.";
+  }
+  async function copiar(texto, aviso) {
+    try { await navigator.clipboard.writeText(texto); toast(aviso); } catch (e) { prompt("Copiá el texto:", texto); }
+  }
+  $("copiarDirExt").addEventListener("click", () => copiar("brave://extensions", "Dirección copiada: pegala en la barra de Brave."));
+  $("copiarRutaExt").addEventListener("click", () => ESTADO && copiar(ESTADO.extension_carpeta, "Ruta copiada: pegala en la ventana de «Cargar descomprimida»."));
+  function renderCfgMicorreo() {
+    const c = ESTADO && ESTADO.correo; if (!c) return;
+    $("cfg_mc_email").value = c.email || ""; $("cfg_mc_password").value = "";
+    $("cfg_mc_password").placeholder = c.credenciales ? "(guardada)" : "";
+    $("cfgMicorreo").className = "ayuda" + (c.credenciales ? " ok" : " err");
+    $("cfgMicorreo").textContent = c.credenciales ? "✓ Cuenta guardada en esta PC. Para cambiarla, escribí el email y la contraseña nuevos."
+      : "Falta la cuenta: sin ella el Correo no se puede cotizar (Vía Cargo funciona igual).";
+  }
+  $("guardarMicorreo").addEventListener("click", async () => {
+    const b = $("guardarMicorreo"); b.disabled = true;
+    try { await api("/api/correo/credenciales", { email: $("cfg_mc_email").value, password: $("cfg_mc_password").value }); await cargarEstado(); renderCfgMicorreo(); toast("Cuenta de MiCorreo guardada."); }
+    catch (e) { alert("No se pudo guardar la cuenta: " + e.message); }
+    finally { b.disabled = false; }
+  });
+  // Respaldo: todas las claves comparador:* de localStorage en un JSON.
+  $("exportRespaldo").addEventListener("click", () => {
+    const claves = {};
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith("comparador:")) claves[k] = localStorage.getItem(k); }
+    descargar(`respaldo-cotizador-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ tipo: "respaldo-comparador", fecha: Date.now(), claves }, null, 1), "application/json");
+  });
+  $("importRespaldo").addEventListener("click", () => $("archivoRespaldo").click());
+  $("archivoRespaldo").addEventListener("change", async (ev) => {
+    const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+    let r; try { r = JSON.parse(await f.text()); } catch (e) { return alert("El archivo no es un respaldo válido."); }
+    if (!r || r.tipo !== "respaldo-comparador" || typeof r.claves !== "object") return alert("El archivo no es un respaldo del cotizador.");
+    if (!confirm("Se reemplazan la configuración, el historial y la caché actuales por los del respaldo. ¿Continuar?")) return;
+    for (const [k, v] of Object.entries(r.claves)) if (k.startsWith("comparador:") && typeof v === "string") { try { localStorage.setItem(k, v); } catch (e) {} }
+    location.reload();
+  });
   $("guardarCfg").addEventListener("click", () => {
     for (const k of CFG_CAMPOS) { const v = $("cfg_" + k).value; CFG[k] = ["recargo_pct", "recargo_fijo", "redondeo", "valor", "validez"].includes(k) ? (+v || 0) : v.trim(); }
     if (!CFG.origen_cp) CFG.origen_cp = "1602";
@@ -1476,7 +1593,7 @@
       const c = ESTADO.correo, v = ESTADO.viacargo;
       LIMITES_VC = v.limites || LIMITES_VC; renderAyudaValor();
       $("pills").innerHTML = `
-        <span class="pill ${!c.credenciales ? "err" : c.sesion_fresca ? "ok" : "warn"}" title="${c.credenciales ? (c.sesion_fresca ? `Sesión de MiCorreo vigente (${c.sesion_minutos} min)` : "La sesión de MiCorreo venció: la primera consulta vuelve a iniciar sesión (puede abrir un navegador)") : "Faltan MICORREO_EMAIL / MICORREO_PASSWORD en Correo/.env"}"><i></i> MiCorreo ${!c.credenciales ? "sin credenciales" : c.sesion_fresca ? "sesión activa" : "sesión vencida"}</span>
+        <span class="pill ${!c.credenciales ? "err" : c.sesion_fresca ? "ok" : "warn"}" title="${c.credenciales ? (c.sesion_fresca ? `Sesión de MiCorreo vigente (${c.sesion_minutos} min)` : "La sesión de MiCorreo venció: la primera consulta vuelve a iniciar sesión (puede abrir un navegador)") : "Falta la cuenta de MiCorreo: cargala en Configuración"}"><i></i> MiCorreo ${!c.credenciales ? "sin credenciales" : c.sesion_fresca ? "sesión activa" : "sesión vencida"}</span>
         <span class="pill ${v.localidades ? "ok" : "err"}" title="Localidades: ${v.localidades} · Agencias: ${v.agencias}"><i></i> Vía Cargo API</span>`;
       if (!$("provincia").options.length) for (const p of ESTADO.provincias) { const o = document.createElement("option"); o.value = p; o.textContent = titulo(p); $("provincia").appendChild(o); }
       renderCfgCatalogos();
@@ -1691,6 +1808,9 @@
 
   renderAnalisis(); renderAyudaValor(); renderHistorial();
   cargarEstado().then(cargarDestinos);
+  // Señal de vida para la app instalada, que se cierra sola cuando no queda ninguna ventana abierta.
+  setInterval(() => fetch("/api/latido", { method: "POST" }).catch(() => {}), 20000);
+  addEventListener("pagehide", () => navigator.sendBeacon("/api/adios"));
 </script>
 </body>
 </html>

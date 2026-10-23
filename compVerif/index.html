@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verificador de comprobantes</title>
+<style>
+  :root {
+    --bg: #f4f4f6; --surface: #ffffff; --surface-2: #f8f8fa; --line: #e7e7ec; --line-2: #d9d9e0;
+    --text: #15151c; --text-2: #565666; --muted: #8b8b99;
+    --accent: #4f46e5; --accent-2: #6d66ff; --accent-soft: #eeedff;
+    --ok: #12a150; --ok-soft: #e7f7ee; --warn: #d97706; --warn-soft: #fff4e2; --err: #dc2626; --err-soft: #fdeceb;
+    --sombra: 0 1px 2px rgba(18,18,30,.04), 0 6px 20px -10px rgba(18,18,30,.18);
+    --sombra-2: 0 18px 50px -20px rgba(18,18,30,.35);
+    --r: 14px;
+    --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    --font-d: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111116; --surface: #1a1a21; --surface-2: #212129; --line: #2b2b35; --line-2: #383844;
+      --text: #f2f2f6; --text-2: #b6b6c3; --muted: #80808f;
+      --accent: #8a84ff; --accent-2: #a39eff; --accent-soft: #25234a; --accent-btn: #5b52f0;
+      --ok: #34c77b; --ok-soft: #13291e; --warn: #f0a33a; --warn-soft: #2e2312; --err: #f26363; --err-soft: #321718;
+      --sombra: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+      --sombra-2: 0 18px 50px -20px rgba(0,0,0,.8);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; }
+  .sel { user-select: text; }
+  .num { font-variant-numeric: tabular-nums; }
+  .cod { font-family: var(--mono); font-size: .92em; }
+  .hidden { display: none !important; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  svg { display: block; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); max-width: 560px; margin: 0 auto; position: relative; overflow: hidden; }
+
+  /* ---------- Encabezado ---------- */
+  .cab { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+  .marca { width: 30px; height: 30px; flex: none; }
+  .titulo { line-height: 1.15; }
+  .titulo b { display: block; font: 600 15px var(--font-d); letter-spacing: -.01em; }
+  .titulo span { font-size: 11.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .titulo span i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .titulo span.ok i { background: var(--ok); } .titulo span.err i { background: var(--err); }
+  .cab .der { margin-left: auto; display: flex; gap: 4px; }
+  .icono-btn { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--text-2); transition: background .15s, color .15s; }
+  .icono-btn:hover { background: var(--surface-2); color: var(--text); }
+  .icono-btn svg { width: 19px; height: 19px; }
+
+  .contenido { overflow: auto; padding: 4px 16px 16px; scrollbar-width: thin; }
+  .vista { animation: entra .28s cubic-bezier(.2,.8,.2,1); }
+  @keyframes entra { from { opacity: 0; transform: translateY(6px); } }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sombra); }
+  .etiqueta { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; font-size: 13.5px; transition: filter .15s, background .15s, transform .08s; }
+  .btn:active { transform: translateY(1px); }
+  .btn svg { width: 16px; height: 16px; }
+  .btn.pri { background: var(--accent-btn, var(--accent)); color: #fff; box-shadow: 0 6px 16px -8px var(--accent-btn, var(--accent)); }
+  .btn.pri:hover { filter: brightness(1.08); }
+  .btn.sec { background: var(--surface-2); border: 1px solid var(--line); color: var(--text); }
+  .btn.sec:hover { background: var(--line); }
+  .btn.ancho { width: 100%; }
+  .btn:disabled { opacity: .5; cursor: wait; }
+
+  /* ---------- Inicio ---------- */
+  .soltar { border: 1.5px dashed var(--line-2); border-radius: 16px; background: var(--surface); padding: 34px 20px 26px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; outline: none; }
+  .soltar:hover, .soltar:focus-visible { border-color: var(--accent); }
+  .soltar .ico { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 18px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+  .soltar .ico svg { width: 30px; height: 30px; }
+  .soltar h2 { font: 600 18px var(--font-d); margin: 0 0 4px; letter-spacing: -.01em; }
+  .soltar p { margin: 0 0 18px; color: var(--text-2); font-size: 13px; }
+  kbd { font: 600 11px var(--font); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--surface-2); color: var(--text-2); }
+  .recientes { margin-top: 18px; }
+  .recientes .etiqueta { margin: 0 4px 8px; display: flex; justify-content: space-between; }
+  .recientes .etiqueta button { font: inherit; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; }
+
+  .lista { list-style: none; margin: 0; padding: 4px; }
+  .lista li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 9px 10px; border-radius: 10px; cursor: pointer; transition: background .12s; }
+  .lista li:hover { background: var(--surface-2); }
+  .lista .pt { width: 9px; height: 9px; border-radius: 50%; grid-row: span 2; }
+  .lista .a { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lista .b { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lista .m { text-align: right; font-size: 13px; font-weight: 600; }
+  .lista .f { text-align: right; font-size: 11.5px; color: var(--muted); }
+  .pt.verde { background: var(--ok); } .pt.amarillo { background: var(--warn); } .pt.rojo { background: var(--err); }
+  .lista .vacia { display: block; text-align: center; color: var(--muted); padding: 22px; cursor: default; }
+  .lista .vacia:hover { background: none; }
+
+  /* ---------- Analizando ---------- */
+  .analizando { text-align: center; padding: 24px 18px 26px; }
+  .escaner { position: relative; width: 150px; height: 200px; margin: 0 auto 20px; border-radius: 12px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); }
+  .escaner img { width: 100%; height: 100%; object-fit: cover; object-position: top; filter: saturate(.9); }
+  .escaner .pdf { position: absolute; inset: 0; display: grid; place-items: center; font: 700 22px var(--font-d); color: var(--err); }
+  .escaner::after { content: ""; position: absolute; left: 0; right: 0; height: 46px; top: -46px; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 35%, transparent) 70%, var(--accent)); animation: barrido 2s cubic-bezier(.45,0,.55,1) infinite; }
+  @keyframes barrido { to { top: 100%; } }
+  .analizando h2 { font: 600 17px var(--font-d); margin: 0 0 4px; }
+  .paso { color: var(--text-2); font-size: 13px; min-height: 20px; transition: opacity .3s; }
+  .barra { height: 3px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 18px auto 0; width: 160px; }
+  .barra i { display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--accent); animation: carga 1.4s ease-in-out infinite; }
+  @keyframes carga { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  .analizando .nota { font-size: 11.5px; color: var(--muted); margin-top: 14px; }
+
+  /* ---------- Resultado ---------- */
+  .veredicto { position: relative; overflow: hidden; text-align: center; padding: 26px 20px 20px; }
+  .veredicto::before { content: ""; position: absolute; inset: 0 0 auto; height: 130px; background: radial-gradient(120% 100% at 50% 0%, var(--tono-soft), transparent 75%); }
+  .veredicto > * { position: relative; }
+  .veredicto.verde { --tono: var(--ok); --tono-soft: var(--ok-soft); }
+  .veredicto.amarillo { --tono: var(--warn); --tono-soft: var(--warn-soft); }
+  .veredicto.rojo { --tono: var(--err); --tono-soft: var(--err-soft); }
+  .insignia { width: 76px; height: 76px; margin: 0 auto 14px; border-radius: 50%; background: var(--tono); color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 8px var(--tono-soft), 0 12px 26px -10px var(--tono); animation: pop .5s cubic-bezier(.2,1.4,.4,1); }
+  .insignia svg { width: 38px; height: 38px; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  .veredicto h2 { font: 700 26px/1.1 var(--font-d); margin: 4px 0 6px; letter-spacing: -.02em; color: var(--tono); }
+  .veredicto .bajada { color: var(--text-2); font-size: 13.5px; margin: 0; }
+  .conclusion { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; text-align: left; color: var(--text); }
+  .conclusion span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .resumen { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); }
+  .chip.err { background: var(--err-soft); border-color: transparent; color: var(--err); }
+  .chip.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+  .chip.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .ficha { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); text-align: left; }
+  .ficha img, .ficha .pdfmini { width: 40px; height: 52px; border-radius: 7px; object-fit: cover; object-position: top; border: 1px solid var(--line); flex: none; background: var(--surface-2); }
+  .ficha .pdfmini { display: grid; place-items: center; font: 700 11px var(--font); color: var(--err); }
+  .ficha .mon { font: 600 16px var(--font-d); }
+  .ficha .sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ficha > div { min-width: 0; flex: 1; }
+  .acciones { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 14px; border-top: 1px solid var(--line); }
+  .decision { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 0 2px; }
+  .decision span { font-size: 12.5px; color: var(--muted); margin-right: auto; }
+  .decision button { height: 30px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); display: inline-flex; align-items: center; gap: 5px; transition: all .15s; }
+  .decision button svg { width: 14px; height: 14px; }
+  .decision button:hover { border-color: var(--line-2); color: var(--text); }
+  .decision button.si.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .decision button.no.on { background: var(--err); border-color: var(--err); color: #fff; }
+
+  /* ---------- Paneles (detalle / historial) ---------- */
+  .panel { position: absolute; inset: 0; background: var(--bg); display: grid; grid-template-rows: auto auto minmax(0, 1fr); transform: translateX(100%); transition: transform .32s cubic-bezier(.2,.8,.2,1); z-index: 20; }
+  .panel.on { transform: none; }
+  .panel .pcab { display: flex; align-items: center; gap: 6px; padding: 12px 12px 8px; }
+  .panel .pcab h3 { margin: 0; font: 600 16px var(--font-d); }
+  .panel .pcab .pt { width: 9px; height: 9px; border-radius: 50%; margin-left: 4px; }
+  .panel .pcuerpo { overflow: auto; padding: 4px 16px 18px; scrollbar-width: thin; }
+  .tabs { display: flex; gap: 2px; margin: 0 16px 10px; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+  .tabs button { flex: 1; height: 30px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); transition: all .15s; }
+  .tabs button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .tabs button .n { display: inline-block; min-width: 17px; height: 17px; line-height: 17px; border-radius: 9px; background: var(--err); color: #fff; font-size: 10.5px; margin-left: 4px; }
+
+  .lienzo { position: relative; line-height: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
+  .lienzo img { width: 100%; height: auto; }
+  .lienzo.ela { background: #000; }
+  .lienzo iframe { width: 100%; height: 60vh; border: 0; }
+  .caja { position: absolute; border: 2px solid var(--err); border-radius: 4px; background: rgba(220,38,38,.07); box-shadow: 0 0 0 1.5px rgba(255,255,255,.8); transition: background .2s, box-shadow .2s; }
+  .caja b { position: absolute; top: -9px; left: -9px; width: 18px; height: 18px; border-radius: 50%; background: var(--err); color: #fff; font: 700 10.5px/18px var(--font); text-align: center; box-shadow: 0 0 0 2px #fff; }
+  .caja.foco { background: rgba(220,38,38,.25); box-shadow: 0 0 0 4px rgba(220,38,38,.25); }
+  .visor-pie { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 2px 0; font-size: 11.5px; color: var(--muted); }
+  .visor-pie button { color: var(--accent); font-weight: 600; font-size: 12px; white-space: nowrap; }
+
+  .bloque + .bloque { margin-top: 16px; }
+  .bloque .etiqueta { margin: 0 2px 8px; }
+  .hallazgos { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .hallazgos li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 1px 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; }
+  .hallazgos .ic { width: 22px; height: 22px; border-radius: 50%; grid-row: span 2; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; }
+  .hallazgos .ic svg { width: 13px; height: 13px; }
+  .hallazgos .t { font-weight: 600; }
+  .hallazgos .d { color: var(--text-2); font-size: 12.5px; }
+  .hallazgos .zona .ic, .hallazgos .rojo .ic { background: var(--err); }
+  .hallazgos .amarillo .ic { background: var(--warn); }
+  .hallazgos .info .ic { background: var(--muted); }
+  .hallazgos .ok .ic { background: var(--ok); }
+  .hallazgos .zona { cursor: pointer; }
+  .hallazgos .obs { grid-template-columns: 8px minmax(0, 1fr); }
+  .hallazgos .obs::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin-top: 7px; }
+
+  .datos { margin: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 13px; }
+  .datos dt, .datos dd { margin: 0; padding: 9px 12px; border-top: 1px solid var(--line); }
+  .datos dt { color: var(--muted); }
+  .datos dd { word-break: break-word; font-weight: 500; }
+  .datos dt:first-of-type, .datos dt:first-of-type + dd { border-top: 0; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; font-size: 11.5px; color: var(--muted); }
+  .meta .btn { height: 32px; font-size: 12.5px; padding: 0 12px; }
+  .meta .der { margin-left: auto; }
+
+  .buscar { position: relative; margin: 0 16px 10px; }
+  .buscar input { width: 100%; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; padding: 0 12px 0 34px; outline: none; }
+  .buscar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .buscar svg { position: absolute; left: 11px; top: 10px; width: 16px; height: 16px; color: var(--muted); }
+
+  /* ---------- Soltar en toda la ventana ---------- */
+  .velo { position: absolute; inset: 8px; z-index: 40; border-radius: 18px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--bg) 88%, var(--accent)); display: grid; place-items: center; text-align: center; opacity: 0; pointer-events: none; transition: opacity .15s; }
+  body.arrastrando .velo { opacity: 1; }
+  .velo div { font: 600 17px var(--font-d); color: var(--accent); }
+  .velo svg { width: 40px; height: 40px; margin: 0 auto 10px; }
+
+  .toast { position: absolute; left: 50%; bottom: 16px; transform: translate(-50%, 12px); background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; opacity: 0; pointer-events: none; transition: all .2s; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--sombra-2); }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .toast.err { background: var(--err); color: #fff; }
+  .error { text-align: center; padding: 28px 20px; }
+  .error .ico { width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 12px; background: var(--err-soft); color: var(--err); display: grid; place-items: center; }
+  .error .ico svg { width: 26px; height: 26px; }
+  .error h2 { font: 600 17px var(--font-d); margin: 0 0 4px; }
+  .error p { color: var(--text-2); font-size: 13px; margin: 0 0 16px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="cab">
+    <svg class="marca" viewBox="0 0 64 64" aria-hidden="true">
+      <defs><linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#635bff"/><stop offset="1" stop-color="#1e1b60"/></linearGradient></defs>
+      <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#gm)"/>
+      <path d="M32 13c5 2.3 10.4 3.4 16 3.6v13.2c0 10.3-6.6 17.6-16 21.2-9.4-3.6-16-10.9-16-21.2V16.6c5.6-.2 11-1.3 16-3.6z" fill="#fff"/>
+      <path d="M25 32.5l5 5 9.5-10.2" fill="none" stroke="#4f46e5" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="titulo"><b>Verificador</b><span id="estado"><i></i>Conectando…</span></div>
+    <div class="der">
+      <button class="icono-btn" id="btnHist" title="Historial" aria-label="Historial">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="contenido" id="contenido"></main>
+
+  <!-- Detalle -->
+  <section class="panel" id="pDetalle" aria-label="Detalle">
+    <div class="pcab">
+      <button class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <h3>Detalle</h3><span class="pt" id="detPunto"></span>
+    </div>
+    <div class="tabs" id="detTabs">
+      <button data-t="imagen" class="on">Imagen</button>
+      <button data-t="hallazgos">Hallazgos</button>
+      <button data-t="datos">Datos</button>
+    </div>
+    <div class="pcuerpo sel" id="detCuerpo"></div>
+  </section>
+
+  <!-- Historial -->
+  <section class="panel" id="pHist" aria-label="Historial">
+    <div class="pcab">
+      <button class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <h3>Historial</h3>
+    </div>
+    <div class="buscar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="buscar" placeholder="Buscar operación, banco o titular" autocomplete="off">
+    </div>
+    <div class="pcuerpo"><ul class="lista card" id="histLista"></ul></div>
+  </section>
+
+  <div class="velo"><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Soltá para analizar</div></div>
+  <div class="toast" id="toast"></div>
+</div>
+<input type="file" id="archivo" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf" class="hidden">
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pesos = n => n == null || n === "" || isNaN(n) ? "" : "$ " + Number(n).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const fechaCorta = f => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(f || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : (f || ""); };
+const cuando = iso => {
+  const d = new Date(iso), hoy = new Date();
+  const hh = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (d.toDateString() === hoy.toDateString()) return "Hoy " + hh;
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === ayer.toDateString()) return "Ayer " + hh;
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" }) + " " + hh;
+};
+
+const ICO = {
+  subir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="M9 14.5l3-3 3 3"/></svg>',
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  alerta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6.5v7"/><path d="M12 17.5v.01"/></svg>',
+  cruz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
+  ojo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  mas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  pulgar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  i: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 11v6"/><path d="M12 7.5v.01"/></svg>',
+};
+const VEREDICTOS = {
+  verde: { t: "Sin alteraciones", s: "No se detectaron signos de edición.", ico: ICO.ok },
+  amarillo: { t: "Revisar", s: "Hay detalles que conviene mirar.", ico: ICO.alerta },
+  rojo: { t: "Alterado", s: "Probablemente fue editado o armado.", ico: ICO.cruz },
+};
+const PASOS = ["Leyendo el comprobante…", "Comparando tipografías…", "Buscando parches y retoques…", "Revisando la alineación…", "Controlando números y fechas…", "Comparando con el historial…"];
+
+let ACTUAL = null, OCUPADO = false, ESTADO = {}, tPasos = null;
+
+function toast(msg, err) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = "toast on" + (err ? " err" : "");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.className = "toast", err ? 5000 : 2200);
+}
+async function api(ruta, opciones = {}) {
+  const r = await fetch(ruta, opciones);
+  const j = await r.json().catch(() => ({ error: "Respuesta inválida" }));
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  return j;
+}
+const post = (ruta, body) => api(ruta, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+async function cargarEstado() {
+  const e = $("#estado");
+  try {
+    ESTADO = await api("/api/estado");
+    e.className = ESTADO.claude ? "ok" : "err";
+    e.lastChild.textContent = ESTADO.claude ? "Listo para analizar" : "Claude Code no encontrado";
+  } catch { e.className = "err"; e.lastChild.textContent = "Sin conexión"; }
+}
+
+// ------------------------------------------------------------------- vistas --
+function render(html) {
+  clearInterval(tPasos);
+  $("#contenido").innerHTML = `<div class="vista">${html}</div>`;
+  $("#contenido").scrollTop = 0;
+}
+
+async function inicio() {
+  ACTUAL = null;
+  render(`
+    <div class="soltar" id="soltar" tabindex="0" role="button" aria-label="Elegir comprobante">
+      <div class="ico">${ICO.subir}</div>
+      <h2>Soltá un comprobante</h2>
+      <p>Arrastralo hasta acá o pegalo con <kbd>Ctrl</kbd> <kbd>V</kbd></p>
+      <span class="btn sec">Elegir archivo</span>
+    </div>
+    <div class="recientes"><div class="etiqueta"><span>Recientes</span><button id="verTodos">Ver todos</button></div><ul class="lista card" id="recientes"><li class="vacia">Cargando…</li></ul></div>`);
+  $("#soltar").addEventListener("click", () => $("#archivo").click());
+  $("#soltar").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#archivo").click(); } });
+  $("#verTodos").addEventListener("click", abrirHistorial);
+  try {
+    const { items } = await api("/api/historial");
+    if ($("#recientes")) llenarLista($("#recientes"), items.slice(0, 4), "Todavía no analizaste comprobantes");
+  } catch { }
+}
+
+function llenarLista(ul, items, vacio) {
+  ul.innerHTML = items.length ? items.map(i => `
+    <li data-id="${i.id}">
+      <span class="pt ${esc(i.semaforo)}"></span>
+      <span class="a">${esc(i.banco || i.titular || i.archivo || "Comprobante")}</span>
+      <span class="m num">${esc(pesos(i.monto))}</span>
+      <span class="b">${esc([i.titular && i.banco ? i.titular : "", i.operacion ? "Op. " + i.operacion : ""].filter(Boolean).join(" · ") || "#" + i.id)}</span>
+      <span class="f">${esc(cuando(i.creado))}</span>
+    </li>`).join("") : `<li class="vacia">${vacio}</li>`;
+  ul.querySelectorAll("li[data-id]").forEach(li => li.addEventListener("click", async () => {
+    try { cerrarPaneles(); resultado(await api("/api/analisis?id=" + li.dataset.id)); }
+    catch (e) { toast(e.message, true); }
+  }));
+}
+
+function analizando(file) {
+  const esPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
+  render(`
+    <div class="card analizando">
+      <div class="escaner">${esPdf ? `<div class="pdf">PDF</div>` : `<img alt="" src="${URL.createObjectURL(file)}">`}</div>
+      <h2>Analizando comprobante</h2>
+      <div class="paso" id="paso">${PASOS[0]}</div>
+      <div class="barra"><i></i></div>
+      <div class="nota">Suele tardar entre 20 y 60 segundos</div>
+    </div>`);
+  let i = 0;
+  tPasos = setInterval(() => {
+    const p = $("#paso"); if (!p) return;
+    p.style.opacity = 0;
+    setTimeout(() => { i = (i + 1) % PASOS.length; p.textContent = PASOS[i]; p.style.opacity = 1; }, 300);
+  }, 3800);
+}
+
+function error(msg) {
+  render(`<div class="card error"><div class="ico">${ICO.alerta}</div><h2>No se pudo analizar</h2><p class="sel">${esc(msg)}</p><button class="btn pri" id="otra">Probar con otro</button></div>`);
+  $("#otra").addEventListener("click", inicio);
+}
+
+function resultado(reg) {
+  ACTUAL = reg;
+  const v = VEREDICTOS[reg.semaforo] || VEREDICTOS.amarillo;
+  const d = reg.datos || {};
+  const zonas = d.zonas_sospechosas || [];
+  const otros = (reg.avisos || []).filter(a => a.origen !== "visual");
+  const fuertes = otros.filter(a => a.gravedad === "rojo").length, dudas = otros.filter(a => a.gravedad === "amarillo").length;
+  const esPdf = reg.forense?.tipo === "pdf";
+  const chips = [
+    zonas.length ? `<span class="chip err">${zonas.length} ${zonas.length === 1 ? "zona alterada" : "zonas alteradas"}</span>` : "",
+    fuertes ? `<span class="chip err">${fuertes} ${fuertes === 1 ? "alerta" : "alertas"}</span>` : "",
+    dudas ? `<span class="chip warn">${dudas} ${dudas === 1 ? "detalle" : "detalles"} a revisar</span>` : "",
+    reg.semaforo === "verde" ? `<span class="chip ok">Controles en orden</span>` : "",
+  ].join("");
+  const conclusion = d.conclusion || (reg.lectura?.estado === "error" ? "No se pudo revisar la imagen con Claude: " + (reg.lectura.mensaje || "") : "");
+  const sub = [d.titular_origen, d.fecha ? fechaCorta(d.fecha) + (d.hora ? " " + d.hora : "") : ""].filter(Boolean).join(" · ");
+
+  render(`
+    <div class="card">
+      <div class="veredicto ${reg.semaforo}">
+        <div class="etiqueta">Resultado</div>
+        <div class="insignia" style="margin-top:12px">${v.ico}</div>
+        <h2>${v.t}</h2>
+        <p class="bajada">${v.s}${reg.semaforo === "verde" ? " No es una garantía absoluta." : ""}</p>
+        ${conclusion ? `<p class="conclusion sel"><span>${esc(conclusion)}</span></p>` : ""}
+        ${chips ? `<div class="resumen">${chips}</div>` : ""}
+      </div>
+      <div class="ficha">
+        ${esPdf ? `<div class="pdfmini">PDF</div>` : `<img alt="" src="/api/archivo?id=${reg.id}">`}
+        <div><div class="mon num">${esc(pesos(d.monto) || "Monto no leído")}</div><div class="sub">${esc([d.banco_origen, sub].filter(Boolean).join(" · ") || reg.archivo)}</div></div>
+      </div>
+      <div class="acciones">
+        <button class="btn pri" id="verDetalle">${ICO.ojo}Ver detalle</button>
+        <button class="btn sec" id="nuevo" title="Analizar otro">${ICO.mas}Nuevo</button>
+      </div>
+    </div>
+    <div class="decision">
+      <span>¿Lo aceptaste?</span>
+      <button class="si${reg.veredicto === "aprobado" ? " on" : ""}" data-ver="aprobado">${ICO.pulgar}Aprobado</button>
+      <button class="no${reg.veredicto === "rechazado" ? " on" : ""}" data-ver="rechazado">${ICO.cruz}Rechazado</button>
+    </div>`);
+
+  $("#verDetalle").addEventListener("click", () => abrirDetalle("imagen"));
+  $("#nuevo").addEventListener("click", inicio);
+  document.querySelectorAll("[data-ver]").forEach(b => b.addEventListener("click", async () => {
+    const valor = reg.veredicto === b.dataset.ver ? "" : b.dataset.ver;  // tocar de nuevo lo quita
+    try { resultado(await post("/api/veredicto", { id: reg.id, veredicto: valor })); toast(valor ? "Decisión guardada" : "Decisión quitada"); }
+    catch (e) { toast(e.message, true); }
+  }));
+}
+
+// ------------------------------------------------------------------ detalle --
+const DATOS = [
+  ["monto", "Monto", v => pesos(v)], ["fecha", "Fecha", fechaCorta], ["hora", "Hora"],
+  ["banco_origen", "Desde"], ["titular_origen", "Titular de origen"], ["cuit_origen", "CUIT/CUIL origen"],
+  ["titular_destino", "Para"], ["banco_destino", "Banco destino"], ["cbu_destino", "CBU / CVU destino"], ["alias_destino", "Alias destino"],
+  ["numero_operacion", "N.º de operación"], ["id_coelsa", "ID COELSA"], ["concepto", "Concepto"],
+];
+const NUMERICOS = ["cuit_origen", "cbu_destino", "numero_operacion", "id_coelsa"];
+let TAB = "imagen", VER_ELA = false;
+
+function abrirDetalle(tab) {
+  VER_ELA = false;
+  $("#detPunto").className = "pt " + (ACTUAL.semaforo === "verde" ? "verde" : ACTUAL.semaforo === "rojo" ? "rojo" : "amarillo");
+  const zonas = (ACTUAL.datos?.zonas_sospechosas || []).length;
+  $('#detTabs [data-t="hallazgos"]').innerHTML = "Hallazgos" + (zonas ? `<span class="n">${zonas}</span>` : "");
+  pestaña(tab);
+  $("#pDetalle").classList.add("on");
+}
+
+function pestaña(tab) {
+  TAB = tab;
+  document.querySelectorAll("#detTabs button").forEach(b => b.classList.toggle("on", b.dataset.t === tab));
+  const reg = ACTUAL, d = reg.datos || {};
+  const zonas = d.zonas_sospechosas || [];
+  const cuerpo = $("#detCuerpo");
+  cuerpo.scrollTop = 0;
+
+  if (tab === "imagen") {
+    const esPdf = reg.forense?.tipo === "pdf";
+    const src = VER_ELA ? `/api/archivo?id=${reg.id}&ela=1` : `/api/archivo?id=${reg.id}`;
+    cuerpo.innerHTML = `
+      <div class="lienzo${VER_ELA ? " ela" : ""}">
+        ${esPdf ? `<iframe src="/api/archivo?id=${reg.id}" title="Comprobante"></iframe>` : `<img src="${src}" alt="Comprobante">`}
+        ${esPdf || VER_ELA ? "" : zonas.map((z, i) => `<div class="caja" data-z="${i}" style="left:${z.x}%;top:${z.y}%;width:${z.ancho}%;height:${z.alto}%" title="${esc(z.descripcion)}"><b>${i + 1}</b></div>`).join("")}
+      </div>
+      <div class="visor-pie">
+        <span>${VER_ELA ? "Mapa de retoques: las zonas que brillan distinto pueden estar pegadas. Es sólo una ayuda." : zonas.length && !esPdf ? "Recuadros: zonas alteradas (ubicación aproximada)." : esPdf ? "" : "No se marcaron zonas alteradas."}</span>
+        ${reg.ela ? `<button id="toggleEla">${VER_ELA ? "Ver original" : "Mapa de retoques"}</button>` : ""}
+      </div>
+      ${zonas.length && !VER_ELA ? `<div class="bloque" style="margin-top:14px"><ul class="hallazgos">${zonas.map((z, i) => `<li class="zona" data-z="${i}"><span class="ic">${i + 1}</span><span class="t">${esc(z.descripcion)}</span><span></span></li>`).join("")}</ul></div>` : ""}`;
+    $("#toggleEla")?.addEventListener("click", () => { VER_ELA = !VER_ELA; pestaña("imagen"); });
+    cuerpo.querySelectorAll(".hallazgos .zona").forEach(li => {
+      const caja = cuerpo.querySelector(`.caja[data-z="${li.dataset.z}"]`);
+      li.addEventListener("mouseenter", () => caja?.classList.add("foco"));
+      li.addEventListener("mouseleave", () => caja?.classList.remove("foco"));
+      li.addEventListener("click", () => caja?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    });
+  }
+
+  if (tab === "hallazgos") {
+    const obs = d.observaciones || [];
+    const otros = (reg.avisos || []).filter(a => a.origen !== "visual" || /no parece un comprobante/.test(a.titulo));
+    const icono = g => g === "ok" ? ICO.ok : g === "info" ? ICO.i : g === "rojo" ? ICO.cruz : ICO.alerta;
+    cuerpo.innerHTML = `
+      ${d.conclusion ? `<div class="bloque"><div class="etiqueta">Conclusión</div><ul class="hallazgos"><li style="display:block">${esc(d.conclusion)}</li></ul></div>` : ""}
+      ${zonas.length ? `<div class="bloque"><div class="etiqueta">Zonas alteradas</div><ul class="hallazgos">${zonas.map((z, i) => `<li class="zona" data-z="${i}"><span class="ic">${i + 1}</span><span class="t">${esc(z.descripcion)}</span><span></span></li>`).join("")}</ul></div>` : ""}
+      ${obs.length ? `<div class="bloque"><div class="etiqueta">Lo que se observó</div><ul class="hallazgos">${obs.map(o => `<li class="obs"><span>${esc(o)}</span></li>`).join("")}</ul></div>` : ""}
+      ${otros.length ? `<div class="bloque"><div class="etiqueta">Controles automáticos</div><ul class="hallazgos">${otros.map(a => `<li class="${a.gravedad}"><span class="ic">${icono(a.gravedad)}</span><span class="t">${esc(a.titulo)}</span>${a.detalle ? `<span class="d">${esc(a.detalle)}</span>` : "<span></span>"}</li>`).join("")}</ul></div>` : ""}
+      ${!d.conclusion && !zonas.length && !obs.length && !otros.length ? `<p style="text-align:center;color:var(--muted)">Sin hallazgos.</p>` : ""}`;
+    cuerpo.querySelectorAll(".zona").forEach(li => li.addEventListener("click", () => pestaña("imagen")));
+  }
+
+  if (tab === "datos") {
+    const filas = DATOS.filter(([k]) => d[k] != null && d[k] !== "").map(([k, l, fmt]) => `<dt>${l}</dt><dd class="${NUMERICOS.includes(k) ? "cod" : k === "monto" ? "num" : ""}">${esc(fmt ? fmt(d[k]) : d[k])}</dd>`).join("");
+    const lec = reg.lectura || {};
+    cuerpo.innerHTML = `
+      ${filas ? `<dl class="datos">${filas}</dl>` : `<p style="text-align:center;color:var(--muted)">No se pudieron leer datos.</p>`}
+      <div class="meta">
+        ${ESTADO.claude ? `<button class="btn sec" id="releer">Volver a analizar</button>` : ""}
+        <button class="btn sec" id="borrar">Borrar</button>
+        <span class="der">#${reg.id}${lec.segundos ? ` · ${lec.segundos} s` : ""}</span>
+      </div>`;
+    $("#releer")?.addEventListener("click", async ev => {
+      ev.target.disabled = true; ev.target.textContent = "Analizando…";
+      try { const r = await post("/api/releer", { id: reg.id }); resultado(r); abrirDetalle("datos"); toast("Análisis actualizado"); }
+      catch (e) { toast(e.message, true); ev.target.disabled = false; ev.target.textContent = "Volver a analizar"; }
+    });
+    $("#borrar").addEventListener("click", async () => {
+      if (!confirm(`¿Borrar el análisis #${reg.id}? Deja de contar para detectar comprobantes repetidos.`)) return;
+      try { await post("/api/borrar", { id: reg.id }); cerrarPaneles(); inicio(); toast("Análisis borrado"); }
+      catch (e) { toast(e.message, true); }
+    });
+  }
+}
+document.querySelectorAll("#detTabs button").forEach(b => b.addEventListener("click", () => pestaña(b.dataset.t)));
+
+// ---------------------------------------------------------------- historial --
+async function cargarHistorial() {
+  try {
+    const { items } = await api("/api/historial?q=" + encodeURIComponent($("#buscar").value.trim()));
+    llenarLista($("#histLista"), items, $("#buscar").value ? "Sin resultados" : "Todavía no hay comprobantes");
+  } catch (e) { toast(e.message, true); }
+}
+function abrirHistorial() { $("#buscar").value = ""; cargarHistorial(); $("#pHist").classList.add("on"); }
+function cerrarPaneles() { document.querySelectorAll(".panel").forEach(p => p.classList.remove("on")); }
+let tBuscar;
+$("#buscar").addEventListener("input", () => { clearTimeout(tBuscar); tBuscar = setTimeout(cargarHistorial, 200); });
+$("#btnHist").addEventListener("click", abrirHistorial);
+document.querySelectorAll("[data-cerrar]").forEach(b => b.addEventListener("click", e => e.target.closest(".panel").classList.remove("on")));
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  const abiertos = [...document.querySelectorAll(".panel.on")];
+  if (abiertos.length) abiertos.at(-1).classList.remove("on");
+});
+
+// --------------------------------------------------------- entrada archivo --
+async function analizar(file) {
+  if (!file || OCUPADO) return;
+  if (!/\.(jpe?g|png|webp|pdf)$/i.test(file.name) && !/^image\/|pdf/.test(file.type)) return toast("Usá una imagen (JPG, PNG, WEBP) o un PDF", true);
+  OCUPADO = true;
+  cerrarPaneles();
+  analizando(file);
+  try { resultado(await api("/api/analizar?" + new URLSearchParams({ nombre: file.name }), { method: "POST", body: file })); }
+  catch (e) { error(e.message); }
+  finally { OCUPADO = false; }
+}
+$("#archivo").addEventListener("change", e => { analizar(e.target.files[0]); e.target.value = ""; });
+let arrastres = 0;
+window.addEventListener("dragenter", e => { e.preventDefault(); if (!OCUPADO && ++arrastres === 1) document.body.classList.add("arrastrando"); });
+window.addEventListener("dragleave", () => { if (--arrastres <= 0) { arrastres = 0; document.body.classList.remove("arrastrando"); } });
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => { e.preventDefault(); arrastres = 0; document.body.classList.remove("arrastrando"); analizar(e.dataTransfer.files[0]); });
+document.addEventListener("paste", e => {
+  if (e.target.closest?.("input")) return;
+  const item = [...(e.clipboardData?.items || [])].find(i => i.kind === "file");
+  if (!item) return;
+  e.preventDefault();
+  const f = item.getAsFile();
+  const ext = (f.type.split("/")[1] || "png").replace("jpeg", "jpg");
+  analizar(new File([f], f.name && !/^image\.\w+$/.test(f.name) ? f.name : `pegado-${Date.now()}.${ext}`, { type: f.type }));
+});
+
+cargarEstado();
+inicio();
+</script>
+</body>
+</html>
