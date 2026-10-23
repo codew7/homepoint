@@ -2395,6 +2395,8 @@
     }
     .pp-grupo--listo { color: var(--ok); }
     .pp-grupo--listo .pp-grupo-count { color: var(--ok); background: var(--ok-soft); }
+    .pp-grupo--sinimp { color: var(--accent); }
+    .pp-grupo--sinimp .pp-grupo-count { color: var(--accent); background: var(--accent-soft); }
 
     .pedidos-panel-item {
       display: flex;
@@ -8411,9 +8413,14 @@
       // Confirmado (PP_GRUPOS_PRIMEROS), luego el resto alfabetico y "Nuevos"
       // (sin nota) siempre al final. Dentro de cada grupo se respeta el orden
       // de pedidosCache (etapa y antiguedad).
+      // En el modo "Imprimir rotulos" los que nunca se rotularon van primero,
+      // en su propio grupo; los ya impresos siguen abajo en sus grupos de
+      // siempre, elegibles para reimprimir.
+      const sinImprimir = [];
       const listos = [];
       const porNota = new Map();
       pedidosCache.forEach(p => {
+        if (ppRotModo && !p.rotuloImpreso) { sinImprimir.push(p); return; }
         if (p.rank === 3) { listos.push(p); return; }
         const g = ppGrupoNota(p.nota);
         if (!porNota.has(g.clave)) {
@@ -8438,6 +8445,7 @@
         pedidos.map(ppFilaHtml).join('');
 
       let html = '';
+      if (sinImprimir.length) html += grupoHtml('Sin imprimir', sinImprimir, ' pp-grupo--sinimp');
       if (listos.length) html += grupoHtml(PP_GRUPOS[3], listos, ' pp-grupo--listo');
       gruposNota.forEach(g => { html += grupoHtml(g.titulo, g.pedidos); });
 
@@ -8644,8 +8652,15 @@
       ppNotaCerrar();
       ppPanelBox.classList.add('pp-modo-rotulos');
       ppBtnRotulos.setAttribute('aria-pressed', 'true');
-      pedidosPanelList.querySelectorAll('.pedidos-panel-item.is-sel').forEach(f => f.classList.remove('is-sel'));
+      ppRotReagrupar();
       ppRotActualizarBarra();
+    }
+
+    // Entrar o salir del modo cambia los grupos (aparece o se disuelve
+    // "Sin imprimir"): se repinta deslizando las filas a su lugar.
+    function ppRotReagrupar() {
+      if (!pedidosCache.length || !pedidosPanelList.querySelector('.pedidos-panel-item')) return;
+      ppRenderAnimado(ppFirmas, new Set());
     }
 
     function ppRotSalir() {
@@ -8654,7 +8669,7 @@
       ppRotSeleccion.clear();
       ppPanelBox.classList.remove('pp-modo-rotulos');
       ppBtnRotulos.setAttribute('aria-pressed', 'false');
-      pedidosPanelList.querySelectorAll('.pedidos-panel-item.is-sel').forEach(f => f.classList.remove('is-sel'));
+      ppRotReagrupar();
     }
 
     function ppRotToggle(fila) {
@@ -8686,7 +8701,8 @@
 
     async function ppRotImprimirSeleccion() {
       // Se respeta el orden en que aparecen en la lista, no el de los toques.
-      const ids = pedidosCache.map(p => p.id).filter(id => ppRotSeleccion.has(id));
+      const ids = Array.from(pedidosPanelList.querySelectorAll('.pedidos-panel-item'), f => f.dataset.id)
+        .filter(id => ppRotSeleccion.has(id));
       if (!ids.length) return;
       ppRotImprimir.disabled = true;
       ppRotImprimir.textContent = 'Preparando...';
