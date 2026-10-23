@@ -760,6 +760,20 @@
             background: var(--ink-4);
         }
 
+        /* Transferencia desplegable y sus alias (un nivel más adentro) */
+        .facturacion-table .detail-row.has-alias { cursor: pointer; }
+        .facturacion-table .detail-row.has-alias td.mes-name { padding-left: 28px; }
+        .facturacion-table .detail-row.has-alias td.mes-name::before { display: none; }
+        .facturacion-table .detail-row.detail-alias td { font-size: 12px; }
+        .facturacion-table .detail-row.detail-alias td.mes-name {
+            padding-left: 54px;
+            color: var(--ink-3);
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         /* Fila clave: Ganancia neta */
         .facturacion-table tr.row-key td {
             background-color: color-mix(in srgb, var(--pos) 6%, var(--surface));
@@ -1272,6 +1286,10 @@
 
         .confirmar-acciones { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
 
+        /* Selector de sucursal y login de otra sucursal */
+        .ctrl[hidden] { display: none; }
+        .login-sucursal-error { min-height: 18px; font-size: 12.5px; color: var(--neg); }
+
         /* ===================== Avisos ===================== */
         .toast-stack {
             position: fixed;
@@ -1442,6 +1460,11 @@
 
         <!-- Controles -->
         <section class="toolbar" aria-label="Filtros">
+            <div class="ctrl ctrl-sucursal" id="ctrlSucursal" hidden>
+                <label class="ctrl-label" for="sucursalSelect">Sucursal</label>
+                <select class="form-select" id="sucursalSelect" title="Sucursal de la que se leen los datos"></select>
+            </div>
+
             <div class="ctrl temporalidad-selector">
                 <span class="ctrl-label">Vista</span>
                 <div class="segmented temporalidad-buttons" role="group" aria-label="Vista">
@@ -1623,6 +1646,30 @@
         </div>
     </div>
 
+    <!-- Inicio de sesión en otra sucursal (cada sucursal es otro proyecto de Firebase) -->
+    <div id="modalLoginSucursal" class="modal-gastos modal-confirmar">
+        <form class="modal-gastos-content confirmar-content" id="loginSucursalForm" role="dialog" aria-modal="true" aria-labelledby="loginSucursalTitulo" novalidate>
+            <div class="confirmar-icono"><i class="bi bi-shop"></i></div>
+            <h2 class="confirmar-titulo" id="loginSucursalTitulo">Iniciar sesión</h2>
+            <div class="confirmar-mensaje">
+                <p>Para ver <strong id="loginSucursalNombre"></strong> ingresá con un usuario de esa sucursal. Se pide una sola vez en este navegador.</p>
+                <div class="form-group">
+                    <label for="loginSucursalEmail">Email</label>
+                    <input type="email" id="loginSucursalEmail" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginSucursalClave">Contraseña</label>
+                    <input type="password" id="loginSucursalClave" autocomplete="current-password" required>
+                </div>
+                <div class="login-sucursal-error" id="loginSucursalError" role="alert"></div>
+            </div>
+            <div class="confirmar-acciones">
+                <button type="button" class="btn" id="loginSucursalCancelar">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="loginSucursalOk">Ingresar</button>
+            </div>
+        </form>
+    </div>
+
     <!-- Modal de Reporte Detallado -->
     <div id="modalReporte" class="modal-reporte">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -1751,10 +1798,20 @@
     <script>
         // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        let db = firebase.database();
+
+        // Sucursal consultada. Arranca en la del equipo (o en ?pv= de la URL) y se cambia desde
+        // el selector de la barra, sin tocar la sucursal del equipo (mismo esquema que controlTransferencias.html).
+        const puntoEquipo = window.PuntoVenta ? PuntoVenta.actual() : null;
+        let puntoConsultado = puntoEquipo;
+        const basesPorPunto = {};
+        if (puntoEquipo) basesPorPunto[puntoEquipo] = db;
+        const LOGIN_CANCELADO = 'login-cancelado';
 
         // Variables globales
         let datosFacturacion = {};
+        let aliasTransferencias = {}; // { [ALIAS]: [total por período] } para el desglose de Transferencia
+        const ALIAS_PRIMERO = ['HOMEPOINT', 'ENVIOS.HP']; // Siempre arriba en el desglose de Transferencia
         let gananciaChart = null;
         let yearActual = new Date().getFullYear();
         let filtroEntrega = 'todas'; // Filtro de entrega: 'todas', 'local', 'envios'
@@ -1833,8 +1890,11 @@
         ];
 
         // Verificar autenticación
+        let appIniciada = false;
         firebase.auth().onAuthStateChanged(user => {
             if (user) {
+                if (appIniciada) return;
+                appIniciada = true;
                 inicializarApp();
             } else {
                 // Con ?redirect= el login entra al proyecto del punto de venta del equipo.
@@ -1842,21 +1902,20 @@
             }
         });
 
-        function inicializarApp() {
-            // Punto de venta: su nombre en el encabezado. Envíos existe solo en el punto 1,
-            // así que en los demás se oculta el filtro de entrega (queda siempre en 'todas').
-            if (window.PuntoVenta) {
-                if (PuntoVenta.multiple()) {
-                    const chipSucursal = document.getElementById('puntoVentaHeader');
-                    chipSucursal.textContent = PuntoVenta.nombre();
-                    chipSucursal.hidden = false;
-                    document.title = 'Facturación · ' + PuntoVenta.nombre();
-                }
-                if (PuntoVenta.actual() !== '1') {
-                    document.querySelector('.entrega-filter').style.display = 'none';
-                    filtroEntrega = 'todas';
+        async function inicializarApp() {
+            // Si la URL trae ?pv= de otra sucursal, se arranca consultando esa
+            const pvUrl = new URLSearchParams(location.search).get('pv');
+            if (pvUrl && pvUrl !== puntoEquipo && window.PuntoVenta && PuntoVenta.lista.some(p => p.id === pvUrl)) {
+                try {
+                    db = await obtenerBase(pvUrl);
+                    puntoConsultado = pvUrl;
+                } catch (error) {
+                    if (error.message !== LOGIN_CANCELADO) console.error('Error al abrir la sucursal de la URL:', error);
+                    recordarSucursalEnUrl(puntoEquipo);
                 }
             }
+            configurarSelectorSucursal();
+            aplicarSucursal();
 
             // Establecer año actual en el selector
             yearSelect.value = yearActual;
@@ -1877,6 +1936,151 @@
 
             // Cargar gastos primero, luego cargar datos
             cargarGastosIniciales();
+        }
+
+        // ===================== Sucursal consultada =====================
+
+        function nombrePunto(id) {
+            const punto = window.PuntoVenta && PuntoVenta.lista.find(p => p.id === id);
+            return punto ? punto.nombre : '';
+        }
+
+        // Base de la sucursal pedida. Para una distinta a la del equipo lee su configN.js como texto
+        // y crea una app de Firebase aparte (el archivo declara `const firebaseConfig`, que no se puede
+        // volver a cargar como <script>). Si en este navegador no hay sesión en ese proyecto, se pide.
+        async function obtenerBase(id) {
+            if (basesPorPunto[id]) return basesPorPunto[id];
+            const punto = PuntoVenta.lista.find(p => p.id === id);
+            if (!punto) throw new Error('Sucursal desconocida: ' + id);
+            let app = firebase.apps.find(a => a.name === 'pv-' + id);
+            if (!app) {
+                const resp = await fetch(punto.config, { cache: 'no-store' });
+                if (!resp.ok) throw new Error('No se pudo leer ' + punto.config);
+                const config = new Function(await resp.text() + '\nreturn firebaseConfig;')();
+                app = firebase.initializeApp(config, 'pv-' + id);
+            }
+            if (!(await usuarioDe(app))) await pedirLoginSucursal(app, punto.nombre);
+            basesPorPunto[id] = app.database();
+            return basesPorPunto[id];
+        }
+
+        // Usuario con sesión en la app indicada (espera a que Firebase la restaure)
+        function usuarioDe(app) {
+            return new Promise(resolve => {
+                const dejar = app.auth().onAuthStateChanged(usuario => { dejar(); resolve(usuario); });
+            });
+        }
+
+        // Resuelve al entrar y rechaza con LOGIN_CANCELADO si se cancela
+        function pedirLoginSucursal(app, nombre) {
+            return new Promise((resolve, reject) => {
+                const modal = document.getElementById('modalLoginSucursal');
+                const form = document.getElementById('loginSucursalForm');
+                const email = document.getElementById('loginSucursalEmail');
+                const clave = document.getElementById('loginSucursalClave');
+                const error = document.getElementById('loginSucursalError');
+                const ingresar = document.getElementById('loginSucursalOk');
+                const cancelar = document.getElementById('loginSucursalCancelar');
+
+                document.getElementById('loginSucursalNombre').textContent = nombre;
+                form.reset();
+                error.textContent = '';
+                mostrarLoading(false);
+                modal.style.display = 'block';
+                setTimeout(() => email.focus(), 30);
+
+                const cerrar = () => {
+                    modal.style.display = 'none';
+                    form.removeEventListener('submit', alEnviar);
+                    cancelar.removeEventListener('click', alCancelar);
+                    document.removeEventListener('keydown', alTecla);
+                };
+                async function alEnviar(e) {
+                    e.preventDefault();
+                    error.textContent = '';
+                    ingresar.disabled = true;
+                    try {
+                        await app.auth().signInWithEmailAndPassword(email.value.trim(), clave.value);
+                        cerrar();
+                        resolve();
+                    } catch (err) {
+                        console.error('Error al iniciar sesión en la sucursal:', err);
+                        error.textContent = 'Usuario o contraseña incorrectos.';
+                        clave.value = '';
+                        clave.focus();
+                    } finally {
+                        ingresar.disabled = false;
+                    }
+                }
+                function alCancelar() {
+                    cerrar();
+                    reject(new Error(LOGIN_CANCELADO));
+                }
+                function alTecla(e) {
+                    if (e.key === 'Escape') alCancelar();
+                }
+                form.addEventListener('submit', alEnviar);
+                cancelar.addEventListener('click', alCancelar);
+                document.addEventListener('keydown', alTecla);
+            });
+        }
+
+        // La URL recuerda la sucursal elegida para que recargar no la pierda
+        function recordarSucursalEnUrl(id) {
+            const url = new URL(location.href);
+            if (!id || id === puntoEquipo) url.searchParams.delete('pv'); else url.searchParams.set('pv', id);
+            history.replaceState(null, '', url);
+        }
+
+        // Nombre en el encabezado y filtro de entrega según la sucursal consultada.
+        // Envíos existe solo en la sucursal 1: en las demás se oculta el filtro (queda en 'todas').
+        function aplicarSucursal() {
+            if (!window.PuntoVenta) return;
+            if (PuntoVenta.multiple()) {
+                const chipSucursal = document.getElementById('puntoVentaHeader');
+                chipSucursal.textContent = nombrePunto(puntoConsultado);
+                chipSucursal.hidden = false;
+                document.title = 'Facturación · ' + nombrePunto(puntoConsultado);
+            }
+            const conEnvios = puntoConsultado === '1';
+            document.querySelector('.entrega-filter').style.display = conEnvios ? '' : 'none';
+            if (!conEnvios && filtroEntrega !== 'todas') {
+                filtroEntrega = 'todas';
+                document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === 'todas'));
+            }
+        }
+
+        function configurarSelectorSucursal() {
+            if (!window.PuntoVenta || !PuntoVenta.multiple()) return;
+            const selector = document.getElementById('sucursalSelect');
+            selector.innerHTML = '';
+            PuntoVenta.lista.forEach(p => selector.add(new Option(p.nombre, p.id)));
+            selector.value = puntoConsultado;
+            document.getElementById('ctrlSucursal').hidden = false;
+
+            selector.addEventListener('change', async () => {
+                const id = selector.value;
+                selector.disabled = true;
+                try {
+                    db = await obtenerBase(id);
+                    puntoConsultado = id;
+                    recordarSucursalEnUrl(id);
+                    // Todo lo leído es de la otra sucursal: se descarta y se vuelve a leer (gastos incluidos)
+                    pedidosCache = null;
+                    firebasePedidosCache = {};
+                    consolidadoCache = {};
+                    consultasPedidosCache = {};
+                    aplicarSucursal();
+                    cargarGastosIniciales();
+                } catch (error) {
+                    selector.value = puntoConsultado;
+                    if (error.message === LOGIN_CANCELADO) return;
+                    console.error('Error al cambiar de sucursal:', error);
+                    mostrarNotificacion('No se pudo cambiar de sucursal: ' + error.message, 'error');
+                } finally {
+                    selector.disabled = false;
+                }
+            });
         }
 
         function cargarGastosIniciales() {
@@ -2086,6 +2290,7 @@
                 gananciaPercentMayorista: new Array(numPeriodos).fill(0)
             };
 
+            aliasTransferencias = {};
             pedidosProcesados = [];
             mesesConsolidadosVista = new Set();
             mesesDetalleCargados = new Set();
@@ -2133,6 +2338,7 @@
         }
 
         function reinicializarDatosFacturacion(numPeriodos) {
+            aliasTransferencias = {};
             datosFacturacion = {
                 facturacion: new Array(numPeriodos).fill(0),
                 consumidorFinal: new Array(numPeriodos).fill(0),
@@ -2313,6 +2519,10 @@
                             CAMPOS_CONSOLIDABLES.forEach(campo => {
                                 datosFacturacion[campo][mes] += Number(datosCuenta[campo]) || 0;
                             });
+                            // Meses consolidados antes del desglose por alias no traen este dato (van a "Sin alias")
+                            Object.entries(datosCuenta.transferenciasAlias || {}).forEach(([clave, total]) => {
+                                sumarAlias(claveAAlias(clave), mes, Number(total) || 0);
+                            });
                         });
                     }
 
@@ -2366,7 +2576,7 @@
             return leerPedidosRango(year, desde, hasta, false).then(pedidos => {
                 const acumulado = {};
                 mesesIdx.forEach(mes => {
-                    acumulado[mes] = { cantidad: 0, Local: {}, Envios: {} };
+                    acumulado[mes] = { cantidad: 0, Local: {}, Envios: {}, alias: { Local: {}, Envios: {} } };
                     CAMPOS_CONSOLIDABLES.forEach(campo => {
                         acumulado[mes].Local[campo] = 0;
                         acumulado[mes].Envios[campo] = 0;
@@ -2382,10 +2592,15 @@
                     const cuenta = obtenerTipoEntrega(pedido);
                     const aportes = aportesDePedido(pedido);
                     CAMPOS_CONSOLIDABLES.forEach(campo => acumulado[mes][cuenta][campo] += aportes[campo]);
+                    const alias = aliasDeTransferencia(pedido);
+                    if (alias) {
+                        const porAlias = acumulado[mes].alias[cuenta];
+                        porAlias[alias] = (porAlias[alias] || 0) + aportes.facturacionTransferencia;
+                    }
                     acumulado[mes].cantidad++;
                 });
 
-                const usuario = firebase.auth().currentUser;
+                const usuario = db.app.auth().currentUser;
                 const updates = {};
 
                 mesesIdx.forEach(mes => {
@@ -2394,7 +2609,7 @@
                         cantidadPedidos: acumulado[mes].cantidad,
                         consolidadoEn: firebase.database.ServerValue.TIMESTAMP,
                         consolidadoPor: (usuario && usuario.email) || null,
-                        version: 1
+                        version: 2 // v2: agrega transferenciasAlias por cuenta
                     };
                     const totales = { facturacion: 0, ventasGeneradas: 0, gananciaBruta: 0, gananciaSeleccionados: 0, gastos: 0, gananciaNeta: 0 };
 
@@ -2404,6 +2619,11 @@
                         // Valores de referencia al momento de consolidar (la vista usa los gastos actuales)
                         datosCuenta.gastos = redondear(gastos[cuenta]);
                         datosCuenta.gananciaNeta = redondear(datosCuenta.gananciaBruta - datosCuenta.gananciaSeleccionados - datosCuenta.gastos);
+                        const transferenciasAlias = {};
+                        Object.entries(acumulado[mes].alias[cuenta]).forEach(([alias, total]) => {
+                            transferenciasAlias[aliasAClave(alias)] = redondear(total);
+                        });
+                        datosCuenta.transferenciasAlias = transferenciasAlias;
                         registro[cuenta] = datosCuenta;
 
                         Object.keys(totales).forEach(campo => totales[campo] += datosCuenta[campo]);
@@ -2920,6 +3140,28 @@
             return aportes;
         }
 
+        // Alias (en mayúsculas) de un pedido pagado por transferencia; '' si no es transferencia o no tiene alias
+        function aliasDeTransferencia(pedido) {
+            // Mismo criterio que aportesDePedido para que los alias sumen igual que la fila Transferencia
+            const medioPago = pedido.pagos?.medioPago;
+            if (medioPago !== 'transferencia' && medioPago !== 'Transferencia') return '';
+            return String(pedido.pagos?.alias || '').trim().toUpperCase();
+        }
+
+        // Firebase no admite . # $ / [ ] en las claves: se codifican como ~NN~ (mismo criterio que el nodo "alias")
+        function aliasAClave(alias) {
+            return alias.replace(/[.#$/\[\]~]/g, c => '~' + c.charCodeAt(0) + '~');
+        }
+
+        function claveAAlias(clave) {
+            return clave.replace(/~(\d+)~/g, (_, codigo) => String.fromCharCode(Number(codigo)));
+        }
+
+        function sumarAlias(alias, indicePeriodo, valor) {
+            if (!aliasTransferencias[alias]) aliasTransferencias[alias] = new Array(periodoLabels.length).fill(0);
+            aliasTransferencias[alias][indicePeriodo] += valor;
+        }
+
         // Registro de un pedido para el drill-down
         function crearPedidoProcesado(pedidoId, pedido, indicePeriodo) {
             const fechaPedido = new Date(pedido.fecha);
@@ -2938,6 +3180,7 @@
                 createdby: pedido.createdby || pedido.createdBy || null,
                 entrega: obtenerTipoEntrega(pedido),
                 medioPago: medioPago.toLowerCase(), // Normalizar a minúsculas
+                alias: aliasDeTransferencia(pedido),
                 totalPedido: totalPedido,
                 gananciaPedido: gananciaPedido,
                 gananciaSelec: gananciaSelec,
@@ -3023,6 +3266,8 @@
                 CAMPOS_CONSOLIDABLES.forEach(campo => {
                     datosFacturacion[campo][indicePeriodo] += aportes[campo];
                 });
+                const alias = aliasDeTransferencia(pedido);
+                if (alias) sumarAlias(alias, indicePeriodo, aportes.facturacionTransferencia);
             });
             
             console.log(`Pedidos procesados: ${totalPedidosProcesados}, Filtrados: ${pedidosFiltrados}, Filtro actual: ${filtroEntrega}, Temporalidad: ${temporalidad}`);
@@ -3504,6 +3749,9 @@
             Object.keys(datosFacturacion).forEach(key => {
                 nuevosDatos[key] = indicesFinales.map(index => datosFacturacion[key][index]);
             });
+            Object.keys(aliasTransferencias).forEach(alias => {
+                aliasTransferencias[alias] = indicesFinales.map(index => aliasTransferencias[alias][index]);
+            });
 
             // Actualizar pedidosProcesados con los nuevos índices
             pedidosProcesados = pedidosProcesados.map(pedido => {
@@ -3843,7 +4091,15 @@
                     
                     const tdTransferenciaNombre = document.createElement('td');
                     tdTransferenciaNombre.className = 'mes-name';
-                    tdTransferenciaNombre.textContent = 'Transferencia';
+                    const hayTransferencias = datosFacturacion.facturacionTransferencia.some(v => v > 0);
+                    if (hayTransferencias) {
+                        // Clic en la fila: despliega los alias que recibieron transferencias en el período
+                        trTransferencia.classList.add('has-alias');
+                        trTransferencia.addEventListener('click', toggleAliasDetail);
+                        tdTransferenciaNombre.innerHTML = '<i class="bi bi-chevron-right expandable-icon" id="expandIconAlias"></i>Transferencia';
+                    } else {
+                        tdTransferenciaNombre.textContent = 'Transferencia';
+                    }
                     trTransferencia.appendChild(tdTransferenciaNombre);
                     
                     let totalTransferencia = 0;
@@ -3874,7 +4130,57 @@
                     trTransferencia.appendChild(tdTotalTransferencia);
                     
                     tbody.appendChild(trTransferencia);
-                    
+
+                    // Filas por alias (ordenadas por total) + lo transferido sin alias registrado
+                    if (hayTransferencias) {
+                        const filasAlias = Object.entries(aliasTransferencias)
+                            .map(([alias, datos]) => ({ alias, datos }));
+                        const sinAlias = datosFacturacion.facturacionTransferencia.map((total, i) =>
+                            Math.max(0, total - filasAlias.reduce((sum, fila) => sum + (fila.datos[i] || 0), 0)));
+                        filasAlias.forEach(fila => fila.total = fila.datos.reduce((sum, v) => sum + v, 0));
+                        // Las cuentas propias van primero (en ese orden); el resto, de mayor a menor
+                        const prioridad = alias => {
+                            const i = ALIAS_PRIMERO.indexOf(alias);
+                            return i === -1 ? ALIAS_PRIMERO.length : i;
+                        };
+                        filasAlias.sort((a, b) => (prioridad(a.alias) - prioridad(b.alias)) || (b.total - a.total));
+                        if (sinAlias.some(v => v >= 1)) {
+                            filasAlias.push({ alias: '', datos: sinAlias, total: sinAlias.reduce((sum, v) => sum + v, 0) });
+                        }
+
+                        filasAlias.forEach(({ alias, datos, total }) => {
+                            const trAlias = document.createElement('tr');
+                            trAlias.className = 'detail-row detail-alias';
+
+                            const tdAliasNombre = document.createElement('td');
+                            tdAliasNombre.className = 'mes-name';
+                            tdAliasNombre.textContent = alias || 'Sin alias';
+                            tdAliasNombre.title = alias || 'Transferencias sin alias registrado';
+                            trAlias.appendChild(tdAliasNombre);
+
+                            for (let i = 0; i < numPeriodos; i++) {
+                                const td = document.createElement('td');
+                                const valor = datos[i] || 0;
+                                if (valor > 0) {
+                                    td.className = 'clickable-cell facturacion-cell';
+                                    td.onclick = () => abrirReporteDetallado(alias, i, periodoLabels[i], 'alias');
+                                } else {
+                                    td.className = 'facturacion-cell';
+                                }
+                                td.textContent = valor !== 0 ? formatearMoneda(valor) : '$0';
+                                trAlias.appendChild(td);
+                            }
+
+                            const tdTotalAlias = document.createElement('td');
+                            tdTotalAlias.className = total > 0 ? 'clickable-cell facturacion-cell' : 'facturacion-cell';
+                            if (total > 0) tdTotalAlias.onclick = () => abrirReporteDetallado(alias, -1, 'TOTAL', 'alias');
+                            tdTotalAlias.textContent = formatearMoneda(total);
+                            trAlias.appendChild(tdTotalAlias);
+
+                            tbody.appendChild(trAlias);
+                        });
+                    }
+
                     // Fila detalle para MercadoPago
                     const trTarjeta = document.createElement('tr');
                     trTarjeta.className = 'detail-row';
@@ -4245,6 +4551,9 @@
                     expandIcon.classList.remove('expanded');
                     detailEfectivo.classList.remove('show');
                     detailTransferencia.classList.remove('show');
+                    // Al plegar Facturación también se pliegan los alias
+                    document.querySelectorAll('.detail-alias').forEach(tr => tr.classList.remove('show'));
+                    document.getElementById('expandIconAlias')?.classList.remove('expanded');
                     detailTarjeta.classList.remove('show');
                     detailOtros.classList.remove('show');
                 } else {
@@ -4255,6 +4564,14 @@
                     detailOtros.classList.add('show');
                 }
             }
+        }
+
+        function toggleAliasDetail() {
+            const expandIcon = document.getElementById('expandIconAlias');
+            if (!expandIcon) return;
+            const expandir = !expandIcon.classList.contains('expanded');
+            expandIcon.classList.toggle('expanded', expandir);
+            document.querySelectorAll('.detail-alias').forEach(tr => tr.classList.toggle('show', expandir));
         }
 
         function toggleGastosDetail() {
@@ -4486,7 +4803,10 @@
                 }
                 
                 // Filtros específicos según el tipo de fila
-                if (filtroEspecial === 'medioPago') {
+                if (filtroEspecial === 'alias') {
+                    // tipoFila es el alias ('' = transferencias sin alias)
+                    return pedido.medioPago === 'transferencia' && pedido.alias === tipoFila;
+                } else if (filtroEspecial === 'medioPago') {
                     // Normalizar comparación de medios de pago
                     const medioPagoNormalizado = pedido.medioPago.toLowerCase();
                     const tipoFilaNormalizado = tipoFila.toLowerCase();
@@ -4516,7 +4836,10 @@
             console.log('Pedidos filtrados:', pedidosFiltrados.length);
             
             // Configurar título del modal
-            let titulo = `${ETIQUETAS_FILA[tipoFila] || tipoFila} · ${periodoLabel === 'TOTAL' ? 'Total' : periodoLabel}`;
+            const nombreFila = filtroEspecial === 'alias'
+                ? `Transferencia · ${tipoFila || 'Sin alias'}`
+                : (ETIQUETAS_FILA[tipoFila] || tipoFila);
+            let titulo = `${nombreFila} · ${periodoLabel === 'TOTAL' ? 'Total' : periodoLabel}`;
             if (temporalidad === 'mensual') titulo += ` ${yearSelect.value}`;
             if (filtroEntrega !== 'todas') titulo += ` · ${filtroEntrega === 'Envios' ? 'Envíos' : filtroEntrega}`;
             
