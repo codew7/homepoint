@@ -292,6 +292,81 @@
         .chip-sep { flex: none; width: 1px; margin: 0.3rem 0.2rem; background: var(--line-strong); }
         .chip-all svg { width: 14px; height: 14px; }
 
+        /* Filtro de categorías: botón con forma de chip que abre una lista con
+           casillas. Todas marcadas por defecto; se desmarcan las que sobran. */
+        .cat-btn svg { width: 12px; height: 12px; opacity: 0.7; transition: transform 200ms var(--ease-out); }
+        .cat-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+        .cat-pop {
+            position: fixed;
+            z-index: 40;
+            display: none;
+            width: 300px;
+            max-width: calc(100vw - 2rem);
+            padding: 0.5rem;
+            border-radius: 14px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+            box-shadow: 0 1px 2px rgba(35, 38, 43, 0.05), 0 16px 40px -12px rgba(35, 38, 43, 0.28);
+            transform-origin: top left;
+        }
+        .cat-pop.show { display: block; animation: pop-in 160ms var(--ease-out); }
+        @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+        .cat-search {
+            width: 100%;
+            height: 34px;
+            padding: 0 0.7rem;
+            border-radius: 9px;
+            border: 1px solid transparent;
+            background: var(--surface-2);
+            color: var(--ink);
+            font: inherit;
+            font-size: 0.8125rem;
+            outline: none;
+            transition: border-color 160ms ease;
+        }
+        .cat-search:focus { border-color: var(--accent); }
+        .cat-actions {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0.15rem;
+        }
+        .cat-actions button {
+            border: none;
+            background: none;
+            padding: 0.2rem 0.4rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--accent);
+            cursor: pointer;
+            transition: background 160ms ease;
+        }
+        .cat-actions button:hover { background: var(--accent-soft); }
+        .cat-list {
+            max-height: min(320px, 50vh);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            border-top: 1px solid var(--line);
+            padding-top: 0.25rem;
+        }
+        .cat-opt {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.4rem 0.5rem;
+            border-radius: 8px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .cat-opt[hidden] { display: none; }
+        .cat-opt:hover { background: var(--surface-2); }
+        .cat-opt input { flex: none; width: 15px; height: 15px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+        .cat-opt span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-opt b { font-weight: 600; font-size: 0.75rem; color: var(--ink-3); }
+        .cat-opt.zero { opacity: 0.55; }
+        .cat-empty { padding: 0.9rem 0.5rem; text-align: center; font-size: 0.8125rem; color: var(--ink-3); }
+
         /* -------------------------------------------------------------- tabla -- */
         main { padding-top: 1.25rem; padding-bottom: 3rem; }
         .panel {
@@ -545,7 +620,7 @@
         /* ------------------------------------------------------------ impresión -- */
         @media print {
             body { background: #fff; color: #000; font-size: 10pt; }
-            .top, .error-banner, .date-rel, .lightbox, .pager { display: none !important; }
+            .top, .error-banner, .date-rel, .lightbox, .pager, .cat-pop { display: none !important; }
             .thumb, .thumb-ph { width: 28pt; height: 28pt; border-radius: 4pt; }
             main { padding: 0; }
             .wrap { max-width: none; padding: 0; }
@@ -614,6 +689,10 @@
                     <button class="chip" type="button" data-filtro="sin" aria-pressed="false"><i></i>Sin stock <b id="kpiSin">—</b></button>
                     <button class="chip" type="button" data-filtro="negativo" aria-pressed="false"><i></i>Negativos <b id="kpiNegativo">—</b></button>
                     <span class="chip-sep" aria-hidden="true"></span>
+                    <button class="chip cat-btn" type="button" id="catBtn" aria-haspopup="true" aria-expanded="false" aria-controls="catPop" aria-pressed="false">
+                        <span id="catBtnText">Todas las categorías</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
                     <button class="chip chip-all" type="button" id="verTodoBtn" aria-pressed="false">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Ver listado completo
                     </button>
@@ -621,6 +700,17 @@
             </div>
         </div>
     </header>
+
+    <!-- Lista de categorías. Va fuera de la cabecera porque el desenfoque de
+         la barra impide posicionarla sobre la pantalla desde adentro. -->
+    <div class="cat-pop" id="catPop" role="dialog" aria-label="Filtrar por categoría">
+        <input type="text" class="cat-search" id="catSearch" placeholder="Buscar categoría" autocomplete="off" spellcheck="false">
+        <div class="cat-actions">
+            <button type="button" id="catAll">Marcar todas</button>
+            <button type="button" id="catNone">Desmarcar todas</button>
+        </div>
+        <div class="cat-list" id="catList"></div>
+    </div>
 
     <main class="wrap">
         <div class="error-banner" id="errorMsg" role="alert">
@@ -769,9 +859,20 @@
             const lightboxImg = document.getElementById('lightboxImg');
             const chips = document.querySelectorAll('.chip[data-filtro]');
             const verTodoBtn = document.getElementById('verTodoBtn');
+            const catBtn = document.getElementById('catBtn');
+            const catBtnText = document.getElementById('catBtnText');
+            const catPop = document.getElementById('catPop');
+            const catList = document.getElementById('catList');
+            const catSearch = document.getElementById('catSearch');
+            const catChips = document.querySelector('.chips');
 
             let stockData = [];
             let imagenes = {}; // codigo -> { url, alt } desde la hoja Lista
+            let categorias = {}; // codigo -> categoría (columna A de la hoja Lista)
+            // Categorías desmarcadas. Se guardan las quitadas (y no las elegidas)
+            // para que todas, incluso las nuevas, arranquen marcadas.
+            const excluidas = new Set();
+            const SIN_CAT = '__sin_categoria__';
             let currentSort = { column: 'nombre', order: 'asc' };
             let filtro = 'todos';
             let primeraCarga = true;
@@ -900,22 +1001,25 @@
             }
             lightbox.addEventListener('click', cerrarLightbox);
 
-            async function fetchImagenes(SHEETS_ID, API_KEY) {
-                // Lista: B imagen(es), C código
-                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/Lista!B2:C?key=${API_KEY}`;
+            async function fetchLista(SHEETS_ID, API_KEY) {
+                // Lista: A categoría, B imagen(es), C código
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/Lista!A2:C?key=${API_KEY}`;
                 const response = await fetch(url, { cache: 'no-store' });
                 const { values } = await response.json();
                 if (!values) throw new Error('Sin datos en la hoja Lista');
                 const mapa = {};
+                const cats = {};
                 values.forEach(row => {
-                    const codigo = String(row[1] || '').trim();
+                    const codigo = String(row[2] || '').trim();
                     if (!codigo) return;
-                    const partes = String(row[0] || '').split(',').map(u => u.trim());
+                    const cat = String(row[0] || '').trim();
+                    if (cat) cats[codigo] = cat;
+                    const partes = String(row[1] || '').split(',').map(u => u.trim());
                     const url1 = partes[0] || '';
                     const url4 = partes[3] || '';
                     if (url1 || url4) mapa[codigo] = { url: url1 || url4, alt: url4 };
                 });
-                return mapa;
+                return { imagenes: mapa, categorias: cats };
             }
 
             function claseStock(n) {
@@ -931,6 +1035,69 @@
                     case 'negativo': return item.stock < 0;
                     default: return true;
                 }
+            }
+
+            function coincideCategoria(item) {
+                return excluidas.size === 0 || !excluidas.has(item.categoria || SIN_CAT);
+            }
+
+            // Arma la lista solo con las categorías que aparecen en los
+            // resultados actuales (búsqueda + filtro rápido), con su cantidad.
+            // Las desmarcadas quedan en la lista aunque tengan 0, para poder
+            // volver a marcarlas.
+            function actualizarCategorias(base) {
+                const cuenta = new Map();
+                base.forEach(item => {
+                    const c = item.categoria || SIN_CAT;
+                    cuenta.set(c, (cuenta.get(c) || 0) + 1);
+                });
+                excluidas.forEach(c => { if (!cuenta.has(c)) cuenta.set(c, 0); });
+                const lista = [...cuenta.keys()].filter(c => c !== SIN_CAT)
+                    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+                if (cuenta.has(SIN_CAT)) lista.push(SIN_CAT);
+
+                const html = lista.length
+                    ? lista.map(c => `<label class="cat-opt${cuenta.get(c) ? '' : ' zero'}"><input type="checkbox" value="${esc(c)}"><span>${c === SIN_CAT ? 'Sin categoría' : esc(c)}</span><b>${fmt(cuenta.get(c))}</b></label>`).join('')
+                    : '<div class="cat-empty">No hay categorías en estos resultados</div>';
+                // Solo se reemplaza si cambió, para no mover la lista si está abierta
+                if (catList.dataset.html !== html) {
+                    catList.innerHTML = html;
+                    catList.dataset.html = html;
+                    filtrarListaCategorias();
+                }
+                catList.querySelectorAll('input').forEach(i => { i.checked = !excluidas.has(i.value); });
+
+                const conDatos = lista.filter(c => cuenta.get(c) > 0);
+                const marcadas = conDatos.filter(c => !excluidas.has(c)).length;
+                catBtnText.textContent = excluidas.size
+                    ? `Categorías: ${marcadas} de ${conDatos.length}`
+                    : 'Todas las categorías';
+                catBtn.setAttribute('aria-pressed', String(excluidas.size > 0));
+            }
+
+            // Buscador interno de la lista: solo oculta, no cambia el filtro
+            function filtrarListaCategorias() {
+                const q = norm(catSearch.value.trim());
+                catList.querySelectorAll('.cat-opt').forEach(l => {
+                    l.hidden = !!q && !norm(l.querySelector('span').textContent).includes(q);
+                });
+            }
+
+            function abrirCategorias() {
+                catPop.classList.add('show');
+                const r = catBtn.getBoundingClientRect();
+                const ancho = catPop.offsetWidth;
+                catPop.style.top = `${r.bottom + 6}px`;
+                catPop.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - ancho - 16))}px`;
+                catBtn.setAttribute('aria-expanded', 'true');
+                catSearch.focus({ preventScroll: true });
+            }
+            function cerrarCategorias() {
+                if (!catPop.classList.contains('show')) return;
+                catPop.classList.remove('show');
+                catBtn.setAttribute('aria-expanded', 'false');
+                catSearch.value = '';
+                filtrarListaCategorias();
             }
 
             function actualizarContadores() {
@@ -1038,7 +1205,13 @@
                 searchBox.classList.toggle('has-value', q.length > 0);
                 if (!mantenerPagina) pagina = 1;
 
-                if (q.length < MIN_CARACTERES && !verTodo) {
+                const base = stockData.filter(item =>
+                    coincideFiltro(item) && (!q || item._busqueda.includes(q))
+                );
+                actualizarCategorias(base);
+
+                // Elegir una categoría también muestra el listado sin buscar
+                if (q.length < MIN_CARACTERES && !verTodo && !excluidas.size) {
                     renderIdle();
                     updateSortIcons();
                     return;
@@ -1049,9 +1222,7 @@
                     return;
                 }
 
-                const filtered = stockData.filter(item =>
-                    coincideFiltro(item) && (!q || item._busqueda.includes(q))
-                );
+                const filtered = base.filter(coincideCategoria);
                 renderTable(sortData(filtered, currentSort.column, currentSort.order), q, animar);
                 updateSortIcons();
             }
@@ -1072,7 +1243,10 @@
 
             // "/" enfoca el buscador desde cualquier lugar, Esc lo limpia
             document.addEventListener('keydown', e => {
-                if (e.key === '/' && document.activeElement !== searchInput) {
+                if (e.key === 'Escape' && catPop.classList.contains('show')) {
+                    cerrarCategorias();
+                    catBtn.focus();
+                } else if (e.key === '/' && !e.target.closest('input, textarea')) {
                     e.preventDefault();
                     searchInput.focus();
                     searchInput.select();
@@ -1093,6 +1267,34 @@
                     filterData();
                 });
             });
+
+            catBtn.addEventListener('click', () => {
+                if (catPop.classList.contains('show')) cerrarCategorias();
+                else abrirCategorias();
+            });
+            catList.addEventListener('change', e => {
+                const input = e.target;
+                if (input.checked) excluidas.delete(input.value);
+                else excluidas.add(input.value);
+                filterData();
+            });
+            // Marcar/desmarcar todas actúa sobre las visibles: si se escribió
+            // algo en "Buscar categoría", solo sobre esas.
+            function marcarVisibles(marcar) {
+                catList.querySelectorAll('.cat-opt:not([hidden]) input').forEach(i => {
+                    if (marcar) excluidas.delete(i.value);
+                    else excluidas.add(i.value);
+                });
+                filterData();
+            }
+            document.getElementById('catAll').addEventListener('click', () => marcarVisibles(true));
+            document.getElementById('catNone').addEventListener('click', () => marcarVisibles(false));
+            catSearch.addEventListener('input', filtrarListaCategorias);
+            document.addEventListener('click', e => {
+                if (!catPop.contains(e.target) && !catBtn.contains(e.target)) cerrarCategorias();
+            });
+            window.addEventListener('resize', cerrarCategorias);
+            catChips.addEventListener('scroll', cerrarCategorias);
 
             // Tocarlo de nuevo vuelve al modo normal (listado solo al buscar)
             verTodoBtn.addEventListener('click', () => {
@@ -1146,12 +1348,16 @@
                     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${RANGE}?key=${API_KEY}`;
                     // Stock e imágenes a la vez. Si las imágenes fallan, la tabla
                     // igual se muestra (con las que ya se tenían o con íconos).
-                    const [response, resImagenes] = await Promise.all([
+                    const [response, resLista] = await Promise.all([
                         fetch(url, { cache: 'no-store' }),
-                        fetchImagenes(SHEETS_ID, API_KEY).then(m => ({ ok: true, m }), err => ({ ok: false, err }))
+                        fetchLista(SHEETS_ID, API_KEY).then(m => ({ ok: true, m }), err => ({ ok: false, err }))
                     ]);
-                    if (resImagenes.ok) imagenes = resImagenes.m;
-                    else console.warn('No se pudieron cargar las imágenes:', resImagenes.err);
+                    if (resLista.ok) {
+                        imagenes = resLista.m.imagenes;
+                        categorias = resLista.m.categorias;
+                    } else {
+                        console.warn('No se pudieron cargar imágenes y categorías:', resLista.err);
+                    }
                     const { values } = await response.json();
                     if (!values || !values.length) throw new Error('No se encontraron datos en la hoja StockPorSucursal');
 
@@ -1169,6 +1375,7 @@
                             stockOtro: Number(row[otra.colStock]) || 0,
                             ultimaEntrada,
                             fecha: parseFecha(ultimaEntrada),
+                            categoria: categorias[String(codigo).trim()] || '',
                             _busqueda: norm(codigo) + ' ' + norm(nombre)
                         };
                     }).filter(item => item.nombre.trim() !== '');
