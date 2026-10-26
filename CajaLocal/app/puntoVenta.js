@@ -13,7 +13,8 @@
 //     pantalla de elección. Al elegir se guarda y la página se recarga.
 //
 // Lo usan: index.html (panel), ingresoPedidoV2.html, historialRecientes.html,
-// buscarPedidos.html, pedidosWhatsapp.html y login.html cuando vuelve a una
+// buscarPedidos.html, pedidosWhatsapp.html, resumenFacturacion.html, inventario.html,
+// consolidarMovimientos.html, controlTransferencias.html y login.html cuando vuelve a una
 // de ellas. El resto del panel sigue con config.js.
 //
 // Cambiarlo es poco común y pide su propia contraseña: se ofrece desde el
@@ -224,6 +225,25 @@
     setTimeout(() => input.focus(), 60);
   }
 
+  // Para el rol root (panel index.html): en vez de la contraseña, sólo un
+  // aviso con confirmación.
+  function pasoAviso() {
+    cambioEl.innerHTML = `
+      <form class="usr-clave-card pv-card" novalidate>
+        <span class="usr-avatar usr-clave-avatar" style="--tono:#7c5fd0" aria-hidden="true">${ICONO_LOCAL}</span>
+        <h2 id="pvCambioTitulo" class="usr-clave-titulo">Cambiar punto de venta</h2>
+        <p class="usr-clave-sub">Este equipo trabaja en <strong>${esc(actual ? actual.nombre : '')}</strong>. Al cambiarlo se cierra la sesión actual y la página se recarga. ¿Querés continuar?</p>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar">Cancelar</button>
+          <button type="submit" class="usr-clave-btn usr-clave-ok pv-ok">Confirmar</button>
+        </div>
+      </form>`;
+    const card = cambioEl.querySelector('.pv-card');
+    card.addEventListener('submit', e => { e.preventDefault(); pasoLista(); });
+    card.querySelector('.usr-clave-cancelar').addEventListener('click', cerrarCambio);
+    setTimeout(() => card.querySelector('.pv-ok').focus(), 60);
+  }
+
   function pasoLista() {
     cambioEl.innerHTML = `
       <div class="usr-clave-card pv-card">
@@ -261,7 +281,8 @@
   }
 
   // `alCerrar` se llama si se cancela (para devolver el foco donde estaba).
-  function pedirCambio(alCerrar) {
+  // `opciones.sinClave`: no pide contraseña, sólo confirmación (rol root).
+  function pedirCambio(alCerrar, opciones) {
     // Pedidos del modo Offline sin subir (modoOffline.js): van a la base de
     // este punto de venta, así que no se cambia hasta que estén arriba.
     if (window.ModoOffline && ModoOffline.hayPendientes()) {
@@ -303,14 +324,16 @@
     // tarjeta no están: se agregan y se muestra cuando terminan de cargar.
     const cargas = HOJAS.map(asegurarHoja).filter(Boolean);
     Promise.all(cargas).then(() => {
-      pasoClave();
+      if (opciones && opciones.sinClave) pasoAviso(); else pasoClave();
       cambioEl.hidden = false;
     });
   }
 
   // ---------------------------------------------------------------- API --
   window.PuntoVenta = {
-    lista: PUNTOS.map(p => ({ id: p.id, nombre: p.nombre })),
+    // `config`: lo usa controlTransferencias.html para consultar otro punto
+    // de venta sin cambiar el del equipo.
+    lista: PUNTOS.map(p => ({ id: p.id, nombre: p.nombre, config: p.config })),
     actual: () => (actual ? actual.id : null),
     nombre: () => (actual ? actual.nombre : ''),
     // Hay algo para elegir sólo con más de un punto de venta.

@@ -1,12 +1,11 @@
 // === USUARIO ACTIVO DE LA CAJA ===
 // Al entrar (después del login de Firebase) se pregunta quién está usando el
 // equipo. El nombre elegido:
-//   · completa el campo Vendedor de cada pedido nuevo (ingresoPedidoV2.js),
+//   · es el vendedor de cada pedido nuevo (ingresoPedidoV2.js),
 //   · es el nombre con el que este equipo aparece en Mensajes (chat.js),
 //   · queda visible en el encabezado (#usuarioActualBtn), que permite cambiarlo.
 //
-// La lista sale de la planilla (Usuarios!A:B), la misma que arma el
-// desplegable de vendedores. La columna B dice en qué punto de venta trabaja
+// La lista sale de la planilla (Usuarios!A:B). La columna B dice en qué punto de venta trabaja
 // cada uno (puntoVenta.js): "1", "2"… o vacía si trabaja en todos. Se
 // muestran sólo los del punto de venta de este equipo. "WhatsApp" no es una persona sino un modo, así
 // que no aparece como botón.
@@ -213,11 +212,23 @@
     } catch (_) { return []; }
   }
 
-  // Último recurso sin planilla ni caché: las <option> de respaldo del HTML.
+  // Último recurso sin planilla ni caché. Antes salía de las <option> del
+  // desplegable Vendedor de la caja, que ya no existe: sin esta lista, un
+  // equipo que nunca cargó la planilla no podría elegir usuario.
+  // Copia de Usuarios!A:B: [nombre, punto de venta] con el mismo criterio que
+  // la columna B (vacío = trabaja en todos). "WhatsApp" no sale como botón:
+  // soloPersonas() lo descarta.
+  const RESPALDO_VENDEDORES = [
+    ['Elias', '1'], ['Valentin', '1'], ['Horacio', '1'], ['Sabrina', '1'],
+    ['Leonardo', '1'], ['Alejandro', '1'],
+    ['Juan', '2'], ['Matias', '2'], ['Maria', '2'], ['Jorge', '2'],
+    ['Javier', ''], ['Otro', ''],
+    ['WhatsApp', '1']
+  ];
   function respaldoHtml() {
-    const sel = document.getElementById('vendedor');
-    if (!sel) return [];
-    return Array.from(sel.options).map(o => o.value.trim()).filter(Boolean);
+    return RESPALDO_VENDEDORES
+      .filter(([, punto]) => trabajaEnEstePunto(punto))
+      .map(([nombre]) => nombre);
   }
 
   // ------------------------------------------------------------- markup --

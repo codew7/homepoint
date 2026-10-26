@@ -82,6 +82,15 @@
           aliasDesdeFirebase = Object.values(val)
             .map(v => (v || '').toString().trim().toUpperCase())
             .filter(v => v !== '');
+          // Firebase manda: se purga del caché local lo que ya no está en el nodo,
+          // así un alias borrado desde otra PC no reaparece desde esta.
+          const enFirebase = new Set(aliasDesdeFirebase);
+          const purgado = aliasHistorial.filter(a => enFirebase.has(a));
+          if (purgado.length !== aliasHistorial.length) {
+            aliasHistorial = purgado;
+            try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
+          }
+          renderListaAlias();
         });
       } catch (error) {
         console.error('Error cargando alias desde Firebase:', error);
@@ -90,9 +99,12 @@
 
     // Registrar un alias en el nodo "alias" de Firebase (una sola vez, sin duplicados).
     // La clave saneada garantiza unicidad: si ya existe, set lo sobrescribe sin duplicar.
+    // Alias de menos de 5 caracteres no se registran en la lista compartida
+    const ALIAS_MIN_CARACTERES = 5;
+
     function registrarAliasEnFirebase(nuevoAlias) {
       try {
-        if (!nuevoAlias || nuevoAlias.trim() === '') return;
+        if (!nuevoAlias || nuevoAlias.trim().length < ALIAS_MIN_CARACTERES) return;
         const aliasLimpio = nuevoAlias.trim().toUpperCase();
         db.ref('alias/' + aliasAClave(aliasLimpio)).set(aliasLimpio);
       } catch (error) {
@@ -102,7 +114,7 @@
 
     function guardarAliasEnLocalStorage(nuevoAlias) {
       try {
-        if (!nuevoAlias || nuevoAlias.trim() === '') return;
+        if (!nuevoAlias || nuevoAlias.trim().length < ALIAS_MIN_CARACTERES) return;
         const aliasLimpio = nuevoAlias.trim().toUpperCase();
         // Registrar en el nodo "alias" de Firebase (fuente compartida)
         registrarAliasEnFirebase(aliasLimpio);
@@ -131,6 +143,103 @@
       return lista;
     }
 
+    // Eliminar un alias del nodo compartido y del caché local.
+    // No toca los pedidos que ya lo tienen asignado.
+    function eliminarAlias(alias) {
+      try {
+        db.ref('alias/' + aliasAClave(alias)).remove();
+      } catch (error) {
+        console.error('Error eliminando alias en Firebase:', error);
+      }
+      aliasDesdeFirebase = aliasDesdeFirebase.filter(a => a !== alias);
+      aliasHistorial = aliasHistorial.filter(a => a !== alias);
+      try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
+      renderListaAlias();
+      mostrarAvisoDeshacer(alias);
+    }
+
+    // Aviso "Alias eliminado · Deshacer" (5 s)
+    let avisoTimer = null;
+    function mostrarAvisoDeshacer(alias) {
+      const aviso = document.getElementById('aliasAviso');
+      document.getElementById('aliasAvisoTexto').textContent = 'Alias eliminado: ' + alias;
+      aviso.dataset.alias = alias;
+      aviso.classList.add('visible');
+      clearTimeout(avisoTimer);
+      avisoTimer = setTimeout(() => aviso.classList.remove('visible'), 5000);
+    }
+
+    function deshacerEliminarAlias() {
+      const aviso = document.getElementById('aliasAviso');
+      const alias = aviso.dataset.alias;
+      aviso.classList.remove('visible');
+      clearTimeout(avisoTimer);
+      if (alias) guardarAliasEnLocalStorage(alias);
+      if (alias && !aliasDesdeFirebase.includes(alias)) aliasDesdeFirebase.push(alias);
+      renderListaAlias();
+    }
+
+    // === LISTA DESPLEGABLE DE ALIAS (reemplaza al datalist para poder borrar) ===
+    let aliasListaAbierta = false;
+    let aliasMarcado = -1;   // índice resaltado con flechas o mouse
+    let aliasFiltrados = [];
+    let aliasSinFiltro = false; // al abrir con clic se muestra la lista completa
+
+    function abrirListaAlias(sinFiltro) {
+      aliasListaAbierta = true;
+      aliasSinFiltro = !!sinFiltro;
+      aliasMarcado = -1;
+      renderListaAlias();
+    }
+
+    function cerrarListaAlias() {
+      aliasListaAbierta = false;
+      aliasMarcado = -1;
+      const ul = document.getElementById('waAliasLista');
+      if (ul) ul.classList.remove('abierta');
+    }
+
+    function renderListaAlias() {
+      const ul = document.getElementById('waAliasLista');
+      if (!ul || !aliasListaAbierta) return;
+      const texto = aliasSinFiltro ? '' : document.getElementById('waAliasInput').value.trim().toUpperCase();
+      aliasFiltrados = obtenerListaAlias().filter(a => a.includes(texto));
+      if (aliasMarcado >= aliasFiltrados.length) aliasMarcado = aliasFiltrados.length - 1;
+
+      ul.innerHTML = '';
+      if (aliasFiltrados.length === 0) { ul.classList.remove('abierta'); return; }
+      aliasFiltrados.forEach((a, i) => {
+        const li = document.createElement('li');
+        li.className = 'alias-item' + (i === aliasMarcado ? ' marcado' : '');
+        const span = document.createElement('span');
+        span.className = 'alias-item-texto';
+        span.textContent = a;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'alias-item-borrar';
+        btn.title = 'Eliminar alias de la lista';
+        btn.setAttribute('aria-label', 'Eliminar ' + a);
+        btn.innerHTML = '&times;';
+        btn.addEventListener('click', e => { e.stopPropagation(); eliminarAlias(a); });
+        li.addEventListener('click', () => elegirAlias(a));
+        li.addEventListener('mouseenter', () => { aliasMarcado = i; marcarItemAlias(); });
+        li.append(span, btn);
+        ul.appendChild(li);
+      });
+      ul.classList.add('abierta');
+    }
+
+    function marcarItemAlias() {
+      const items = document.querySelectorAll('#waAliasLista .alias-item');
+      items.forEach((li, i) => li.classList.toggle('marcado', i === aliasMarcado));
+      if (items[aliasMarcado]) items[aliasMarcado].scrollIntoView({ block: 'nearest' });
+    }
+
+    function elegirAlias(alias) {
+      document.getElementById('waAliasInput').value = alias;
+      cerrarListaAlias();
+    }
+
     // Cargar alias al inicio
     cargarHistorialAliasDesdeLocalStorage();
     cargarAliasDesdeFirebase();
@@ -151,14 +260,7 @@
       telInput.value = telefonoActual;
       telInput.placeholder = telefonoActual ? '' : 'Ej: 11 2189-1006';
 
-      // Poblar datalist
-      const datalist = document.getElementById('waAliasDatalist');
-      datalist.innerHTML = '';
-      obtenerListaAlias().forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a;
-        datalist.appendChild(opt);
-      });
+      cerrarListaAlias();
 
       document.getElementById('waModal').style.display = 'flex';
       // Si no hay teléfono, enfocar primero ese campo; si ya hay, enfocar alias
@@ -167,6 +269,7 @@
     }
 
     function cerrarModalWhatsapp() {
+      cerrarListaAlias();
       document.getElementById('waModal').style.display = 'none';
       whatsappPedidoId = null;
     }
@@ -1584,6 +1687,59 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
     .modal-input--alias { text-transform: uppercase; }
 
+    /* Lista desplegable de alias: cada fila tiene una × para borrarla (o Supr) */
+    .alias-combo { position: relative; }
+    .alias-lista {
+      display: none;
+      position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+      margin: 0; padding: 4px; list-style: none;
+      max-height: 240px; overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--line); border-radius: var(--r2);
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .16);
+      z-index: 5;
+    }
+    .alias-lista.abierta { display: block; }
+    .alias-item {
+      display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+      padding: 7px 6px 7px 10px; border-radius: var(--r1);
+      font-size: 14px; color: var(--ink); cursor: pointer;
+    }
+    .alias-item.marcado { background: var(--violeta-soft); }
+    .alias-item-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alias-item-borrar {
+      flex: none;
+      width: 24px; height: 24px; padding: 0;
+      border: none; border-radius: var(--r1); background: none;
+      font-size: 18px; line-height: 1; color: var(--ink-4); cursor: pointer;
+      opacity: 0;
+    }
+    .alias-item.marcado .alias-item-borrar { opacity: 1; }
+    .alias-item-borrar:hover { background: var(--rojo-bg); color: var(--rojo); }
+    .alias-lista-ayuda {
+      margin-top: 4px; font-size: 11px; color: var(--ink-5);
+    }
+
+    /* Aviso con Deshacer tras borrar un alias */
+    .alias-aviso {
+      position: fixed; left: 50%; bottom: 24px;
+      transform: translate(-50%, 20px);
+      display: flex; align-items: center; gap: var(--s3);
+      padding: 10px 12px 10px 16px;
+      background: var(--ink); color: #fff;
+      border-radius: var(--r2); box-shadow: var(--shadow-modal);
+      font-size: 14px;
+      opacity: 0; pointer-events: none;
+      transition: opacity var(--t-base), transform var(--t-base);
+      z-index: 10001;
+    }
+    .alias-aviso.visible { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    .alias-aviso button {
+      background: none; border: none; padding: 4px 8px; border-radius: var(--r1);
+      color: #c9b8f0; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .alias-aviso button:hover { background: rgba(255, 255, 255, .1); }
+
     .modal-acciones { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s5); }
 
     .btn-wa {
@@ -1825,8 +1981,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
       <div class="modal-campo">
         <label for="waAliasInput" class="modal-label">Alias</label>
-        <input type="text" id="waAliasInput" class="modal-input modal-input--alias" list="waAliasDatalist" placeholder="Ingrese o seleccione un alias">
-        <datalist id="waAliasDatalist"></datalist>
+        <div class="alias-combo">
+          <input type="text" id="waAliasInput" class="modal-input modal-input--alias" placeholder="Ingrese o seleccione un alias" autocomplete="off" role="combobox" aria-controls="waAliasLista">
+          <ul id="waAliasLista" class="alias-lista" role="listbox"></ul>
+        </div>
+        <div class="alias-lista-ayuda">↑ ↓ para elegir · Supr o × para quitar un alias de la lista</div>
       </div>
 
       <div class="modal-acciones">
@@ -1874,7 +2033,56 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     </div>
   </div>
 
+  <div id="aliasAviso" class="alias-aviso" role="status">
+    <span id="aliasAvisoTexto"></span>
+    <button type="button" onclick="deshacerEliminarAlias()">Deshacer</button>
+  </div>
+
   <script>
+    // Lista de alias: abrir con clic, filtrar al escribir, navegar y borrar con teclado
+    (function() {
+      const input = document.getElementById('waAliasInput');
+      const ul = document.getElementById('waAliasLista');
+
+      input.addEventListener('click', () => {
+        if (aliasListaAbierta) cerrarListaAlias(); else abrirListaAlias(true);
+      });
+      input.addEventListener('input', () => abrirListaAlias(false));
+      input.addEventListener('blur', () => cerrarListaAlias());
+      // Evita que el clic en la lista saque el foco del input (y la cierre)
+      ul.addEventListener('mousedown', e => e.preventDefault());
+
+      // Se escucha en el input, antes que el keydown global del modal,
+      // para que Enter/Escape actúen sobre la lista cuando está abierta.
+      input.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (!aliasListaAbierta) { abrirListaAlias(true); return; }
+          if (aliasFiltrados.length === 0) return;
+          const paso = e.key === 'ArrowDown' ? 1 : -1;
+          aliasMarcado = (aliasMarcado + paso + aliasFiltrados.length) % aliasFiltrados.length;
+          marcarItemAlias();
+          return;
+        }
+        if (!aliasListaAbierta || aliasMarcado < 0) {
+          if (e.key === 'Escape' && aliasListaAbierta) { e.stopPropagation(); cerrarListaAlias(); }
+          return;
+        }
+        const alias = aliasFiltrados[aliasMarcado];
+        if (e.key === 'Enter') {
+          e.preventDefault(); e.stopPropagation();
+          elegirAlias(alias);
+        } else if (e.key === 'Delete') {
+          e.preventDefault(); e.stopPropagation();
+          eliminarAlias(alias);
+          if (aliasFiltrados.length) { aliasMarcado = Math.min(aliasMarcado, aliasFiltrados.length - 1); marcarItemAlias(); }
+        } else if (e.key === 'Escape') {
+          e.stopPropagation();
+          cerrarListaAlias();
+        }
+      });
+    })();
+
     // Cerrar modal con Escape y enviar con Enter
     document.addEventListener('keydown', function(e) {
       if (document.getElementById('waModal').style.display === 'flex') {

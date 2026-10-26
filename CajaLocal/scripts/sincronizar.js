@@ -62,6 +62,10 @@ const IGNORAR = {
   'index.html': 'panel de la web; login.html lo usa sólo si no le pasan ?redirect=',
   'buscarPedidos.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
   'pedidosWhatsapp.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
+  'resumenFacturacion.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
+  'inventario.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
+  'consolidarMovimientos.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
+  'controlTransferencias.html': 'pantalla de la web; login.html sólo la nombra para elegir el config',
   'no-disponible.png': 'ingresoPedidoV2.js sólo compara el nombre, no carga la imagen'
 };
 
