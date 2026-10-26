@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS ix_sha ON analisis(sha256);
 CREATE INDEX IF NOT EXISTS ix_op ON analisis(operacion);
 """
 
-COLUMNAS_LISTA = ("id", "creado", "archivo", "tipo", "banco", "titular", "operacion", "coelsa", "fecha_op",
+COLUMNAS_LISTA = ("id", "creado", "archivo", "extension", "tipo", "banco", "titular", "operacion", "coelsa", "fecha_op",
                   "monto", "semaforo", "veredicto", "sha256", "dhash", "texto_hash")
 
 

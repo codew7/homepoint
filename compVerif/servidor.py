@@ -3,8 +3,10 @@ Servidor local del verificador de comprobantes de transferencia.
 
 Se arrastra o pega el comprobante y se analiza solo, sin cargar ningun dato:
 
-    lector.py    revision visual y lectura con Claude (suscripcion, CLI `claude -p`)
-    forense.py   mapa ELA, PDF con cosas agregadas encima, texto interno del PDF
+    lector.py    revision visual y lectura con Claude (suscripcion, CLI `claude -p`),
+                 comparando con comprobantes reales aprobados del mismo banco
+    forense.py   mapa ELA, PDF con cosas agregadas encima, texto interno del PDF,
+                 huellas de imagen hecha o editada con IA
     reglas.py    digitos verificadores, fecha, numero de operacion repetido
 
 API para la interfaz (index.html):
@@ -46,6 +48,10 @@ EXTENSIONES = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 # Distancia maxima (bits de 1024) para considerar dos imagenes "casi iguales"
 UMBRAL_DHASH = 25
 
+# Comprobantes aprobados que se le muestran a Claude como referencia (uno por banco,
+# los de diseno mas parecido primero)
+MAX_REFERENCIAS = 3
+
 
 # ------------------------------------------------------------------ analisis --
 
@@ -82,6 +88,19 @@ def control_duplicados(reg, previos):
     return avisos
 
 
+def fondos_reales(datos, previos, maximo=20):
+    """Colores de fondo de los ultimos comprobantes aprobados del mismo banco."""
+    banco = reglas.normalizar(datos.get("banco_origen"))
+    if not banco:
+        return []
+    colores = []
+    for p in [p for p in previos if p.get("veredicto") == "aprobado" and reglas.normalizar(p.get("banco")) == banco][:maximo]:
+        color = ((historial.obtener(p["id"]) or {}).get("forense", {}).get("meta") or {}).get("fondo")
+        if color:
+            colores.append(color)
+    return colores
+
+
 def evaluar(reg):
     """Recalcula avisos y semaforo de un registro (sin volver a leer el archivo)."""
     datos = reg.get("datos") or {}
@@ -95,6 +114,7 @@ def evaluar(reg):
         avisos.append(aviso("amarillo", "No se pudo revisar el comprobante con Claude", lectura.get("mensaje", ""), "visual"))
     if reg["forense"].get("tipo") == "pdf":
         avisos += forense.cruzar_texto_pdf(reg["forense"].get("texto"), datos)
+    avisos += forense.controles_ia(reg["forense"], datos, fondos_reales(datos, previos))
     avisos += reglas.evaluar(datos, previos) + control_duplicados(reg, previos)
     avisos.sort(key=lambda a: -reglas.ORDEN.get(a["gravedad"], 0))
     reg["avisos"] = avisos
@@ -102,9 +122,31 @@ def evaluar(reg):
     return reg
 
 
+def referencias(reg):
+    """Comprobantes reales (aprobados) para comparar el diseno: el ultimo de cada banco,
+    ordenados por parecido visual con el que se analiza. [(bytes, extension, banco)]"""
+    f = reg.get("forense") or {}
+    por_banco = {}
+    for p in historial.todos_menos(reg.get("id")):  # del mas nuevo al mas viejo
+        if p.get("veredicto") != "aprobado" or p.get("tipo") != "imagen" or p.get("sha256") == f.get("sha256"):
+            continue
+        por_banco.setdefault(reglas.normalizar(p.get("banco")) or f"#{p['id']}", p)
+
+    def distancia(p):
+        d = forense.hamming(f.get("dhash"), p.get("dhash"))
+        return d if d is not None else forense.LADO_DHASH ** 2
+
+    elegidos = []
+    for p in sorted(por_banco.values(), key=distancia)[:MAX_REFERENCIAS]:
+        ruta = ruta_archivo(p["id"], p.get("extension") or "")
+        if ruta.exists():
+            elegidos.append((ruta.read_bytes(), ruta.suffix, p.get("banco")))
+    return elegidos
+
+
 def leer_con_claude(reg, data):
     try:
-        datos, info = lector.leer(data, reg["extension"])
+        datos, info = lector.leer(data, reg["extension"], referencias(reg))
         reg["datos"] = datos
         reg["lectura"] = {"estado": "ok", **info}
     except RuntimeError as e:

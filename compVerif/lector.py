@@ -7,10 +7,17 @@ herramienta habilitada: Read. El comprobante lo manda un tercero y puede traer
 texto escrito para darle ordenes al modelo; sin Bash, escritura ni web, lo peor
 que puede pasar es una lectura equivocada, que el usuario puede corregir a mano.
 
+Junto al comprobante van:
+    ampliacion-N.png   franjas del mismo comprobante agrandadas, para ver las
+                       letras chicas que una IA deforma al redibujar
+    referencia-N.*     comprobantes reales ya aprobados, para comparar el diseno
+                       contra la app del mismo banco
+
 Uso suelto:
     venv\Scripts\python.exe lector.py <archivo>
 """
 
+import io
 import json
 import os
 import re
@@ -20,12 +27,21 @@ import sys
 import tempfile
 from pathlib import Path
 
+from PIL import Image, ImageOps
+
 # Opus por defecto: la revision visual es el control principal y conviene el modelo mas fino
 MODELO = os.environ.get("VERIFICADOR_MODELO", "opus")
-TIMEOUT = 240
+TIMEOUT = 300
+
+# Ampliaciones: franjas de hasta ANCHO_AMPLIADO x ALTO_FRANJA px (lo que Claude ve sin achicar)
+ANCHO_AMPLIADO = 1400
+ALTO_FRANJA = 800
+MAX_ESCALA = 2.5
+MAX_FRANJAS = 5
 
 CAMPOS = {
     "es_comprobante": "true si es un comprobante de transferencia o pago; false si es otra cosa",
+    "tipo_imagen": "captura (captura de pantalla de una app), foto (foto de un papel o de otra pantalla), pdf u otro",
     "banco_origen": "banco o billetera desde donde se pago (ej. Mercado Pago, Galicia, Ualá)",
     "titular_origen": "nombre de quien paga",
     "cuit_origen": "CUIT/CUIL de quien paga, tal como aparece",
@@ -61,12 +77,43 @@ Tareas:
    - Fondo: rectángulos o parches de un tono apenas distinto, ruido o compresión diferente, bordes, halos o restos de píxeles alrededor de un texto.
    - Diseño: alineación con la grilla de la app, márgenes y separación entre etiqueta y valor, íconos, logos y colores que no corresponden a la app de ese banco o billetera (Mercado Pago, Ualá, Brubank, Naranja X, Cuenta DNI, MODO, Galicia, Santander, BBVA, Macro, Nación, Provincia, etc.).
    - Coherencia: día de la semana y fecha; hora de la barra de estado del celular anterior a la hora de la operación (imposible); formato del monto y de los números propio de ese banco; campos que ese banco siempre muestra y faltan.
-   - Señales de imagen generada con IA: texto chico deformado o sin sentido, íconos raros, logos imperfectos.
-   Sé concreto y no inventes: si no ves nada raro, nivel_sospecha "baja", observaciones y zonas_sospechosas vacías. Una captura comprimida por WhatsApp tiene artefactos parejos en toda la imagen; eso solo no es sospechoso.
+   - Edición o fabricación con IA (ChatGPT, Gemini y similares): la IA no pega un parche, vuelve a dibujar la imagen entera, así que todo se ve parejo y no hay bordes ni manchas. Buscá en cambio sus errores de dibujo: letras chicas, textos legales o notas al pie deformes, borrosos o sin sentido; íconos de la barra de estado (señal, wifi, batería, notificaciones) inventados o mal dibujados; la hora del celular rara o ilegible; logos con detalles distintos al original; dígitos con formas irregulares o distintas entre sí cuando deberían ser iguales (dos "5" diferentes); texto con aspecto pintado o con bordes demasiado suaves; QR o códigos de barras sin nitidez o sin estructura; colores de marca apenas corridos; espaciados y márgenes que no son los de la app aunque todo esté prolijo. Que todo se vea perfecto no prueba que sea real.
+{ampliaciones}{referencias}   Sé concreto y no inventes: si no ves nada raro, nivel_sospecha "baja", observaciones y zonas_sospechosas vacías. Una captura comprimida por WhatsApp tiene artefactos parejos en toda la imagen; eso solo no es sospechoso.
 
 Respondé ÚNICAMENTE con un objeto JSON (sin texto antes ni después) con estas claves (null si no aparece):
 {campos}
 """
+
+
+TEXTO_AMPLIACIONES = """   - Ampliaciones: {lista} son franjas del MISMO comprobante, de arriba hacia abajo, agrandadas. Leelas todas con Read y usalas para mirar de cerca letras, dígitos, íconos y logos. Las coordenadas de zonas_sospechosas son siempre sobre la imagen completa ({archivo}), no sobre las ampliaciones.
+"""
+
+TEXTO_REFERENCIAS = """   - Referencias: {lista} son comprobantes REALES, ya verificados, de otros pagos ({bancos}). Leelos con Read. Si alguno es de la misma app o banco que el comprobante, comparalos en detalle: tipografía, tamaños, colores exactos, íconos, logos, márgenes, orden y nombre de los campos, formato del monto y de los números. Las diferencias de diseño son una señal fuerte; los datos (nombres, montos, fechas) obviamente cambian. Si ninguno es del mismo banco, ignoralos. No extraigas datos de las referencias.
+"""
+
+
+def ampliaciones(data):
+    """Franjas horizontales del comprobante agrandadas, como PNG (lista de bytes)."""
+    try:
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception:
+        return []
+    # Capturas muy largas: se agranda menos para cubrirlas con MAX_FRANJAS sin huecos
+    escala = min(MAX_ESCALA, ANCHO_AMPLIADO / im.width, ALTO_FRANJA * MAX_FRANJAS * 0.85 / im.height)
+    alto_franja = int(ALTO_FRANJA / escala)
+    if im.height <= alto_franja * 0.8:
+        return []
+    cantidad = min(MAX_FRANJAS, -(-im.height // int(alto_franja * 0.85)))
+    paso = (im.height - alto_franja) / max(1, cantidad - 1)
+    franjas = []
+    for i in range(cantidad):
+        arriba = int(i * paso)
+        franja = im.crop((0, arriba, im.width, min(im.height, arriba + alto_franja)))
+        franja = franja.resize((round(franja.width * escala), round(franja.height * escala)), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        franja.save(buf, "PNG", optimize=True)
+        franjas.append(buf.getvalue())
+    return franjas
 
 
 def ruta_claude():
@@ -102,15 +149,27 @@ def _zonas(lista):
     return limpias
 
 
-def leer(data, extension):
-    """Devuelve (datos: dict, info: dict con modelo/segundos/costo). Lanza RuntimeError si falla."""
+def leer(data, extension, referencias=()):
+    """Devuelve (datos: dict, info: dict con modelo/segundos/costo). Lanza RuntimeError si falla.
+    referencias: [(bytes, extension, banco)] de comprobantes reales aprobados, para comparar."""
     exe = ruta_claude()
     if not exe:
         raise RuntimeError("No se encontró el programa «claude» (Claude Code). Instalalo e iniciá sesión con tu suscripción.")
     nombre = "comprobante" + extension.lower()
-    prompt = PROMPT.format(archivo=nombre, campos="\n".join(f'- "{k}": {v}' for k, v in CAMPOS.items()))
+    archivos = {nombre: data}
+    if data[:5] != b"%PDF-":
+        archivos |= {f"ampliacion-{i}.png": b for i, b in enumerate(ampliaciones(data), 1)}
+        archivos |= {f"referencia-{i}{ext.lower()}": b for i, (b, ext, _) in enumerate(referencias, 1)}
+    nombres_amp = [n for n in archivos if n.startswith("ampliacion-")]
+    nombres_ref = [n for n in archivos if n.startswith("referencia-")]
+    bancos = ", ".join(f"{n}: {r[2] or 'banco sin identificar'}" for n, r in zip(nombres_ref, referencias))
+    prompt = PROMPT.format(
+        archivo=nombre, campos="\n".join(f'- "{k}": {v}' for k, v in CAMPOS.items()),
+        ampliaciones=TEXTO_AMPLIACIONES.format(lista=", ".join(nombres_amp), archivo=nombre) if nombres_amp else "",
+        referencias=TEXTO_REFERENCIAS.format(lista=", ".join(nombres_ref), bancos=bancos) if nombres_ref else "")
     with tempfile.TemporaryDirectory(prefix="compverif-") as carpeta:
-        (Path(carpeta) / nombre).write_bytes(data)
+        for n, b in archivos.items():
+            (Path(carpeta) / n).write_bytes(b)
         cmd = [exe, "-p", "--model", MODELO, "--output-format", "json",
                "--tools", "Read", "--allowedTools", "Read",
                "--strict-mcp-config", "--no-session-persistence"]
@@ -134,7 +193,8 @@ def leer(data, extension):
     datos = {k: datos.get(k) for k in CAMPOS}
     datos["zonas_sospechosas"] = _zonas(datos.get("zonas_sospechosas"))
     info ={"modelo": next(iter(respuesta.get("modelUsage") or {}), MODELO),
-            "segundos": round((respuesta.get("duration_ms") or 0) / 1000, 1)}
+            "segundos": round((respuesta.get("duration_ms") or 0) / 1000, 1),
+            "ampliaciones": len(nombres_amp), "referencias": len(nombres_ref)}
     return datos, info
 
 
