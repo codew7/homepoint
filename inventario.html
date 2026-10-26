@@ -32,7 +32,8 @@
   <script>
     // Inicializar Firebase con la base del punto de venta elegido en el panel
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    // Base consultada: cambia con el selector de sucursal (ver obtenerBase)
+    let db = firebase.database();
     
     // Sistema de autenticación
     let admin = false; // Declarar admin al principio para evitar errores de hoisting
@@ -217,6 +218,61 @@
       letter-spacing: .2px;
     }
     .chip-sucursal[hidden] { display: none; }
+    /* Selector de sucursal del encabezado: la misma píldora, desplegable */
+    header .select-sucursal,
+    header .select-sucursal:focus {
+      font-size: .8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      background: rgba(147,180,251,.18) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23e2e8f0' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right .55rem center;
+      border: 1px solid rgba(147,180,251,.35);
+      border-radius: 999px;
+      padding: .2rem 1.6rem .2rem .7rem;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+    header .select-sucursal:hover { background-color: rgba(147,180,251,.28); }
+    header .select-sucursal:focus-visible { outline: 2px solid #93b4fb; outline-offset: 2px; box-shadow: none; }
+    header .select-sucursal:disabled { opacity: .6; cursor: wait; }
+    header .select-sucursal option { color: #1f2937; background: #fff; }
+    /* Login en otra sucursal (al elegirla en el selector sin sesión en su base) */
+    .modal-login {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 16px;
+    }
+    .modal-login.abierto { display: flex; }
+    .modal-login form {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 1.25rem;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .modal-login h2 { margin: 0; font-size: 1.05rem; color: var(--text); }
+    .modal-login input { width: 100%; box-sizing: border-box; }
+    .modal-login .login-error { color: var(--danger); font-size: .85rem; min-height: 1em; }
+    .modal-login .login-botones { display: flex; gap: .5rem; justify-content: flex-end; }
+    .modal-login button {
+      padding: .5rem 1rem;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .modal-login button[type="submit"] { background: var(--primary); border-color: var(--primary); color: #fff; }
     main {
       flex: 1;
       width: 100%;
@@ -797,7 +853,9 @@
 </head>
 <body>
   <header>
-    <h1><i class="bi bi-boxes"></i> Gestión de Inventario <span id="puntoVentaHeader" class="chip-sucursal" hidden></span></h1>
+    <h1><i class="bi bi-boxes"></i> Gestión de Inventario
+      <select id="sucursalSelect" class="chip-sucursal select-sucursal" hidden aria-label="Sucursal" title="Sucursal donde se registran y consultan los movimientos y el stock"></select>
+    </h1>
     
     <!-- Indicadores de usuario -->
     <div id="adminIndicator" style="position: absolute; top: 11px; right: 20px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); padding: 6px 8px 6px 12px; border-radius: 999px; font-size: 0.82rem; display: none; color: #e2e8f0; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.25);">
@@ -883,10 +941,30 @@
       <div class="paginacion" id="paginacion"></div>
     </section>
   </main>
+
+  <!-- Login en la base de otra sucursal -->
+  <div class="modal-login" id="modalLoginSucursal">
+    <form id="loginSucursalForm" autocomplete="on">
+      <h2>Ingresar a <span id="loginSucursalNombre"></span></h2>
+      <input type="email" id="loginSucursalEmail" placeholder="Email" required />
+      <input type="password" id="loginSucursalClave" placeholder="Contraseña" required />
+      <div class="login-error" id="loginSucursalError"></div>
+      <div class="login-botones">
+        <button type="button" id="loginSucursalCancelar">Cancelar</button>
+        <button type="submit" id="loginSucursalOk">Ingresar</button>
+      </div>
+    </form>
+  </div>
   <!-- Firebase scripts duplicados eliminados -->
   <script>
     // Variable para bloquear la interfaz durante procesos críticos de Firebase
     let procesoCriticoEnEjecucion = false;
+
+    // Sucursal consultada: la del equipo al entrar; el selector la cambia
+    const puntoEquipo = (window.PuntoVenta && PuntoVenta.actual()) || '1';
+    let puntoConsultado = puntoEquipo;
+    const basesPorPunto = { [puntoEquipo]: db };
+    const LOGIN_CANCELADO = 'login-cancelado';
 
     // Estado de conexión persistente — se actualiza en tiempo real
     let firebaseConectado = false;
@@ -897,14 +975,16 @@
     // Verificar conexión activa con Firebase antes de escribir
     async function verificarConexionFirebase(timeoutMs = 5000) {
       // Si ya sabemos que está conectado, retornar inmediatamente
-      if (firebaseConectado) return true;
+      // (el estado persistente es de la base del equipo)
+      if (firebaseConectado && puntoConsultado === puntoEquipo) return true;
       // Si no, esperar a que se conecte (o timeout)
+      const base = db;
       return new Promise((resolve) => {
         const timer = setTimeout(() => resolve(false), timeoutMs);
-        const unsub = db.ref('.info/connected').on('value', snap => {
+        const unsub = base.ref('.info/connected').on('value', snap => {
           if (snap.val() === true) {
             clearTimeout(timer);
-            db.ref('.info/connected').off('value', unsub);
+            base.ref('.info/connected').off('value', unsub);
             resolve(true);
           }
         });
@@ -1022,13 +1102,9 @@
     
     // Función para inicializar la funcionalidad de inventario
     function inicializarInventario() {
-      // Punto de venta: su nombre en el encabezado
-      if (window.PuntoVenta && PuntoVenta.multiple()) {
-        const chipSucursal = document.getElementById('puntoVentaHeader');
-        chipSucursal.textContent = PuntoVenta.nombre();
-        chipSucursal.hidden = false;
-        document.title = 'Gestión de Inventario · ' + PuntoVenta.nombre();
-      }
+      // Punto de venta: su nombre en el encabezado y el selector de sucursal
+      aplicarSucursal();
+      configurarSelectorSucursal();
 
       // Event listeners para los botones de logout
       const logoutBtn = document.getElementById('logoutBtn');
@@ -1045,6 +1121,139 @@
       cargarProductos();
       // No se cargan movimientos al inicio: el usuario debe presionar "Cargar Todos"
       configurarEventListeners();
+    }
+
+    // ===================== Sucursal consultada =====================
+
+    function nombrePunto(id) {
+      const punto = window.PuntoVenta && PuntoVenta.lista.find(p => p.id === id);
+      return punto ? punto.nombre : '';
+    }
+
+    function aplicarSucursal() {
+      if (!window.PuntoVenta || !PuntoVenta.multiple()) return;
+      document.title = 'Gestión de Inventario · ' + nombrePunto(puntoConsultado);
+    }
+
+    // Base de la sucursal pedida. Para una distinta a la del equipo lee su configN.js como texto
+    // y crea una app de Firebase aparte (el archivo declara `const firebaseConfig`, que no se puede
+    // volver a cargar como <script>). Si en este navegador no hay sesión en ese proyecto, se pide.
+    async function obtenerBase(id) {
+      if (basesPorPunto[id]) return basesPorPunto[id];
+      const punto = PuntoVenta.lista.find(p => p.id === id);
+      if (!punto) throw new Error('Sucursal desconocida: ' + id);
+      let app = firebase.apps.find(a => a.name === 'pv-' + id);
+      if (!app) {
+        const resp = await fetch(punto.config, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('No se pudo leer ' + punto.config);
+        const config = new Function(await resp.text() + '\nreturn firebaseConfig;')();
+        app = firebase.initializeApp(config, 'pv-' + id);
+      }
+      if (!(await usuarioDe(app))) await pedirLoginSucursal(app, punto.nombre);
+      basesPorPunto[id] = app.database();
+      return basesPorPunto[id];
+    }
+
+    // Usuario con sesión en la app indicada (espera a que Firebase la restaure)
+    function usuarioDe(app) {
+      return new Promise(resolve => {
+        const dejar = app.auth().onAuthStateChanged(usuario => { dejar(); resolve(usuario); });
+      });
+    }
+
+    // Resuelve al entrar y rechaza con LOGIN_CANCELADO si se cancela
+    function pedirLoginSucursal(app, nombre) {
+      return new Promise((resolve, reject) => {
+        const modal = document.getElementById('modalLoginSucursal');
+        const form = document.getElementById('loginSucursalForm');
+        const email = document.getElementById('loginSucursalEmail');
+        const clave = document.getElementById('loginSucursalClave');
+        const error = document.getElementById('loginSucursalError');
+        const ingresar = document.getElementById('loginSucursalOk');
+        const cancelar = document.getElementById('loginSucursalCancelar');
+
+        document.getElementById('loginSucursalNombre').textContent = nombre;
+        form.reset();
+        error.textContent = '';
+        modal.classList.add('abierto');
+        setTimeout(() => email.focus(), 30);
+
+        const cerrar = () => {
+          modal.classList.remove('abierto');
+          form.removeEventListener('submit', alEnviar);
+          cancelar.removeEventListener('click', alCancelar);
+          document.removeEventListener('keydown', alTecla);
+        };
+        async function alEnviar(e) {
+          e.preventDefault();
+          error.textContent = '';
+          ingresar.disabled = true;
+          try {
+            await app.auth().signInWithEmailAndPassword(email.value.trim(), clave.value);
+            cerrar();
+            resolve();
+          } catch (err) {
+            console.error('Error al iniciar sesión en la sucursal:', err);
+            error.textContent = 'Usuario o contraseña incorrectos.';
+            clave.value = '';
+            clave.focus();
+          } finally {
+            ingresar.disabled = false;
+          }
+        }
+        function alCancelar() {
+          cerrar();
+          reject(new Error(LOGIN_CANCELADO));
+        }
+        function alTecla(e) {
+          if (e.key === 'Escape') alCancelar();
+        }
+        form.addEventListener('submit', alEnviar);
+        cancelar.addEventListener('click', alCancelar);
+        document.addEventListener('keydown', alTecla);
+      });
+    }
+
+    // Al cambiar de sucursal se registra y consulta en su base, y el stock mostrado es el suyo
+    function configurarSelectorSucursal() {
+      if (!window.PuntoVenta || !PuntoVenta.multiple()) return;
+      const selector = document.getElementById('sucursalSelect');
+      selector.innerHTML = '';
+      PuntoVenta.lista.forEach(p => selector.add(new Option(p.nombre, p.id)));
+      selector.value = puntoConsultado;
+      selector.hidden = false;
+
+      selector.addEventListener('change', async () => {
+        const id = selector.value;
+        selector.disabled = true;
+        try {
+          db = await obtenerBase(id);
+          puntoConsultado = id;
+          aplicarSucursal();
+          // El stock y el historial leídos son de la otra sucursal: se descartan
+          stockCache = null;
+          const codigo = document.getElementById('codigo').value.trim();
+          if (codigo) cargarStockDisponible(codigo);
+          const habiaCargado = movimientosCargados;
+          movimientos = [];
+          movimientosFiltrados = [];
+          movimientosCargados = false;
+          paginaActual = 1;
+          if (habiaCargado) {
+            cargarMovimientos(true);
+          } else {
+            document.getElementById('paginacion').innerHTML = '';
+            mostrarLoadingTabla('Presiona "Cargar Todos" para ver el historial de ' + nombrePunto(id) + '.');
+          }
+        } catch (error) {
+          selector.value = puntoConsultado;
+          if (error.message === LOGIN_CANCELADO) return;
+          console.error('Error al cambiar de sucursal:', error);
+          mostrarFeedback('No se pudo cambiar de sucursal: ' + error.message, 'error');
+        } finally {
+          selector.disabled = false;
+        }
+      });
     }
 
     function configurarEventListeners() {
@@ -1150,7 +1359,7 @@
         cantidad,
         tipo: tipo,
         // Sucursal donde se registra ('1' Munro, '2' Caseros), como en pedidos y Traspasos
-        sucursal: (window.PuntoVenta && PuntoVenta.actual()) || '1'
+        sucursal: puntoConsultado
       };
       
       try {
@@ -1386,12 +1595,11 @@
     }
 
     // Función para cargar y mostrar el stock disponible de un artículo (desde Google Sheets)
-    // Se muestra el stock de la sucursal de este punto de venta, no el total.
+    // Se muestra el stock de la sucursal elegida en el selector, no el total.
     // Hoja StockPorSucursal (fila 1 = encabezado): A código, B nombre,
     // C stock Munro, D stock Caseros, E stock total (igual que consultaStock.html).
     const STOCK_SUCURSAL_URL = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/StockPorSucursal!A2:E?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
     const COL_STOCK_SUCURSAL = { '1': 2, '2': 3 }; // C Munro, D Caseros
-    const SUCURSAL_STOCK = (window.PuntoVenta && PuntoVenta.actual()) || '1';
     // Cache local para evitar llamadas repetidas a la API
     let stockCache = null;
     let stockCacheTimestamp = 0;
@@ -1410,7 +1618,7 @@
       stockDisplay.style.display = 'block';
       stockDisplay.className = 'stock-cargando';
       stockCantidad.textContent = 'Cargando...';
-      document.getElementById('stockEtiqueta').textContent = 'Stock ' + nombreSucursal(SUCURSAL_STOCK);
+      document.getElementById('stockEtiqueta').textContent = 'Stock ' + nombreSucursal(puntoConsultado);
       
       try {
         // Verificar si tenemos cache válido
@@ -1423,7 +1631,7 @@
           const rows = data.values || [];
           
           // Crear mapa de stock por código con la columna de esta sucursal
-          const col = COL_STOCK_SUCURSAL[SUCURSAL_STOCK] ?? COL_STOCK_SUCURSAL['1'];
+          const col = COL_STOCK_SUCURSAL[puntoConsultado] ?? COL_STOCK_SUCURSAL['1'];
           stockCache = {};
           for (const row of rows) {
             const codigoProducto = String(row[0] || '').trim();
@@ -1561,7 +1769,8 @@
     function cargarMovimientos(cargarTodos = false) {
       mostrarLoadingTabla();
       const nodoPedido = nodoConsulta;
-      let ref = db.ref(nodoPedido);
+      const base = db;
+      let ref = base.ref(nodoPedido);
       if (!cargarTodos) {
         // Calcular timestamp de inicio y fin del día actual (zona local)
         const ahora = new Date();
@@ -1570,8 +1779,8 @@
         ref = ref.orderByChild('timestamp').startAt(inicioDia).endAt(finDia);
       }
       ref.once('value', snap => {
-        // Si el usuario cambió de nodo mientras se cargaba, ignorar esta respuesta
-        if (nodoPedido !== nodoConsulta) return;
+        // Si el usuario cambió de nodo o de sucursal mientras se cargaba, ignorar esta respuesta
+        if (nodoPedido !== nodoConsulta || base !== db) return;
         movimientos = [];
         snap.forEach(child => {
           let mov = { ...child.val(), _id: child.key };

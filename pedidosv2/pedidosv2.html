@@ -1461,6 +1461,45 @@
     }
     .pv-alias-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
 
+    /* Lista desplegable de alias: cada fila tiene una × para borrarla (o Supr) */
+    .pv-alias-combo { position: relative; flex: 1; min-width: 0; display: flex; }
+    .pv-alias-lista {
+      display: none;
+      position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+      margin: 0; padding: 4px; list-style: none;
+      max-height: 240px; overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--line); border-radius: var(--r1);
+      box-shadow: var(--sh3);
+      z-index: 50;
+    }
+    .pv-alias-lista.abierta { display: block; }
+    .pv-alias-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 6px 4px 6px 9px; border-radius: 6px;
+      font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+      color: var(--ink); cursor: pointer;
+    }
+    .pv-alias-item.marcado { background: var(--accent-soft); }
+    .pv-alias-item-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pv-alias-item-borrar {
+      flex: none;
+      width: 22px; height: 22px; padding: 0;
+      border: none; border-radius: 6px; background: none;
+      font-size: 17px; line-height: 1; color: var(--ink-4); cursor: pointer;
+      opacity: 0;
+    }
+    .pv-alias-item.marcado .pv-alias-item-borrar { opacity: 1; }
+    .pv-alias-item-borrar:hover { background: var(--surface-2); color: var(--ink); }
+
+    /* Toast con Deshacer tras borrar un alias */
+    .pv-alias-toast { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 20px; }
+    .pv-alias-toast button {
+      background: none; border: none; padding: 5px 10px; border-radius: 99px;
+      color: var(--accent); font: inherit; font-weight: 700; cursor: pointer;
+    }
+    .pv-alias-toast button:hover { background: rgba(255, 255, 255, .1); }
+
     /* Atajo al alias propio (ENVIOS.HP): pastilla chica y discreta al lado del
        campo. Gris en reposo; con ese alias cargado queda en el naranja suave
        de la marca para que se lea de reojo que va con titular. */
@@ -6130,7 +6169,7 @@
     window.sheetStockMap = window.sheetStockMap || {};
     let mapImg = {};
     let aliasHistorial = [];
-    let aliasDesdeSheets = [];
+    let aliasDesdeFirebase = [];
     let updateQueue = {};
     let updateTimer = null;
     let procesoCriticoEnEjecucion = false;
@@ -7038,8 +7077,10 @@
       const showAlias = admin && pedidoActual.tipoPago === 'Transferencia';
       panel += '<div class="pv-alias-row" id="pvAliasRow" style="display:' + (showAlias ? 'flex' : 'none') + '">';
       panel += '<span>Alias</span>';
-      panel += '<input type="text" class="pv-alias-input" id="pvAlias" maxlength="50" value="' + escapeHtml((pagos.alias) || '') + '" list="pvAliasDatalist" placeholder="Alias de la cuenta">';
-      panel += '<datalist id="pvAliasDatalist"></datalist>';
+      panel += '<div class="pv-alias-combo">';
+      panel += '<input type="text" class="pv-alias-input" id="pvAlias" maxlength="50" value="' + escapeHtml((pagos.alias) || '') + '" placeholder="Alias de la cuenta" autocomplete="off" role="combobox" aria-controls="pvAliasLista" title="↑ ↓ para elegir · Supr o × para quitar un alias de la lista">';
+      panel += '<ul id="pvAliasLista" class="pv-alias-lista" role="listbox"></ul>';
+      panel += '</div>';
       // Atajo a la cuenta propia: completa el alias y la cotizacion suma el titular.
       const aliasEsHP = pvAliasEsHP(pagos.alias);
       panel += '<button type="button" class="pv-alias-atajo' + (aliasEsHP ? ' is-on' : '') + '" id="pvAliasHP"' +
@@ -12894,8 +12935,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           void aliasHP.offsetWidth;   // reinicia la animacion si se toca dos veces
           aliasHP.classList.add('is-pulso');
         });
-        // Populate datalist
-        pvActualizarAliasDatalist();
+        pvAliasListaConectar(aliasInput);
       }
 
 
@@ -12965,13 +13005,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
 
-    function pvActualizarAliasDatalist() {
-      const dl = document.getElementById('pvAliasDatalist');
-      if (!dl) return;
-      dl.innerHTML = '';
-      const vistos = new Set();
-      aliasHistorial.forEach(a => { if (!vistos.has(a)) { vistos.add(a); dl.innerHTML += '<option value="' + escapeHtml(a) + '">'; } });
-      aliasDesdeSheets.forEach(a => { if (!vistos.has(a)) { vistos.add(a); dl.innerHTML += '<option value="' + escapeHtml(a) + '">'; } });
+    // Misma lista que historialRecientes.html: nodo "alias" de Firebase RTDB
+    // (compartido) + caché local en localStorage para cuando no hay conexión.
+    // Alias de menos de 5 caracteres no se registran en la lista compartida.
+    const ALIAS_MIN_CARACTERES = 5;
+
+    // Las claves de RTDB no admiten . # $ / [ ] ; el alias original va como valor.
+    function aliasAClave(alias) {
+      return alias.replace(/[.#$/\[\]]/g, c => '~' + c.charCodeAt(0) + '~');
     }
 
     function cargarHistorialAliasDesdeLocalStorage() {
@@ -12981,30 +13022,204 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       } catch (e) { aliasHistorial = []; }
     }
 
-    async function cargarAliasDesdeSheets() {
-      try {
-        const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID + '/values/Alias!A2:A?key=' + GOOGLE_SHEETS_CONFIG.API_KEY;
-        const resp = await fetch(url);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (data.values && Array.isArray(data.values)) {
-          aliasDesdeSheets = data.values.map(row => (row[0] || '').trim().toUpperCase()).filter(v => v !== '');
+    // Se suscribe recién con sesión iniciada (las reglas de RTDB piden auth);
+    // si Firebase cancela la escucha, se reintenta en el próximo login.
+    let aliasSuscrito = false;
+    function cargarAliasDesdeFirebase() {
+      firebase.auth().onAuthStateChanged(user => {
+        if (!user || aliasSuscrito) return;
+        aliasSuscrito = true;
+        suscribirAliasFirebase();
+      });
+    }
+
+    function suscribirAliasFirebase() {
+      db.ref('alias').on('value', snap => {
+        const val = snap.val() || {};
+        aliasDesdeFirebase = Object.values(val)
+          .map(v => (v || '').toString().trim().toUpperCase())
+          .filter(v => v !== '');
+        // Firebase manda: se purga del caché local lo que ya no está en el nodo,
+        // así un alias borrado desde otra PC no reaparece desde esta.
+        const enFirebase = new Set(aliasDesdeFirebase);
+        const purgado = aliasHistorial.filter(a => enFirebase.has(a));
+        if (purgado.length !== aliasHistorial.length) {
+          aliasHistorial = purgado;
+          try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
         }
-      } catch (e) { console.error('Error cargando alias:', e); }
+        pvAliasRender();
+      }, e => { aliasSuscrito = false; console.error('Error cargando alias:', e); });
     }
 
     function guardarAliasEnLocalStorage(nuevoAlias) {
-      if (!nuevoAlias || nuevoAlias.trim() === '') return;
+      if (!nuevoAlias || nuevoAlias.trim().length < ALIAS_MIN_CARACTERES) return;
       const limpio = nuevoAlias.trim().toUpperCase();
+      try { db.ref('alias/' + aliasAClave(limpio)).set(limpio); }
+      catch (e) { console.error('Error registrando alias en Firebase:', e); }
       aliasHistorial = aliasHistorial.filter(a => a !== limpio);
       aliasHistorial.unshift(limpio);
       if (aliasHistorial.length > 15) aliasHistorial = aliasHistorial.slice(0, 15);
-      localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial));
+      try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
+    }
+
+    // Lista combinada sin duplicados y ordenada alfabéticamente
+    function obtenerListaAlias() {
+      const vistos = new Set();
+      const lista = [];
+      [...aliasDesdeFirebase, ...aliasHistorial].forEach(alias => {
+        const a = (alias || '').trim().toUpperCase();
+        if (a !== '' && !vistos.has(a)) { vistos.add(a); lista.push(a); }
+      });
+      lista.sort((a, b) => a.localeCompare(b, 'es'));
+      return lista;
+    }
+
+    // Borra el alias de la lista (no toca los pedidos que ya lo tienen asignado)
+    function pvEliminarAlias(alias) {
+      try { db.ref('alias/' + aliasAClave(alias)).remove(); }
+      catch (e) { console.error('Error eliminando alias en Firebase:', e); }
+      aliasDesdeFirebase = aliasDesdeFirebase.filter(a => a !== alias);
+      aliasHistorial = aliasHistorial.filter(a => a !== alias);
+      try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
+      pvAliasRender();
+      pvAliasAvisoDeshacer(alias);
+    }
+
+    // Toast "Alias eliminado · Deshacer" (5 s), con el mismo estilo que showToast
+    function pvAliasAvisoDeshacer(alias) {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.className = 'toast pv-alias-toast';
+      const txt = document.createElement('span');
+      txt.textContent = 'Alias eliminado: ' + alias;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Deshacer';
+      btn.addEventListener('click', () => {
+        toast.remove();
+        guardarAliasEnLocalStorage(alias);
+        if (!aliasDesdeFirebase.includes(alias)) aliasDesdeFirebase.push(alias);
+        pvAliasRender();
+      });
+      toast.append(txt, btn);
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    }
+
+    // Lista desplegable propia (reemplaza al datalist para poder borrar alias)
+    let pvAliasAbierta = false;
+    let pvAliasMarcado = -1;
+    let pvAliasFiltrados = [];
+    let pvAliasSinFiltro = false; // al abrir con clic se muestra la lista completa
+
+    function pvAliasAbrir(sinFiltro) {
+      pvAliasAbierta = true;
+      pvAliasSinFiltro = !!sinFiltro;
+      pvAliasMarcado = -1;
+      pvAliasRender();
+    }
+
+    function pvAliasCerrar() {
+      pvAliasAbierta = false;
+      pvAliasMarcado = -1;
+      const ul = document.getElementById('pvAliasLista');
+      if (ul) ul.classList.remove('abierta');
+    }
+
+    function pvAliasRender() {
+      const ul = document.getElementById('pvAliasLista');
+      const input = document.getElementById('pvAlias');
+      if (!ul || !input || !pvAliasAbierta) return;
+      const texto = pvAliasSinFiltro ? '' : input.value.trim().toUpperCase();
+      pvAliasFiltrados = obtenerListaAlias().filter(a => a.includes(texto));
+      if (pvAliasMarcado >= pvAliasFiltrados.length) pvAliasMarcado = pvAliasFiltrados.length - 1;
+
+      ul.innerHTML = '';
+      if (pvAliasFiltrados.length === 0) { ul.classList.remove('abierta'); return; }
+      pvAliasFiltrados.forEach((a, i) => {
+        const li = document.createElement('li');
+        li.className = 'pv-alias-item' + (i === pvAliasMarcado ? ' marcado' : '');
+        const span = document.createElement('span');
+        span.className = 'pv-alias-item-texto';
+        span.textContent = a;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pv-alias-item-borrar';
+        btn.title = 'Eliminar alias de la lista';
+        btn.setAttribute('aria-label', 'Eliminar ' + a);
+        btn.innerHTML = '&times;';
+        btn.addEventListener('click', e => { e.stopPropagation(); pvEliminarAlias(a); });
+        li.addEventListener('click', () => pvAliasElegir(a));
+        li.addEventListener('mouseenter', () => { pvAliasMarcado = i; pvAliasMarcar(); });
+        li.append(span, btn);
+        ul.appendChild(li);
+      });
+      ul.classList.add('abierta');
+    }
+
+    function pvAliasMarcar() {
+      const items = document.querySelectorAll('#pvAliasLista .pv-alias-item');
+      items.forEach((li, i) => li.classList.toggle('marcado', i === pvAliasMarcado));
+      if (items[pvAliasMarcado]) items[pvAliasMarcado].scrollIntoView({ block: 'nearest' });
+    }
+
+    // Elegir pasa por el evento input para que se guarde igual que al tipear
+    function pvAliasElegir(alias) {
+      const input = document.getElementById('pvAlias');
+      if (!input) return;
+      input.value = alias;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      pvAliasCerrar();
+    }
+
+    // Se llama cada vez que se arma el panel del pedido
+    function pvAliasListaConectar(input) {
+      const ul = document.getElementById('pvAliasLista');
+      if (!ul) return;
+      pvAliasCerrar();
+      const bloqueado = () => input.readOnly || input.disabled;
+
+      input.addEventListener('click', () => {
+        if (bloqueado()) return;
+        if (pvAliasAbierta) pvAliasCerrar(); else pvAliasAbrir(true);
+      });
+      // Solo al tipear: el atajo HP también dispara 'input' y no debe abrir la lista
+      input.addEventListener('input', () => {
+        if (!bloqueado() && document.activeElement === input) pvAliasAbrir(false);
+      });
+      input.addEventListener('blur', () => pvAliasCerrar());
+      // Evita que el clic en la lista saque el foco del input (y la cierre)
+      ul.addEventListener('mousedown', e => e.preventDefault());
+
+      input.addEventListener('keydown', e => {
+        if (bloqueado()) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (!pvAliasAbierta) { pvAliasAbrir(true); return; }
+          if (pvAliasFiltrados.length === 0) return;
+          const paso = e.key === 'ArrowDown' ? 1 : -1;
+          pvAliasMarcado = (pvAliasMarcado + paso + pvAliasFiltrados.length) % pvAliasFiltrados.length;
+          pvAliasMarcar();
+          return;
+        }
+        if (!pvAliasAbierta) return;
+        if (e.key === 'Escape') { e.stopPropagation(); pvAliasCerrar(); return; }
+        if (pvAliasMarcado < 0) return;
+        const alias = pvAliasFiltrados[pvAliasMarcado];
+        if (e.key === 'Enter') {
+          e.preventDefault(); e.stopPropagation();
+          pvAliasElegir(alias);
+        } else if (e.key === 'Delete') {
+          e.preventDefault(); e.stopPropagation();
+          pvEliminarAlias(alias);
+        }
+      });
     }
 
     // Cargar alias al inicio
     cargarHistorialAliasDesdeLocalStorage();
-    cargarAliasDesdeSheets();
+    cargarAliasDesdeFirebase();
 
     // ==========================================
     // PEDIDO VIEW: Bloquear/Desbloquear interfaz
