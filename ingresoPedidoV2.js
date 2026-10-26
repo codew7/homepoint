@@ -414,6 +414,30 @@ document.addEventListener('DOMContentLoaded', function() {
     return candidatos.filter(art => art[4]?.toLowerCase() !== 'no disponible');
   }
 
+  // Dos artículos distintos pueden compartir el nombre (con otro precio y otro
+  // código): la identidad de un artículo es su código interno (col C). El nombre
+  // queda sólo como respaldo para artículos sin código o pedidos viejos.
+  function buscarArticulo(codigo, nombre) {
+    const k = normalizarCodigoBarras(codigo);
+    if (k) {
+      const candidatos = articulosPorCodigoInterno[k] || [];
+      if (candidatos.length) return candidatos.find(a => a[3] === nombre) || candidatos[0];
+    }
+    return nombre ? articulosPorNombre[nombre] : undefined;
+  }
+
+  function articuloDeItem(item) {
+    return item ? buscarArticulo(item.codigo, item.nombre) : undefined;
+  }
+
+  // ¿La línea del pedido corresponde a este artículo del catálogo?
+  function esMismoArticulo(item, art) {
+    const codArt = normalizarCodigoBarras(art[2]);
+    const codItem = normalizarCodigoBarras(item.codigo);
+    if (codArt || codItem) return codArt === codItem;
+    return item.nombre === art[3];
+  }
+
   // Radios de tipo de cliente
   let radiosTipoCliente = [];
   // Insertar radios de tipo de cliente debajo de Datos del Cliente
@@ -442,11 +466,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // === FUNCIÓN PARA ACTUALIZAR TODOS LOS ITEMS DESPUÉS DE CARGAR GOOGLE SHEETS ===
   function actualizarTodosLosItems() {
     items.forEach(item => {
-      if (item.nombre && articulosPorNombre[item.nombre]) {
+      const art = articuloDeItem(item);
+      if (art) {
         // Preservar cantidad actual
         const cantidadActual = item.cantidad;
         // Usar función auxiliar para actualizar campos
-        actualizarCamposArticulo(item, item.nombre);
+        actualizarCamposArticulo(item, item.nombre, art);
         // Restaurar cantidad
         item.cantidad = cantidadActual;
         // Recalcular valorG
@@ -583,10 +608,11 @@ function getTipoCliente() {
     };
   }
 
-  // Igual que obtenerPrimeraImagen pero devuelve { principal, alt } por nombre.
-  function obtenerImagenesArticulo(nombreArticulo) {
-    if (!nombreArticulo || !articulosPorNombre[nombreArticulo]) return { principal: '', alt: '' };
-    return imagenesDeStr(articulosPorNombre[nombreArticulo][1] || '');
+  // Devuelve { principal, alt } de la línea del pedido (por código interno).
+  function obtenerImagenesArticulo(item) {
+    const art = articuloDeItem(item);
+    if (!art) return { principal: '', alt: '' };
+    return imagenesDeStr(art[1] || '');
   }
 
   // onerror autocontenido para usar en HTML inline: cae al 4to link (data-alt)
@@ -713,8 +739,11 @@ function getTipoCliente() {
   }
 
   // === FUNCIÓN AUXILIAR PARA ACTUALIZAR CAMPOS DE ARTÍCULO ===
-  function actualizarCamposArticulo(item, nombre) {
-    if (!nombre || !articulosPorNombre[nombre]) {
+  // `art` es el artículo exacto del catálogo; sin él se resuelve por el código
+  // interno de la línea (y recién después por el nombre).
+  function actualizarCamposArticulo(item, nombre, art) {
+    art = art || buscarArticulo(item.codigo, nombre);
+    if (!art) {
       // Si no hay artículo, limpiar campos
       item.codigo = '';
       item.codigoBarras = '';
@@ -727,7 +756,6 @@ function getTipoCliente() {
       return;
     }
 
-    const art = articulosPorNombre[nombre];
     const currentTipo = getTipoCliente();
 
     // Asignar campos básicos
@@ -794,7 +822,7 @@ function getTipoCliente() {
 
   // === OPTIMIZACIÓN: CREAR UNA SOLA FILA ===
   function createRowElement(item, idx) {
-    const imgs = obtenerImagenesArticulo(item.nombre);
+    const imgs = obtenerImagenesArticulo(item);
     const primeraImagen = imgs.principal;
 
     const row = document.createElement('tr');
@@ -847,7 +875,7 @@ function getTipoCliente() {
     // Configurar efecto hover para imagen con cleanup
     let hoverCleanup = null;
     if (imgElement) {
-      const imgs = obtenerImagenesArticulo(items[idx].nombre);
+      const imgs = obtenerImagenesArticulo(items[idx]);
       if (imgs.principal) {
         hoverCleanup = crearHoverImagen(imgElement, imgs.principal, imgs.alt);
       }
@@ -969,10 +997,11 @@ function getTipoCliente() {
         setupRowEventListeners(task.row, task.idx);
         
         // Actualizar campos si hay artículo seleccionado
-        if (task.item.nombre && articulosPorNombre[task.item.nombre]) {
+        const artTask = articuloDeItem(task.item);
+        if (artTask) {
           const cantidadOriginal = task.item.cantidad;
           const valorUOriginal = task.item.valorU;
-          actualizarCamposArticulo(task.item, task.item.nombre);
+          actualizarCamposArticulo(task.item, task.item.nombre, artTask);
           
           if (cantidadOriginal) task.item.cantidad = cantidadOriginal;
           if (valorUOriginal) task.item.valorU = valorUOriginal;
@@ -1015,6 +1044,26 @@ function getTipoCliente() {
     // incluso en cero, para no mover el layout mientras se carga el pedido.
     cantidadArticulosElement.innerHTML = `<strong>${cantidadArticulosDistintos}</strong> ${cantidadArticulosDistintos === 1 ? 'artículo' : 'artículos'}`;
     cantidadUnidadesElement.innerHTML = `<strong>${cantidadUnidadesTotales}</strong> ${cantidadUnidadesTotales === 1 ? 'unidad' : 'unidades'}`;
+  }
+
+  // Porcentaje cargado en el casillero % (0 si está vacío o no es válido).
+  function leerPorcentaje(input) {
+    if (!input) return 0;
+    const pct = parseFloat(String(input.value || '').replace(/[^\d.]/g, ''));
+    return !isNaN(pct) && pct > 0 ? pct : 0;
+  }
+
+  // El pedido guarda el MONTO del recargo/descuento (lo leen tickets, historial y
+  // devoluciones) y, si se cargó como %, también el porcentaje: al editar el
+  // pedido el % vuelve a su casillero y el monto se recalcula con los artículos.
+  // Si no hay %, el campo se omite y el monto queda fijo, como antes.
+  function porcentajesPagos() {
+    const recargoPct = leerPorcentaje(recargoPorcentajeInput);
+    const descuentoPct = leerPorcentaje(descuentoPorcentajeInput);
+    return {
+      ...(recargoPct ? { recargoPorcentaje: recargoPct } : {}),
+      ...(descuentoPct ? { descuentoPorcentaje: descuentoPct } : {})
+    };
   }
 
   // Formateo numérico para todos los campos relacionados a valores
@@ -1078,7 +1127,8 @@ function getTipoCliente() {
 
   // === LECTOR DE CÓDIGO DE BARRAS + BÚSQUEDA DE ARTÍCULOS ===
   let selectedResultIndex = -1;
-  let selectedArticuloNombre = null;
+  let selectedArticulo = null;   // fila del catálogo elegida en el desplegable
+  let resultadosMostrados = [];  // artículos del desplegable, en el orden de sus data-idx
   // Cuando es false (por defecto): la búsqueda es "barcode-first" (solo columna L),
   // y los artículos sin código de barras se hallan por nombre/código.
   // Cuando es true (desbloqueado con contraseña): búsqueda manual completa por nombre.
@@ -1171,7 +1221,7 @@ function getTipoCliente() {
     ocultarNoEncontrado();
 
     if (matches.length === 1) {
-      addArticuloFromSearch(matches[0][3]);
+      addArticuloFromSearch(matches[0]);
       return true;
     }
 
@@ -1231,7 +1281,7 @@ function getTipoCliente() {
       const query = this.value.trim().toLowerCase();
 
       // Limpiar selección previa al escribir
-      selectedArticuloNombre = null;
+      selectedArticulo = null;
       if (!this.value) ocultarNoEncontrado();
 
       if (query.length < 2) {
@@ -1275,7 +1325,7 @@ function getTipoCliente() {
         searchResults.style.display = 'none';
         searchResults.innerHTML = '';
         selectedResultIndex = -1;
-        selectedArticuloNombre = null;
+        selectedArticulo = null;
         ocultarNoEncontrado();
         refrescarEstadoBase();
       }
@@ -1286,8 +1336,8 @@ function getTipoCliente() {
       searchQuantity.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (selectedArticuloNombre) {
-            addArticuloFromSearch(selectedArticuloNombre);
+          if (selectedArticulo) {
+            addArticuloFromSearch(selectedArticulo);
           }
         }
       });
@@ -1308,8 +1358,8 @@ function getTipoCliente() {
     // código tipeado sin elegir del desplegable también se cargue.
     if (addSearchItemBtn) {
       addSearchItemBtn.addEventListener('click', function() {
-        if (selectedArticuloNombre) {
-          addArticuloFromSearch(selectedArticuloNombre);
+        if (selectedArticulo) {
+          addArticuloFromSearch(selectedArticulo);
           return;
         }
         confirmarBusqueda();
@@ -1427,7 +1477,7 @@ function getTipoCliente() {
     function limpiarBuscadorParaEscaneo() {
       cancelarBusquedaPendiente();
       searchInput.value = '';
-      selectedArticuloNombre = null;
+      selectedArticulo = null;
       selectedResultIndex = -1;
       if (searchResults) {
         searchResults.style.display = 'none';
@@ -1526,12 +1576,15 @@ function getTipoCliente() {
   }
   
   function selectArticuloAndFocusQuantity(resultItem) {
-    const nombreArticulo = resultItem.getAttribute('data-nombre');
-    selectedArticuloNombre = nombreArticulo;
-    
+    // Se elige la fila exacta del catálogo (no el nombre): puede haber varios
+    // artículos con el mismo nombre y distinto código interno.
+    const art = resultadosMostrados[parseInt(resultItem.getAttribute('data-idx'), 10)];
+    if (!art) return;
+    selectedArticulo = art;
+
     // Actualizar el campo de búsqueda con el nombre del artículo
     if (searchInput) {
-      searchInput.value = nombreArticulo;
+      searchInput.value = art[3] || '';
     }
     
     // Ocultar resultados
@@ -1597,14 +1650,15 @@ function getTipoCliente() {
     }
 
     // Renderizar resultados
-    searchResults.innerHTML = results.map(art => {
+    resultadosMostrados = results;
+    searchResults.innerHTML = results.map((art, i) => {
       const codigo = art[2] || '';
       const nombre = art[3] || '';
       const imgs = imagenesDeStr(art[1] || '');
       const imagenUrl = imgs.principal;
 
       return `
-        <div class="search-result-item" data-nombre="${nombre}">
+        <div class="search-result-item" data-idx="${i}">
           ${imagenUrl ? `<img src="${imagenUrl}" class="search-result-img" alt="${nombre}" ${imgFallbackAttrs(imgs.alt)}>` : '<div class="search-result-img-placeholder"></div>'}
           <div class="search-result-info">
             <div class="search-result-name">${nombre}</div>
@@ -1630,13 +1684,12 @@ function getTipoCliente() {
     });
   }
   
-  function addArticuloFromSearch(nombreArticulo) {
-    if (!nombreArticulo || !articulosPorNombre[nombreArticulo]) {
-      return;
-    }
-    
-    const articulo = articulosPorNombre[nombreArticulo];
-    
+  // Recibe la fila del catálogo (array), no el nombre: dos artículos pueden
+  // llamarse igual y tener distinto código interno y precio.
+  function addArticuloFromSearch(articulo) {
+    if (!Array.isArray(articulo)) return;
+    const nombreArticulo = articulo[3] || '';
+
     // Obtener cantidad especificada
     const cantidadEspecificada = searchQuantity ? (parseInt(searchQuantity.value) || 1) : 1;
     
@@ -1646,10 +1699,10 @@ function getTipoCliente() {
       return;
     }
     
-    // Verificar si el artículo ya existe en la lista.
+    // Verificar si el artículo ya existe en la lista (por código interno, no por nombre).
     // Solo se fusiona con otra línea de VENTA: una devolución del mismo artículo es una
     // operación distinta (movimiento ENTRADA, precio histórico) y debe quedar separada.
-    const existingItemIndex = items.findIndex(item => item.nombre === nombreArticulo && !esLineaCambio(item));
+    const existingItemIndex = items.findIndex(item => esMismoArticulo(item, articulo) && !esLineaCambio(item));
 
     if (existingItemIndex !== -1) {
       // Incrementar cantidad del artículo existente
@@ -1700,7 +1753,7 @@ function getTipoCliente() {
       };
       
       // Actualizar campos del artículo
-      actualizarCamposArticulo(newItem, nombreArticulo);
+      actualizarCamposArticulo(newItem, nombreArticulo, articulo);
       
       // Restaurar cantidad especificada
       newItem.cantidad = cantidadEspecificada;
@@ -1761,7 +1814,7 @@ function getTipoCliente() {
 
     // Fusionar solo con una línea equivalente: mismo artículo, mismo tipo y mismo pedido origen.
     const idxExistente = items.findIndex(it =>
-      it.nombre === nombre &&
+      (codigo ? it.codigo === codigo : it.nombre === nombre) &&
       it.tipoLinea === tipoLinea &&
       it.pedidoOrigenId === pedidoOrigenId
     );
@@ -1923,7 +1976,7 @@ function getTipoCliente() {
       searchQuantity.value = 1;
     }
     selectedResultIndex = -1;
-    selectedArticuloNombre = null;
+    selectedArticulo = null;
     // Volver a enfocar el campo de búsqueda
     if (searchInput) {
       searchInput.focus();
@@ -2113,7 +2166,7 @@ function getTipoCliente() {
         needsRecalculation = true;
 
         // Actualizar valorG si hay artículo válido
-        if (items[idx].nombre && articulosPorNombre[items[idx].nombre]) {
+        if (articuloDeItem(items[idx])) {
           items[idx].valorG = signoLinea(items[idx]) * (items[idx].valorU - items[idx].valorC) * items[idx].cantidad;
         }
 
@@ -2138,7 +2191,7 @@ function getTipoCliente() {
         needsRecalculation = true;
 
         // Actualizar valorG si hay artículo válido
-        if (items[idx].nombre && articulosPorNombre[items[idx].nombre]) {
+        if (articuloDeItem(items[idx])) {
           items[idx].valorG = signoLinea(items[idx]) * (items[idx].valorU - items[idx].valorC) * items[idx].cantidad;
         }
 
@@ -2364,7 +2417,7 @@ function getTipoCliente() {
     const nombre = form.nombre.value.trim();
     const direccion = form.direccion.value.trim();
     const medioPago = form.medioPago.value;
-    const vendedor = form.vendedor ? form.vendedor.value.trim() : '';
+    const vendedor = vendedorDelPedido();
     const tipoClienteRadio = document.querySelector('input[name="tipoCliente"]:checked');
     const tipoCliente = tipoClienteRadio ? tipoClienteRadio.value : '';
 
@@ -2377,7 +2430,7 @@ function getTipoCliente() {
       enviandoPedido = false; return;
     }
     if (!vendedor) {
-      showPopup('Debe completar el campo Vendedor.', '❗', false);
+      showPopup('No hay un usuario activo en la caja: elegí quién está en la caja antes de guardar.', '❗', false);
       enviandoPedido = false; return;
     }
 
@@ -2407,8 +2460,8 @@ function getTipoCliente() {
       }
 
       // FORZAR ACTUALIZACIÓN de todos los campos desde Google Sheets antes de guardar
-      if (item.nombre && articulosPorNombre[item.nombre]) {
-        const art = articulosPorNombre[item.nombre];
+      if (articuloDeItem(item)) {
+        const art = articuloDeItem(item);
         // Forzar actualización de codigo, codigoBarras, categoria y seleccionado
         item.codigo = art[2] || '';
         item.codigoBarras = art[11] || '';
@@ -2488,6 +2541,7 @@ function getTipoCliente() {
             medioPago,
             recargo,
             descuento,
+            ...porcentajesPagos(),
             envio,
             subtotal,
             totalFinal,
@@ -2586,8 +2640,6 @@ function getTipoCliente() {
                   if (window.desactivarModoAdmin) window.desactivarModoAdmin();
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
-                  // reset() deja el Vendedor vacío: se repone el usuario activo.
-                  aplicarVendedorPorDefecto();
                   items = [];
                   limpiarEstadoCambios();
                   renderItems();
@@ -2598,8 +2650,6 @@ function getTipoCliente() {
                   if (window.desactivarModoAdmin) window.desactivarModoAdmin();
                   if (window.contraerExtraCliente) window.contraerExtraCliente();
                   form.reset();
-                  // reset() deja el Vendedor vacío: se repone el usuario activo.
-                  aplicarVendedorPorDefecto();
                   items = [];
                   limpiarEstadoCambios();
                   renderItems();
@@ -2687,8 +2737,6 @@ function getTipoCliente() {
           showPopup('Pedido guardado en esta PC. Se sube solo cuando vuelva internet.', '✅', true);
           if (window.contraerExtraCliente) window.contraerExtraCliente();
           form.reset();
-          // reset() deja el Vendedor vacío: se repone el usuario activo.
-          aplicarVendedorPorDefecto();
           items = [];
           limpiarEstadoCambios();
           renderItems();
@@ -2843,8 +2891,8 @@ function getTipoCliente() {
           // Forzar actualización de valores de artículos según tipoCliente
           // (las líneas de cambio conservan el importe histórico del pedido original)
           items.forEach((item, idx) => {
-            if (item.nombre && articulosPorNombre[item.nombre] && !esLineaCambio(item)) {
-              const art = articulosPorNombre[item.nombre];
+            if (articuloDeItem(item) && !esLineaCambio(item)) {
+              const art = articuloDeItem(item);
               let valorRaw = tipoCliente === 'consumidor final' ? (art[4] || '0') : (art[6] || '0');
               valorRaw = valorRaw.replace(/\$/g, '').replace(/[.,]/g, '');
               items[idx].valorU = parseInt(valorRaw) || 0;
@@ -2861,7 +2909,7 @@ function getTipoCliente() {
         valorU: it.valorU || 0,
         valorC: typeof it.valorC !== 'undefined' ? it.valorC : 0,
         categoria: typeof it.categoria !== 'undefined' ? it.categoria : '',
-        seleccionado: typeof it.seleccionado !== 'undefined' ? it.seleccionado : (it.nombre && articulosPorNombre[it.nombre] ? articulosPorNombre[it.nombre][8] || '' : ''),
+        seleccionado: typeof it.seleccionado !== 'undefined' ? it.seleccionado : (articuloDeItem(it) ? articuloDeItem(it)[8] || '' : ''),
         valorG: typeof it.valorG !== 'undefined' ? it.valorG : (typeof it.valorU !== 'undefined' && typeof it.valorC !== 'undefined' ? it.valorU - it.valorC : 0),
         // Los pedidos anteriores a los cambios no traen tipoLinea: se leen como VENTA
         tipoLinea: it.tipoLinea || 'VENTA',
@@ -2875,18 +2923,18 @@ function getTipoCliente() {
       form.recargo.value = pedido.pagos?.recargo ? Number(String(pedido.pagos.recargo).replace(/\D/g, '')).toLocaleString('es-AR').replace(/,/g, '.') : '';
       form.descuento.value = pedido.pagos?.descuento ? Number(String(pedido.pagos.descuento).replace(/\D/g, '')).toLocaleString('es-AR').replace(/,/g, '.') : '';
       form.envio.value = pedido.pagos?.envio ? Number(String(pedido.pagos.envio).replace(/\D/g, '')).toLocaleString('es-AR').replace(/,/g, '.') : '';
+      // Si el pedido guardó el %, vuelve a su casillero: desde acá el monto se
+      // recalcula solo al cambiar los artículos. Los pedidos sin % (anteriores o
+      // cargados como monto fijo) conservan el monto fijo.
+      form.recargoPorcentaje.value = pedido.pagos?.recargoPorcentaje ? String(pedido.pagos.recargoPorcentaje) : '';
+      form.descuentoPorcentaje.value = pedido.pagos?.descuentoPorcentaje ? String(pedido.pagos.descuentoPorcentaje) : '';
       // Mostrar subtotal y total como enteros con separador de miles (conservando el signo:
       // un cambio con saldo a favor del cliente se guarda con importe negativo)
       form.subtotal.value = pedido.pagos?.subtotal ? parseImporte(pedido.pagos.subtotal).toLocaleString('es-AR').replace(/,/g, '.') : '';
       form.totalFinal.value = pedido.pagos?.totalFinal ? parseImporte(pedido.pagos.totalFinal).toLocaleString('es-AR').replace(/,/g, '.') : '';
-      // Autocompletar nota y vendedor si existen
+      // Autocompletar nota; el vendedor se conserva al volver a guardar
       if (form.nota) form.nota.value = pedido.nota || '';
-      // El vendedor del pedido puede no estar en la planilla (alguien que ya no trabaja):
-      // se repone como opción para que el desplegable no quede vacío al editar.
-      if (form.vendedor) {
-        asegurarOpcionVendedor(pedido.vendedor);
-        form.vendedor.value = pedido.vendedor || '';
-      }
+      vendedorPedidoEditado = pedido.vendedor || '';
       if (form.alias) form.alias.value = pedido.pagos?.alias || '';
 
       // --- SOLO LECTURA SI STATUS ES CANCELADO ---
@@ -2970,8 +3018,8 @@ function getTipoCliente() {
         }
         
         // FORZAR ACTUALIZACIÓN de todos los campos desde Google Sheets antes de guardar
-        if (item.nombre && articulosPorNombre[item.nombre]) {
-          const art = articulosPorNombre[item.nombre];
+        if (articuloDeItem(item)) {
+          const art = articuloDeItem(item);
           // Forzar actualización de codigo, codigoBarras, categoria y seleccionado
           item.codigo = art[2] || '';
           item.codigoBarras = art[11] || '';
@@ -3007,7 +3055,7 @@ function getTipoCliente() {
       const descuento = parseImporte(form.descuento.value);
       const envio = parseImporte(form.envio.value);
       const nota = form.nota ? form.nota.value.trim() : '';
-      const vendedor = form.vendedor ? form.vendedor.value.trim() : '';
+      const vendedor = vendedorDelPedido();
       const alias = form.alias ? form.alias.value.trim().toUpperCase() : '';
       
       
@@ -3042,6 +3090,7 @@ function getTipoCliente() {
               medioPago: form.medioPago.value,
               recargo,
               descuento,
+              ...porcentajesPagos(),
               envio,
               subtotal,
               totalFinal,
@@ -3272,7 +3321,7 @@ function getTipoCliente() {
     // Crear hash simple de los items para detectar cambios.
     // Incluye tipoLinea y valorC: un mismo artículo con la misma cantidad tiene costo
     // opuesto según sea venta o devolución, y la caché debe distinguirlos.
-    const currentHash = items.map(item => `${item.nombre}-${item.cantidad}-${item.tipoLinea || 'VENTA'}-${item.valorC || 0}`).join('|');
+    const currentHash = items.map(item => `${item.codigo}-${item.nombre}-${item.cantidad}-${item.tipoLinea || 'VENTA'}-${item.valorC || 0}`).join('|');
 
     if (costosCache !== null && lastItemsHash === currentHash) {
       return costosCache;
@@ -3280,7 +3329,7 @@ function getTipoCliente() {
 
     let costos = 0;
     items.forEach(item => {
-      if (item.nombre && articulosPorNombre[item.nombre]) {
+      if (articuloDeItem(item)) {
         // Usar valorC que ya está calculado en el item. El signo lo aporta el tipo de línea:
         // una devolución recupera el costo, una garantía no computa costo alguno.
         costos += costoLinea(item);
@@ -3362,57 +3411,14 @@ if (cargarClienteBtn) {
   });
 }
 
-// === VENDEDORES: el desplegable se arma desde la planilla (Usuarios!A:B, filtrada por punto de venta) ===
-// Las <option> que trae el HTML son sólo el respaldo para cuando la planilla no
-// responde: sin vendedor el pedido no se puede guardar, así que la caja nunca
-// puede quedarse con el desplegable vacío.
-// La consulta a la planilla la hace usuarioActivo.js (una sola por carga de
-// página, compartida con el selector de usuario).
-
-// Agrega el valor al desplegable si todavía no figura entre las opciones.
-// Un pedido viejo puede tener un vendedor que ya no está en la planilla: sin la
-// opción, asignar el value dejaría el select vacío y el pedido no se guardaría.
-function asegurarOpcionVendedor(valor) {
-  if (!form.vendedor || !valor) return;
-  const existe = Array.from(form.vendedor.options)
-    .some(o => o.value.toLowerCase() === valor.toLowerCase());
-  if (existe) return;
-  const opt = document.createElement('option');
-  opt.value = valor;
-  opt.textContent = valor;
-  form.vendedor.appendChild(opt);
-}
-
-function cargarVendedoresDesdeSheets() {
-  if (!form.vendedor || !window.UsuarioActivo) return;
-  UsuarioActivo.cargarVendedores().then(nombres => {
-      // Planilla vacía o ilegible: se conservan las opciones de respaldo del HTML.
-      if (nombres.length === 0) return;
-
-      const seleccionado = form.vendedor.value;
-      form.vendedor.innerHTML = '<option value="">Seleccione</option>';
-      nombres.forEach(nombre => {
-        const opt = document.createElement('option');
-        opt.value = nombre;
-        opt.textContent = nombre;
-        form.vendedor.appendChild(opt);
-      });
-
-      // "WhatsApp" lo asigna por código el modo homónimo: tiene que existir siempre.
-      asegurarOpcionVendedor('WhatsApp');
-      // Reponer lo que el operador (o la carga de un pedido) ya había elegido.
-      if (seleccionado) {
-        asegurarOpcionVendedor(seleccionado);
-        form.vendedor.value = seleccionado;
-      }
-    });
-}
-cargarVendedoresDesdeSheets();
-
 // === USUARIO ACTIVO → VENDEDOR ===
-// Quien eligió su nombre al entrar (usuarioActivo.js) queda como vendedor de
-// los pedidos nuevos. Prioridades: el modo WhatsApp manda sobre el usuario, y
-// un pedido que se está editando conserva el vendedor con el que se guardó.
+// No hay desplegable de vendedor: sale solo. Un pedido nuevo lo toma de quien
+// eligió su nombre al entrar (usuarioActivo.js), o "WhatsApp" si ese modo está
+// prendido. Un pedido que se está editando conserva el vendedor con el que se
+// guardó (si no tenía, toma el usuario activo).
+// Se mira la URL y no `pedidoId`: el botón Nuevo quita el ?id= sin recargar.
+let vendedorPedidoEditado = '';
+
 function usuarioActivo() {
   return window.UsuarioActivo ? UsuarioActivo.actual() : '';
 }
@@ -3421,19 +3427,9 @@ function vendedorPorDefecto() {
   return busquedaManualPersistente ? 'WhatsApp' : usuarioActivo();
 }
 
-// `anterior` es el usuario que estaba antes: si el campo todavía lo tenía, se
-// lo reemplaza; si alguien eligió otro vendedor a mano, se respeta.
-// Se mira la URL y no `pedidoId`: el botón Nuevo quita el ?id= sin recargar.
-function aplicarVendedorPorDefecto(anterior) {
-  if (!form.vendedor || new URLSearchParams(window.location.search).get('id')) return;
-  const actualCampo = form.vendedor.value;
-  const reemplazable = !actualCampo ||
-    (anterior && actualCampo.toLowerCase() === anterior.toLowerCase());
-  if (!reemplazable) return;
-  const valor = vendedorPorDefecto();
-  if (!valor) return;
-  asegurarOpcionVendedor(valor);
-  form.vendedor.value = valor;
+function vendedorDelPedido() {
+  const editando = new URLSearchParams(window.location.search).get('id');
+  return String((editando && vendedorPedidoEditado) || vendedorPorDefecto() || '').trim();
 }
 
 // El selector decide el modo WhatsApp (pide la contraseña y deja la marca
@@ -3445,10 +3441,7 @@ document.addEventListener('usuarioactivo:cambio', e => {
     if (d.nombre.toLowerCase() === 'whatsapp') window.modoWhatsapp.activar();
     else window.modoWhatsapp.desactivar();
   }
-  aplicarVendedorPorDefecto(d.anterior);
 });
-// La pestaña puede venir con el usuario ya elegido (recarga tras guardar).
-aplicarVendedorPorDefecto();
 
 // === ALIAS: Autocompletar desde el nodo "alias" de Firebase RTDB (+ cache en localStorage) ===
 let aliasHistorial = [];      // cache offline en localStorage
@@ -4144,7 +4137,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       envio: form.envio.value,
       totalFinal: form.totalFinal.value,
       pedidoId: pedidoId || '',
-      vendedor: form.vendedor ? form.vendedor.value : '',
+      vendedor: vendedorDelPedido(),
       fecha: new Date().toLocaleString('es-AR', { hour12: false }),
       esCambio: items.some(esLineaCambio),
       pedidosOrigen: [...new Set(items.filter(esLineaCambio).map(it => it.pedidoOrigenId).filter(Boolean))],
@@ -4532,7 +4525,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     form.totalFinal.value = '';
     
     if (form.nota) form.nota.value = '';
-    if (form.vendedor) form.vendedor.value = '';
+    vendedorPedidoEditado = '';
     if (form.alias) form.alias.value = '';
     
     // Restablecer tipo de cliente a "mayorista" por defecto
@@ -4552,16 +4545,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     if (searchQuantity) searchQuantity.value = '1';
     if (searchResults) { searchResults.innerHTML = ''; searchResults.style.display = 'none'; }
     selectedResultIndex = -1;
-    selectedArticuloNombre = null;
+    selectedArticulo = null;
     ocultarNoEncontrado();
     
     // Limpiar URL para quitar parámetro ?id= si existe
     const newUrl = window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
 
-    // Recién sin ?id=: vendedor = usuario activo (o WhatsApp si ese modo sigue).
-    aplicarVendedorPorDefecto();
-    
     // Enfocar en el campo de búsqueda de artículos
     if (searchInput) {
       setTimeout(() => searchInput.focus(), 100);
@@ -4570,8 +4560,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     if (window.desactivarModoAdmin) window.desactivarModoAdmin();
     if (window.contraerExtraCliente) window.contraerExtraCliente();
 
-    // El modo Whatsapp sobrevive al restablecimiento: el vendedor ya lo repuso
-    // aplicarVendedorPorDefecto(); falta la búsqueda manual.
+    // El modo Whatsapp sobrevive al restablecimiento: se repone la búsqueda manual.
     if (busquedaManualPersistente) {
       if (!busquedaManualHabilitada && typeof activarBusquedaManual === 'function') {
         activarBusquedaManual();
@@ -4586,6 +4575,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   if (btnNuevo) {
     btnNuevo.addEventListener('click', function(e) {
       e.preventDefault();
+      // Saliendo de una edición se recarga la página limpia: el modo edición
+      // (pedidoId, el submit "Modificar", avisos y bloqueo de pedido cancelado)
+      // se arma una sola vez al cargar con ?id= y restablecerFormulario() no lo
+      // deshace. Sin recargar, el "pedido nuevo" pisaba al pedido editado.
+      if (pedidoId) {
+        window.location.href = 'ingresoPedidoV2.html';
+        return;
+      }
       restablecerFormulario();
     });
   }
@@ -4629,9 +4626,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (persistir !== false) {
         try { sessionStorage.setItem(WHATSAPP_MODE_KEY, '1'); } catch (e) {}
       }
-      // Preseleccionar WhatsApp si el vendedor está vacío o es el usuario
-      // activo (puesto solo); no si se está editando un pedido.
-      aplicarVendedorPorDefecto(usuarioActivo());
     }
 
     function desactivarModoWhatsapp() {
@@ -4640,8 +4634,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         desactivarBusquedaManual();
       }
       try { sessionStorage.removeItem(WHATSAPP_MODE_KEY); } catch (e) {}
-      // Si el vendedor había quedado en WhatsApp por el modo, vuelve al usuario.
-      aplicarVendedorPorDefecto('WhatsApp');
     }
 
     function confirmar() {
@@ -4695,7 +4687,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
   // === MODAL CONTRASEÑA BÚSQUEDA MANUAL ===
   (function() {
-    const MANUAL_PASS = 'homepoint2278';
+    const MANUAL_PASS = 'homepoint';
     const overlay = document.getElementById('manualPassOverlay');
     const input   = document.getElementById('manualPassInput');
     const errDiv  = document.getElementById('manualPassError');
@@ -5063,7 +5055,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const pctDescuento = (Math.round(pct * 10) / 10).toLocaleString('es-AR');
 
       const filas = (pedido.items || []).map((it, i) => {
-        const imgs = obtenerImagenesArticulo(it.nombre);
+        const imgs = obtenerImagenesArticulo(it);
         const devueltas = yaDevueltas[it.codigo] || 0;
         const disponibles = Math.max(0, (parseInt(it.cantidad, 10) || 0) - devueltas);
         // El texto lo escribe refrescarCupos(): el nodo se renderiza siempre para

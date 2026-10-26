@@ -288,6 +288,9 @@
         .chip[data-filtro="todos"] i { display: none; }
         .chip[data-filtro="bajo"] { --tone: var(--warn); }
         .chip[data-filtro="sin"], .chip[data-filtro="negativo"] { --tone: var(--bad); }
+        /* Botón "Ver listado completo": separado de los filtros */
+        .chip-sep { flex: none; width: 1px; margin: 0.3rem 0.2rem; background: var(--line-strong); }
+        .chip-all svg { width: 14px; height: 14px; }
 
         /* -------------------------------------------------------------- tabla -- */
         main { padding-top: 1.25rem; padding-bottom: 3rem; }
@@ -610,6 +613,10 @@
                     <button class="chip" type="button" data-filtro="bajo" aria-pressed="false"><i></i>Stock bajo <b id="kpiBajo">—</b></button>
                     <button class="chip" type="button" data-filtro="sin" aria-pressed="false"><i></i>Sin stock <b id="kpiSin">—</b></button>
                     <button class="chip" type="button" data-filtro="negativo" aria-pressed="false"><i></i>Negativos <b id="kpiNegativo">—</b></button>
+                    <span class="chip-sep" aria-hidden="true"></span>
+                    <button class="chip chip-all" type="button" id="verTodoBtn" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Ver listado completo
+                    </button>
                 </div>
             </div>
         </div>
@@ -760,7 +767,8 @@
             const pagerNext = document.getElementById('pagerNext');
             const lightbox = document.getElementById('lightbox');
             const lightboxImg = document.getElementById('lightboxImg');
-            const chips = document.querySelectorAll('.chip');
+            const chips = document.querySelectorAll('.chip[data-filtro]');
+            const verTodoBtn = document.getElementById('verTodoBtn');
 
             let stockData = [];
             let imagenes = {}; // codigo -> { url, alt } desde la hoja Lista
@@ -771,6 +779,7 @@
             const MIN_CARACTERES = 3;   // el listado aparece recién con 3 caracteres
             const POR_PAGINA = 30;
             let cargando = false;
+            let verTodo = false;        // muestra el listado sin necesidad de buscar
 
             // Punto de venta elegido en el panel (lo guarda puntoVenta.js).
             // Si no hay ninguno elegido se toma el 1 (Munro).
@@ -1029,7 +1038,7 @@
                 searchBox.classList.toggle('has-value', q.length > 0);
                 if (!mantenerPagina) pagina = 1;
 
-                if (q.length < MIN_CARACTERES) {
+                if (q.length < MIN_CARACTERES && !verTodo) {
                     renderIdle();
                     updateSortIcons();
                     return;
@@ -1083,6 +1092,13 @@
                     chips.forEach(c => c.setAttribute('aria-pressed', String(c.dataset.filtro === filtro)));
                     filterData();
                 });
+            });
+
+            // Tocarlo de nuevo vuelve al modo normal (listado solo al buscar)
+            verTodoBtn.addEventListener('click', () => {
+                verTodo = !verTodo;
+                verTodoBtn.setAttribute('aria-pressed', String(verTodo));
+                filterData(true);
             });
 
             function irAPagina(n) {
