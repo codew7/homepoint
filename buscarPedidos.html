@@ -681,8 +681,8 @@ table.items tr.pega td:first-child{ color:var(--accent) !important; font-weight:
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
       </span>
       <input id="q" type="search" autocomplete="off" spellcheck="false"
-             placeholder="Cliente, nota, artículo, código o ID del pedido…"
-             aria-label="Buscar por nombre, nota, artículo, código o ID">
+             placeholder="Cliente, artículo, código o ID del pedido…"
+             aria-label="Buscar por nombre, artículo, código o ID">
       <button class="btn-limpiar" id="btnLimpiarQ" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
@@ -692,9 +692,9 @@ table.items tr.pega td:first-child{ color:var(--accent) !important; font-weight:
     <div class="campos" role="group" aria-label="Campos en los que buscar">
       <span class="etiqueta-alcance">Buscar en</span>
       <button class="campo-tgl" id="tglNombre" aria-pressed="true">Nombre</button>
-      <button class="campo-tgl" id="tglNota" aria-pressed="true">Nota</button>
-      <button class="campo-tgl" id="tglArticulo" aria-pressed="false">Artículo</button>
-      <button class="campo-tgl" id="tglCodigo" aria-pressed="false">Código</button>
+      <button class="campo-tgl" id="tglArticulo" aria-pressed="true">Artículo</button>
+      <button class="campo-tgl" id="tglCodigo" aria-pressed="true">Código</button>
+      <button class="campo-tgl" id="tglId" aria-pressed="true" title="ID completo o sus últimos 6 caracteres">ID pedido</button>
     </div>
 
     <div class="alcance">
@@ -1006,7 +1006,7 @@ function normalizar(id, p){
     unidades,
     lineas: items.length,
     _n: norm(nombre),
-    _t: norm(nota),
+    _i: norm(id),               // ID del pedido, para buscar completo o por sus últimos 6
     _a: blobArt,                // nombres de los artículos, normalizados
     _c: blobCod,                // código interno + código de barras
     d: p                        // crudo completo, para el detalle
@@ -1294,19 +1294,20 @@ function filtrar(recalcularSelects, silencioso){
 function camposActivos(){
   return {
     nombre:   $('tglNombre').getAttribute('aria-pressed') === 'true',
-    nota:     $('tglNota').getAttribute('aria-pressed') === 'true',
     articulo: $('tglArticulo').getAttribute('aria-pressed') === 'true',
-    codigo:   $('tglCodigo').getAttribute('aria-pressed') === 'true'
+    codigo:   $('tglCodigo').getAttribute('aria-pressed') === 'true',
+    id:       $('tglId').getAttribute('aria-pressed') === 'true'
   };
 }
 
 /* Todo contra blobs precalculados: un indexOf por campo, sin recorrer ítems. */
 function coincide(r, texto, c){
   if (c.nombre && r._n.includes(texto)) return true;
-  if (c.nota && r._t.includes(texto)) return true;
   if (c.articulo && r._a.includes(texto)) return true;
   if (c.codigo && r._c.includes(texto)) return true;
-  return r.id.toLowerCase() === texto;
+  // ID: completo, o sus últimos 6 caracteres (o más) tal como se ven al final
+  if (c.id && (r._i === texto || (texto.length >= 6 && r._i.endsWith(texto)))) return true;
+  return false;
 }
 
 function poblarSelects(){
@@ -1361,7 +1362,7 @@ function render(){
     let html;
     if (!rangoCargado && !enCurso){
       html = '<h3>¿Qué pedido buscás?</h3>' +
-        '<p>Escribí el nombre del cliente, una nota, un artículo o un código y presioná <b>Enter</b>. ' +
+        '<p>Escribí el nombre del cliente, un artículo, un código o el ID del pedido (completo o sus últimos 6 caracteres) y presioná <b>Enter</b>. ' +
         'Primero se busca en la última semana; si no aparece, la búsqueda se amplía sola. ' +
         'No se descarga nada hasta que buscás.</p>' +
         '<div class="pasos"><span>7 días</span><i>→</i><span>30 días</span><i>→</i><span>60 días</span><i>→</i><span>90 días</span><i>→</i><span>+1 mes</span></div>';
@@ -1400,7 +1401,7 @@ function render(){
       '<td class="col-opc">' + (r.entrega ? esc(r.entrega) : '<span class="sin">—</span>') + '</td>' +
       '<td class="col-opc2">' + (r.medio ? esc(r.medio) : '<span class="sin">—</span>') + '</td>' +
       '<td class="col-opc2">' + (r.vendedor ? esc(r.vendedor) : '<span class="sin">—</span>') + '</td>' +
-      '<td class="c-nota col-opc">' + (r.nota ? resaltar(r.nota, q) : '<span class="sin">—</span>') + '</td>' +
+      '<td class="c-nota col-opc">' + (r.nota ? esc(r.nota) : '<span class="sin">—</span>') + '</td>' +
       '<td class="num c-total">' + ars(r.total) + '</td>' +
     '</tr>'
   ).join('');
@@ -2185,7 +2186,7 @@ $('hasta').addEventListener('change', marcarChipActivo);
 /* Buscar: un ID exacto se lee directo; el resto recorre las etapas */
 async function buscar(){
   const val = $('q').value.trim();
-  if (RE_ID.test(val)){ await abrirDetalle(val); return; }
+  if (camposActivos().id && RE_ID.test(val)){ await abrirDetalle(val); return; }
   consultar({ auto:true });
 }
 $('btnBuscar').addEventListener('click', buscar);
@@ -2210,7 +2211,7 @@ $('btnLimpiarQ').addEventListener('click', () => {
   $('q').focus(); seleccion = -1; filtrar(false);
 });
 
-const TOGGLES = ['tglNombre','tglNota','tglArticulo','tglCodigo'];
+const TOGGLES = ['tglNombre','tglArticulo','tglCodigo','tglId'];
 TOGGLES.forEach(id => {
   $(id).addEventListener('click', () => {
     const on = $(id).getAttribute('aria-pressed') === 'true';
