@@ -1066,6 +1066,167 @@ function getTipoCliente() {
     };
   }
 
+  // === PAGO PARCIAL: dos medios y cuánto se cobra con cada uno ===
+  // pagos.medioPago sigue siendo 'Parcial' (historial, chips y filtros lo leen
+  // así) y además se guarda pagos.desglose = [{ medio, monto }, { medio, monto }],
+  // cuya suma es exactamente el totalFinal. Lo leen resumenFacturacion.html y
+  // controlTransferencias.html para repartir la venta entre sus medios reales.
+  // El cajero escribe el monto del 1º medio; el 2º es lo que falta. Los select
+  // arrancan en Efectivo + Transferencia (el caso más habitual).
+  // Con Crédito, el 6% de recargo se aplica sólo sobre la parte en crédito: el
+  // monto que se escribe es sin recargo y la parte guardada lo incluye.
+  const RECARGO_CREDITO_PCT = 6;
+  const parcialBox = document.getElementById('parcialBox');
+  const parcialMedio1 = document.getElementById('parcialMedio1');
+  const parcialMedio2 = document.getElementById('parcialMedio2');
+  const parcialMonto1 = document.getElementById('parcialMonto1');
+  const parcialMonto2 = document.getElementById('parcialMonto2');
+  // true mientras el recargo del formulario lo puso el parcial con Crédito:
+  // si deja de haber Crédito, ese recargo automático se quita.
+  let recargoAutoParcial = false;
+
+  const pesosParcial = n => '$ ' + Math.round(n).toLocaleString('es-AR');
+
+  function esParcial() {
+    return form.medioPago.value === 'Parcial';
+  }
+
+  // Nombre para mostrar de un medio ('Debito' → 'Débito'), según el select.
+  function etiquetaMedio(valor) {
+    const opcion = Array.from(form.medioPago.options).find(o => o.value === valor);
+    return opcion ? opcion.textContent.trim() : valor;
+  }
+
+  function parcialConCredito() {
+    return esParcial() && (parcialMedio1.value === 'Credito' || parcialMedio2.value === 'Credito');
+  }
+
+  // Recargo de la parte en crédito, sobre la base del pedido sin ese recargo
+  // (subtotal + envío − descuento). null si no hay parcial con Crédito.
+  function recargoCreditoParcial(base) {
+    if (!parcialConCredito()) return null;
+    const monto1 = parseImporte(parcialMonto1.value);
+    const baseCredito = parcialMedio1.value === 'Credito' ? monto1 : base - monto1;
+    return Math.max(0, Math.round(baseCredito * RECARGO_CREDITO_PCT / 100));
+  }
+
+  // Las dos partes tal como se cobran (la de Crédito con su recargo).
+  function leerDesgloseParcial() {
+    const total = parseImporte(totalFinalInput.value);
+    const recargoCredito = parcialConCredito() ? parseImporte(recargoInput.value) : 0;
+    const medio1 = parcialMedio1.value;
+    const medio2 = parcialMedio2.value;
+    const monto1 = parseImporte(parcialMonto1.value);
+    const parte1 = monto1 + (medio1 === 'Credito' ? recargoCredito : 0);
+    return {
+      total, medio1, medio2, monto1, recargoCredito,
+      partes: [
+        { medio: medio1, monto: parte1 },
+        { medio: medio2, monto: total - parte1 }
+      ]
+    };
+  }
+
+  // Mensaje de error del desglose, o null si está completo y suma el total.
+  function validarParcial() {
+    if (!esParcial()) return null;
+    const d = leerDesgloseParcial();
+    if (d.total <= 0) return 'El pago Parcial sólo se usa cuando hay un importe a cobrar.';
+    if (!d.medio1 || !d.medio2) return 'Elegí los dos medios del pago Parcial.';
+    if (d.medio1 === d.medio2) return 'Los dos medios del pago Parcial tienen que ser distintos.';
+    if (d.monto1 <= 0) return `Ingresá cuánto paga con ${etiquetaMedio(d.medio1)}.`;
+    if (d.partes[1].monto <= 0) return `Lo que paga con ${etiquetaMedio(d.medio1)} cubre todo el total: elegí un solo medio de pago.`;
+    return null;
+  }
+
+  // Se esparce en pagos igual que porcentajesPagos(): con otros medios el
+  // campo se omite y Firebase no lo guarda.
+  function desglosePagos() {
+    if (!esParcial()) return {};
+    return { desglose: leerDesgloseParcial().partes };
+  }
+
+  // Texto corto del desglose: "Efectivo $ 30.000 + Transferencia $ 45.000".
+  function textoDesglose(partes) {
+    return partes.map(p => `${etiquetaMedio(p.medio)} ${pesosParcial(p.monto)}`).join(' + ');
+  }
+
+  // Pinta el monto del 2º medio y el estado. Se llama al final de cada calcularTotalFinal().
+  function actualizarParcial() {
+    if (!parcialBox) return;
+    parcialBox.hidden = !esParcial();
+    if (!esParcial()) return;
+
+    const d = leerDesgloseParcial();
+    const estado = document.getElementById('parcialEstado');
+    const conMonto = d.monto1 > 0 && d.total > 0;
+    const parte2 = d.partes[1].monto;
+
+    parcialMonto2.value = conMonto ? pesosParcial(parte2) : '';
+
+    const error = validarParcial();
+    if (error) {
+      // Mientras falta completar no se marca en rojo: sólo se guía.
+      const incompleto = !d.medio1 || !d.medio2 || d.monto1 <= 0;
+      estado.textContent = error;
+      estado.className = 'parcial-estado' + (incompleto ? '' : ' error');
+      return;
+    }
+    const credito = d.partes.find(p => p.medio === 'Credito');
+    estado.textContent = credito && d.recargoCredito
+      ? `✓ Crédito con ${RECARGO_CREDITO_PCT}% de recargo (${pesosParcial(d.recargoCredito)}) · suma el total`
+      : '✓ Suma el total';
+    estado.className = 'parcial-estado ok';
+  }
+
+  // Al editar un pedido: vuelve a cargar el desglose guardado. El monto 1 se
+  // muestra sin el recargo de crédito, que es como lo escribe el cajero.
+  function cargarDesgloseParcial(pagos) {
+    const partes = Array.isArray(pagos && pagos.desglose) ? pagos.desglose : null;
+    if (!partes || partes.length !== 2) {
+      parcialMedio1.value = 'Efectivo';
+      parcialMedio2.value = 'Transferencia';
+      parcialMonto1.value = '';
+    } else {
+      parcialMedio1.value = partes[0].medio || '';
+      parcialMedio2.value = partes[1].medio || '';
+      const tieneCredito = partes.some(p => p.medio === 'Credito');
+      const recargo = tieneCredito ? (Number(pagos.recargo) || 0) : 0;
+      const monto1 = (Number(partes[0].monto) || 0) - (partes[0].medio === 'Credito' ? recargo : 0);
+      parcialMonto1.value = monto1 > 0 ? monto1.toLocaleString('es-AR') : '';
+      recargoAutoParcial = tieneCredito;
+    }
+    actualizarParcial();
+  }
+
+  if (parcialBox) {
+    [parcialMedio1, parcialMedio2].forEach(sel => {
+      sel.addEventListener('change', function() {
+        // Si los dos quedan iguales, el otro pasa al primer medio distinto.
+        const otro = sel === parcialMedio1 ? parcialMedio2 : parcialMedio1;
+        if (otro.value === sel.value) {
+          otro.value = Array.from(otro.options).find(o => o.value !== sel.value).value;
+        }
+        // El 6% del Crédito en parcial no va por el casillero %: lo calcula
+        // recargoCreditoParcial() sobre la parte en crédito.
+        if (parcialConCredito()) recargoPorcentajeInput.value = '';
+        calcularTotalFinal();
+        actualizarVisibilidadComprobanteTransferencia();
+      });
+    });
+    parcialMonto1.addEventListener('input', function() {
+      const n = parseInt(this.value.replace(/\D/g, ''), 10) || 0;
+      this.value = n ? n.toLocaleString('es-AR') : '';
+      calcularTotalFinal();
+    });
+    // form.reset() vuelve los select a Efectivo + Transferencia y vacía el
+    // monto: después del reset se oculta el bloque.
+    form.addEventListener('reset', () => {
+      recargoAutoParcial = false;
+      setTimeout(actualizarParcial, 0);
+    });
+  }
+
   // Formateo numérico para todos los campos relacionados a valores
   function calcularTotalFinal() {
     let subtotal = items.reduce((acc, it) => acc + totalLinea(it), 0);
@@ -1107,6 +1268,17 @@ function getTipoCliente() {
         }
       }
     }
+    // Parcial con Crédito: el recargo es el 6% de la parte en crédito, no de
+    // toda la venta. Si deja de haber Crédito, ese recargo automático se quita.
+    const recargoCredito = recargoCreditoParcial(subtotal + envio - descuento);
+    if (recargoCredito !== null) {
+      recargo = recargoCredito;
+      recargoAutoParcial = true;
+    } else if (recargoAutoParcial) {
+      // Si ahora rige un % (p. ej. pasó a Crédito solo), ese recargo queda.
+      if (!leerPorcentaje(recargoPorcentajeInput)) recargo = 0;
+      recargoAutoParcial = false;
+    }
     let total = subtotal + recargo + envio - descuento;
     // Usar punto como separador de miles para todos los campos
     const formatMiles = n => n ? n.toLocaleString('es-AR').replace(/,/g, '.').replace(/\./g, (m, o, s) => s && s.length > 3 ? '.' : '.') : '';
@@ -1119,6 +1291,7 @@ function getTipoCliente() {
     descuentoInput.value = descuento ? formatMiles(descuento) : '';
     envioInput.value = envio ? formatMiles(envio) : '';
     totalFinalInput.value = formatImporte(total);
+    actualizarParcial();
   }
 
 
@@ -2382,7 +2555,9 @@ function getTipoCliente() {
       diferencia > 0 ? 'A cobrar' : diferencia < 0 ? 'A devolver' : 'Importe';
     document.getElementById('confirmarCambioImporte').textContent =
       diferencia === 0 ? 'Sin cargo' : formatoPesos(Math.abs(diferencia));
-    document.getElementById('confirmarCambioMedio').textContent = form.medioPago.value || '—';
+    document.getElementById('confirmarCambioMedio').textContent = esParcial()
+      ? 'Parcial: ' + textoDesglose(leerDesgloseParcial().partes)
+      : (form.medioPago.value || '—');
 
     const btnOk = document.getElementById('confirmarCambioOkBtn');
     const btnCancel = document.getElementById('confirmarCambioCancelBtn');
@@ -2427,6 +2602,11 @@ function getTipoCliente() {
     }
     if (!medioPago) {
       showPopup('Debe seleccionar el Medio de Pago.', '❗', false);
+      enviandoPedido = false; return;
+    }
+    const errorParcial = validarParcial();
+    if (errorParcial) {
+      showPopup(errorParcial, '❗', false);
       enviandoPedido = false; return;
     }
     if (!vendedor) {
@@ -2542,6 +2722,7 @@ function getTipoCliente() {
             recargo,
             descuento,
             ...porcentajesPagos(),
+            ...desglosePagos(),
             envio,
             subtotal,
             totalFinal,
@@ -2936,6 +3117,10 @@ function getTipoCliente() {
       if (form.nota) form.nota.value = pedido.nota || '';
       vendedorPedidoEditado = pedido.vendedor || '';
       if (form.alias) form.alias.value = pedido.pagos?.alias || '';
+      // Desglose del pago Parcial. Un Parcial guardado antes de esto no lo
+      // trae: el bloque queda vacío y hay que completarlo para Modificar.
+      cargarDesgloseParcial(pedido.pagos);
+      actualizarVisibilidadComprobanteTransferencia();
 
       // --- SOLO LECTURA SI STATUS ES CANCELADO ---
       if (pedido.status === 'CANCELADO') {
@@ -3009,6 +3194,12 @@ function getTipoCliente() {
 
     // Nueva función para modificar el pedido (solo si la contraseña fue correcta y no se canceló nada)
     function modificarPedido(contrasena) {
+      const errorParcial = validarParcial();
+      if (errorParcial) {
+        messageDiv.textContent = errorParcial;
+        messageDiv.style.color = 'red';
+        enviandoPedido = false; return;
+      }
       // Validar artículos
       for (const item of items) {
         if (!item.nombre || item.cantidad <= 0 || item.valorU < 0) {
@@ -3091,6 +3282,7 @@ function getTipoCliente() {
               recargo,
               descuento,
               ...porcentajesPagos(),
+              ...desglosePagos(),
               envio,
               subtotal,
               totalFinal,
@@ -3290,10 +3482,15 @@ function getTipoCliente() {
     
   */
 
-  // Autocompletar recargo 6% al seleccionar Crédito
+  // Autocompletar recargo 6% al seleccionar Crédito. En Parcial no se toca el
+  // %: si una de las partes es Crédito, su recargo lo calcula el desglose.
   form.medioPago.addEventListener('change', function() {
     if (this.value === 'Credito') {
-      recargoPorcentajeInput.value = '6';
+      recargoPorcentajeInput.value = String(RECARGO_CREDITO_PCT);
+    } else if (this.value === 'Parcial') {
+      recargoPorcentajeInput.value = '';
+      recargoInput.value = '';
+      setTimeout(() => parcialMonto1.focus(), 0);
     } else {
       recargoPorcentajeInput.value = '';
       recargoInput.value = '';
@@ -3891,6 +4088,7 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
     data.push(escTxt(posSep()));
     data.push(escTxt(posFila('Subtotal', soloEntero(d.subtotal))));
     data.push(escTxt(posFila('Medio de Pago', d.medioPago)));
+    (d.desglose || []).forEach(p => data.push(escTxt(posFila('  ' + p.medio, soloEntero(p.monto)))));
     if (parseFloat(d.recargo)) data.push(escTxt(posFila('Recargo', soloEntero(d.recargo))));
     if (parseFloat(d.descuento)) data.push(escTxt(posFila('Descuento', soloEntero(d.descuento))));
     if (parseFloat(d.envio)) data.push(escTxt(posFila('Costo de Envio', soloEntero(d.envio))));
@@ -4096,6 +4294,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           <div class="tot">
             <div class="tot-fila"><span>Subtotal</span><span>${soloEntero(d.subtotal)}</span></div>
             <div class="tot-fila"><span>Medio de Pago</span><span>${d.medioPago}</span></div>
+            ${(d.desglose || []).map(p => `<div class="tot-fila"><span>&nbsp;&nbsp;${p.medio}</span><span>${soloEntero(p.monto)}</span></div>`).join('')}
             ${parseFloat(d.recargo) ? `<div class="tot-fila"><span>Recargo</span><span>${soloEntero(d.recargo)}</span></div>` : ''}
             ${parseFloat(d.descuento) ? `<div class="tot-fila"><span>Descuento</span><span>${soloEntero(d.descuento)}</span></div>` : ''}
             ${parseFloat(d.envio) ? `<div class="tot-fila"><span>Costo de Envio</span><span>${soloEntero(d.envio)}</span></div>` : ''}
@@ -4131,6 +4330,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       nombre: form.nombre.value.trim(),
       telefono: form.telefono.value.trim(),
       medioPago: form.medioPago.value,
+      // Pago Parcial: cada medio con su nombre visible y su monto
+      desglose: esParcial()
+        ? leerDesgloseParcial().partes.map(p => ({ medio: etiquetaMedio(p.medio), monto: p.monto }))
+        : [],
       subtotal: form.subtotal.value,
       recargo: form.recargo.value,
       descuento: form.descuento.value,
@@ -4189,12 +4392,16 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   function actualizarVisibilidadComprobanteTransferencia() {
     const aliasRow = document.getElementById('aliasRow');
     if (!aliasRow) return;
-    if (form.medioPago.value === 'Transferencia' || form.medioPago.value === 'Parcial') {
+    // En Parcial, sólo si una de las dos partes es Transferencia (mientras no
+    // eligieron los medios se muestra, como antes).
+    const parcialSinTransferencia = esParcial() && parcialMedio1.value && parcialMedio2.value &&
+      parcialMedio1.value !== 'Transferencia' && parcialMedio2.value !== 'Transferencia';
+    if (form.medioPago.value === 'Transferencia' || (esParcial() && !parcialSinTransferencia)) {
       aliasRow.style.display = '';
     } else {
       aliasRow.style.display = 'none';
-      // El alias solo aplica a Transferencia/Parcial: limpiarlo del formulario
-      // para que no se guarde en Firebase con otros medios de pago.
+      // El alias solo aplica a Transferencia/Parcial con transferencia: limpiarlo
+      // del formulario para que no se guarde en Firebase con otros medios de pago.
       if (form.alias) form.alias.value = '';
     }
   }
@@ -4516,6 +4723,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     form.dni.value = '';
     form.email.value = '';
     form.medioPago.value = '';
+    cargarDesgloseParcial(null);
     form.recargo.value = '';
     form.recargoPorcentaje.value = '';
     form.descuento.value = '';

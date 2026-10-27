@@ -352,6 +352,133 @@
       cerrarModalWhatsapp();
     }
 
+    // === MODAL PAGO PARCIAL ===
+    // Muestra con qué dos medios se cobró un pedido Parcial y cuánto con cada
+    // uno (pagos.desglose, lo guarda ingresoPedidoV2.js) y permite corregirlo.
+    // El total del pedido no cambia: se escribe el monto del 1º medio y el 2º
+    // es lo que falta. Lo leen resumenFacturacion.html y controlTransferencias.html.
+    let parcialPedidoId = null;
+    const NOMBRES_MEDIO = { Efectivo: 'Efectivo', Transferencia: 'Transferencia', Debito: 'Débito', Credito: 'Crédito' };
+
+    function esPagoParcial(pagos) {
+      return slugMedio((pagos || {}).medioPago) === 'parcial';
+    }
+
+    // Desglose guardado del pedido, o null si es un Parcial cargado sin detalle
+    function desgloseGuardado(pagos) {
+      const d = (pagos || {}).desglose;
+      return Array.isArray(d) && d.length === 2 ? d : null;
+    }
+
+    // Texto para el title de la fila: "Efectivo $30.000 + Transferencia $45.000"
+    function textoDesgloseParcial(pagos) {
+      const d = desgloseGuardado(pagos);
+      if (!d) return 'Pago parcial sin detalle de medios: clic para completarlo';
+      return d.map(p => `${NOMBRES_MEDIO[p.medio] || p.medio} ${pesos(Number(p.monto) || 0)}`).join(' + ') + ' · clic para ver o editar';
+    }
+
+    function leerModalParcial() {
+      const pedido = pedidosCache[parcialPedidoId] || {};
+      const total = montoPedido(pedido.pagos);
+      const medio1 = document.getElementById('parcialMedio1').value;
+      const medio2 = document.getElementById('parcialMedio2').value;
+      const monto1 = parseInt(document.getElementById('parcialMonto1').value.replace(/\D/g, ''), 10) || 0;
+      return {
+        total, medio1, medio2, monto1,
+        partes: [
+          { medio: medio1, monto: monto1 },
+          { medio: medio2, monto: total - monto1 }
+        ]
+      };
+    }
+
+    // Mensaje de error, o null si el desglose está completo y suma el total
+    function validarModalParcial(d) {
+      if (d.total <= 0) return 'El pedido no tiene un importe a cobrar.';
+      if (d.medio1 === d.medio2) return 'Los dos medios tienen que ser distintos.';
+      if (d.monto1 <= 0) return `Ingresá cuánto pagó con ${NOMBRES_MEDIO[d.medio1]}.`;
+      if (d.partes[1].monto <= 0) return `Lo pagado con ${NOMBRES_MEDIO[d.medio1]} cubre todo el total: no es un pago parcial.`;
+      return null;
+    }
+
+    function actualizarModalParcial() {
+      const d = leerModalParcial();
+      const cancelado = ((pedidosCache[parcialPedidoId] || {}).status || '').toUpperCase() === 'CANCELADO';
+      document.getElementById('parcialMonto2').value = d.monto1 > 0 ? pesos(d.partes[1].monto) : '';
+      const estado = document.getElementById('parcialEstado');
+      const error = validarModalParcial(d);
+      if (cancelado) {
+        estado.textContent = 'El pedido está cancelado: no se puede modificar.';
+        estado.className = 'parcial-estado';
+      } else if (error) {
+        estado.textContent = error;
+        estado.className = 'parcial-estado' + (d.monto1 > 0 ? ' error' : '');
+      } else {
+        estado.textContent = '✓ Suma el total';
+        estado.className = 'parcial-estado ok';
+      }
+      document.getElementById('parcialBtnGuardar').disabled = cancelado || !!error;
+    }
+
+    function abrirModalParcial(id) {
+      const pedido = pedidosCache[id];
+      if (!pedido) { alert('Pedido no encontrado'); return; }
+      parcialPedidoId = id;
+      const pagos = pedido.pagos || {};
+      const guardado = desgloseGuardado(pagos);
+      const cancelado = (pedido.status || '').toUpperCase() === 'CANCELADO';
+
+      document.getElementById('parcialCliente').textContent = (pedido.cliente && pedido.cliente.nombre) || 'Sin nombre';
+      document.getElementById('parcialTotal').textContent = pesos(montoPedido(pagos));
+      document.getElementById('parcialMedio1').value = guardado ? guardado[0].medio : 'Efectivo';
+      document.getElementById('parcialMedio2').value = guardado ? guardado[1].medio : 'Transferencia';
+      const monto1 = guardado ? Number(guardado[0].monto) || 0 : 0;
+      document.getElementById('parcialMonto1').value = monto1 > 0 ? monto1.toLocaleString('es-AR') : '';
+      // Parcial cargado antes del desglose: se avisa que falta completarlo
+      document.getElementById('parcialAviso').hidden = !!guardado;
+
+      ['parcialMedio1', 'parcialMedio2', 'parcialMonto1'].forEach(campo => {
+        document.getElementById(campo).disabled = cancelado;
+      });
+
+      actualizarModalParcial();
+      document.getElementById('parcialModal').style.display = 'flex';
+      if (!cancelado) document.getElementById('parcialMonto1').focus();
+    }
+
+    function cerrarModalParcial() {
+      document.getElementById('parcialModal').style.display = 'none';
+      parcialPedidoId = null;
+    }
+
+    async function guardarModalParcial() {
+      if (!parcialPedidoId) return;
+      const pedido = pedidosCache[parcialPedidoId];
+      if (!pedido || (pedido.status || '').toUpperCase() === 'CANCELADO') return;
+      const d = leerModalParcial();
+      const error = validarModalParcial(d);
+      if (error) { alert(error); return; }
+
+      const btn = document.getElementById('parcialBtnGuardar');
+      btn.disabled = true;
+      try {
+        await db.ref('pedidos/' + parcialPedidoId + '/pagos/desglose').set(d.partes);
+        if (!pedido.pagos) pedido.pagos = {};
+        pedido.pagos.desglose = d.partes;
+        const txtOriginal = btn.innerHTML;
+        btn.innerHTML = '✓ Guardado';
+        setTimeout(() => {
+          btn.innerHTML = txtOriginal;
+          cerrarModalParcial();
+          renderPedidos();
+        }, 700);
+      } catch (e) {
+        console.error('Error guardando el pago parcial:', e);
+        alert('Error al guardar en Firebase');
+        btn.disabled = false;
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
       // Calcular fecha de hoy en Argentina (UTC-3) antes de armar la query
       const now = new Date();
@@ -485,7 +612,20 @@
         const medioPagoNorm = (pagos.medioPago || '').toString().trim().toLowerCase();
         // Slug sin acentos para la clase del chip (débito -> debito)
         const medioPagoSlug = medioPagoNorm.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
-        const waHabilitado = medioPagoNorm === 'transferencia' || medioPagoNorm === 'parcial';
+        const waPorMedio = medioPagoNorm === 'transferencia' || medioPagoNorm === 'parcial';
+        const waHabilitado = waPorMedio && !isCancelado;
+        const waTitulo = isCancelado ? 'El pedido está cancelado'
+          : (waPorMedio ? 'Enviar alias por WhatsApp' : 'Solo disponible para pagos por transferencia o parcial');
+        // Parcial: total y chip abren el detalle de los dos medios
+        const esParcial = esPagoParcial(pagos);
+        const ayudaParcial = esParcial ? textoDesgloseParcial(pagos).replace(/"/g, '&quot;') : '';
+        const celdaTotal = esParcial && totalFinal
+          ? `<button type="button" class="total-parcial" onclick="abrirModalParcial('${id}')" title="${ayudaParcial}">${totalFinal}</button>`
+          : totalFinal;
+        const chipMedio = !pagos.medioPago ? ''
+          : esParcial
+            ? `<button type="button" class="chip-pago chip-pago--${medioPagoSlug} chip-pago--btn${desgloseGuardado(pagos) ? '' : ' chip-pago--incompleto'}" onclick="abrirModalParcial('${id}')" title="${ayudaParcial}">${pagos.medioPago}</button>`
+            : `<span class="chip-pago chip-pago--${medioPagoSlug}">${pagos.medioPago}</span>`;
         // La calculadora de vuelto solo tiene sentido cobrando en efectivo
         const calcHabilitado = medioPagoNorm === 'efectivo';
         return `
@@ -496,12 +636,12 @@
               ${isCancelado ? '<span class="badge-cancelado">Cancelado</span>' : ''}
             </td>
             <td class="col-nota"><span class="nota-txt">${p.nota || ''}</span></td>
-            <td class="col-total">${totalFinal}</td>
-            <td>${pagos.medioPago ? `<span class="chip-pago chip-pago--${medioPagoSlug}">${pagos.medioPago}</span>` : ''}</td>
+            <td class="col-total">${celdaTotal}</td>
+            <td>${chipMedio}</td>
             <td class="col-vendedor">${vendedor}</td>
             <td>
               <div class="acciones">
-              <button class="icon-btn icon-btn--wa" onclick="abrirModalWhatsapp('${id}')" title="${waHabilitado ? 'Enviar alias por WhatsApp' : 'Solo disponible para pagos por transferencia o parcial'}" aria-label="WhatsApp"${waHabilitado ? '' : ' disabled'}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.116.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.116-.198-.012-.304.087-.403.089-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.325-.336-.445-.342-.116-.007-.248-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.13 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.116-.943-.05-.084-.182-.133-.38-.232z"/></svg></button>
+              <button class="icon-btn icon-btn--wa" onclick="abrirModalWhatsapp('${id}')" title="${waTitulo}" aria-label="WhatsApp"${waHabilitado ? '' : ' disabled'}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.116.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.116-.198-.012-.304.087-.403.089-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.325-.336-.445-.342-.116-.007-.248-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.13 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.116-.943-.05-.084-.182-.133-.38-.232z"/></svg></button>
               <button class="icon-btn icon-btn--calc" onclick="abrirCalcCobro('${id}')" title="${calcHabilitado ? 'Calculadora de cobro' : 'Solo disponible para pagos en efectivo'}" aria-label="Calculadora de cobro"${calcHabilitado ? '' : ' disabled'}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6"/><path d="M9 11h.01M12 11h.01M15 11h.01M9 15h.01M12 15h.01M15 15h.01M9 19h.01M12 19h.01M15 19h.01"/></svg></button>
               <button class="icon-btn icon-btn--ver" onclick="verPedido('${id}')" title="Ver pedido" aria-label="Ver pedido"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg></button>
               <button class="icon-btn icon-btn--print" onclick="imprimirPedido('${id}')" title="Imprimir ticket" aria-label="Imprimir"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/></svg></button>
@@ -704,6 +844,14 @@
     // Construye el documento ESC-POS completo del recibo.
     // conLogo=false omite la imagen (el logo es lo único raster; si la
     // impresora/QZ no lo puede procesar, igual sale todo el texto nativo).
+    // Partes de un pago Parcial para el ticket ([{ medio, monto }], lo guarda
+    // ingresoPedidoV2.js en pagos.desglose). Vacío en los demás pagos.
+    function partesParcialTicket(pagos) {
+      const nombres = { Debito: 'Débito', Credito: 'Crédito' };
+      if (pagos.medioPago !== 'Parcial' || !Array.isArray(pagos.desglose)) return [];
+      return pagos.desglose.map(p => ({ medio: nombres[p.medio] || p.medio, monto: p.monto }));
+    }
+
     function construirESCPOS(pedido, conLogo, id) {
       const cliente = pedido.cliente || {};
       const nombre = cliente.nombre || '';
@@ -762,6 +910,18 @@
       // Cuerpo alineado a la izquierda
       data.push(escCmd('1B6100'));
       data.push(escTxt(posSep()));
+      // Encabezado de la operación: un cambio no es una venta y el ticket tiene que decirlo.
+      // Mismo formato que el ticket de la caja (ingresoPedidoV2.js).
+      const cambio = datosCambioTicket(pedido);
+      if (cambio.esCambio) {
+        data.push(escCmd('1B4501'));
+        data.push(escTxt(posWrap('*** CAMBIO / DEVOLUCION ***')));
+        data.push(escCmd('1B4500'));
+        if (cambio.pedidosOrigen.length) {
+          data.push(escTxt(posWrap('Ref. ticket: ' + cambio.pedidosOrigen.map(idCortoPedido).join(', '))));
+        }
+        data.push(escTxt(posSep()));
+      }
       data.push(escTxt(posWrap('Nombre: ' + nombre)));
       data.push(escTxt(posWrap('Telefono: ' + telefono)));
       data.push(escTxt(posSep()));
@@ -770,12 +930,14 @@
         pedido.items.forEach(it => {
           const cant = it.cantidad || 0;
           const vU = it.valorU || 0;
-          const vTotal = cant * vU;
+          const tipo = it.tipoLinea || 'VENTA';
           const bc = ultimos5BC(it.codigoBarras);
+          const prefijo = tipo === 'DEVOLUCION' ? '(-) ' : tipo === 'GARANTIA' ? '(G) ' : '';
+          const importe = tipo === 'GARANTIA' ? 'SIN CARGO' : soloEntero(totalLineaTicket(it));
           data.push(escCmd('1B4501'));
-          data.push(escTxt(posWrap((it.nombre || '').toUpperCase())));
+          data.push(escTxt(posWrap(prefijo + (it.nombre || '').toUpperCase())));
           data.push(escCmd('1B4500'));
-          data.push(escTxt(posFila(cant + ' x ' + soloEntero(vU), soloEntero(vTotal))));
+          data.push(escTxt(posFila(cant + ' x ' + soloEntero(vU), importe)));
           data.push(escTxt(posWrap('COD.' + (it.codigo || '') + (bc ? ' - ' + bc : ''))));
         });
       }
@@ -783,11 +945,12 @@
       data.push(escTxt(posSep()));
       data.push(escTxt(posFila('Subtotal', soloEntero(pagos.subtotal))));
       data.push(escTxt(posFila('Medio de Pago', medioPago)));
+      partesParcialTicket(pagos).forEach(p => data.push(escTxt(posFila('  ' + p.medio, soloEntero(p.monto)))));
       if (parseNum(pagos.recargo)) data.push(escTxt(posFila('Recargo', soloEntero(pagos.recargo))));
       if (parseNum(pagos.descuento)) data.push(escTxt(posFila('Descuento', soloEntero(pagos.descuento))));
       if (parseNum(pagos.envio)) data.push(escTxt(posFila('Costo de Envio', soloEntero(pagos.envio))));
       data.push(escCmd('1B4501'));
-      data.push(escTxt(posFila('TOTAL', '$ ' + soloEntero(pagos.totalFinal))));
+      data.push(escTxt(posFila(rotuloTotalTicket(cambio.esCambio, parseNum(pagos.totalFinal)), '$ ' + soloEntero(pagos.totalFinal))));
       data.push(escCmd('1B4500'));
 
       data.push(escTxt(posSep()));
@@ -956,6 +1119,43 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return ini ? ini + ' - ' + corto : corto;
     }
 
+    // === TICKET DE CAMBIO / DEVOLUCIÓN ===
+    // Mismo criterio que ingresoPedidoV2.js: cada línea guarda su tipo en tipoLinea
+    // (VENTA / DEVOLUCION / GARANTIA) y valorU siempre en positivo. Los pedidos
+    // históricos no tienen tipoLinea: la ausencia se interpreta como VENTA.
+    function esLineaCambioTicket(it) {
+      return !!it && !!it.tipoLinea && it.tipoLinea !== 'VENTA';
+    }
+
+    // DEVOLUCION resta (signo -1), GARANTIA no aporta importe (signo 0).
+    function totalLineaTicket(it) {
+      const signo = (!it || !it.tipoLinea || it.tipoLinea === 'VENTA') ? 1
+        : it.tipoLinea === 'DEVOLUCION' ? -1 : 0;
+      return signo * (parseInt(it && it.cantidad, 10) || 0) * (parseInt(it && it.valorU, 10) || 0);
+    }
+
+    // Etiqueta corta del pedido de origen: el mismo fragmento del pie de su ticket.
+    function idCortoPedido(id) {
+      return id ? String(id).slice(-8).toUpperCase() : '';
+    }
+
+    function datosCambioTicket(pedido) {
+      const items = Array.isArray(pedido.items) ? pedido.items : [];
+      const lineas = items.filter(esLineaCambioTicket);
+      return {
+        esCambio: lineas.length > 0 || pedido.tipoOperacion === 'CAMBIO',
+        pedidosOrigen: [...new Set(lineas.map(it => it.pedidoOrigenId).filter(Boolean))]
+      };
+    }
+
+    // Rótulo del importe final según el signo de la operación.
+    function rotuloTotalTicket(esCambio, total) {
+      if (!esCambio) return 'TOTAL';
+      if (total > 0) return 'DIFERENCIA';
+      if (total < 0) return 'A DEVOLVER';
+      return 'SIN CARGO';
+    }
+
     function generarReciboYImprimir(pedido, id) {
       // Obtener datos del pedido
       const cliente = pedido.cliente || {};
@@ -1010,20 +1210,24 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           .replace(/[^\x00-\x7F]/g, '');
       };
 
+      const cambio = datosCambioTicket(pedido);
+
       // Items en formato ticket
       let itemsHtml = '';
       if (pedido.items && Array.isArray(pedido.items)) {
         pedido.items.forEach(it => {
           const cant = it.cantidad || 0;
           const vU = it.valorU || 0;
-          const vTotal = cant * vU;
+          const tipo = it.tipoLinea || 'VENTA';
           const bc = ultimos5BC(it.codigoBarras);
+          const prefijo = tipo === 'DEVOLUCION' ? '(-) ' : tipo === 'GARANTIA' ? '(G) ' : '';
+          const importe = tipo === 'GARANTIA' ? 'SIN CARGO' : soloEntero(totalLineaTicket(it));
           itemsHtml += `
             <div class="item">
-              <div class="item-nombre">${(it.nombre || '').toUpperCase()}</div>
+              <div class="item-nombre">${prefijo}${(it.nombre || '').toUpperCase()}</div>
               <div class="item-linea">
                 <span>${cant} x ${soloEntero(vU)}</span>
-                <span>${soloEntero(vTotal)}</span>
+                <span>${importe}</span>
               </div>
               <div class="item-cod">COD.${it.codigo || ''}${bc ? ' - ' + bc : ''}</div>
             </div>`;
@@ -1066,10 +1270,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             <img src="logo.png" alt="Logo" class="logo">
             <div class="local">Vélez Sársfield 4127, Munro</div>
             <div class="local">Tel. 11 2189-1006</div>
-            <div class="titulo">PRESUPUESTO</div>
+            <div class="titulo">${cambio.esCambio ? '*** CAMBIO / DEVOLUCION ***' : 'PRESUPUESTO'}</div>
             <div class="fecha">${new Date(pedido.timestamp).toLocaleString('es-AR', { hour12: false })}</div>
             <hr class="sep">
             <div class="datos">
+              ${cambio.esCambio && cambio.pedidosOrigen.length ? `<div>Ref. ticket: ${cambio.pedidosOrigen.map(idCortoPedido).join(', ')}</div>` : ''}
               <div>Nombre: ${nombre}</div>
               <div>Telefono: ${telefono}</div>
             </div>
@@ -1079,10 +1284,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             <div class="tot">
               <div class="tot-fila"><span>Subtotal</span><span>${soloEntero(subtotal)}</span></div>
               <div class="tot-fila"><span>Medio de Pago</span><span>${medioPago}</span></div>
+              ${partesParcialTicket(pagos).map(p => `<div class="tot-fila"><span>&nbsp;&nbsp;${p.medio}</span><span>${soloEntero(p.monto)}</span></div>`).join('')}
               ${parseNum(recargo) ? `<div class="tot-fila"><span>Recargo</span><span>${soloEntero(recargo)}</span></div>` : ''}
               ${parseNum(descuento) ? `<div class="tot-fila"><span>Descuento</span><span>${soloEntero(descuento)}</span></div>` : ''}
               ${parseNum(envio) ? `<div class="tot-fila"><span>Costo de Envío</span><span>${soloEntero(envio)}</span></div>` : ''}
-              <div class="tot-fila tot-final"><span>TOTAL</span><span>$ ${soloEntero(totalFinal)}</span></div>
+              <div class="tot-fila tot-final"><span>${rotuloTotalTicket(cambio.esCambio, parseNum(totalFinal))}</span><span>$ ${soloEntero(totalFinal)}</span></div>
             </div>
             <hr class="sep">
             <div class="legend">- DOCUMENTO NO VALIDO COMO FACTURA -</div>
@@ -1149,46 +1355,46 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
     
     async function cancelarPedido(id) {
-      const clave = prompt('Ingrese la contraseña para cancelar el pedido:');
+      // prompt() no existe en la app de caja (Electron lo ignora y devuelve null, por eso
+      // el botón "no respondía"): la contraseña se pide con un modal propio.
+      const clave = await pedirClaveCancelacion();
       if (clave === null) return;
       if (clave !== '2574') { alert('Contraseña incorrecta'); return; }
       if (!confirm('¿Seguro que desea cancelar este pedido? Esta acción es IRREVERSIBLE y el pedido no podrá ser modificado ni reactivado.')) return;
-      
+
       try {
         // Primero obtener los movimientos antes de eliminarlos
         const movimientosSnap = await db.ref('movimientos').orderByChild('pedidoId').equalTo(id).once('value');
-        const movimientos = movimientosSnap.val();
-        
-        // Restaurar stock solo si hay movimientos de SALIDA
-        if (movimientos) {
-          const movimientosArray = Object.values(movimientos);
-          const movimientosSalida = movimientosArray.filter(mov => mov.tipo === 'SALIDA');
-          
-          if (movimientosSalida.length > 0) {
-            // Restaurar stock sumando las cantidades que se habían restado
-            for (const mov of movimientosSalida) {
-              if (mov.codigo && mov.nombre && mov.cantidad) {
-                // Restaurar sumando la cantidad (revertir la SALIDA)
-                await actualizarStock(mov.codigo, mov.nombre, mov.cantidad, 'ENTRADA');
-              }
-            }
-          }
-          
-          // Eliminar los movimientos
-          const updates = {};
-          Object.keys(movimientos).forEach(key => {
-            updates[key] = null;
-          });
-          await db.ref('movimientos').update(updates);
+        const movimientos = movimientosSnap.val() || {};
+
+        // Revertir cada movimiento en stock/: la SALIDA vuelve a entrar y la ENTRADA
+        // de una devolución (pedido de cambio) vuelve a salir.
+        for (const mov of Object.values(movimientos)) {
+          if (!mov || !mov.codigo || !mov.nombre || !mov.cantidad) continue;
+          if (mov.tipo === 'SALIDA') await actualizarStock(mov.codigo, mov.nombre, mov.cantidad, 'ENTRADA');
+          else if (mov.tipo === 'ENTRADA') await actualizarStock(mov.codigo, mov.nombre, mov.cantidad, 'SALIDA');
         }
-        
-        // Actualizar el pedido como cancelado
-        await db.ref('pedidos/' + id).update({ 
-          status: 'CANCELADO', 
-          locked: true, 
-          movimientosRegistrados: false 
+
+        // Una sola escritura: borra los movimientos, marca el pedido como cancelado y,
+        // si era un cambio, suelta la retro-referencia que dejó en cada pedido de origen
+        // (sin esto esas unidades seguirían figurando como devueltas). Mismo criterio
+        // que la caja al abrir un pedido cancelado (ingresoPedidoV2.js).
+        const updates = {};
+        Object.keys(movimientos).forEach(key => {
+          updates['movimientos/' + key] = null;
         });
-        
+        let pedido = pedidosCache[id];
+        if (!pedido) pedido = (await db.ref('pedidos/' + id).once('value')).val() || {};
+        const origenes = [...new Set((pedido.items || [])
+          .map(it => it && it.pedidoOrigenId).filter(o => o && o !== id))];
+        origenes.forEach(origenId => {
+          updates[`pedidos/${origenId}/devoluciones/${id}`] = null;
+        });
+        updates[`pedidos/${id}/status`] = 'CANCELADO';
+        updates[`pedidos/${id}/locked`] = true;
+        updates[`pedidos/${id}/movimientosRegistrados`] = false;
+        await db.ref().update(updates);
+
         alert('Pedido cancelado. Ya no podrá ser modificado. Los movimientos asociados han sido eliminados y el stock ha sido restaurado.');
       } catch (e) {
         console.error('Error al cancelar pedido:', e);
@@ -1579,6 +1785,18 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     .chip-pago--debito,
     .chip-pago--credito       { background: var(--azul-bg);    border-color: var(--azul-line);    color: var(--azul); }
     .chip-pago--parcial       { background: var(--ambar-bg);   border-color: var(--ambar-line);   color: var(--ambar); }
+    /* Parcial: el chip y el total abren el detalle de los dos medios */
+    .chip-pago--btn { font-family: inherit; cursor: pointer; }
+    .chip-pago--btn:hover { border-color: var(--ambar); }
+    /* Parcial sin desglose cargado: borde punteado = falta completar */
+    .chip-pago--incompleto { border-style: dashed; }
+    .total-parcial {
+      background: none; border: none; padding: 0; margin: 0;
+      font: inherit; color: inherit; cursor: pointer;
+      text-decoration: underline dotted var(--ambar-line);
+      text-underline-offset: 4px;
+    }
+    .total-parcial:hover { color: var(--ambar); text-decoration-color: var(--ambar); }
 
     /* ----------------------------------------------- botones de la fila -- */
     .acciones { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
@@ -1741,6 +1959,27 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     .alias-aviso button:hover { background: rgba(255, 255, 255, .1); }
 
     .modal-acciones { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s5); }
+
+    /* Modal de pago parcial */
+    .parcial-fila { display: flex; gap: var(--s2); }
+    .parcial-fila select { flex: 1 1 0; min-width: 0; }
+    .parcial-monto { flex: 0 0 140px; width: 140px; text-align: right; }
+    .parcial-monto[readonly] { background: var(--surface-2); color: var(--ink-2); }
+    .parcial-fila select:disabled,
+    .parcial-fila input:disabled { background: var(--surface-2); color: var(--ink-4); }
+    .parcial-aviso {
+      margin: 0 0 var(--s4);
+      padding: var(--s2) var(--s3);
+      border: 1px solid var(--ambar-line);
+      border-radius: var(--r2);
+      background: var(--ambar-bg);
+      color: var(--ambar);
+      font-size: 13px;
+    }
+    .parcial-aviso[hidden] { display: none; }
+    .parcial-estado { margin: 0; min-height: 1.3em; font-size: 13px; color: var(--ink-3); }
+    .parcial-estado.ok { color: var(--verde); }
+    .parcial-estado.error { color: var(--rojo); }
 
     .btn-wa {
       display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
@@ -2001,6 +2240,49 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     </div>
   </div>
 
+  <!-- Modal Pago parcial: los dos medios y sus importes, editables -->
+  <div id="parcialModal" class="modal-overlay">
+    <div class="modal-card modal-card-ancha" role="dialog" aria-modal="true" aria-labelledby="parcialTitulo">
+      <div class="modal-head">
+        <h3 id="parcialTitulo" class="modal-titulo">Pago parcial</h3>
+        <button type="button" class="modal-cerrar" onclick="cerrarModalParcial()" title="Cerrar" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="calc-destacado">
+        <div class="calc-destacado-label" id="parcialCliente"></div>
+        <div id="parcialTotal" class="calc-destacado-valor">$0</div>
+      </div>
+      <p id="parcialAviso" class="parcial-aviso" hidden>Este pedido se cargó sin el detalle de medios. Completalo y guardá.</p>
+      <div class="modal-campo">
+        <label for="parcialMedio1" class="modal-label">Primer medio</label>
+        <div class="parcial-fila">
+          <select id="parcialMedio1" class="modal-input" aria-label="Primer medio">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Debito">Débito</option>
+            <option value="Credito">Crédito</option>
+          </select>
+          <input type="text" id="parcialMonto1" class="modal-input parcial-monto" inputmode="numeric" placeholder="Monto" autocomplete="off" aria-label="Monto del primer medio">
+        </div>
+      </div>
+      <div class="modal-campo">
+        <label for="parcialMedio2" class="modal-label">Segundo medio · lo que falta</label>
+        <div class="parcial-fila">
+          <select id="parcialMedio2" class="modal-input" aria-label="Segundo medio">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Debito">Débito</option>
+            <option value="Credito">Crédito</option>
+          </select>
+          <input type="text" id="parcialMonto2" class="modal-input parcial-monto" readonly tabindex="-1" aria-label="Monto del segundo medio">
+        </div>
+      </div>
+      <p id="parcialEstado" class="parcial-estado" role="status" aria-live="polite"></p>
+      <div class="modal-acciones">
+        <button type="button" id="parcialBtnGuardar" class="btn-guardar" onclick="guardarModalParcial()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Calculadora de Cobro -->
   <div id="calcModal" class="modal-overlay">
     <div class="modal-card">
@@ -2030,6 +2312,25 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         <div class="calc-resultado-label">Falta</div>
         <div id="calcFalta" class="calc-resultado-valor">$0</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Contraseña para cancelar pedido -->
+  <div id="cancelarModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 class="modal-titulo">Cancelar pedido</h3>
+        <button type="button" class="modal-cerrar" onclick="cerrarClaveCancelacion(null)" title="Cerrar" aria-label="Cerrar">&times;</button>
+      </div>
+      <form id="cancelarForm" autocomplete="off">
+        <div class="modal-campo">
+          <label for="cancelarClave" class="modal-label">Contraseña</label>
+          <input type="password" id="cancelarClave" class="modal-input" placeholder="Ingrese la contraseña">
+        </div>
+        <div class="modal-acciones">
+          <button type="submit" class="btn-guardar">Continuar</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -2094,6 +2395,36 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     document.getElementById('waModal').addEventListener('click', function(e) {
       if (e.target === this) cerrarModalWhatsapp();
     });
+
+    // Modal de pago parcial: recalcular al cambiar medios o monto, Escape
+    // cierra, Enter guarda, clic afuera cierra.
+    (function() {
+      const overlay = document.getElementById('parcialModal');
+      const medio1 = document.getElementById('parcialMedio1');
+      const medio2 = document.getElementById('parcialMedio2');
+      const monto1 = document.getElementById('parcialMonto1');
+      [medio1, medio2].forEach(sel => {
+        sel.addEventListener('change', () => {
+          // Si los dos quedan iguales, el otro pasa al primer medio distinto
+          const otro = sel === medio1 ? medio2 : medio1;
+          if (otro.value === sel.value) {
+            otro.value = Array.from(otro.options).find(o => o.value !== sel.value).value;
+          }
+          actualizarModalParcial();
+        });
+      });
+      monto1.addEventListener('input', function() {
+        const n = parseInt(this.value.replace(/\D/g, ''), 10) || 0;
+        this.value = n ? n.toLocaleString('es-AR') : '';
+        actualizarModalParcial();
+      });
+      document.addEventListener('keydown', e => {
+        if (overlay.style.display !== 'flex') return;
+        if (e.key === 'Escape') cerrarModalParcial();
+        if (e.key === 'Enter' && document.activeElement === monto1) guardarModalParcial();
+      });
+      overlay.addEventListener('click', e => { if (e.target === overlay) cerrarModalParcial(); });
+    })();
 
     // === CALCULADORA DE COBRO ===
     // Misma mecánica que el modal de ingresoPedidoV2.html, pero el total no se
@@ -2187,6 +2518,45 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // Las filas de la tabla se generan con onclick inline: hace falta el global
       window.abrirCalcCobro = abrirCalcCobro;
       window.cerrarCalcCobro = cerrarCalcCobro;
+    })();
+
+    // === CONTRASEÑA PARA CANCELAR PEDIDO ===
+    // Reemplaza a prompt(), que la app de caja (Electron) no soporta. Devuelve una
+    // promesa con el texto ingresado, o null si se cierra sin continuar.
+    (function() {
+      const overlay = document.getElementById('cancelarModal');
+      const form = document.getElementById('cancelarForm');
+      const input = document.getElementById('cancelarClave');
+      let resolver = null;
+
+      function pedirClaveCancelacion() {
+        if (resolver) resolver(null);
+        input.value = '';
+        overlay.style.display = 'flex';
+        setTimeout(() => input.focus(), 100);
+        return new Promise(resolve => { resolver = resolve; });
+      }
+
+      function cerrarClaveCancelacion(valor) {
+        overlay.style.display = 'none';
+        const r = resolver;
+        resolver = null;
+        if (r) r(valor);
+      }
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        cerrarClaveCancelacion(input.value);
+      });
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) cerrarClaveCancelacion(null);
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay.style.display === 'flex') cerrarClaveCancelacion(null);
+      });
+
+      window.pedirClaveCancelacion = pedirClaveCancelacion;
+      window.cerrarClaveCancelacion = cerrarClaveCancelacion;
     })();
   </script>
   <!-- Mensajería entre equipos: la misma que en la caja. -->
