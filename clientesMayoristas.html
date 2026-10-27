@@ -252,6 +252,28 @@
         .stat { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1rem 1.2rem; box-shadow: var(--shadow); }
         .stat-label { font-size: .75rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
         .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+        .filtro i { margin-left: .25rem; color: var(--warning); }
+        .filtro.active i { color: #fff; }
+        .nota-periodo { font-size: .8rem; color: var(--gray-500); margin: -.5rem 0 1rem; }
+        .nota-periodo b { color: var(--gray-700); }
+        .select {
+            padding: .5rem 2rem .5rem .8rem; font: inherit; font-size: .85rem; font-weight: 600; color: var(--gray-700);
+            border: 1px solid var(--gray-300); border-radius: 8px; background: #fff; cursor: pointer;
+        }
+        .select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .badge-registro { background: var(--primary-light); color: var(--primary-dark); vertical-align: middle; }
+
+        /* ===== LOGIN EN OTRA SUCURSAL ===== */
+        .modal.modal-login { max-width: 400px; }
+        .login-sub { font-size: .85rem; color: var(--gray-500); margin-bottom: 1rem; }
+        .modal-login label { display: block; font-size: .8rem; font-weight: 600; color: var(--gray-600); margin-bottom: .75rem; }
+        .modal-login input {
+            display: block; width: 100%; margin-top: .3rem; padding: .6rem .8rem; font: inherit;
+            border: 1px solid var(--gray-300); border-radius: 8px; background: #fff;
+        }
+        .modal-login input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .login-error { min-height: 1.2rem; font-size: .8rem; color: var(--danger); font-weight: 600; }
+        .modal-login .qr-actions { justify-content: flex-end; }
 
         .table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); overflow-x: auto; box-shadow: var(--shadow); }
         table { width: 100%; border-collapse: collapse; }
@@ -385,12 +407,22 @@
                 <div class="stat"><div class="stat-label">Total facturado</div><div class="stat-value" id="stTotal">–</div></div>
                 <div class="stat"><div class="stat-label">Ticket promedio</div><div class="stat-value" id="stTicket">–</div></div>
             </div>
+            <p class="nota-periodo" id="notaPeriodo"></p>
             <div class="toolbar">
                 <div class="search">
                     <i class="bi bi-search"></i>
                     <input type="text" id="buscarDash" placeholder="Buscar mayorista…">
                 </div>
-                <button class="btn btn-outline" onclick="cargarDashboard(true)"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+                <select class="select" id="registroDash" title="Filtrar por registro">
+                    <option value="">Todos los registros</option>
+                </select>
+                <div class="filtros" id="periodoDash">
+                    <button class="filtro active" data-periodo="30">30 días</button>
+                    <button class="filtro" data-periodo="90">3 meses</button>
+                    <button class="filtro" data-periodo="180" title="Descarga pesada: pide confirmación">6 meses<i class="bi bi-exclamation-triangle-fill"></i></button>
+                    <button class="filtro" data-periodo="0" title="Descarga pesada: pide confirmación">Todo<i class="bi bi-exclamation-triangle-fill"></i></button>
+                </div>
+                <button class="btn btn-outline" onclick="actualizarDashboard()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
             </div>
             <div class="table-wrap">
                 <table>
@@ -434,6 +466,24 @@
                 </table>
             </div>
         </div>
+    </div>
+
+    <!-- Inicio de sesión en otra sucursal (otro proyecto de Firebase) -->
+    <div class="modal-bg" id="modalLogin">
+        <form class="modal modal-login" id="loginForm" novalidate>
+            <div class="modal-head">
+                <h2>Iniciar sesión en <span id="loginSucursal"></span></h2>
+                <button type="button" class="modal-close" id="loginCerrar" aria-label="Cancelar">&times;</button>
+            </div>
+            <p class="login-sub">Para importar el cliente también en esta sucursal, ingresá con un usuario de esa sucursal. Se pide una sola vez: después queda recordado en este navegador.</p>
+            <label>Email<input type="email" id="loginEmail" autocomplete="username"></label>
+            <label>Contraseña<input type="password" id="loginClave" autocomplete="current-password"></label>
+            <div class="login-error" id="loginError" role="alert"></div>
+            <div class="qr-actions">
+                <button type="button" class="btn btn-outline" id="loginCancelar">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="loginOk">Ingresar</button>
+            </div>
+        </form>
     </div>
 
     <!-- Afiche QR A3 -->
@@ -646,59 +696,173 @@
                 .catch(err => { console.error(err); alert('No se pudo eliminar.'); });
         }
 
-        // Importa solo nombre, teléfono y email al nodo clientes como mayorista.
-        // Si ya existe un cliente con el mismo email o teléfono, se ofrece
-        // marcarlo como mayorista en vez de duplicarlo.
+        /* ====================================================== sucursales = */
+        // Cada sucursal es otro proyecto de Firebase con su propio nodo clientes y
+        // sus propios usuarios. Munro es la app por defecto de la página (config.js).
+        // Caseros se conecta aparte leyendo config2.js como texto: declara la misma
+        // constante firebaseConfig y no se puede cargar como <script>. El nombre de
+        // la app ('pv-2') es el mismo que usan las otras páginas, así comparten la
+        // sesión guardada en el navegador.
+        const SUCURSALES = [
+            { id: '1', nombre: 'Munro', config: 'config.js' },
+            { id: '2', nombre: 'Caseros', config: 'config2.js' }
+        ];
+        const basesSucursal = { '1': db };
+        const LOGIN_CANCELADO = 'login-cancelado';
+
+        async function baseDe(suc) {
+            if (basesSucursal[suc.id]) return basesSucursal[suc.id];
+            let app = firebase.apps.find(a => a.name === 'pv-' + suc.id);
+            if (!app) {
+                const resp = await fetch(suc.config, { cache: 'no-store' });
+                if (!resp.ok) throw new Error('No se pudo leer ' + suc.config);
+                const config = new Function(await resp.text() + '\nreturn firebaseConfig;')();
+                app = firebase.initializeApp(config, 'pv-' + suc.id);
+            }
+            if (!(await usuarioDe(app))) await pedirLogin(app, suc.nombre);
+            basesSucursal[suc.id] = app.database();
+            return basesSucursal[suc.id];
+        }
+
+        // Usuario con sesión en la app indicada (espera a que Firebase la restaure).
+        function usuarioDe(app) {
+            return new Promise(resolve => {
+                const dejar = app.auth().onAuthStateChanged(u => { dejar(); resolve(u); });
+            });
+        }
+
+        // Resuelve al iniciar sesión; rechaza con LOGIN_CANCELADO si se cancela
+        // (botón, cruz, clic afuera o Escape).
+        function pedirLogin(app, nombre) {
+            return new Promise((resolve, reject) => {
+                const modal = $('modalLogin'), form = $('loginForm');
+                const email = $('loginEmail'), clave = $('loginClave'), error = $('loginError'), ok = $('loginOk');
+                $('loginSucursal').textContent = nombre;
+                form.reset();
+                error.textContent = '';
+                modal.classList.add('open');
+                setTimeout(() => email.focus(), 30);
+
+                function cerrar() {
+                    modal.classList.remove('open');
+                    form.removeEventListener('submit', alEnviar);
+                    $('loginCancelar').removeEventListener('click', alCancelar);
+                    $('loginCerrar').removeEventListener('click', alCancelar);
+                    modal.removeEventListener('click', alClicFuera);
+                    document.removeEventListener('keydown', alTecla);
+                }
+                async function alEnviar(e) {
+                    e.preventDefault();
+                    error.textContent = '';
+                    ok.disabled = true;
+                    try {
+                        await app.auth().signInWithEmailAndPassword(email.value.trim(), clave.value);
+                        cerrar();
+                        resolve();
+                    } catch (err) {
+                        console.error('Error al iniciar sesión en ' + nombre + ':', err);
+                        error.textContent = 'Usuario o contraseña incorrectos.';
+                        clave.value = '';
+                        clave.focus();
+                    } finally {
+                        ok.disabled = false;
+                    }
+                }
+                function alCancelar() { cerrar(); reject(new Error(LOGIN_CANCELADO)); }
+                function alClicFuera(e) { if (e.target === modal) alCancelar(); }
+                function alTecla(e) { if (e.key === 'Escape') alCancelar(); }
+                form.addEventListener('submit', alEnviar);
+                $('loginCancelar').addEventListener('click', alCancelar);
+                $('loginCerrar').addEventListener('click', alCancelar);
+                modal.addEventListener('click', alClicFuera);
+                document.addEventListener('keydown', alTecla);
+            });
+        }
+
+        // Cliente de la sucursal con el mismo email o teléfono, si lo hay.
+        function buscarExistente(snap, email, tel) {
+            let existente = null;
+            snap.forEach(ch => {
+                if (existente) return;
+                const c = ch.val() || {};
+                if ((email && normEmail(c.email) === email) || (tel.length === 8 && normTel(c.telefono) === tel)) {
+                    existente = { id: ch.key, ...c };
+                }
+            });
+            return existente;
+        }
+
+        // Crea el cliente en la sucursal, o marca como mayorista al que ya
+        // existía (completando email o teléfono si le faltaban). Devuelve su id.
+        async function guardarEnSucursal({ base, existente }, p) {
+            if (existente) {
+                const cambios = { tipoCliente: 'mayorista' };
+                if (!existente.email && p.email) cambios.email = normEmail(p.email);
+                if (!existente.telefono && p.telefono) cambios.telefono = p.telefono.trim();
+                await base.ref('clientes/' + existente.id).update(cambios);
+                return existente.id;
+            }
+            const ref = await base.ref('clientes').push({
+                nombre: p.nombre.trim(),
+                telefono: p.telefono.trim(),
+                email: normEmail(p.email),
+                tipoCliente: 'mayorista',
+                registro: 'QR'
+            });
+            return ref.key;
+        }
+
+        // Importa solo nombre, teléfono y email al nodo clientes de TODAS las
+        // sucursales como mayorista. En cada una, si ya existe un cliente con el
+        // mismo email o teléfono, se lo marca como mayorista en vez de duplicarlo.
         async function importar(id, btn) {
             const p = potenciales.find(x => x.id === id);
             if (!p) return;
             btn.disabled = true;
             try {
-                const snap = await db.ref('clientes').once('value');
+                // Primero se conectan todas las sucursales (de a una, por si alguna
+                // pide iniciar sesión): si se cancela, no se escribe en ninguna.
+                const bases = [];
+                for (const suc of SUCURSALES) bases.push(await baseDe(suc));
+
                 const email = normEmail(p.email);
                 const tel = normTel(p.telefono);
-                let existente = null;
-                snap.forEach(ch => {
-                    if (existente) return;
-                    const c = ch.val() || {};
-                    if ((email && normEmail(c.email) === email) || (tel.length === 8 && normTel(c.telefono) === tel)) {
-                        existente = { id: ch.key, ...c };
-                    }
+                const snaps = await Promise.all(bases.map(b => b.ref('clientes').once('value')));
+                const planes = SUCURSALES.map((suc, i) => ({ suc, base: bases[i], existente: buscarExistente(snaps[i], email, tel) }));
+
+                const detalle = planes.map(({ suc, existente }) => existente
+                    ? `• ${suc.nombre}: ya existe un cliente parecido → se marca como mayorista\n   ${existente.nombre || '(sin nombre)'} · ${existente.telefono || ''} ${existente.email || ''} · tipo actual: ${existente.tipoCliente || 'sin especificar'}`
+                    : `• ${suc.nombre}: se crea como cliente nuevo`).join('\n');
+                if (!confirm(`¿Importar a "${p.nombre}" como cliente mayorista en ambas sucursales?\n\n${detalle}`)) { btn.disabled = false; return; }
+
+                const resultados = await Promise.allSettled(planes.map(pl => guardarEnSucursal(pl, p)));
+                const clienteIds = { ...(p.clienteIds || {}) };
+                const fallidas = [];
+                resultados.forEach((r, i) => {
+                    if (r.status === 'fulfilled') clienteIds[planes[i].suc.id] = r.value;
+                    else { console.error(`Error al importar en ${planes[i].suc.nombre}:`, r.reason); fallidas.push(planes[i].suc.nombre); }
                 });
 
-                let clienteId;
-                if (existente) {
-                    const ok = confirm(
-                        `Ya existe un cliente parecido:\n\n${existente.nombre || '(sin nombre)'}\n${existente.telefono || ''}  ${existente.email || ''}\nTipo actual: ${existente.tipoCliente || 'sin especificar'}\n\n¿Marcarlo como mayorista y vincularlo a este registro?`
-                    );
-                    if (!ok) { btn.disabled = false; return; }
-                    const cambios = { tipoCliente: 'mayorista' };
-                    if (!existente.email && p.email) cambios.email = normEmail(p.email);
-                    if (!existente.telefono && p.telefono) cambios.telefono = p.telefono.trim();
-                    await db.ref('clientes/' + existente.id).update(cambios);
-                    clienteId = existente.id;
-                } else {
-                    if (!confirm(`¿Importar a "${p.nombre}" como cliente mayorista?`)) { btn.disabled = false; return; }
-                    const ref = await db.ref('clientes').push({
-                        nombre: p.nombre.trim(),
-                        telefono: p.telefono.trim(),
-                        email: normEmail(p.email),
-                        tipoCliente: 'mayorista',
-                        registro: 'QR'
-                    });
-                    clienteId = ref.key;
+                // Solo queda "importado" si se guardó en todas; si no, sigue pendiente
+                // para reintentar (donde ya se creó lo detecta y no lo duplica).
+                const cambios = { clienteIds };
+                if (clienteIds['1']) cambios.clienteId = clienteIds['1'];
+                if (!fallidas.length) {
+                    cambios.estado = 'importado';
+                    cambios.importadoEn = firebase.database.ServerValue.TIMESTAMP;
                 }
-
-                await db.ref('clientesPotenciales/' + id).update({
-                    estado: 'importado',
-                    clienteId,
-                    importadoEn: firebase.database.ServerValue.TIMESTAMP
-                });
+                await db.ref('clientesPotenciales/' + id).update(cambios);
                 dashboardCargado = false;
+
+                if (fallidas.length) {
+                    alert(`No se pudo importar en: ${fallidas.join(', ')}.\n\nEl registro queda pendiente. Tocá "Importar" de nuevo para reintentar: en la sucursal donde ya se guardó no se va a duplicar.`);
+                    btn.disabled = false;
+                }
             } catch (err) {
+                btn.disabled = false;
+                if (err.message === LOGIN_CANCELADO) return;
                 console.error('Error al importar:', err);
                 alert('No se pudo importar el cliente.');
-                btn.disabled = false;
             }
         }
 
@@ -707,16 +871,116 @@
         let filasDash = [];
         let ordenDash = { campo: 'total', asc: false };
 
+        // Período en días (0 = todo el historial). Por defecto solo se bajan
+        // los últimos 30 días para no consumir cuota de Firebase de más.
+        const PERIODOS = {
+            30:  { texto: 'los últimos 30 días' },
+            90:  { texto: 'los últimos 3 meses' },
+            180: { texto: 'los últimos 6 meses', pesado: true },
+            0:   { texto: 'todo el historial', pesado: true }
+        };
+        let periodoDash = 30;
+        // Pedidos entregados ya descargados. Si cubren un período más amplio
+        // que el elegido, se filtran en memoria sin volver a pedir a Firebase.
+        let cachePedidos = null; // { periodo, bytes, lista: [{ id, ts, total, cliente }] }
+        let cargaDash = 0;
+
+        const cubre = (amplio, pedido) => amplio === 0 || (pedido !== 0 && pedido <= amplio);
+        const megas = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+
+        function inicioPeriodo(periodo) {
+            if (!periodo) return 0;
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() - periodo);
+            return d.getTime();
+        }
+
+        // Consultas acotadas en el servidor (usa ".indexOn": "fecha" de las reglas).
+        // Además de los pedidos desde la fecha límite, se traen los que no tienen
+        // fecha (null o ""), que se ubican por timestamp.
+        async function descargarPedidos(periodo) {
+            const ref = db.ref('pedidos');
+            let snaps;
+            if (!periodo) {
+                snaps = [await ref.once('value')];
+            } else {
+                const d = new Date(inicioPeriodo(periodo));
+                const desde = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                snaps = await Promise.all([
+                    ref.orderByChild('fecha').startAt(desde).once('value'),
+                    ref.orderByChild('fecha').endAt(null).once('value'),
+                    ref.orderByChild('fecha').equalTo('').once('value')
+                ]);
+            }
+
+            const porId = new Map();
+            let bytes = 0;
+            snaps.forEach(snap => {
+                bytes += JSON.stringify(snap.val() || {}).length;
+                snap.forEach(ch => {
+                    const p = ch.val() || {};
+                    if ((p.status || '').toUpperCase() !== ESTADO_VALIDO) return;
+                    porId.set(ch.key, { id: ch.key, ts: fechaPedido(p), total: num((p.pagos || {}).totalFinal), cliente: p.cliente || {} });
+                });
+            });
+            return { periodo, bytes, lista: [...porId.values()] };
+        }
+
+        // Aviso previo a las descargas pesadas, con un tamaño estimado a partir
+        // de lo que ya se bajó (pedidos por día × días del período).
+        function confirmarDescarga(periodo) {
+            const p = PERIODOS[periodo];
+            if (!p.pesado) return true;
+            let estimado = '';
+            if (cachePedidos && cachePedidos.periodo) {
+                const porDia = cachePedidos.bytes / cachePedidos.periodo;
+                estimado = periodo
+                    ? `\nTamaño estimado: ~${megas(porDia * periodo)}.`
+                    : `\nSolo 6 meses serían ~${megas(porDia * 180)}; el historial completo puede ser varias veces más.`;
+            }
+            return confirm(
+                `⚠ Descarga pesada\n\nVas a descargar los pedidos de ${p.texto}.${estimado}\n\n` +
+                `Esto consume transferencia de Firebase (se factura por volumen descargado) y puede tardar. ` +
+                `Usalo solo si realmente necesitás esos datos.\n\n¿Continuar?`
+            );
+        }
+
+        $('periodoDash').addEventListener('click', e => {
+            const b = e.target.closest('.filtro');
+            if (!b || b.classList.contains('active')) return;
+            const periodo = Number(b.dataset.periodo);
+            // Si ya está en memoria no hay descarga, así que no hace falta avisar.
+            const enCache = cachePedidos && cubre(cachePedidos.periodo, periodo);
+            if (!enCache && !confirmarDescarga(periodo)) return;
+            periodoDash = periodo;
+            document.querySelectorAll('#periodoDash .filtro').forEach(x => x.classList.toggle('active', x === b));
+            dashboardCargado = false;
+            cargarDashboard();
+        });
+
+        function actualizarDashboard() {
+            if (!confirmarDescarga(periodoDash)) return;
+            cargarDashboard(true);
+        }
+
+        // forzar = volver a descargar los pedidos aunque estén en memoria.
         async function cargarDashboard(forzar) {
             if (dashboardCargado && !forzar) return;
+            const esta = ++cargaDash;
+            const periodo = periodoDash;
             $('tbodyDash').innerHTML = '';
             $('emptyDash').style.display = 'block';
-            $('emptyDash').innerHTML = '<i class="bi bi-hourglass-split"></i>Cargando pedidos…';
+            $('emptyDash').innerHTML = `<i class="bi bi-hourglass-split"></i>Cargando pedidos de ${PERIODOS[periodo].texto}…`;
             try {
-                const [cliSnap, pedSnap] = await Promise.all([
+                const descargar = forzar || !cachePedidos || !cubre(cachePedidos.periodo, periodo);
+                const [cliSnap, pedidos] = await Promise.all([
                     db.ref('clientes').once('value'),
-                    db.ref('pedidos').once('value')
+                    descargar ? descargarPedidos(periodo) : cachePedidos
                 ]);
+                if (esta !== cargaDash) return;
+                if (descargar) cachePedidos = pedidos;
+                const desde = inicioPeriodo(periodo);
 
                 // Índices de mayoristas por email, nombre+teléfono y nombre.
                 const mayoristas = [];
@@ -724,7 +988,7 @@
                 cliSnap.forEach(ch => {
                     const c = ch.val() || {};
                     if ((c.tipoCliente || '').toLowerCase() !== 'mayorista') return;
-                    const fila = { id: ch.key, nombre: c.nombre || '(sin nombre)', telefono: c.telefono || '', email: c.email || '', pedidosLista: [] };
+                    const fila = { id: ch.key, nombre: c.nombre || '(sin nombre)', telefono: c.telefono || '', email: c.email || '', registro: (c.registro || '').trim(), pedidosLista: [] };
                     mayoristas.push(fila);
                     const e = normEmail(c.email), n = normNombre(c.nombre), t = normTel(c.telefono);
                     if (e && !porEmail.has(e)) porEmail.set(e, fila);
@@ -734,18 +998,13 @@
 
                 // Cada pedido entregado se asigna a un solo mayorista, probando
                 // primero la coincidencia más confiable.
-                pedSnap.forEach(ch => {
-                    const p = ch.val() || {};
-                    if ((p.status || '').toUpperCase() !== ESTADO_VALIDO) return;
-                    const cl = p.cliente || {};
+                pedidos.lista.forEach(p => {
+                    if (desde && p.ts < desde) return;
+                    const cl = p.cliente;
                     const e = normEmail(cl.email), n = normNombre(cl.nombre), t = normTel(cl.telefono);
                     const fila = (e && porEmail.get(e)) || (n && t && porNomTel.get(n + '|' + t)) || (n && porNombre.get(n));
                     if (!fila) return;
-                    fila.pedidosLista.push({
-                        id: ch.key,
-                        ts: fechaPedido(p),
-                        total: num((p.pagos || {}).totalFinal)
-                    });
+                    fila.pedidosLista.push({ id: p.id, ts: p.ts, total: p.total });
                 });
 
                 const hoy = Date.now();
@@ -764,17 +1023,13 @@
                     };
                 });
 
-                const conCompras = filasDash.filter(f => f.pedidos > 0);
-                const totalGral = conCompras.reduce((s, f) => s + f.total, 0);
-                const pedidosGral = conCompras.reduce((s, f) => s + f.pedidos, 0);
-                $('stMayoristas').textContent = filasDash.length;
-                $('stConCompras').textContent = conCompras.length;
-                $('stTotal').textContent = pesos(totalGral);
-                $('stTicket').textContent = pedidosGral ? pesos(totalGral / pedidosGral) : '–';
+                cargarOpcionesRegistro();
+                $('notaPeriodo').innerHTML = `Compras, totales y fechas calculados con los pedidos entregados de <b>${PERIODOS[periodo].texto}</b>.`;
 
                 dashboardCargado = true;
                 renderDashboard();
             } catch (err) {
+                if (esta !== cargaDash) return;
                 console.error('Error al cargar dashboard:', err);
                 $('emptyDash').innerHTML = '<i class="bi bi-exclamation-triangle"></i>No se pudieron cargar los datos.';
             }
@@ -796,10 +1051,61 @@
             renderDashboard();
         }));
 
+        // Opciones del filtro "registro" según los valores que existen (Local, Web, QR…),
+        // con la cantidad de mayoristas de cada uno. Se conserva la opción elegida.
+        // Los valores se agrupan ignorando mayúsculas, tildes y espacios ("local",
+        // " Local ", "LOCAL" son lo mismo) y se muestran con la escritura más usada.
+        const SIN_REGISTRO = '__vacio';
+        const normRegistro = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+        let etiquetaRegistro = new Map(); // clave normalizada → texto a mostrar
+
+        function cargarOpcionesRegistro() {
+            const sel = $('registroDash');
+            const actual = sel.value;
+            const grupos = new Map(); // clave → { total, variantes: Map(texto → cantidad) }
+            filasDash.forEach(f => {
+                const k = normRegistro(f.registro) || SIN_REGISTRO;
+                const g = grupos.get(k) || { total: 0, variantes: new Map() };
+                const texto = f.registro.trim().replace(/\s+/g, ' ');
+                g.total++;
+                g.variantes.set(texto, (g.variantes.get(texto) || 0) + 1);
+                grupos.set(k, g);
+            });
+
+            etiquetaRegistro = new Map();
+            grupos.forEach((g, k) => {
+                if (k === SIN_REGISTRO) return;
+                const [masUsada] = [...g.variantes].sort((a, b) => b[1] - a[1])[0];
+                etiquetaRegistro.set(k, masUsada);
+            });
+
+            const claves = [...etiquetaRegistro.keys()].sort((a, b) => etiquetaRegistro.get(a).localeCompare(etiquetaRegistro.get(b), 'es'));
+            if (grupos.has(SIN_REGISTRO)) claves.push(SIN_REGISTRO);
+            sel.innerHTML = `<option value="">Todos los registros (${filasDash.length})</option>` + claves.map(k =>
+                `<option value="${esc(k)}">${k === SIN_REGISTRO ? 'Sin especificar' : esc(etiquetaRegistro.get(k))} (${grupos.get(k).total})</option>`).join('');
+            sel.value = grupos.has(actual) ? actual : '';
+        }
+
+        const coincideRegistro = (f, r) => !r || (normRegistro(f.registro) || SIN_REGISTRO) === r;
+
+        $('registroDash').addEventListener('change', renderDashboard);
+
         function renderDashboard() {
             const q = $('buscarDash').value.trim().toLowerCase();
+            const r = $('registroDash').value;
             const { campo, asc } = ordenDash;
-            const lista = filasDash
+
+            // Las tarjetas de arriba reflejan el registro elegido (no la búsqueda).
+            const delRegistro = filasDash.filter(f => coincideRegistro(f, r));
+            const conCompras = delRegistro.filter(f => f.pedidos > 0);
+            const totalGral = conCompras.reduce((s, f) => s + f.total, 0);
+            const pedidosGral = conCompras.reduce((s, f) => s + f.pedidos, 0);
+            $('stMayoristas').textContent = delRegistro.length;
+            $('stConCompras').textContent = conCompras.length;
+            $('stTotal').textContent = pesos(totalGral);
+            $('stTicket').textContent = pedidosGral ? pesos(totalGral / pedidosGral) : '–';
+
+            const lista = delRegistro
                 .filter(f => !q || [f.nombre, f.telefono, f.email].some(v => (v || '').toLowerCase().includes(q)))
                 .sort((a, b) => {
                     let va = a[campo], vb = b[campo];
@@ -821,7 +1127,7 @@
 
             $('tbodyDash').innerHTML = lista.map(f => `
                 <tr onclick="verDetalle('${f.id}')">
-                    <td><strong>${esc(f.nombre)}</strong><br><span class="muted">${esc(f.email)}</span></td>
+                    <td><strong>${esc(f.nombre)}</strong>${normRegistro(f.registro) ? ` <span class="badge badge-registro">${esc(etiquetaRegistro.get(normRegistro(f.registro)) || f.registro)}</span>` : ''}<br><span class="muted">${esc(f.email)}</span></td>
                     <td>${f.telefono ? `<button class="btn btn-wa btn-sm" onclick="event.stopPropagation(); waMayorista('${f.id}')"><i class="bi bi-whatsapp"></i> ${esc(f.telefono)}</button>` : '<span class="muted">—</span>'}</td>
                     <td class="num">${f.pedidos || '<span class="muted">0</span>'}</td>
                     <td class="num"><strong>${f.total ? pesos(f.total) : '<span class="muted">—</span>'}</strong></td>

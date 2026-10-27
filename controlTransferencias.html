@@ -458,6 +458,14 @@
             white-space: nowrap;
         }
 
+        .amount-sub {
+            display: block;
+            font-family: var(--font-sans);
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--text-3);
+        }
+
         .checkbox-column {
             text-align: center;
             width: 56px;
@@ -1222,9 +1230,46 @@
         }
 
         // Devuelve el totalFinal de un pedido como número (0 si no se puede parsear)
-        function montoDe(pedido) {
+        function totalDe(pedido) {
             const total = parseFloat(pedido.pagos?.totalFinal?.toString().replace(/[^\d.-]/g, '') || 0);
             return isNaN(total) ? 0 : total;
+        }
+
+        // Desglose de un pago Parcial ([{ medio, monto }], lo guarda ingresoPedidoV2.js);
+        // null si no es Parcial o es un Parcial viejo, cargado sin desglose.
+        function desgloseDe(pedido) {
+            const desglose = pedido.pagos?.desglose;
+            if (medioPagoDe(pedido) !== 'parcial' || !Array.isArray(desglose) || desglose.length === 0) return null;
+            return desglose;
+        }
+
+        // Monto a controlar en el banco: el total, o en un Parcial con desglose
+        // sólo la parte pagada por transferencia.
+        function montoDe(pedido) {
+            const desglose = desgloseDe(pedido);
+            if (!desglose) return totalDe(pedido);
+            return desglose
+                .filter(p => String(p?.medio || '').toLowerCase() === 'transferencia')
+                .reduce((acc, p) => acc + (Number(p.monto) || 0), 0);
+        }
+
+        // Nombre visible de un medio del desglose ('Debito' → 'Débito')
+        function etiquetaMedio(medio) {
+            const nombres = { debito: 'Débito', credito: 'Crédito' };
+            const m = String(medio || '');
+            return nombres[m.toLowerCase()] || formatearMedioPago(m);
+        }
+
+        // Celda de importe: en un Parcial con desglose, la parte transferida y
+        // debajo el total y lo pagado con el otro medio.
+        function celdaImporte(pedido) {
+            const desglose = desgloseDe(pedido);
+            if (!desglose) return formatearMoneda(pedido.pagos?.totalFinal || 0);
+            const otros = desglose
+                .filter(p => String(p?.medio || '').toLowerCase() !== 'transferencia')
+                .map(p => `${etiquetaMedio(p.medio)} ${formatearMoneda(Number(p.monto) || 0)}`)
+                .join(' · ');
+            return `${formatearMoneda(montoDe(pedido))}<span class="amount-sub">de ${formatearMoneda(totalDe(pedido))}${otros ? ' · ' + otros : ''}</span>`;
         }
 
         // Devuelve el medioPago normalizado (sin espacios, en minúsculas)
@@ -1401,7 +1446,7 @@
                     <td class="date-column">${formatearFecha(pedido.fecha || '')}</td>
                     <td class="client-column" data-pedido-id="${pedido.id}" data-entrega="${pedido.entrega || ''}" title="Abrir pedido de ${nombreCliente}">${nombreCliente}</td>
                     <td>${pedido.entrega || '<span class="badge-vacio">—</span>'}</td>
-                    <td class="amount-column">${formatearMoneda(pedido.pagos?.totalFinal || 0)}</td>
+                    <td class="amount-column">${celdaImporte(pedido)}</td>
                     <td class="alias-column">${aliasBadge}</td>
                     <td>${medioBadge}</td>
                     <td class="checkbox-column">
