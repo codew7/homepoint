@@ -254,6 +254,29 @@
 
         .sucursal-chip[hidden] { display: none; }
 
+        /* Selector de sucursal dentro del chip: el select ocupa el chip y conserva su aspecto */
+        .sucursal-chip { cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; }
+        .sucursal-chip:hover { background: rgba(217, 180, 106, 0.16); border-color: rgba(217, 180, 106, 0.5); }
+        .sucursal-chip:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+        .sucursal-chip select {
+            appearance: none;
+            -webkit-appearance: none;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            padding: 0;
+            min-width: 0;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            outline: none;
+        }
+        .sucursal-chip select:disabled { cursor: progress; opacity: 0.6; }
+        .sucursal-chip select option { color: var(--ink); background: var(--surface); }
+        .sucursal-chip .bi { font-size: 10px; opacity: 0.8; pointer-events: none; }
+
         .appbar-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
 
         /* Línea de progreso mientras se cargan datos */
@@ -1426,7 +1449,11 @@
                 <span class="brand-sep"></span>
                 <span class="brand-section">Finanzas</span>
             </a>
-            <span class="sucursal-chip" id="puntoVentaHeader" hidden></span>
+            <!-- Sucursal consultada: el chip es el selector (solo con más de una sucursal) -->
+            <label class="sucursal-chip" id="puntoVentaHeader" title="Cambiar la sucursal de la que se leen los datos" hidden>
+                <select id="sucursalSelect" aria-label="Sucursal"></select>
+                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </label>
 
             <nav class="appbar-actions" aria-label="Acciones">
                 <button class="btn btn-ghost" id="btnGestionarGastos" title="Gestionar gastos">
@@ -1460,11 +1487,6 @@
 
         <!-- Controles -->
         <section class="toolbar" aria-label="Filtros">
-            <div class="ctrl ctrl-sucursal" id="ctrlSucursal" hidden>
-                <label class="ctrl-label" for="sucursalSelect">Sucursal</label>
-                <select class="form-select" id="sucursalSelect" title="Sucursal de la que se leen los datos"></select>
-            </div>
-
             <div class="ctrl temporalidad-selector">
                 <span class="ctrl-label">Vista</span>
                 <div class="segmented temporalidad-buttons" role="group" aria-label="Vista">
@@ -1818,6 +1840,9 @@
         let temporalidad = 'mensual'; // Temporalidad: 'mensual', 'semanal', 'diario'
         let periodoLabels = []; // Almacena las etiquetas de los períodos actuales
         let pedidosProcesados = []; // Almacena los pedidos procesados para drill-down
+        // Número de la última llamada a cargarDatos(). Las respuestas de cargas anteriores se descartan:
+        // si se procesaran, mezclarían sus índices con las etiquetas ya filtradas de la carga nueva
+        let cargaVigente = 0;
 
         // Cache de pedidos descargados de Firebase (evita re-descargar al cambiar filtros)
         let pedidosCache = null;
@@ -1844,8 +1869,26 @@
             'facturacion', 'consumidorFinal', 'mayorista',
             'ventasGeneradas', 'ventasConsumidorFinal', 'ventasMayoristas',
             'gananciaBruta', 'gananciaBrutaConsumidor', 'gananciaBrutaMayorista', 'gananciaSeleccionados',
-            'facturacionEfectivo', 'facturacionTransferencia', 'facturacionTarjeta', 'facturacionOtros'
+            'facturacionEfectivo', 'facturacionTransferencia',
+            'facturacionDebito', 'facturacionCredito', 'facturacionOtros'
         ];
+
+        // Filas del desglose de Facturación que van después de Efectivo y Transferencia.
+        // facturacionOtros no es un medio: junta lo que no se puede repartir y solo se muestra si tiene importe.
+        const MEDIOS_DETALLE = [
+            { id: 'detailDebito', fila: 'debito', campo: 'facturacionDebito' },
+            { id: 'detailCredito', fila: 'credito', campo: 'facturacionCredito' },
+            { id: 'detailOtros', fila: 'otros', campo: 'facturacionOtros', soloSiHay: true }
+        ];
+
+        // Fila del detalle de cada campo de facturación por medio
+        const FILA_DE_CAMPO = {
+            facturacionEfectivo: 'efectivo',
+            facturacionTransferencia: 'transferencia',
+            facturacionDebito: 'debito',
+            facturacionCredito: 'credito',
+            facturacionOtros: 'otros'
+        };
 
         // Variables para gastos (siguen en Firebase)
         let gastosData = [];
@@ -1881,7 +1924,9 @@
             'Ventas Mayoristas': 'Ventas mayoristas',
             'efectivo': 'Efectivo',
             'transferencia': 'Transferencia',
-            'mercadopago': 'MercadoPago'
+            'debito': 'Débito',
+            'credito': 'Crédito',
+            'otros': 'Sin desglose'
         };
 
         const mesesCortos = [
@@ -2037,9 +2082,8 @@
         function aplicarSucursal() {
             if (!window.PuntoVenta) return;
             if (PuntoVenta.multiple()) {
-                const chipSucursal = document.getElementById('puntoVentaHeader');
-                chipSucursal.textContent = nombrePunto(puntoConsultado);
-                chipSucursal.hidden = false;
+                document.getElementById('sucursalSelect').value = puntoConsultado;
+                document.getElementById('puntoVentaHeader').hidden = false;
                 document.title = 'Facturación · ' + nombrePunto(puntoConsultado);
             }
             const conEnvios = puntoConsultado === '1';
@@ -2056,7 +2100,6 @@
             selector.innerHTML = '';
             PuntoVenta.lista.forEach(p => selector.add(new Option(p.nombre, p.id)));
             selector.value = puntoConsultado;
-            document.getElementById('ctrlSucursal').hidden = false;
 
             selector.addEventListener('change', async () => {
                 const id = selector.value;
@@ -2248,6 +2291,7 @@
 
         function cargarDatos() {
             const year = parseInt(yearSelect.value);
+            const carga = ++cargaVigente;
 
             const loadingText = document.getElementById('loadingText');
             if (loadingText) loadingText.textContent = 'Cargando datos de facturación...';
@@ -2283,7 +2327,8 @@
                 // Nuevos campos para facturación por medio de pago
                 facturacionEfectivo: new Array(numPeriodos).fill(0),
                 facturacionTransferencia: new Array(numPeriodos).fill(0),
-                facturacionTarjeta: new Array(numPeriodos).fill(0),
+                facturacionDebito: new Array(numPeriodos).fill(0),
+                facturacionCredito: new Array(numPeriodos).fill(0),
                 facturacionOtros: new Array(numPeriodos).fill(0),
                 // Nuevos campos para porcentaje de ganancia por tipo de cliente
                 gananciaPercentConsumidor: new Array(numPeriodos).fill(0),
@@ -2298,12 +2343,12 @@
 
             // Semanal y diario: siempre solo los pedidos del rango visible, sin importar la fuente
             if (temporalidad !== 'mensual') {
-                cargarDatosRecientes(year);
+                cargarDatosRecientes(year, carga);
                 return;
             }
 
             if (fuenteDatos === 'consolidado') {
-                cargarDatosConsolidados(year);
+                cargarDatosConsolidados(year, carga);
                 return;
             }
 
@@ -2319,21 +2364,23 @@
 
             cargarPedidos
                 .then(pedidos => {
+                    if (carga !== cargaVigente) return;
                     if (pedidos && Object.keys(pedidos).length > 0) {
                         procesarPedidos(pedidos, year);
                         // Si 'pedidos' no tiene registros para el año solicitado, buscar en el nodo archivado del año
                         if (!datosFacturacion.facturacion.some(v => v > 0)) {
-                            cargarPedidosDesdeFirebase(year);
+                            cargarPedidosDesdeFirebase(year, carga);
                         } else {
                             mostrarDatos();
                         }
                     } else {
-                        cargarPedidosDesdeFirebase(year);
+                        cargarPedidosDesdeFirebase(year, carga);
                     }
                 })
                 .catch(error => {
+                    if (carga !== cargaVigente) return;
                     console.error('Error al cargar pedidos desde Firebase:', error);
-                    cargarPedidosDesdeFirebase(year);
+                    cargarPedidosDesdeFirebase(year, carga);
                 });
         }
 
@@ -2355,7 +2402,8 @@
                 gananciaSeleccionados: new Array(numPeriodos).fill(0),
                 facturacionEfectivo: new Array(numPeriodos).fill(0),
                 facturacionTransferencia: new Array(numPeriodos).fill(0),
-                facturacionTarjeta: new Array(numPeriodos).fill(0),
+                facturacionDebito: new Array(numPeriodos).fill(0),
+                facturacionCredito: new Array(numPeriodos).fill(0),
                 facturacionOtros: new Array(numPeriodos).fill(0),
                 gananciaPercentConsumidor: new Array(numPeriodos).fill(0),
                 gananciaPercentMayorista: new Array(numPeriodos).fill(0)
@@ -2481,13 +2529,14 @@
         }
 
         // Vistas Semanal y Diaria: descarga solo los pedidos desde inicioRangoReciente() hasta hoy
-        function cargarDatosRecientes(year) {
+        function cargarDatosRecientes(year, carga) {
             const loadingText = document.getElementById('loadingText');
             if (loadingText) loadingText.textContent = 'Cargando pedidos del período...';
             const hoy = new Date();
 
             leerPedidosRango(hoy.getFullYear(), claveDia(inicioRangoReciente()), claveDia(hoy))
                 .then(pedidos => {
+                    if (carga !== cargaVigente) return;
                     procesarPedidos(pedidos, year);
                     actualizarEstadoFuente(temporalidad === 'semanal'
                         ? `Últimas ${SEMANAS_VISTA} semanas, en vivo`
@@ -2495,19 +2544,21 @@
                     mostrarDatos();
                 })
                 .catch(error => {
+                    if (carga !== cargaVigente) return;
                     console.error('Error al cargar pedidos del período:', error);
                     mostrarNotificacion('Error al cargar los pedidos del período', 'error');
                     mostrarSinDatos();
                 });
         }
 
-        function cargarDatosConsolidados(year) {
+        function cargarDatosConsolidados(year, carga) {
             const loadingText = document.getElementById('loadingText');
 
             if (loadingText) loadingText.textContent = `Cargando facturación consolidada de ${year}...`;
 
             leerConsolidadoAnio(year)
                 .then(consolidado => {
+                    if (carga !== cargaVigente) return null;
                     // Sumar los meses consolidados según el filtro de entrega
                     const cuentas = cuentasDelFiltro();
                     for (let mes = 0; mes < 12; mes++) {
@@ -2519,6 +2570,8 @@
                             CAMPOS_CONSOLIDABLES.forEach(campo => {
                                 datosFacturacion[campo][mes] += Number(datosCuenta[campo]) || 0;
                             });
+                            // Meses consolidados cuando existía la fila MercadoPago: ese importe pasa a "Sin desglose"
+                            datosFacturacion.facturacionOtros[mes] += Number(datosCuenta.facturacionTarjeta) || 0;
                             // Meses consolidados antes del desglose por alias no traen este dato (van a "Sin alias")
                             Object.entries(datosCuenta.transferenciasAlias || {}).forEach(([clave, total]) => {
                                 sumarAlias(claveAAlias(clave), mes, Number(total) || 0);
@@ -2535,7 +2588,9 @@
                     const hasta = claveMes(year, Math.max(...pendientes));
                     return leerPedidosRango(year, desde, hasta).then(pedidos => ({ pedidos, pendientes }));
                 })
-                .then(({ pedidos, pendientes }) => {
+                .then(resultado => {
+                    if (!resultado || carga !== cargaVigente) return;
+                    const { pedidos, pendientes } = resultado;
                     procesarPedidos(pedidos, year, new Set(pendientes));
 
                     const consolidados = mesesConsolidadosVista.size;
@@ -2545,6 +2600,7 @@
                     mostrarDatos();
                 })
                 .catch(error => {
+                    if (carga !== cargaVigente) return;
                     console.error('Error al cargar facturación consolidada:', error);
                     mostrarNotificacion('Error al cargar la facturación consolidada', 'error');
                     mostrarSinDatos();
@@ -2609,7 +2665,7 @@
                         cantidadPedidos: acumulado[mes].cantidad,
                         consolidadoEn: firebase.database.ServerValue.TIMESTAMP,
                         consolidadoPor: (usuario && usuario.email) || null,
-                        version: 2 // v2: agrega transferenciasAlias por cuenta
+                        version: 3 // v2: agrega transferenciasAlias por cuenta; v3: separa Débito y Crédito de Otros
                     };
                     const totales = { facturacion: 0, ventasGeneradas: 0, gananciaBruta: 0, gananciaSeleccionados: 0, gastos: 0, gananciaNeta: 0 };
 
@@ -3054,7 +3110,7 @@
             if (event.key === 'Escape') cerrarModalConsolidar();
         });
 
-        function cargarPedidosDesdeFirebase(year) {
+        function cargarPedidosDesdeFirebase(year, carga) {
             const loadingText = document.getElementById('loadingText');
             if (loadingText) loadingText.textContent = `Buscando datos de ${year} en Firebase...`;
             mostrarLoading(true);
@@ -3069,6 +3125,7 @@
 
             db.ref(String(year)).once('value')
                 .then(snapshot => {
+                    if (carga !== cargaVigente) return;
                     if (snapshot.exists()) {
                         const val = snapshot.val();
                         const pedidos = val.pedidos || val;
@@ -3081,6 +3138,7 @@
                     }
                 })
                 .catch(error => {
+                    if (carga !== cargaVigente) return;
                     console.error(`Error al cargar ${year} desde Firebase:`, error);
                     mostrarNotificacion(`No se encontraron datos para ${year}`, 'error');
                     mostrarSinDatos();
@@ -3115,16 +3173,11 @@
             aportes.gananciaBruta = gananciaPedido;
             aportes.gananciaSeleccionados = gananciaSelec;
 
-            // Segmentar facturación por medio de pago
-            if (medioPago === 'efectivo' || medioPago === 'Efectivo') {
-                aportes.facturacionEfectivo = totalPedido;
-            } else if (medioPago === 'transferencia' || medioPago === 'Transferencia') {
-                aportes.facturacionTransferencia = totalPedido;
-            } else if (medioPago === 'mercadopago' || medioPago === 'MercadoPago' || medioPago === 'Mercado Pago') {
-                aportes.facturacionTarjeta = totalPedido;
-            } else {
-                aportes.facturacionOtros = totalPedido;
-            }
+            // Segmentar facturación por medio de pago: un pago Parcial reparte
+            // cada parte en la fila de su medio; el resto va entero a la suya.
+            partesDePago(pedido).forEach(parte => {
+                aportes[campoDeMedio(parte.medio)] += parte.monto;
+            });
 
             // Segmentar por tipo de cliente usando pedido.cliente.tipoCliente
             if (tipoCliente === 'consumidor final' || tipoCliente === 'Consumidor Final' || tipoCliente === 'consumidor-final') {
@@ -3140,11 +3193,40 @@
             return aportes;
         }
 
-        // Alias (en mayúsculas) de un pedido pagado por transferencia; '' si no es transferencia o no tiene alias
+        // Partes del pago de un pedido: [{ medio, monto }]. Un pago Parcial cargado
+        // con desglose (ingresoPedidoV2.js guarda pagos.desglose) trae una parte por
+        // medio; cualquier otro pedido, y los Parcial viejos sin desglose, son una
+        // sola parte con el medio y el total de siempre. Si el desglose no suma el
+        // total se ignora, para que la facturación por medio nunca difiera del total.
+        function partesDePago(pedido) {
+            const totalPedido = Number(pedido.pagos?.totalFinal) || 0;
+            const medioPago = pedido.pagos?.medioPago || 'Efectivo';
+            const desglose = pedido.pagos?.desglose;
+            if (Array.isArray(desglose) && desglose.length > 0) {
+                const partes = desglose.map(p => ({ medio: String(p?.medio || ''), monto: Number(p?.monto) || 0 }));
+                const suma = partes.reduce((acc, p) => acc + p.monto, 0);
+                if (partes.every(p => p.medio) && suma === totalPedido) return partes;
+            }
+            return [{ medio: medioPago, monto: totalPedido }];
+        }
+
+        // Campo de facturación al que va un medio de pago (sin distinguir mayúsculas, acentos ni espacios).
+        // 'Parcial' solo llega acá si es un Parcial viejo sin desglose: no se puede repartir y va a Otros.
+        function campoDeMedio(medioPago) {
+            const m = String(medioPago || '').normalize('NFD').replace(/[̀-ͯ\s]/g, '').toLowerCase();
+            if (m === 'efectivo') return 'facturacionEfectivo';
+            if (m === 'transferencia') return 'facturacionTransferencia';
+            if (m === 'debito') return 'facturacionDebito';
+            if (m === 'credito') return 'facturacionCredito';
+            return 'facturacionOtros';
+        }
+
+        // Alias (en mayúsculas) de un pedido con pago por transferencia (entero o como parte
+        // de un Parcial); '' si no tiene transferencia o no tiene alias
         function aliasDeTransferencia(pedido) {
             // Mismo criterio que aportesDePedido para que los alias sumen igual que la fila Transferencia
-            const medioPago = pedido.pagos?.medioPago;
-            if (medioPago !== 'transferencia' && medioPago !== 'Transferencia') return '';
+            const conTransferencia = partesDePago(pedido).some(p => campoDeMedio(p.medio) === 'facturacionTransferencia');
+            if (!conTransferencia) return '';
             return String(pedido.pagos?.alias || '').trim().toUpperCase();
         }
 
@@ -3181,6 +3263,7 @@
                 entrega: obtenerTipoEntrega(pedido),
                 medioPago: medioPago.toLowerCase(), // Normalizar a minúsculas
                 alias: aliasDeTransferencia(pedido),
+                partes: partesDePago(pedido),
                 totalPedido: totalPedido,
                 gananciaPedido: gananciaPedido,
                 gananciaSelec: gananciaSelec,
@@ -3267,8 +3350,7 @@
                     datosFacturacion[campo][indicePeriodo] += aportes[campo];
                 });
                 const alias = aliasDeTransferencia(pedido);
-                if (alias) sumarAlias(alias, indicePeriodo, aportes.facturacionTransferencia);
-            });
+                if (alias) sumarAlias(alias, indicePeriodo, aportes.facturacionTransferencia);            });
             
             console.log(`Pedidos procesados: ${totalPedidosProcesados}, Filtrados: ${pedidosFiltrados}, Filtro actual: ${filtroEntrega}, Temporalidad: ${temporalidad}`);
             console.log(`Pedidos almacenados para drill-down: ${pedidosProcesados.length}`);
@@ -3752,7 +3834,6 @@
             Object.keys(aliasTransferencias).forEach(alias => {
                 aliasTransferencias[alias] = indicesFinales.map(index => aliasTransferencias[alias][index]);
             });
-
             // Actualizar pedidosProcesados con los nuevos índices
             pedidosProcesados = pedidosProcesados.map(pedido => {
                 if (mapeoIndices.hasOwnProperty(pedido.indicePeriodo)) {
@@ -4181,83 +4262,44 @@
                         });
                     }
 
-                    // Fila detalle para MercadoPago
-                    const trTarjeta = document.createElement('tr');
-                    trTarjeta.className = 'detail-row';
-                    trTarjeta.id = 'detailTarjeta';
-                    
-                    const tdTarjetaNombre = document.createElement('td');
-                    tdTarjetaNombre.className = 'mes-name';
-                    tdTarjetaNombre.textContent = 'MercadoPago';
-                    trTarjeta.appendChild(tdTarjetaNombre);
-                    
-                    let totalTarjeta = 0;
-                    for (let i = 0; i < numPeriodos; i++) {
-                        const td = document.createElement('td');
-                        const valor = datosFacturacion.facturacionTarjeta[i];
-                        totalTarjeta += valor;
-                        
-                        if (valor > 0) {
-                            td.className = 'clickable-cell facturacion-cell';
-                            td.onclick = () => abrirReporteDetallado('mercadopago', i, periodoLabels[i], 'medioPago');
-                        } else {
-                            td.className = 'facturacion-cell';
+                    // Filas detalle para el resto de los medios. 'Sin desglose' solo aparece si tiene importe:
+                    // Parcial viejos sin desglose, medios desconocidos y meses consolidados antes de separar Débito y Crédito
+                    MEDIOS_DETALLE.forEach(({ id, fila: filaMedio, campo, soloSiHay }) => {
+                        const datos = datosFacturacion[campo];
+                        const totalMedio = datos.reduce((sum, v) => sum + v, 0);
+                        if (soloSiHay && totalMedio < 1) return;
+
+                        const trMedio = document.createElement('tr');
+                        trMedio.className = 'detail-row';
+                        trMedio.id = id;
+
+                        const tdMedioNombre = document.createElement('td');
+                        tdMedioNombre.className = 'mes-name';
+                        tdMedioNombre.textContent = ETIQUETAS_FILA[filaMedio];
+                        if (filaMedio === 'otros') tdMedioNombre.title = 'Parcial sin desglose, medios no reconocidos o meses consolidados antes de separar Débito y Crédito (reconsolidar para repartirlos)';
+                        trMedio.appendChild(tdMedioNombre);
+
+                        for (let i = 0; i < numPeriodos; i++) {
+                            const td = document.createElement('td');
+                            const valor = datos[i];
+                            if (valor > 0) {
+                                td.className = 'clickable-cell facturacion-cell';
+                                td.onclick = () => abrirReporteDetallado(filaMedio, i, periodoLabels[i], 'medioPago');
+                            } else {
+                                td.className = 'facturacion-cell';
+                            }
+                            td.textContent = valor !== 0 ? formatearMoneda(valor) : '$0';
+                            trMedio.appendChild(td);
                         }
-                        
-                        td.textContent = valor !== 0 ? formatearMoneda(valor) : '$0';
-                        trTarjeta.appendChild(td);
-                    }
-                    
-                    const tdTotalTarjeta = document.createElement('td');
-                    if (totalTarjeta > 0) {
-                        tdTotalTarjeta.className = 'clickable-cell facturacion-cell';
-                        tdTotalTarjeta.onclick = () => abrirReporteDetallado('mercadopago', -1, 'TOTAL', 'medioPago');
-                    } else {
-                        tdTotalTarjeta.className = 'facturacion-cell';
-                    }
-                    tdTotalTarjeta.textContent = formatearMoneda(totalTarjeta);
-                    trTarjeta.appendChild(tdTotalTarjeta);
-                    
-                    tbody.appendChild(trTarjeta);
-                    
-                    // Fila detalle para Otros
-                    const trOtros = document.createElement('tr');
-                    trOtros.className = 'detail-row';
-                    trOtros.id = 'detailOtros';
-                    
-                    const tdOtrosNombre = document.createElement('td');
-                    tdOtrosNombre.className = 'mes-name';
-                    tdOtrosNombre.textContent = 'Otros';
-                    trOtros.appendChild(tdOtrosNombre);
-                    
-                    let totalOtros = 0;
-                    for (let i = 0; i < numPeriodos; i++) {
-                        const td = document.createElement('td');
-                        const valor = datosFacturacion.facturacionOtros[i];
-                        totalOtros += valor;
-                        
-                        if (valor > 0) {
-                            td.className = 'clickable-cell facturacion-cell';
-                            td.onclick = () => abrirReporteDetallado('Otros', i, periodoLabels[i], 'medioPago');
-                        } else {
-                            td.className = 'facturacion-cell';
-                        }
-                        
-                        td.textContent = valor !== 0 ? formatearMoneda(valor) : '$0';
-                        trOtros.appendChild(td);
-                    }
-                    
-                    const tdTotalOtros = document.createElement('td');
-                    if (totalOtros > 0) {
-                        tdTotalOtros.className = 'clickable-cell facturacion-cell';
-                        tdTotalOtros.onclick = () => abrirReporteDetallado('Otros', -1, 'TOTAL', 'medioPago');
-                    } else {
-                        tdTotalOtros.className = 'facturacion-cell';
-                    }
-                    tdTotalOtros.textContent = formatearMoneda(totalOtros);
-                    trOtros.appendChild(tdTotalOtros);
-                    
-                    tbody.appendChild(trOtros);
+
+                        const tdTotalMedio = document.createElement('td');
+                        tdTotalMedio.className = totalMedio > 0 ? 'clickable-cell facturacion-cell' : 'facturacion-cell';
+                        if (totalMedio > 0) tdTotalMedio.onclick = () => abrirReporteDetallado(filaMedio, -1, 'TOTAL', 'medioPago');
+                        tdTotalMedio.textContent = formatearMoneda(totalMedio);
+                        trMedio.appendChild(tdTotalMedio);
+
+                        tbody.appendChild(trMedio);
+                    });
                 }
                 
                 // Agregar filas de detalle después de Ganancia Bruta Tot.
@@ -4541,12 +4583,12 @@
             const expandIcon = document.getElementById('expandIconFacturacion');
             const detailEfectivo = document.getElementById('detailEfectivo');
             const detailTransferencia = document.getElementById('detailTransferencia');
-            const detailTarjeta = document.getElementById('detailTarjeta');
-            const detailOtros = document.getElementById('detailOtros');
-            
-            if (expandIcon && detailEfectivo && detailTransferencia && detailTarjeta && detailOtros) {
+            // 'Sin desglose' (detailOtros) puede no existir: solo se dibuja si tiene importe
+            const detallesMedios = MEDIOS_DETALLE.map(({ id }) => document.getElementById(id)).filter(Boolean);
+
+            if (expandIcon && detailEfectivo && detailTransferencia) {
                 const isExpanded = expandIcon.classList.contains('expanded');
-                
+
                 if (isExpanded) {
                     expandIcon.classList.remove('expanded');
                     detailEfectivo.classList.remove('show');
@@ -4554,14 +4596,12 @@
                     // Al plegar Facturación también se pliegan los alias
                     document.querySelectorAll('.detail-alias').forEach(tr => tr.classList.remove('show'));
                     document.getElementById('expandIconAlias')?.classList.remove('expanded');
-                    detailTarjeta.classList.remove('show');
-                    detailOtros.classList.remove('show');
+                    detallesMedios.forEach(tr => tr.classList.remove('show'));
                 } else {
                     expandIcon.classList.add('expanded');
                     detailEfectivo.classList.add('show');
                     detailTransferencia.classList.add('show');
-                    detailTarjeta.classList.add('show');
-                    detailOtros.classList.add('show');
+                    detallesMedios.forEach(tr => tr.classList.add('show'));
                 }
             }
         }
@@ -4784,6 +4824,36 @@
                 });
         }
 
+        // Fila del detalle ('efectivo', 'transferencia', 'debito', 'credito' u 'otros')
+        // de un medio de pago. Usa campoDeMedio para que el detalle sume lo mismo que la celda.
+        function filaDetalleDeMedio(medio) {
+            return FILA_DE_CAMPO[campoDeMedio(medio)];
+        }
+
+        // Partes del pago de un pedido procesado que caen en una fila del detalle
+        function partesDeFila(pedido, tipoFila) {
+            const fila = filaDetalleDeMedio(tipoFila);
+            const partes = pedido.partes || [{ medio: pedido.medioPago, monto: pedido.totalPedido }];
+            return partes.filter(p => filaDetalleDeMedio(p.medio) === fila);
+        }
+
+        // Copia del pedido reducida a lo pagado con el medio de la fila (las ganancias,
+        // en la misma proporción). Un pedido de un solo medio vuelve sin cambios.
+        function porcionDeFila(pedido, tipoFila) {
+            if (!pedido.partes || pedido.partes.length < 2) return pedido;
+            const partes = partesDeFila(pedido, tipoFila);
+            const monto = partes.reduce((acc, p) => acc + p.monto, 0);
+            const proporcion = pedido.totalPedido ? monto / pedido.totalPedido : 0;
+            return {
+                ...pedido,
+                medioPago: `${pedido.medioPago} (${partes.map(p => p.medio.toLowerCase()).join(' + ')})`,
+                totalPedido: monto,
+                gananciaPedido: pedido.gananciaPedido * proporcion,
+                gananciaSelec: pedido.gananciaSelec * proporcion,
+                gananciaNeta: pedido.gananciaNeta * proporcion
+            };
+        }
+
         function mostrarReporteDetallado(tipoFila, indicePeriodo, periodoLabel, filtroEspecial = null) {
             console.log('Abriendo reporte:', { tipoFila, indicePeriodo, periodoLabel, filtroEspecial });
             
@@ -4805,23 +4875,10 @@
                 // Filtros específicos según el tipo de fila
                 if (filtroEspecial === 'alias') {
                     // tipoFila es el alias ('' = transferencias sin alias)
-                    return pedido.medioPago === 'transferencia' && pedido.alias === tipoFila;
+                    return partesDeFila(pedido, 'transferencia').length > 0 && pedido.alias === tipoFila;
                 } else if (filtroEspecial === 'medioPago') {
-                    // Normalizar comparación de medios de pago
-                    const medioPagoNormalizado = pedido.medioPago.toLowerCase();
-                    const tipoFilaNormalizado = tipoFila.toLowerCase();
-                    
-                    if (tipoFilaNormalizado === 'efectivo') {
-                        return medioPagoNormalizado === 'efectivo';
-                    } else if (tipoFilaNormalizado === 'transferencia') {
-                        return medioPagoNormalizado === 'transferencia';
-                    } else if (tipoFilaNormalizado === 'mercadopago') {
-                        return medioPagoNormalizado === 'mercadopago' || 
-                               medioPagoNormalizado === 'mercado pago';
-                    } else {
-                        // Otros medios de pago
-                        return !['efectivo', 'transferencia', 'mercadopago', 'mercado pago'].includes(medioPagoNormalizado);
-                    }
+                    // Un pago Parcial entra en cada fila donde tiene una parte
+                    return partesDeFila(pedido, tipoFila).length > 0;
                 } else if (filtroEspecial === 'tipoCliente' || tipoFila.includes('Consumidor') || tipoFila.includes('Cons.Final')) {
                     return pedido.tipoCliente === 'consumidor final' || 
                            pedido.tipoCliente === 'Consumidor Final' || 
@@ -4833,8 +4890,15 @@
                 return true;
             });
             
+            // En las filas por medio de pago, un Parcial cuenta sólo con la parte
+            // pagada con ese medio: así el detalle suma lo mismo que la celda.
+            if (filtroEspecial === 'alias' || filtroEspecial === 'medioPago') {
+                const fila = filtroEspecial === 'alias' ? 'transferencia' : tipoFila;
+                pedidosFiltrados = pedidosFiltrados.map(pedido => porcionDeFila(pedido, fila));
+            }
+
             console.log('Pedidos filtrados:', pedidosFiltrados.length);
-            
+
             // Configurar título del modal
             const nombreFila = filtroEspecial === 'alias'
                 ? `Transferencia · ${tipoFila || 'Sin alias'}`
