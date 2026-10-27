@@ -4118,7 +4118,22 @@
       transform: rotate(43deg);
     }
     .articulo-pedido-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .articulo-pedido-titulo { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    /* Pedido cobrado (nota de pago): moneda chica en el verde de pago. */
+    .articulo-pedido-pago {
+      flex: none;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--pago-soft);
+      color: var(--pago);
+    }
+    .articulo-pedido-pago svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
     .articulo-pedido-nombre {
+      min-width: 0;
       font-size: 13.5px;
       font-weight: 700;
       color: var(--ink);
@@ -7677,8 +7692,8 @@
     // ==========================================
     // Pedido cerrado o entregado y ya cobrado al que le falta mercaderia: el
     // articulo sale de items y queda en pedidos/{id}/faltantesAbonados con lo
-    // que el cliente efectivamente pago por el. pagos.totalFinal NO cambia
-    // (pvCalcSubtotal los sigue sumando): el reembolso se muestra aparte.
+    // que el cliente efectivamente pago por el. El total del pedido se recalcula
+    // como en cualquier borrado (pvCalcSubtotal solo mira items).
     // Cada registro: { codigo, nombre, cantidad, valorU, unitPagado, importe,
     // fecha, item } — item es la copia original para poder devolverlo.
     let faIdx = -1;
@@ -7693,10 +7708,6 @@
     function faLista() {
       const l = pedidoActual && pedidoActual.faltantesAbonados;
       return Array.isArray(l) ? l.filter(Boolean) : (l ? Object.values(l).filter(Boolean) : []);
-    }
-
-    function faSubtotalLista() {
-      return faLista().reduce((s, f) => s + Math.round((f.cantidad || 0) * Math.round(f.valorU || 0)), 0);
     }
 
     function faTotalReembolso() {
@@ -7760,7 +7771,7 @@
         if (Number(p.recargo)) ajustes.push(p.porcentajeRecargo ? 'el ' + p.porcentajeRecargo + '% de recargo' : 'el recargo');
         nota += ' · precio de lista ' + faPesos(lista) + (ajustes.length ? ', con ' + ajustes.join(' y ') + ' aplicado' : '');
       }
-      document.getElementById('faNota').textContent = nota + '. El total cobrado no cambia.';
+      document.getElementById('faNota').textContent = nota + '. Se descuenta del total del pedido.';
     }
 
     async function faRegistrar() {
@@ -7876,7 +7887,7 @@
       });
       h += '</ul>';
       h += '<div class="fa-total"><span>Total a reembolsar</span><strong>' + faPesos(reembolso) + '</strong></div>';
-      h += '<div class="fa-neto">Cobrado ' + faPesos(totalFinal) + ' &middot; Neto ' + faPesos(Math.max(0, totalFinal - reembolso)) + '</div>';
+      h += '<div class="fa-neto">Total original ' + faPesos(totalFinal + reembolso) + ' &middot; Ajustado ' + faPesos(totalFinal) + '</div>';
       const tieneTel = !!linkWhatsapp((pedidoActual.cliente || {}).telefono);
       h += '<div class="fa-acciones">' +
         '<button type="button" class="fa-btn fa-btn--wa" onclick="faEnviarWhatsapp()"' + (tieneTel ? '' : ' disabled title="Sin tel&eacute;fono"') + '>' + IC_CHAT + '<span>Enviar al cliente</span></button>' +
@@ -9732,6 +9743,7 @@
               status: p.status,
               cantidad: item.cantidad || 1,
               yaListo: item.listo === 'y',
+              pagado: estadoPago(p.nota) === 'pagado',
               timestamp: p.timestamp || 0,
               // Pre-marcado: el flujo normal es escanear -> "Marcar listo".
               // Se destilda solo lo que no corresponda.
@@ -9762,7 +9774,10 @@
         '<div class="articulo-pedido-row' + (r.yaListo ? ' ya-listo' : '') + '" data-i="' + i + '">' +
         '<input type="checkbox"' + (r.sel ? ' checked' : '') + (r.yaListo ? ' disabled' : '') + '>' +
         '<div class="articulo-pedido-info">' +
-        '<div class="articulo-pedido-nombre">' + escapeHtml(r.nombre) + '</div>' +
+        '<div class="articulo-pedido-titulo">' +
+          '<span class="articulo-pedido-nombre">' + escapeHtml(r.nombre) + '</span>' +
+          (r.pagado ? '<span class="articulo-pedido-pago" title="Pagado" aria-label="Pagado">' + IC_MENU_PAGO + '</span>' : '') +
+        '</div>' +
         '<div class="articulo-pedido-id">' + escapeHtml(r.id) + '</div>' +
         '</div>' +
         '<span class="articulo-pedido-cant">x' + r.cantidad + '</span>' +
@@ -13071,9 +13086,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // ==========================================
     // PEDIDO VIEW: Calculos globales
     // ==========================================
-    // Los faltantes abonados salieron de items pero el cliente ya los pago:
-    // siguen sumando al subtotal para que el total cobrado no cambie y el
-    // reembolso se muestre aparte.
     function pvCalcSubtotal() {
       let subtotal = 0;
       if (pedidoActual && pedidoActual.items) {
@@ -13081,7 +13093,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           subtotal += Math.round((it.cantidad || 0) * Math.round(it.valorU || 0));
         });
       }
-      return subtotal + faSubtotalLista();
+      return subtotal;
     }
 
     function pvBuildCotizacionTexto() {
