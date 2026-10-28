@@ -689,11 +689,63 @@
                 .catch(err => { console.error(err); alert('No se pudo actualizar el estado.'); });
         }
 
-        function eliminarPotencial(id) {
+        // Ids del cliente en cada sucursal. Los registros viejos solo guardaban
+        // clienteId (Munro).
+        function idsImportados(p) {
+            const ids = { ...(p.clienteIds || {}) };
+            if (!ids['1'] && p.clienteId) ids['1'] = p.clienteId;
+            return ids;
+        }
+
+        // Si el registro se importó, también borra el cliente del nodo clientes
+        // de cada sucursal. El registro solo se elimina si se borró en todas;
+        // si alguna falla, queda con los ids que faltan para reintentar.
+        async function eliminarPotencial(id) {
             const p = potenciales.find(x => x.id === id);
-            if (!p || !confirm(`¿Eliminar el registro de "${p.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
-            db.ref('clientesPotenciales/' + id).remove()
-                .catch(err => { console.error(err); alert('No se pudo eliminar.'); });
+            if (!p) return;
+            const ids = idsImportados(p);
+            const sucs = SUCURSALES.filter(s => ids[s.id]);
+
+            if (!sucs.length) {
+                if (!confirm(`¿Eliminar el registro de "${p.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
+                db.ref('clientesPotenciales/' + id).remove()
+                    .catch(err => { console.error(err); alert('No se pudo eliminar.'); });
+                return;
+            }
+
+            try {
+                // Se conectan todas antes de borrar: si se cancela un login, no se toca nada.
+                const bases = [];
+                for (const suc of sucs) bases.push(await baseDe(suc));
+                const snaps = await Promise.all(bases.map((b, i) => b.ref('clientes/' + ids[sucs[i].id]).once('value')));
+
+                const detalle = sucs.map((suc, i) => {
+                    const c = snaps[i].val();
+                    return c
+                        ? `• ${suc.nombre}: ${c.nombre || '(sin nombre)'} · ${c.telefono || ''} ${c.email || ''}`
+                        : `• ${suc.nombre}: ya no existe`;
+                }).join('\n');
+                if (!confirm(`¿Eliminar a "${p.nombre}"?\n\nTambién se borra el cliente en las sucursales:\n${detalle}\n\nEsta acción no se puede deshacer.`)) return;
+
+                const resultados = await Promise.allSettled(sucs.map((suc, i) => bases[i].ref('clientes/' + ids[suc.id]).remove()));
+                const fallidas = [];
+                resultados.forEach((r, i) => {
+                    if (r.status === 'fulfilled') delete ids[sucs[i].id];
+                    else { console.error(`Error al eliminar en ${sucs[i].nombre}:`, r.reason); fallidas.push(sucs[i].nombre); }
+                });
+
+                if (fallidas.length) {
+                    await db.ref('clientesPotenciales/' + id).update({ clienteIds: ids, clienteId: ids['1'] || null });
+                    alert(`No se pudo eliminar el cliente en: ${fallidas.join(', ')}.\n\nEl registro queda para reintentar.`);
+                } else {
+                    await db.ref('clientesPotenciales/' + id).remove();
+                }
+                dashboardCargado = false;
+            } catch (err) {
+                if (err.message === LOGIN_CANCELADO) return;
+                console.error('Error al eliminar:', err);
+                alert('No se pudo eliminar.');
+            }
         }
 
         /* ====================================================== sucursales = */

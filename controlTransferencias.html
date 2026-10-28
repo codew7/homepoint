@@ -1115,8 +1115,11 @@
         // pedido está verificado; al destildar se borra. Se guarda solo lo verificado.
         // Los registros de más de 60 días se borran al abrir la página (no hace falta
         // Cloud Functions): como el nodo ya se descarga entero, no suma lecturas.
+        // Excepción: los de Caseros no se borran nunca, porque CuentasCaseros.html los
+        // descuenta como pagos de Caseros a Munro y necesita el historial completo.
         const NODO_VERIFICADOS = 'transferenciasVerificadas';
         const DIAS_RETENCION_VERIFICADOS = 60;
+        const PUNTOS_SIN_LIMPIEZA = ['2'];
         let verificados = {};
         let refVerificados = null;
 
@@ -1145,6 +1148,7 @@
             });
 
             // Limpieza: usa los mismos datos que ya trajo el listener (no se descargan de nuevo)
+            if (PUNTOS_SIN_LIMPIEZA.includes(puntoConsultado)) return;
             ref.once('value').then(snap => {
                 const limite = Date.now() - DIAS_RETENCION_VERIFICADOS * 24 * 60 * 60 * 1000;
                 const vencidos = {};
