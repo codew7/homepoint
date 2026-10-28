@@ -6325,6 +6325,7 @@
     let mapImg = {};
     let aliasHistorial = [];
     let aliasDesdeFirebase = [];
+    let aliasUso = {}; // alias -> timestamp del último uso (nodo aliasUso de RTDB)
     let updateQueue = {};
     let updateTimer = null;
     let procesoCriticoEnEjecucion = false;
@@ -9098,8 +9099,17 @@
                   : 'No se puede entregar este pedido');
           return;
         }
+        // Al confirmar la entrega se cierra el pedido y se vuelve a la lista.
+        entregaDesdePendientes = p.id;
         btnDesp.click();
       }
+    }
+    let entregaDesdePendientes = null;
+
+    function volverAPendientes() {
+      resetView();
+      pedidosPanel.classList.add('active');
+      cargarPedidosPendientes();
     }
 
     // ==========================================
@@ -13497,6 +13507,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         }
         pvAliasRender();
       }, e => { aliasSuscrito = false; console.error('Error cargando alias:', e); });
+      // Fecha del último uso de cada alias (nodo aparte para no romper "alias")
+      db.ref('aliasUso').on('value', snap => {
+        const val = snap.val() || {};
+        aliasUso = {};
+        Object.values(val).forEach(v => {
+          if (v && v.alias && typeof v.ts === 'number') aliasUso[v.alias] = v.ts;
+        });
+        pvAliasRender();
+      }, e => console.error('Error cargando uso de alias:', e));
     }
 
     function guardarAliasEnLocalStorage(nuevoAlias) {
@@ -13504,13 +13523,21 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const limpio = nuevoAlias.trim().toUpperCase();
       try { db.ref('alias/' + aliasAClave(limpio)).set(limpio); }
       catch (e) { console.error('Error registrando alias en Firebase:', e); }
+      const ts = Date.now();
+      aliasUso[limpio] = ts;
+      try {
+        db.ref('aliasUso/' + aliasAClave(limpio)).set({ alias: limpio, ts })
+          .catch(e => console.error('Error registrando uso de alias:', e));
+      } catch (e) { console.error('Error registrando uso de alias:', e); }
       aliasHistorial = aliasHistorial.filter(a => a !== limpio);
       aliasHistorial.unshift(limpio);
       if (aliasHistorial.length > 15) aliasHistorial = aliasHistorial.slice(0, 15);
       try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
     }
 
-    // Lista combinada sin duplicados y ordenada alfabéticamente
+    // Lista combinada sin duplicados: primero los usados más recientemente
+    // (fecha compartida en Firebase, si no el orden del historial local),
+    // y los que nunca se usaron quedan al final en orden alfabético.
     function obtenerListaAlias() {
       const vistos = new Set();
       const lista = [];
@@ -13518,7 +13545,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const a = (alias || '').trim().toUpperCase();
         if (a !== '' && !vistos.has(a)) { vistos.add(a); lista.push(a); }
       });
-      lista.sort((a, b) => a.localeCompare(b, 'es'));
+      const posLocal = a => { const i = aliasHistorial.indexOf(a); return i < 0 ? Infinity : i; };
+      lista.sort((a, b) =>
+        (aliasUso[b] || 0) - (aliasUso[a] || 0) ||
+        posLocal(a) - posLocal(b) ||
+        a.localeCompare(b, 'es'));
       return lista;
     }
 
@@ -13526,6 +13557,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     function pvEliminarAlias(alias) {
       try { db.ref('alias/' + aliasAClave(alias)).remove(); }
       catch (e) { console.error('Error eliminando alias en Firebase:', e); }
+      try { db.ref('aliasUso/' + aliasAClave(alias)).remove().catch(() => {}); } catch (e) {}
+      delete aliasUso[alias];
       aliasDesdeFirebase = aliasDesdeFirebase.filter(a => a !== alias);
       aliasHistorial = aliasHistorial.filter(a => a !== alias);
       try { localStorage.setItem('historialAlias', JSON.stringify(aliasHistorial)); } catch (e) {}
@@ -14070,6 +14103,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // PEDIDO VIEW: Despachar
     // ==========================================
     document.getElementById('btnDespachar').addEventListener('click', async () => {
+      // Se lee en el acto: si se cancela, un clic manual posterior no vuelve a la lista.
+      const volverALista = entregaDesdePendientes !== null && entregaDesdePendientes === pedidoId;
+      entregaDesdePendientes = null;
       if (!pedidoActual || pedidoActual.status === 'CANCELADO') return;
       if (!puedeEjecutarAccionesCriticas()) { showToast('Accion no permitida para este usuario'); return; }
       if (despachoYaEjecutado) { showToast('Ya fue procesado'); return; }
@@ -14141,6 +14177,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           await db.ref('pedidos/' + pedidoId).update({ status: 'DESPACHADO/ENTREGADO', locked: true, fecha: getFechaActual() });
           desbloquearInterfaz();
           showToast('Despachado (movimientos ya registrados)');
+          if (volverALista) volverAPendientes();
           return;
         }
 
@@ -14200,6 +14237,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
         desbloquearInterfaz();
         showToast('Despachado ✔ ' + movCount + ' movimientos registrados');
+        if (volverALista) volverAPendientes();
       } catch (err) {
         desbloquearInterfaz();
         despachoYaEjecutado = false;
