@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Reglas COMPLETAS de Firebase Storage del proyecto pedidos-87064
+// (artículos + LocatorPic). Se pegan enteras en la consola:
+// Storage -> Reglas -> Publicar.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Fotos de artículos: articulos/{codigo}.jpg
+    match /articulos/{archivo} {
+      // Lectura: solo usuarios autenticados desde el SDK.
+      // (Las URLs de getDownloadURL con ?token= siguen funcionando sin auth.)
+      allow read: if request.auth != null;
+
+      allow write: if request.auth != null
+                   && archivo.matches('^[A-Za-z0-9._-]{1,64}\\.jpg$')
+                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.contentType == 'image/jpeg';
+
+      allow delete: if request.auth != null;
+    }
+
+    // LocatorPic: fotos del recorrido del depósito.
+    //   locatorpic/{recorrido}/{foto}.jpg       foto completa (máxima calidad)
+    //   locatorpic/{recorrido}/min/{foto}.jpg   miniatura (foto guía)
+    // La app solo sube y lee. El borrado de recorridos viejos lo hace la PC
+    // (relevar.py) con la cuenta de servicio, que no depende de estas reglas.
+    function esFotoLocatorPic(recorrido, foto) {
+      return request.auth != null
+          && recorrido.matches('^[A-Za-z0-9_-]{1,40}$')
+          && foto.matches('^[A-Za-z0-9_-]{1,40}\\.jpg$')
+          && request.resource.size < 30 * 1024 * 1024
+          && request.resource.contentType == 'image/jpeg';
+    }
+
+    match /locatorpic/{recorrido}/{foto} {
+      allow read: if request.auth != null;
+      allow create, update: if esFotoLocatorPic(recorrido, foto);
+    }
+
+    match /locatorpic/{recorrido}/min/{foto} {
+      allow read: if request.auth != null;
+      allow create, update: if esFotoLocatorPic(recorrido, foto);
+    }
+
+    // Todo lo demás: denegado.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,5 @@
 r"""
-Lanzador de la app instalable "Cotizador de envios" (Correo Argentino + Via Cargo).
+Lanzador de la app instalable "Cotizador de envios" (Correo Argentino + Via Cargo + Flecha Carga).
 
 Es el punto de entrada del ejecutable que arma PyInstaller (ver construir.py). No
 duplica codigo: importa servidor.py del comparador, que a su vez importa los modulos
@@ -10,6 +10,7 @@ de ../Correo y ../ViaCargo, y solo reubica los archivos que se escriben:
     Datos del usuario:       %LOCALAPPDATA%\Cotizador de envios\
                              .env, auth_state.json, browser_profile/, sucursales*.json,
                              localidades.json, agencias.json, destinos.json,
+                             flechacarga-tarifas.json, flechacarga-sucursales.json,
                              pedidos_sesion.json, ventana/ (perfil de la ventana), registro.log,
                              extension-micorreo/ (la extension que el usuario carga en Brave)
 
@@ -48,13 +49,28 @@ if CONGELADO:
 else:
     _RAIZ = Path(__file__).resolve().parent.parent
     RECURSOS = None
-    for _d in ("Comparador", "Correo", "ViaCargo"):
+    # Correo y ViaCargo tambien tienen un servidor.py: el Comparador tiene que quedar primero
+    # (se inserta al reves porque cada insert(0) pasa adelante).
+    for _d in ("ViaCargo", "Correo", "Comparador"):
         sys.path.insert(0, str(_RAIZ / _d))
+    # Al final: tiene su propio servidor.py, que no debe tapar al del Comparador.
+    sys.path.append(str(_RAIZ / "Flecha Carga"))
 
 DATOS = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / NOMBRE
 # Catalogos que vienen con el instalador y se copian a DATOS la primera vez (despues se
-# actualizan desde la app). Sin compilar se toman de las carpetas hermanas.
-CATALOGOS_INICIALES = {"sucursales.json": "Correo", "localidades.json": "ViaCargo", "agencias.json": "ViaCargo", "destinos.json": "Comparador"}
+# actualizan desde la app): nombre en DATOS -> (carpeta hermana, nombre ahi). Sin compilar se
+# toman de las carpetas hermanas. Los de Flecha Carga cambian de nombre: "sucursales.json" ya
+# es el del Correo.
+CATALOGOS_INICIALES = {
+    "sucursales.json": ("Correo", "sucursales.json"),
+    "localidades.json": ("ViaCargo", "localidades.json"),
+    "agencias.json": ("ViaCargo", "agencias.json"),
+    "destinos.json": ("Comparador", "destinos.json"),
+    "flechacarga-tarifas.json": ("Flecha Carga", "tarifas.json"),
+    "flechacarga-sucursales.json": ("Flecha Carga", "sucursales.json"),
+}
+# El CSV del tarifario se lee desde el programa (solo para regenerar las tarifas si faltan).
+TARIFARIO_CSV = "Flecha Carga - TARIFARIO.csv"
 
 
 def preparar_entorno():
@@ -63,8 +79,8 @@ def preparar_entorno():
     os.environ["COTIZADOR_DATOS"] = str(DATOS)
     if CONGELADO:
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(RECURSOS / "ms-playwright")
-    for nombre, carpeta in CATALOGOS_INICIALES.items():
-        origen = RECURSOS / "catalogos" / nombre if CONGELADO else _RAIZ / carpeta / nombre
+    for nombre, (carpeta, original) in CATALOGOS_INICIALES.items():
+        origen = RECURSOS / "catalogos" / nombre if CONGELADO else _RAIZ / carpeta / original
         if not (DATOS / nombre).exists() and origen.exists():
             shutil.copy2(origen, DATOS / nombre)
     os.chdir(DATOS)
@@ -76,6 +92,7 @@ def preparar_entorno():
 def reubicar_modulos():
     """Los modulos de Via Cargo, destinos y pedidos guardan junto a su archivo: en la app, a DATOS."""
     import destinos
+    import flechacarga
     import pedidos
     import servidor
     import viacargo
@@ -84,6 +101,14 @@ def reubicar_modulos():
     viacargo.AGENCIAS_FILE = DATOS / "agencias.json"
     destinos.DESTINOS_FILE = DATOS / "destinos.json"
     pedidos.SESION_FILE = DATOS / "pedidos_sesion.json"
+    flechacarga.TARIFAS_FILE = DATOS / "flechacarga-tarifas.json"
+    flechacarga.SUCURSALES_FILE = DATOS / "flechacarga-sucursales.json"
+    # En otra PC no esta la carpeta de pedidosv2: la copia para "Sucursales disponibles" no aplica.
+    flechacarga.PEDIDOS_JSON = DATOS / "sin-pedidosv2" / "flechacarga-sucursales.json"
+    if CONGELADO:
+        flechacarga.TARIFARIO_CSV = RECURSOS / "catalogos" / TARIFARIO_CSV
+    else:
+        flechacarga.TARIFARIO_CSV = _RAIZ / "Flecha Carga" / TARIFARIO_CSV
     if CONGELADO:
         # La extension se carga en Brave desde una ruta fija: va a DATOS (la carpeta del programa
         # se reemplaza al actualizar) y se refresca en cada inicio por si cambio de version.
@@ -95,6 +120,9 @@ def reubicar_modulos():
             "/icono.png": RECURSOS / "web" / "icono.png",
             "/logo-correo.png": RECURSOS / "web" / "logo-correo.png",
             "/logo-viacargo.png": RECURSOS / "web" / "logo-viacargo.png",
+            "/logo-flechacarga.png": RECURSOS / "web" / "logo-flechacarga-claro.png",
+            "/logo-flechacarga-blanco.png": RECURSOS / "web" / "logo-flechacarga.png",
+            "/logo-flechacarga-icono.png": RECURSOS / "web" / "logo-flechacarga-icono.png",
         })
     return servidor
 

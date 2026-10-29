@@ -1,5 +1,5 @@
 r"""
-Compila el cotizador (Comparador + Correo + ViaCargo) en una app de Windows y arma el instalador.
+Compila el cotizador (Comparador + Correo + ViaCargo + Flecha Carga) en una app de Windows y arma el instalador.
 
     .venv\Scripts\python.exe construir.py            (o "Construir instalador.bat")
 
@@ -21,12 +21,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 NOMBRE_EXE = "Cotizador de envios"
 
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parent
-COMPARADOR, CORREO, VIACARGO = RAIZ / "Comparador", RAIZ / "Correo", RAIZ / "ViaCargo"
+COMPARADOR, CORREO, VIACARGO, FLECHA = RAIZ / "Comparador", RAIZ / "Correo", RAIZ / "ViaCargo", RAIZ / "Flecha Carga"
 PEDIDOSV2_CONFIG = RAIZ.parent / "pedidosv2" / "config.js"
 BUILD = AQUI / "build"
 RECURSOS = BUILD / "recursos"
@@ -89,7 +89,8 @@ def preparar_recursos():
         shutil.rmtree(RECURSOS)
     web = RECURSOS / "web"
     web.mkdir(parents=True)
-    for f in (COMPARADOR / "index.html", COMPARADOR / "icono.png", CORREO / "logo-correo.png", VIACARGO / "logo-viacargo.png"):
+    for f in (COMPARADOR / "index.html", COMPARADOR / "icono.png", CORREO / "logo-correo.png", VIACARGO / "logo-viacargo.png",
+              FLECHA / "logo-flechacarga.png", FLECHA / "logo-flechacarga-claro.png", FLECHA / "logo-flechacarga-icono.png"):
         shutil.copy2(f, web / f.name)
 
     # Extension de Brave para completar MiCorreo en el navegador del usuario (app.py la copia a DATOS).
@@ -97,9 +98,15 @@ def preparar_recursos():
 
     cat = RECURSOS / "catalogos"
     cat.mkdir()
-    for f in (CORREO / "sucursales.json", VIACARGO / "localidades.json", VIACARGO / "agencias.json", COMPARADOR / "destinos.json"):
+    # Nombre en la app -> archivo de origen. Los de Flecha Carga se renombran: "sucursales.json"
+    # ya es el del Correo (ver CATALOGOS_INICIALES en app.py).
+    catalogos = {"sucursales.json": CORREO / "sucursales.json", "localidades.json": VIACARGO / "localidades.json",
+                 "agencias.json": VIACARGO / "agencias.json", "destinos.json": COMPARADOR / "destinos.json",
+                 "flechacarga-tarifas.json": FLECHA / "tarifas.json", "flechacarga-sucursales.json": FLECHA / "sucursales.json",
+                 "Flecha Carga - TARIFARIO.csv": FLECHA / "Flecha Carga - TARIFARIO.csv"}
+    for nombre, f in catalogos.items():
         if f.exists():
-            shutil.copy2(f, cat / f.name)
+            shutil.copy2(f, cat / nombre)
         else:
             print(f"aviso: falta {f} (la app lo descargara al usarse)")
 
@@ -133,7 +140,7 @@ def archivo_version() -> Path:
   kids=[
     StringFileInfo([StringTable('0C0A04B0', [
       StringStruct('CompanyName', 'Homepoint'),
-      StringStruct('FileDescription', 'Cotizador de envíos (Correo Argentino + Vía Cargo)'),
+      StringStruct('FileDescription', 'Cotizador de envíos (Correo Argentino + Vía Cargo + Flecha Carga)'),
       StringStruct('FileVersion', '{VERSION}'),
       StringStruct('InternalName', '{NOMBRE_EXE}'),
       StringStruct('OriginalFilename', '{NOMBRE_EXE}.exe'),
@@ -148,6 +155,15 @@ def archivo_version() -> Path:
     return ruta
 
 
+def modulos_flecha() -> Path:
+    # "Flecha Carga" tiene su propio servidor.py: no se agrega la carpeta entera (taparia al del
+    # Comparador), solo una copia de flechacarga.py en una carpeta aparte.
+    carpeta = BUILD / "modulos-flecha"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(FLECHA / "flechacarga.py", carpeta / "flechacarga.py")
+    return carpeta
+
+
 def pyinstaller():
     if (DIST / NOMBRE_EXE).exists():
         shutil.rmtree(DIST / NOMBRE_EXE)
@@ -155,9 +171,9 @@ def pyinstaller():
         sys.executable, "-m", "PyInstaller", str(AQUI / "app.py"),
         "--name", NOMBRE_EXE, "--windowed", "--noconfirm", "--clean",
         "--icon", str(AQUI / "icono.ico"), "--version-file", str(archivo_version()),
-        "--paths", str(COMPARADOR), "--paths", str(CORREO), "--paths", str(VIACARGO),
+        "--paths", str(COMPARADOR), "--paths", str(CORREO), "--paths", str(VIACARGO), "--paths", str(modulos_flecha()),
         # Modulos que app.py importa dentro de funciones o que solo carga servidor.py.
-        *sum((["--hidden-import", m] for m in ("servidor", "destinos", "pedidos", "viacargo", "cotizador", "auth", "sucursales")), []),
+        *sum((["--hidden-import", m] for m in ("servidor", "destinos", "pedidos", "viacargo", "flechacarga", "cotizador", "auth", "sucursales")), []),
         "--exclude-module", "tkinter",
         "--add-data", f"{RECURSOS}{os.pathsep}.",
         "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller"), "--specpath", str(BUILD),

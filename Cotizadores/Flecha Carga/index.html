@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cotizador Flecha Carga</title>
+<style>
+  :root {
+    --bg: #f3f4f8; --card: #fff; --text: #111827; --muted: #6b7280;
+    --border: #d1d5db; --accent: #030b84; --accent-hover: #02075e; --rojo: #e30613;
+    --ok: #047857; --ok-bg: #ecfdf5; --warn-bg: #fffbeb; --warn: #92400e;
+    --err-bg: #fef2f2; --err: #b91c1c; --price-bg: #eef0fb; --info-bg: #f8fafc; --oro: #b7791f; --oro-bg: #fdf6e3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1240px; margin: 0 auto; }
+  .cabecera { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; background: var(--accent); border-radius: 10px; padding: 14px 20px; margin-bottom: 8px; border-bottom: 4px solid var(--rojo); }
+  .cabecera img { height: 28px; width: auto; }
+  h1 { font-size: 18px; margin: 0; color: #fff; font-weight: 600; letter-spacing: .02em; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .disposicion { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+  .lateral { position: sticky; top: 24px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; gap: 16px; }
+  .lateral .card { margin-bottom: 0; display: flex; flex-direction: column; min-height: 0; }
+  .lateral .card.hist-card { flex: 1 1 auto; }
+  .lateral .barra { flex: 0 0 auto; }
+  #historial { overflow: auto; min-height: 0; margin: 0 -8px; padding: 0 8px; }
+  @media (max-width: 1023px) {
+    .disposicion { grid-template-columns: minmax(0, 1fr); }
+    .lateral { position: static; max-height: none; }
+  }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 18px; }
+  legend { font-weight: 600; margin-bottom: 10px; padding: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input:disabled { background: #f3f4f6; color: var(--muted); }
+  .hidden { display: none !important; }
+  button {
+    padding: 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.principal { width: 100%; }
+  button.principal:hover { background: var(--accent-hover); }
+  button.sec { background: #fff; color: var(--accent); border: 1px solid var(--accent); padding: 8px 12px; font-weight: 500; font-size: 14px; }
+  button.chico { padding: 5px 10px; font-size: 13px; }
+  button:hover { filter: brightness(.95); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .paquete-fila { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .paquete-fila > div { display: flex; flex-direction: column; justify-content: flex-end; }
+  @media (max-width: 720px) { .paquete-fila { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .opcion-vol { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
+  .opcion-vol label.chk { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--text); cursor: pointer; font-size: 14px; }
+  .opcion-vol input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .opcion-vol .factor { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .opcion-vol .factor input { width: 90px; padding: 5px 8px; }
+  .estado { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 20px; }
+  .aviso { border-radius: 8px; padding: 12px; font-size: 14px; }
+  .aviso.error { background: var(--err-bg); color: var(--err); border: 1px solid #fecaca; }
+  .aviso.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde68a; }
+  .aviso.info { background: var(--info-bg); color: var(--text); border: 1px solid var(--border); }
+  .bajar { background: var(--oro-bg); color: #7a4f0e; border: 1px solid #ecd9a8; border-radius: 8px; padding: 8px 12px; font-size: 13.5px; margin-bottom: 10px; }
+  .analisis { background: var(--info-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 14px; font-size: 14px; }
+  .analisis .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .kpi .n { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .v { font-size: 18px; font-weight: 700; }
+  .kpi .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .analisis ul { margin: 8px 0 0; padding-left: 18px; }
+  .analisis li { margin-bottom: 4px; }
+  .equivalente { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .tag.tam { background: #fef3c7; color: #92400e; }
+  .tag.peso { background: #e0e7ff; color: #1e2a8a; }
+  .tag.no { background: #fee2e2; color: #991b1b; }
+  .loc-estado { font-size: 12.5px; margin-top: 4px; min-height: 18px; color: var(--muted); }
+  .loc-estado.ok { color: var(--ok); }
+  .loc-estado.err { color: var(--err); }
+  .detalle { font-size: 13px; color: var(--muted); }
+  .detalle b { color: var(--text); font-weight: 600; }
+  .detalle a, .agencia a { color: var(--accent); }
+  .total { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .precio { background: var(--price-bg); border-radius: 8px; padding: 16px; text-align: center; border: 1px solid var(--accent); }
+  .precio.cliente { background: var(--oro-bg); border-color: #ecd9a8; }
+  .precio .nombre { font-size: 13px; font-weight: 700; }
+  .precio .monto { font-size: 28px; font-weight: 700; color: var(--accent); margin-top: 4px; }
+  .precio.cliente .monto { color: var(--oro); }
+  .precio .entrega { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  details { margin-top: 10px; font-size: 13px; }
+  summary { cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr.actual td { background: var(--price-bg); font-weight: 700; }
+  .columnas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 14px; }
+  .columnas h3 { margin: 0 0 8px; font-size: 14px; }
+  .vacio { color: var(--muted); font-size: 14px; }
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .agencia { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 8px; background: #fff; }
+  .agencia .nom { font-weight: 600; }
+  .agencia .ext { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .hist { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; background: #fff; }
+  .hist:hover { border-color: var(--accent); }
+  .hist .fila1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .hist .paq { font-weight: 600; }
+  .hist .fecha { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .hist .dest { color: var(--muted); margin-top: 2px; }
+  .hist .pie { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .hist .pie b { color: var(--accent); font-size: 14px; }
+  .hist .acc { display: flex; gap: 6px; }
+  .config .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .config .full { grid-column: 1 / -1; }
+  .config summary { font-weight: 600; font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="cabecera"><img src="/logo-flechacarga.png" alt="Flecha Carga"><h1>Cotizador de encomiendas</h1></div>
+  <p class="sub">Calcula el envío con el cuadro tarifario de Flecha Carga (franjas de 5 kg hasta 40 kg y kilo excedente) y le suma el seguro de la mercadería.</p>
+
+  <div class="disposicion">
+  <div>
+  <form id="form" class="card" autocomplete="off">
+    <fieldset>
+      <legend>Destino</legend>
+      <input id="destino" name="destino" list="lista-destinos" type="text" placeholder="Ej: ROSARIO, ALCORTA o el código de agencia" required>
+      <div id="destino-estado" class="loc-estado"></div>
+      <datalist id="lista-destinos"></datalist>
+      <div class="detalle" id="infoTarifas"></div>
+      <input type="file" id="archivoCsv" accept=".csv,text/csv" class="hidden">
+    </fieldset>
+
+    <fieldset>
+      <legend>Paquete y seguro</legend>
+      <div class="paquete-fila">
+        <div><label for="peso">Peso real (kg)</label><input id="peso" name="peso" type="text" inputmode="decimal" placeholder="Ej: 2 o 2,5" required></div>
+        <div><label for="largo">Largo (cm)</label><input id="largo" name="largo" type="number" min="1" step="1" placeholder="opcional"></div>
+        <div><label for="ancho">Ancho (cm)</label><input id="ancho" name="ancho" type="number" min="1" step="1" placeholder="opcional"></div>
+        <div><label for="alto">Alto (cm)</label><input id="alto" name="alto" type="number" min="1" step="1" placeholder="opcional"></div>
+        <div><label for="seguro" title="Monto fijo que se suma al flete. Queda guardado para la próxima.">Seguro ($)</label><input id="seguro" name="seguro" type="text" inputmode="decimal" placeholder="Ej: 1500"></div>
+      </div>
+      <div class="opcion-vol">
+        <label class="chk"><input type="checkbox" id="usarVol"> Cobrar por peso volumétrico si es mayor</label>
+        <span class="factor" id="factorCaja">factor <input id="factor" type="number" min="1" step="1" value="4000"> <span>(largo × ancho × alto ÷ factor)</span></span>
+      </div>
+      <div class="detalle" style="margin-top:6px">El seguro se suma tal cual y se recuerda. Como referencia, Flecha Carga informa en su web un seguro del 2 % del valor declarado.</div>
+      <div id="analisis" class="analisis"></div>
+    </fieldset>
+
+    <button id="btn" type="submit" class="principal">Cotizar</button>
+    <div id="estado" class="estado"></div>
+  </form>
+
+  <section id="resultado" class="card hidden"></section>
+  </div>
+
+  <aside class="lateral">
+    <section class="card config">
+      <details id="configBox">
+        <summary>Configuración</summary>
+        <div class="grid" style="margin-top:12px">
+          <div><label for="cfg_pct">Recargo al cliente (%)</label><input id="cfg_pct" type="text" inputmode="decimal" placeholder="0"></div>
+          <div><label for="cfg_fijo">Recargo fijo ($)</label><input id="cfg_fijo" type="text" inputmode="decimal" placeholder="0"></div>
+          <div><label for="cfg_red">Redondear hacia arriba a</label>
+            <select id="cfg_red"><option value="1">sin redondeo</option><option value="10">$ 10</option><option value="100">$ 100</option><option value="500">$ 500</option><option value="1000">$ 1.000</option></select></div>
+          <div><label for="cfg_validez">Validez de la ficha (días)</label><input id="cfg_validez" type="number" min="0" step="1" placeholder="7"></div>
+          <div class="full"><label for="cfg_negocio">Nombre del negocio (ficha)</label><input id="cfg_negocio" type="text" placeholder="opcional"></div>
+          <div class="full"><label for="cfg_contacto">Contacto (ficha)</label><input id="cfg_contacto" type="text" placeholder="WhatsApp, mail…"></div>
+          <div class="full"><label for="cfg_nota">Nota al pie de la ficha</label><input id="cfg_nota" type="text" placeholder="opcional"></div>
+        </div>
+        <div class="detalle" style="margin-top:8px">Con recargo, aparece el precio «Al cliente» en el resultado y la ficha muestra ese precio.</div>
+      </details>
+    </section>
+    <section class="card hist-card">
+      <div class="barra">
+        <h2 style="margin:0">Historial</h2>
+        <div style="display:flex;gap:6px"><button type="button" id="exportarHistorial" class="sec chico">CSV</button><button type="button" id="borrarHistorial" class="sec chico">Vaciar</button></div>
+      </div>
+      <div id="historial"></div>
+    </section>
+  </aside>
+  </div>
+</main>
+
+<script>
+  // ---------- Reglas del tarifario ----------
+  // Cada destino tiene NETO / IVA / TOTAL para 8 franjas de 5 kg (0-5 ... 35-40 kg).
+  // Por encima de 40 kg se cobra la franja 35-40 más el "costo por kilo excedente"
+  // (ya con IVA) por cada kilo extra, redondeando hacia arriba. El seguro es un monto
+  // fijo que se carga a mano. Opcionalmente se cobra el peso volumétrico
+  // (largo × ancho × alto ÷ factor) si es mayor que el real.
+  const FRANJAS = [5, 10, 15, 20, 25, 30, 35, 40];
+  const ULTIMA = FRANJAS.length - 1;
+  const UMBRAL_BAJAR = 0.10;   // aviso «↓ Bajás…» si alcanza con quitar hasta 10 %
+  const MAX_PUNTOS = 4;
+  const URL_PUNTOS = "https://www.flechacarga.com/donde-estamos/";
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), btn = $("btn"), estado = $("estado"), resultado = $("resultado");
+
+  // ---------- Utilidades ----------
+  function escapar(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+  const fmtKg = (x) => (+x).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  const fmtN = (x) => Math.round(x).toLocaleString("es-AR");
+  const fmt$ = (x) => "$ " + Math.round(+x).toLocaleString("es-AR");
+  const dd = (n) => String(n).padStart(2, "0");
+  const fmtFechaCorta = (ts) => { const f = new Date(ts); return `${dd(f.getDate())}/${dd(f.getMonth() + 1)} ${dd(f.getHours())}:${dd(f.getMinutes())}`; };
+  const leerDecimal = (txt) => parseFloat(String(txt ?? "").trim().replace(",", "."));
+  // Montos en pesos: el punto es separador de miles ("1.500" = 1500, "1.500,50" = 1500.5).
+  const leerMonto = (txt) => parseFloat(String(txt ?? "").trim().replace(/[$\s.]/g, "").replace(",", "."));
+  function store(clave, valor) { try { localStorage.setItem(clave, JSON.stringify(valor)); } catch (e) {} }
+  function load(clave, porDefecto) { try { return JSON.parse(localStorage.getItem(clave)) ?? porDefecto; } catch (e) { return porDefecto; } }
+  const normalizar = (s) => String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  const nombreFranja = (i) => `${FRANJAS[i] - 5} a ${FRANJAS[i]} kg`;
+
+  // ---------- Configuración ----------
+  const CFG_DEF = { pct: "", fijo: "", red: "1", validez: "7", negocio: "", contacto: "", nota: "" };
+  let CFG = { ...CFG_DEF, ...load("flechacarga:config", {}) };
+  for (const k of Object.keys(CFG_DEF)) {
+    const el = $("cfg_" + k);
+    el.value = CFG[k];
+    // Se redibuja en "input" y no en "change": "change" llega al perder el foco, justo
+    // cuando se hace clic en un botón del resultado, y el redibujo se comía ese clic.
+    el.addEventListener("input", () => { CFG[k] = el.value; store("flechacarga:config", CFG); if (ULTIMA_COT) mostrarResultado(ULTIMA_COT); });
+  }
+  const hayRecargo = () => (leerDecimal(CFG.pct) || 0) !== 0 || (leerMonto(CFG.fijo) || 0) !== 0;
+  function alCliente(total) {
+    const pct = leerDecimal(CFG.pct) || 0, fijo = leerMonto(CFG.fijo) || 0, red = +CFG.red || 1;
+    const v = total * (1 + pct / 100) + fijo;
+    return Math.ceil(v / red - 1e-9) * red;
+  }
+
+  // ---------- Seguro y volumétrico (se recuerdan) ----------
+  $("seguro").value = load("flechacarga:seguro", "");
+  $("seguro").addEventListener("input", () => store("flechacarga:seguro", $("seguro").value.trim()));
+  const VOL = { activo: false, factor: 4000, ...load("flechacarga:vol", {}) };
+  $("usarVol").checked = !!VOL.activo; $("factor").value = VOL.factor;
+  function actualizarVol() {
+    VOL.activo = $("usarVol").checked;
+    VOL.factor = +$("factor").value > 0 ? +$("factor").value : 4000;
+    $("factor").disabled = !VOL.activo;
+    $("factorCaja").style.opacity = VOL.activo ? 1 : .55;
+    store("flechacarga:vol", VOL);
+  }
+  $("usarVol").addEventListener("change", () => { actualizarVol(); renderAnalisis(); });
+  $("factor").addEventListener("input", () => { actualizarVol(); renderAnalisis(); });
+  actualizarVol();
+
+  // ---------- Tarifario y Puntos Flecha ----------
+  let T = null;   // { destinos, sucursales, actualizado, fuente, ... }
+  const porEtiqueta = new Map();
+  function aplicarCatalogo(json) {
+    T = json;
+    porEtiqueta.clear();
+    for (const d of T.destinos) porEtiqueta.set(d.etiqueta, d);
+    $("lista-destinos").innerHTML = T.destinos.map((d) => `<option value="${escapar(d.etiqueta)}">${escapar(d.provincia)}</option>`).join("");
+    const f = (s) => s ? new Date(s).toLocaleDateString("es-AR") : "-";
+    $("infoTarifas").innerHTML = `${T.destinos.length} destinos · tarifario «${escapar(T.fuente || "CSV")}» importado el ${f(T.actualizado)} · <a href="#" data-acc="csv">cargar tarifario nuevo (CSV)</a><br>`
+      + (T.sucursales_error ? `No se pudieron descargar los Puntos Flecha (${escapar(T.sucursales_error)}). ` : `${T.sucursales.length} Puntos Flecha del ${f(T.sucursales_actualizado)} · `)
+      + `<a href="#" data-acc="puntos">actualizar Puntos Flecha desde el sitio</a>`;
+    resolverDestinoCampo();
+    renderAnalisis();
+  }
+  async function cargarTarifas(url = "/api/tarifas", opciones = undefined, aviso = "Cargando tarifario…") {
+    $("infoTarifas").textContent = aviso;
+    try {
+      const resp = await fetch(url, opciones);
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+      aplicarCatalogo(json);
+      return true;
+    } catch (e) {
+      if (T) aplicarCatalogo(T);
+      $("infoTarifas").insertAdjacentHTML("afterbegin", `<span style="color:var(--err)">${escapar(e.message)}</span><br>`);
+      if (!T) $("infoTarifas").insertAdjacentHTML("beforeend", ` <a href="#" data-acc="reintentar">Reintentar</a>`);
+      return false;
+    }
+  }
+  $("infoTarifas").addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-acc]");
+    if (!a) return;
+    ev.preventDefault();
+    if (a.dataset.acc === "csv") $("archivoCsv").click();
+    else if (a.dataset.acc === "puntos") cargarTarifas("/api/sucursales/actualizar", { method: "POST" }, "Descargando los Puntos Flecha del sitio…");
+    else cargarTarifas();
+  });
+  $("archivoCsv").addEventListener("change", async () => {
+    const f = $("archivoCsv").files[0];
+    if (!f) return;
+    const texto = await f.text();
+    $("archivoCsv").value = "";
+    const ok = await cargarTarifas("/api/tarifas/importar", { method: "POST", headers: { "Content-Type": "text/csv; charset=utf-8", "X-Archivo": encodeURIComponent(f.name) }, body: texto }, "Importando tarifario…");
+    if (ok) estado.textContent = `Tarifario «${f.name}» importado: ${T.destinos.length} destinos.`;
+  });
+
+  function resolverDestino(texto) {
+    if (!T) return null;
+    const t = String(texto || "").trim();
+    if (!t) return null;
+    if (porEtiqueta.has(t)) return porEtiqueta.get(t);
+    const n = normalizar(t);
+    for (const campo of ["codigo", "nombre", "base"]) {
+      const exactos = T.destinos.filter((d) => normalizar(d[campo]) === n);
+      if (exactos.length === 1) return exactos[0];
+    }
+    const parciales = T.destinos.filter((d) => normalizar(d.etiqueta).includes(n));
+    return parciales.length === 1 ? parciales[0] : null;
+  }
+  function resolverDestinoCampo() {
+    const est = $("destino-estado");
+    const texto = $("destino").value.trim();
+    const d = resolverDestino(texto);
+    est.className = "loc-estado" + (d ? " ok" : (texto && T ? " err" : ""));
+    if (d) est.textContent = `✓ ${d.nombre}${d.provincia ? " · " + d.provincia : ""} · agencia ${d.codigo} · 0 a 5 kg ${fmt$(d.franjas[0].total)}`;
+    else if (!texto) est.textContent = "";
+    else if (!T) est.textContent = "Esperando el tarifario…";
+    else {
+      const n = normalizar(texto);
+      const cant = T.destinos.filter((x) => normalizar(x.etiqueta).includes(n)).length;
+      est.textContent = cant > 1 ? `${cant} destinos coinciden: elegí uno de la lista.` : "No figura en el tarifario de Flecha Carga.";
+    }
+    return d;
+  }
+  $("destino").addEventListener("input", () => { resolverDestinoCampo(); renderAnalisis(); });
+  $("destino").addEventListener("change", () => { const d = resolverDestinoCampo(); if (d) $("destino").value = d.etiqueta; renderAnalisis(); });
+
+  // ---------- Cálculo ----------
+  function leerPaquete() {
+    const peso = leerDecimal($("peso").value);
+    if (!(peso > 0)) return null;
+    const largo = +$("largo").value || 0, ancho = +$("ancho").value || 0, alto = +$("alto").value || 0;
+    return { peso, largo, ancho, alto };
+  }
+  const indiceFranja = (kg) => { const i = FRANJAS.findIndex((h) => kg <= h + 1e-9); return i < 0 ? ULTIMA : i; };
+  // Misma cuenta que flechacarga.cotizar() en Python.
+  function calcular(d, pq, seguro, factor) {
+    const volumen = pq.largo * pq.ancho * pq.alto;
+    const pesoVol = factor && volumen > 0 ? volumen / factor : 0;
+    const facturable = Math.max(pq.peso, pesoVol);
+    const idx = indiceFranja(facturable);
+    const f = d.franjas[idx];
+    const kgExtra = facturable > FRANJAS[ULTIMA] ? Math.ceil(facturable - FRANJAS[ULTIMA] - 1e-9) : 0;
+    const excedente = kgExtra * d.kg_excedente;
+    const flete = f.total + excedente;
+    seguro = Math.max(0, seguro || 0);
+    return { volumen, pesoVol, facturable, idx, kgExtra, excedente, flete, seguro, total: flete + seguro,
+      neto: f.neto, iva: f.iva, fleteFranja: f.total, manda: pesoVol > pq.peso ? "volumen" : "peso" };
+  }
+
+  // ---------- Análisis del paquete ----------
+  function bloqueBajar(d, pq, c) {
+    if (!d || c.idx === 0 || c.kgExtra > 0) return "";
+    const limite = FRANJAS[c.idx - 1];
+    const quitarKg = c.facturable - limite;
+    if (quitarKg / c.facturable > UMBRAL_BAJAR + 1e-9) return "";
+    const ahorro = d.franjas[c.idx].total - d.franjas[c.idx - 1].total;
+    let como;
+    if (c.manda === "volumen") {
+      const volMax = limite * VOL.factor;
+      const opciones = [["largo", Math.floor(volMax / (pq.ancho * pq.alto)), pq.largo], ["ancho", Math.floor(volMax / (pq.largo * pq.alto)), pq.ancho], ["alto", Math.floor(volMax / (pq.largo * pq.ancho)), pq.alto]]
+        .filter(([, max, act]) => max >= 1 && max < act).sort((a, b) => (a[2] - a[1]) - (b[2] - b[1]));
+      const peso = pq.peso > limite ? ` y el peso a ${fmtKg(limite)} kg` : "";
+      como = opciones.length ? `achicando el ${opciones[0][0]} a <b>${opciones[0][1]} cm</b> (hoy ${opciones[0][2]})${peso}` : `reduciendo el volumen a ${fmtN(volMax)} cm³${peso}`;
+    } else {
+      como = `quitando <b>${fmtKg(Math.round(quitarKg * 100) / 100)} kg</b> (llegar a ${fmtKg(limite)} kg)`;
+    }
+    return `<div class="bajar">↓ Bajás a la franja de ${nombreFranja(c.idx - 1)} ${como}: ahorrás <b>${fmt$(ahorro)}</b>.</div>`;
+  }
+  function renderAnalisis() {
+    const cont = $("analisis");
+    const pq = leerPaquete();
+    const d = resolverDestino($("destino").value);
+    if (!pq) { cont.innerHTML = '<span class="vacio">Completá el peso para ver en qué franja cae el paquete.</span>'; return; }
+    const tieneMedidas = pq.largo > 0 && pq.ancho > 0 && pq.alto > 0;
+    if (VOL.activo && !tieneMedidas) { cont.innerHTML = '<span class="vacio">Con peso volumétrico activo, completá largo, ancho y alto.</span>'; return; }
+    const c = calcular(d || { franjas: FRANJAS.map(() => ({ total: 0, neto: 0, iva: 0 })), kg_excedente: 0 }, pq, 0, VOL.activo ? VOL.factor : 0);
+    const tips = [];
+    if (c.kgExtra === 0) {
+      const margen = FRANJAS[c.idx] - c.facturable;
+      if (margen > 0.005) tips.push(`Podés sumar hasta <b>${fmtKg(Math.round(margen * 100) / 100)} kg</b>${c.manda === "volumen" ? " facturables" : ""} sin cambiar de franja.`);
+      if (c.idx === 0) tips.push("Ya está en la franja más económica.");
+      if (d && c.idx < ULTIMA) tips.push(`La franja siguiente (${nombreFranja(c.idx + 1)}) cuesta ${fmt$(d.franjas[c.idx + 1].total - d.franjas[c.idx].total)} más.`);
+    } else if (d) {
+      tips.push(`Más de 40 kg: se cobra la franja de 35 a 40 kg más ${c.kgExtra} kg × ${fmt$(d.kg_excedente)}. Si se puede, conviene dividir en dos bultos de hasta 40 kg.`);
+    }
+    if (!d) tips.push("Elegí el destino para ver los precios.");
+    cont.innerHTML = `
+      ${bloqueBajar(d, pq, c)}
+      <div class="kpis">
+        <div class="kpi"><div class="n">Peso real</div><div class="v">${fmtKg(pq.peso)} <small>kg</small></div></div>
+        ${tieneMedidas ? `<div class="kpi"><div class="n">Volumen</div><div class="v">${fmtN(c.volumen)} <small>cm³</small></div></div>` : ""}
+        ${VOL.activo ? `<div class="kpi"><div class="n">Peso volumétrico</div><div class="v">${fmtKg(Math.round(c.pesoVol * 100) / 100)} <small>kg</small></div></div>` : ""}
+        <div class="kpi"><div class="n">Se cobra como</div><div class="v">${c.kgExtra ? `${fmtKg(c.facturable)} kg` : nombreFranja(c.idx)}</div></div>
+        ${d ? `<div class="kpi"><div class="n">Flete</div><div class="v">${fmt$(c.flete)}</div></div>` : ""}
+      </div>
+      ${VOL.activo ? `<div>${c.manda === "volumen" ? '<span class="tag tam">manda el tamaño</span>' : '<span class="tag peso">manda el peso</span>'}</div>` : ""}
+      <ul>${tips.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+  }
+  for (const id of ["peso", "largo", "ancho", "alto"]) $(id).addEventListener("input", renderAnalisis);
+
+  // ---------- Resultado ----------
+  let ULTIMA_COT = null;
+  const puntosDe = (d) => (d && T ? (d.puntos || []).map((i) => T.sucursales[i]).filter(Boolean) : []);
+  const mapaPunto = (s) => s.lat && s.lng ? `https://www.google.com/maps?q=${encodeURIComponent(s.lat + "," + s.lng)}` : `https://www.google.com/maps/search/${encodeURIComponent(s.direccion + " " + s.nombre)}`;
+  function htmlPunto(s) {
+    const marca = s.solo_domicilio ? ' <span class="tag no">solo envío a domicilio</span>' : s.solo_despacho ? ' <span class="tag no">solo despacho</span>' : "";
+    return `<div class="agencia">
+      <div class="nom">${escapar(s.nombre)}${marca}</div>
+      ${s.solo_domicilio ? "" : `<div>${escapar(s.direccion)}${s.cp ? ` (CP ${escapar(s.cp)})` : ""}</div>`}
+      <div class="ext">${s.horario ? escapar(s.horario) : "Horario no informado"}${s.contacto ? ` · ${escapar(s.contacto)}` : ""}${s.lat ? ` · <a href="${escapar(mapaPunto(s))}" target="_blank" rel="noopener">mapa</a>` : ""}</div>
+    </div>`;
+  }
+  function bloquePuntos(c) {
+    const lista = c.puntos || [];
+    if (!lista.length) return `<div class="detalle">No se encontró un Punto Flecha con ese nombre en el listado. Consultá el más cercano en <a href="${URL_PUNTOS}" target="_blank" rel="noopener">flechacarga.com/donde-estamos</a>.</div>`;
+    return lista.slice(0, MAX_PUNTOS).map(htmlPunto).join("")
+      + (lista.length > MAX_PUNTOS ? `<div class="detalle">… y ${lista.length - MAX_PUNTOS} más en <a href="${URL_PUNTOS}" target="_blank" rel="noopener">flechacarga.com/donde-estamos</a>.</div>` : "");
+  }
+  function tablaFranjas(c) {
+    return `<table>
+      <tr><th>Franja</th><th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th></tr>
+      ${c.franjas.map((f, i) => `<tr class="${i === c.idx ? "actual" : ""}"><td>${nombreFranja(i)}</td><td class="num">${fmt$(f.neto)}</td><td class="num">${fmt$(f.iva)}</td><td class="num">${fmt$(f.total)}</td></tr>`).join("")}
+      <tr><td>Kilo excedente (más de 40 kg)</td><td></td><td></td><td class="num">${fmt$(c.kg_excedente)} / kg</td></tr>
+    </table>`;
+  }
+  function mostrarResultado(c) {
+    ULTIMA_COT = c;
+    const conRecargo = hayRecargo();
+    const pq = c.p;
+    const medidas = pq.largo > 0 && pq.ancho > 0 && pq.alto > 0 ? `${pq.largo}×${pq.ancho}×${pq.alto} cm, ` : "";
+    resultado.innerHTML = `
+      <div class="barra" style="flex-wrap:wrap"><h2 style="margin:0">Resultado</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="copiarTexto" class="sec">Copiar resumen</button><button type="button" id="compartir" class="sec">Ficha para el cliente</button></div></div>
+      <div class="total">
+        <div class="precio"><div class="nombre">Costo Flecha Carga</div><div class="monto">${fmt$(c.total)}</div><div class="entrega">flete ${fmt$(c.flete)}${c.seguro ? ` + seguro ${fmt$(c.seguro)}` : " · sin seguro"}</div></div>
+        ${conRecargo ? `<div class="precio cliente"><div class="nombre">Al cliente</div><div class="monto">${fmt$(alCliente(c.total))}</div><div class="entrega">con recargo de la configuración</div></div>` : ""}
+      </div>
+      <div class="detalle">
+        <div><b>Destino:</b> ${escapar(c.destino.nombre)}${c.destino.provincia ? ", " + escapar(c.destino.provincia) : ""} · agencia ${escapar(c.destino.codigo)}</div>
+        <div><b>Paquete:</b> ${medidas}${fmtKg(pq.peso)} kg${c.factor ? ` · peso volumétrico ${fmtKg(Math.round(c.pesoVol * 100) / 100)} kg (÷${c.factor})` : ""} · <b>se cobra como ${c.kgExtra ? fmtKg(c.facturable) + " kg" : nombreFranja(c.idx)}</b></div>
+      </div>
+      <table style="margin-top:12px">
+        <tr><th>Concepto</th><th class="num">Importe</th></tr>
+        <tr><td>Flete ${nombreFranja(c.idx)} (neto)</td><td class="num">${fmt$(c.neto)}</td></tr>
+        <tr><td>IVA 21 %</td><td class="num">${fmt$(c.iva)}</td></tr>
+        ${c.kgExtra ? `<tr><td>${c.kgExtra} kg excedente × ${fmt$(c.kg_excedente)} (IVA incluido)</td><td class="num">${fmt$(c.excedente)}</td></tr>` : ""}
+        <tr><td>Seguro de la mercadería</td><td class="num">${fmt$(c.seguro)}</td></tr>
+        <tr><td><b>Total</b></td><td class="num"><b>${fmt$(c.total)}</b></td></tr>
+      </table>
+      <div class="columnas">
+        <div><h3>Puntos Flecha en destino</h3>${bloquePuntos(c)}</div>
+        <div><h3>Todas las franjas de este destino</h3>${tablaFranjas(c)}</div>
+      </div>`;
+    resultado.classList.remove("hidden");
+    $("compartir").addEventListener("click", () => abrirFicha(c));
+    $("copiarTexto").addEventListener("click", async (ev) => {
+      try { await navigator.clipboard.writeText(textoResumen(c)); ev.target.textContent = "¡Copiado!"; setTimeout(() => { ev.target.textContent = "Copiar resumen"; }, 2500); }
+      catch (e) { alert("No se pudo copiar: " + e.message); }
+    });
+  }
+  function textoResumen(c) {
+    const precio = hayRecargo() ? alCliente(c.total) : c.total;
+    const pq = c.p;
+    const ret = (c.puntos || []).filter((s) => !s.solo_domicilio && !s.solo_despacho)[0];
+    return [`*Envío por Flecha Carga*`, `Destino: ${c.destino.nombre}`,
+      `Paquete: ${pq.largo > 0 ? `${pq.largo}×${pq.ancho}×${pq.alto} cm, ` : ""}${fmtKg(pq.peso)} kg`,
+      `*Costo: ${fmt$(precio)}*${!hayRecargo() && c.seguro ? ` (flete ${fmt$(c.flete)} + seguro ${fmt$(c.seguro)})` : ""}`,
+      ret ? `Retiro: ${ret.nombre} – ${ret.direccion}` : ""].filter(Boolean).join("\n");
+  }
+
+  // ---------- Historial ----------
+  function agregarHistorial(c) {
+    const hist = load("flechacarga:historial", []);
+    hist.unshift(c);
+    store("flechacarga:historial", hist.slice(0, 30));
+    renderHistorial();
+  }
+  function renderHistorial() {
+    const hist = load("flechacarga:historial", []);
+    const cont = $("historial");
+    if (!hist.length) { cont.innerHTML = '<div class="vacio">Todavía no hay cotizaciones.</div>'; return; }
+    cont.innerHTML = hist.map((h, i) => `<div class="hist">
+        <div class="fila1"><span class="paq">${escapar(h.destino.nombre)}</span><span class="fecha">${fmtFechaCorta(h.fecha)}</span></div>
+        <div class="dest">${h.p.largo > 0 ? `${h.p.largo}×${h.p.ancho}×${h.p.alto} cm · ` : ""}${fmtKg(h.p.peso)} kg · ${h.kgExtra ? fmtKg(h.facturable) + " kg" : nombreFranja(h.idx)}${h.factor ? " (vol.)" : ""}</div>
+        <div class="pie">
+          <span>${fmt$(h.total)} <span class="detalle">${h.seguro ? `incl. seguro ${fmt$(h.seguro)}` : "sin seguro"}</span></span>
+          <div class="acc"><button type="button" class="sec chico" data-ver="${i}">Ver</button><button type="button" class="sec chico" data-rep="${i}" title="Volver a cargar estos datos en el formulario">Repetir</button><button type="button" class="sec chico" data-ficha="${i}">Ficha</button></div>
+        </div>
+      </div>`).join("");
+    cont.querySelectorAll("[data-ver]").forEach((b) => b.addEventListener("click", () => { mostrarResultado(hist[+b.dataset.ver]); resultado.scrollIntoView({ behavior: "smooth" }); }));
+    cont.querySelectorAll("[data-ficha]").forEach((b) => b.addEventListener("click", () => abrirFicha(hist[+b.dataset.ficha])));
+    cont.querySelectorAll("[data-rep]").forEach((b) => b.addEventListener("click", () => {
+      const h = hist[+b.dataset.rep];
+      $("destino").value = h.destino.etiqueta;
+      $("peso").value = String(h.p.peso).replace(".", ",");
+      for (const k of ["largo", "ancho", "alto"]) $(k).value = h.p[k] || "";
+      $("seguro").value = h.seguro ? String(h.seguro) : "";
+      store("flechacarga:seguro", $("seguro").value);
+      $("usarVol").checked = !!h.factor;
+      if (h.factor) $("factor").value = h.factor;
+      actualizarVol(); resolverDestinoCampo(); renderAnalisis();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }));
+  }
+  $("borrarHistorial").addEventListener("click", () => {
+    if (!confirm("¿Vaciar el historial de cotizaciones?")) return;
+    store("flechacarga:historial", []); renderHistorial();
+  });
+  $("exportarHistorial").addEventListener("click", () => {
+    const hist = load("flechacarga:historial", []);
+    if (!hist.length) return alert("El historial está vacío.");
+    const num = (x) => String(Math.round(x)).replace(".", ",");
+    const filas = [["fecha", "destino", "agencia", "peso_kg", "medidas_cm", "factor_vol", "se_cobra_como", "flete", "seguro", "total", "al_cliente"]];
+    for (const h of hist) filas.push([new Date(h.fecha).toLocaleString("es-AR"), h.destino.nombre, h.destino.codigo, String(h.p.peso).replace(".", ","),
+      h.p.largo > 0 ? `${h.p.largo}x${h.p.ancho}x${h.p.alto}` : "", h.factor || "", h.kgExtra ? `${h.facturable} kg` : nombreFranja(h.idx),
+      num(h.flete), num(h.seguro), num(h.total), num(alCliente(h.total))]);
+    const csv = "﻿" + filas.map((f) => f.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = "historial-flechacarga.csv"; a.click();
+  });
+
+  // ---------- Ficha para el cliente ----------
+  function htmlFicha(c) {
+    const fecha = new Date(c.fecha);
+    const fechaTxt = fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+    const nro = fecha.getFullYear().toString().slice(2) + dd(fecha.getMonth() + 1) + dd(fecha.getDate()) + "-" + dd(fecha.getHours()) + dd(fecha.getMinutes());
+    const dias = parseInt(CFG.validez, 10);
+    const vence = dias > 0 ? new Date(fecha.getTime() + dias * 86400e3).toLocaleDateString("es-AR") : "";
+    const conRecargo = hayRecargo();
+    const precio = conRecargo ? alCliente(c.total) : c.total;
+    const pq = c.p;
+    const logo = location.origin + "/logo-flechacarga.png";
+    const fila = (k, v) => v ? `<div class="f"><dt>${k}</dt><dd>${v}</dd></div>` : "";
+    const retiro = (c.puntos || []).filter((s) => !s.solo_domicilio && !s.solo_despacho).slice(0, 3);
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<title>Cotización Flecha Carga ${escapar(nro)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<style>
+  :root { --azul: #030b84; --rojo: #e30613; --azul-suave: #eef0fb; --ink: #1a2333; --muted: #6b7280; --line: #e3e7ef; --bg: #eceef6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .barra { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 14px 16px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  .barra button { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--ink); }
+  .barra button.p { background: var(--azul); color: #fff; border-color: var(--azul); font-weight: 600; }
+  .barra .hint { width: 100%; text-align: center; font-size: 12px; color: var(--muted); }
+  .lienzo { padding: 28px 16px 48px; display: flex; justify-content: center; }
+  .ficha { width: 640px; max-width: 100%; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(3,11,132,.45), 0 2px 6px rgba(3,11,132,.08); }
+  .cab { background: var(--azul); padding: 26px 34px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 5px solid var(--rojo); }
+  .cab img { height: 34px; width: auto; display: block; }
+  .cab .meta { text-align: right; font-size: 12.5px; color: rgba(255,255,255,.8); line-height: 1.6; }
+  .cab .meta b { color: #fff; font-size: 13px; }
+  .cuerpo { padding: 26px 34px 10px; }
+  .tit { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--azul); font-weight: 700; margin-bottom: 12px; padding-left: 10px; border-left: 4px solid var(--rojo); line-height: 1.2; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 24px; margin: 0 0 20px; }
+  .f dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .f dd { margin: 0; font-size: 15px; }
+  .f dd strong { font-weight: 700; font-size: 17px; color: var(--azul); }
+  .precio { background: var(--azul); color: #fff; border-radius: 14px; padding: 20px 22px; margin: 4px 0 18px; position: relative; }
+  .precio::before { content: ""; position: absolute; left: 22px; right: 22px; top: 0; height: 4px; background: var(--rojo); border-radius: 0 0 4px 4px; }
+  .precio .pn { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: rgba(255,255,255,.8); }
+  .precio .pv { font-size: 34px; font-weight: 700; margin: 6px 0 4px; letter-spacing: -.02em; }
+  .precio .ps { font-size: 12px; color: rgba(255,255,255,.8); }
+  .desg { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: -6px 0 18px; }
+  .desg td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .desg td:last-child { text-align: right; }
+  .paquete { background: var(--azul-suave); border-radius: 14px; padding: 18px 20px 6px; margin: 0 0 14px; }
+  .suc { background: #f6f7fb; border-radius: 14px; padding: 16px 20px 10px; font-size: 13px; margin-bottom: 14px; }
+  .suc .ag { margin-bottom: 8px; }
+  .suc .ag span { color: var(--muted); font-size: 12px; }
+  .pie { padding: 16px 34px 22px; font-size: 11.5px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); margin-top: 8px; }
+  .pie b { color: var(--ink); font-weight: 600; }
+  @media print { .barra { display: none; } body { background: #fff; } .lienzo { padding: 0; } .ficha { box-shadow: none; border-radius: 0; width: 100%; } }
+  @media (max-width: 560px) { .cab { flex-direction: column; align-items: flex-start; } .cab .meta { text-align: left; } .cab, .cuerpo, .pie { padding-left: 22px; padding-right: 22px; } }
+</style></head><body>
+<div class="barra">
+  <button class="p" id="copiar">Copiar imagen (para WhatsApp)</button>
+  <button id="png">Descargar imagen (PNG)</button>
+  <button id="imprimir">Imprimir / guardar PDF</button>
+  <div class="hint">"Copiar imagen" deja la cotización en el portapapeles lista para pegar (Ctrl+V). La imagen no incluye esta barra.</div>
+</div>
+<div class="lienzo">
+<article class="ficha" id="ficha">
+  <header class="cab">
+    <img src="${logo}" alt="Flecha Carga">
+    <div class="meta"><b>Cotización N.º ${escapar(nro)}</b><br>${escapar(fechaTxt)}${vence ? `<br>Válida hasta el ${escapar(vence)}` : ""}</div>
+  </header>
+  <div class="cuerpo">
+    <div class="tit">Envío</div>
+    <dl>
+      ${fila("Destino", `<strong>${escapar(c.destino.nombre)}</strong>${c.destino.provincia ? `<br>${escapar(c.destino.provincia)}` : ""}`)}
+      ${fila("Servicio", "Encomienda Flecha Carga<br>retiro en Punto Flecha")}
+    </dl>
+    <div class="precio"><div class="pn">Costo del envío</div><div class="pv">${fmt$(precio)}</div><div class="ps">IVA incluido${c.seguro ? " · incluye seguro de la mercadería" : ""}</div></div>
+    ${conRecargo ? "" : `<table class="desg"><tr><td>Flete (${c.kgExtra ? fmtKg(c.facturable) + " kg" : nombreFranja(c.idx)})</td><td>${fmt$(c.flete)}</td></tr>${c.seguro ? `<tr><td>Seguro de la mercadería</td><td>${fmt$(c.seguro)}</td></tr>` : ""}</table>`}
+    ${retiro.length ? `<div class="suc"><div class="tit">Dónde retirar</div>${retiro.map((s) => `<div class="ag"><strong>${escapar(s.nombre)}</strong> · ${escapar(s.direccion)}${s.horario ? `<br><span>${escapar(s.horario)}</span>` : ""}${s.contacto ? ` <span>· ${escapar(s.contacto)}</span>` : ""}</div>`).join("")}</div>` : ""}
+    <section class="paquete">
+      <div class="tit">Detalle del paquete</div>
+      <dl>
+        ${pq.largo > 0 ? fila("Medidas", `${pq.largo} × ${pq.ancho} × ${pq.alto} cm`) : ""}
+        ${fila("Peso", `${escapar(fmtKg(pq.peso))} kg`)}
+      </dl>
+    </section>
+  </div>
+  <footer class="pie">
+    ${CFG.negocio ? `<b>${escapar(CFG.negocio)}</b>${CFG.contacto ? " · " + escapar(CFG.contacto) : ""}<br>` : (CFG.contacto ? escapar(CFG.contacto) + "<br>" : "")}
+    Precio calculado con el cuadro tarifario vigente de Flecha Carga; puede variar si cambian las tarifas. Para retirar con otra persona, Flecha Carga pide autorización escrita del destinatario y DNI de ambos.
+    ${CFG.nota ? `<br>${escapar(CFG.nota)}` : ""}
+  </footer>
+</article>
+</div>
+<script>
+  document.getElementById("imprimir").addEventListener("click", () => window.print());
+  async function capturar() {
+    await (document.fonts ? document.fonts.ready : Promise.resolve());
+    return html2canvas(document.getElementById("ficha"), { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+  }
+  document.getElementById("png").addEventListener("click", async () => {
+    const b = document.getElementById("png"); b.disabled = true; b.textContent = "Generando…";
+    try {
+      const canvas = await capturar();
+      const a = document.createElement("a");
+      a.download = "cotizacion-flechacarga-${escapar(nro)}.png"; a.href = canvas.toDataURL("image/png"); a.click();
+    } catch (e) { alert("No se pudo generar la imagen: " + e.message); }
+    finally { b.disabled = false; b.textContent = "Descargar imagen (PNG)"; }
+  });
+  document.getElementById("copiar").addEventListener("click", async () => {
+    const b = document.getElementById("copiar"); const original = b.textContent; b.disabled = true; b.textContent = "Copiando…";
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw new Error("este navegador no permite copiar imágenes al portapapeles; usá Descargar imagen.");
+      const blobPromise = capturar().then((canvas) => new Promise((ok, err) => canvas.toBlob((bl) => bl ? ok(bl) : err(new Error("no se pudo generar el PNG")), "image/png")));
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
+      b.textContent = "¡Copiada! Pegala con Ctrl+V";
+      setTimeout(() => { b.textContent = original; }, 3500);
+    } catch (e) { alert("No se pudo copiar la imagen: " + e.message); b.textContent = original; }
+    finally { b.disabled = false; }
+  });
+<\/script>
+</body></html>`;
+  }
+  function abrirFicha(c) {
+    const w = window.open("", "_blank");
+    if (!w) return alert("El navegador bloqueó la ventana emergente. Permitila para este sitio y volvé a intentar.");
+    w.document.open(); w.document.write(htmlFicha(c)); w.document.close();
+  }
+
+  // ---------- Cotizar ----------
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const d = resolverDestinoCampo();
+    if (!d) { estado.textContent = "Elegí un destino de la lista del tarifario."; return; }
+    const pq = leerPaquete();
+    if (!pq) { estado.textContent = "Revisá el peso: tiene que ser mayor a cero."; return; }
+    if (VOL.activo && !(pq.largo > 0 && pq.ancho > 0 && pq.alto > 0)) { estado.textContent = "Con peso volumétrico activo hacen falta largo, ancho y alto."; return; }
+    const seguroTxt = $("seguro").value.trim();
+    const seguro = seguroTxt ? leerMonto(seguroTxt) : 0;
+    if (seguroTxt && !(seguro >= 0)) { estado.textContent = "El seguro tiene que ser un número (ej: 1500)."; return; }
+    store("flechacarga:seguro", seguroTxt);
+    const factor = VOL.activo ? VOL.factor : null;
+    const c = { fecha: Date.now(), p: pq, factor, ...calcular(d, pq, seguro, factor),
+      destino: { nombre: d.nombre, provincia: d.provincia, codigo: d.codigo, etiqueta: d.etiqueta },
+      franjas: d.franjas, kg_excedente: d.kg_excedente, puntos: puntosDe(d).slice(0, 8) };
+    agregarHistorial(c);
+    mostrarResultado(c);
+    estado.textContent = "";
+  });
+
+  renderAnalisis();
+  renderHistorial();
+  cargarTarifas();
+</script>
+</body>
+</html>

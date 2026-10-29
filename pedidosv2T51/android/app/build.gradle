@@ -1,0 +1,90 @@
+plugins {
+    id 'com.android.application'
+}
+
+// La firma se toma de firma.properties, que NO va al repositorio (ver .gitignore).
+// En GitHub Actions ese archivo lo arma el workflow con los secrets. Si no
+// existe, solo se puede compilar la variante debug.
+def firma = new Properties()
+def archivoFirma = rootProject.file('firma.properties')
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { firma.load(it) }
+}
+def hayFirma = firma['storeFile'] != null
+
+android {
+    namespace 'ar.com.homepoint.pedidos'
+    compileSdk 34
+
+    defaultConfig {
+        // Variante para colector de datos (3nStar NuStar 65, Android 14): id
+        // propio para convivir con la app de tablets. minSdk 23 para que tambien
+        // entre en colectores viejos (Android 6).
+        applicationId "ar.com.homepoint.pedidos.t51"
+        minSdk 23
+        targetSdk 34
+        // GitHub Actions los pasa por linea de comandos. El versionCode tiene que
+        // subir en cada compilacion o Android no deja instalar la nueva version
+        // encima de la que ya esta en el telefono.
+        versionCode project.hasProperty('appVersionCode') ? appVersionCode.toInteger() : 1
+        versionName project.hasProperty('appVersionName') ? appVersionName.toString() : "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (hayFirma) {
+                storeFile file(firma['storeFile'])
+                storePassword firma['storePassword']
+                keyAlias firma['keyAlias']
+                keyPassword firma['keyPassword']
+                storeType firma.getProperty('storeType', 'PKCS12')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hayFirma) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Un aviso de lint no tiene por que frenar la compilacion del APK.
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // Las librerias de AndroidX arrastran distintas versiones de la biblioteca
+    // de Kotlin. Desde Kotlin 1.8 los paquetes -jdk7 y -jdk8 se fusionaron con
+    // el principal, asi que mezclar versiones deja clases repetidas y el build
+    // se corta. Esta linea las alinea a todas en la misma version.
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.24')
+
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.core:core:1.13.1'
+    // WebViewAssetLoader: sirve la pagina guardada en el APK bajo el dominio real.
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
+
+// La pagina viaja dentro del APK. Se copia en cada compilacion desde la carpeta
+// pedidosv2T51 (una sola fuente: no hay que duplicar el HTML a mano).
+def dirWeb = layout.buildDirectory.dir('generated/webT51')
+def copiarWeb = tasks.register('copiarWebT51', Copy) {
+    from(rootProject.file('..')) {
+        include 'pedidosv2T51.html', 'config.js', 'favicon.png', 'faviconblanco.png', 'manifest.json'
+    }
+    into dirWeb.map { it.dir('web') }
+}
+android.sourceSets.main.assets.srcDirs += dirWeb
+tasks.named('preBuild') { dependsOn copiarWeb }

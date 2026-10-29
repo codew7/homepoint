@@ -262,6 +262,71 @@
         }
         .select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
         .badge-registro { background: var(--primary-light); color: var(--primary-dark); vertical-align: middle; }
+        .badge-interior { background: #e0f2fe; color: #075985; vertical-align: middle; }
+
+        /* ===== PANEL DE ANÁLISIS =====
+           Dos bloques (Ordenar · Filtrar) con su título arriba y un pie con
+           el resultado a la izquierda y las acciones a la derecha. Todos los
+           controles miden lo mismo de alto para que la fila quede pareja. */
+        .analisis {
+            --alto-ctrl: 36px;
+            background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg);
+            margin-bottom: 1rem; box-shadow: var(--shadow);
+        }
+        .analisis-cuerpo { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; padding: .9rem 1rem; }
+        .bloque { display: grid; gap: .4rem; align-content: start; }
+        .bloque + .bloque { padding-left: 2.5rem; border-left: 1px solid var(--gray-100); }
+        .analisis-label { font-size: .7rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .06em; }
+        .controles { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+        .controles .y-luego { font-size: .8rem; color: var(--gray-500); }
+        .analisis .select, .analisis .btn { height: var(--alto-ctrl); font-size: .8rem; }
+        .analisis .select { padding-top: 0; padding-bottom: 0; }
+
+        /* Selector + botón de sentido pegados, como un solo control */
+        .combo { display: inline-flex; }
+        .combo .select { border-radius: 8px 0 0 8px; min-width: 165px; }
+        .combo .btn-dir {
+            border-radius: 0 8px 8px 0; margin-left: -1px; min-width: 8.5rem; justify-content: center;
+            background: var(--gray-50); color: var(--gray-700);
+        }
+        .combo .btn-dir:hover { background: var(--gray-100); }
+        .combo .btn-dir[hidden] { display: none; }
+        .combo:has(.btn-dir[hidden]) .select { border-radius: 8px; }
+
+        .btn-filtros.on { border-color: var(--primary); color: var(--primary); background: var(--primary-subtle); }
+        .num-filtros { background: var(--primary); color: #fff; border-radius: 999px; padding: 0 .4rem; font-size: .68rem; line-height: 1.4; }
+        .num-filtros[hidden] { display: none; }
+
+        .rangos {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .75rem 1.25rem;
+            padding: .9rem 1rem; border-top: 1px solid var(--gray-100); background: var(--gray-50);
+        }
+        .rangos[hidden] { display: none; }
+        .rango { display: grid; gap: .3rem; font-size: .75rem; font-weight: 600; color: var(--gray-600); }
+        .rango-inputs { display: flex; align-items: center; gap: .35rem; color: var(--gray-400); }
+        .rango input {
+            width: 100%; min-width: 0; height: 32px; padding: 0 .55rem; font: inherit; font-weight: 400; font-size: .8rem;
+            border: 1px solid var(--gray-300); border-radius: 6px; background: #fff; color: var(--gray-800);
+        }
+        .rango input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+        .analisis-pie {
+            display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem;
+            padding: .65rem 1rem; border-top: 1px solid var(--gray-100);
+        }
+        .resultado { font-size: .8rem; color: var(--gray-500); }
+        .resultado b { color: var(--gray-800); }
+        .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+        .acciones .select { max-width: 260px; }
+        .acciones .sep-v { width: 1px; height: 22px; background: var(--gray-200); margin: 0 .3rem; }
+        .acciones .btn-icon { width: var(--alto-ctrl); }
+        .acciones .btn-icon[hidden] { display: none; }
+
+        @media (max-width: 900px) {
+            .bloque + .bloque { padding-left: 0; border-left: 0; }
+        }
+        th .nivel { font-size: .62rem; background: var(--primary); color: #fff; border-radius: 999px; padding: 0 .3rem; margin-left: .15rem; }
+        th.sorted2 { color: var(--primary-dark); }
 
         /* ===== LOGIN EN OTRA SUCURSAL ===== */
         .modal.modal-login { max-width: 400px; }
@@ -394,6 +459,11 @@
                     <button class="filtro" data-estado="descartado">Descartados</button>
                     <button class="filtro" data-estado="">Todos</button>
                 </div>
+                <select class="select" id="zonaPot" title="Filtrar por zona según el teléfono">
+                    <option value="">Todas las zonas</option>
+                    <option value="interior">Solo interior</option>
+                    <option value="amba">Solo CABA / GBA (11)</option>
+                </select>
             </div>
             <div class="lista" id="gridPot"></div>
             <div class="empty" id="emptyPot" style="display:none"><i class="bi bi-inbox"></i>No hay registros en esta vista.</div>
@@ -424,6 +494,52 @@
                 </div>
                 <button class="btn btn-outline" onclick="actualizarDashboard()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
             </div>
+            <div class="analisis">
+                <div class="analisis-cuerpo">
+                    <div class="bloque">
+                        <span class="analisis-label">Ordenar por</span>
+                        <div class="controles">
+                            <div class="combo">
+                                <select class="select" id="orden1" title="Primer criterio de orden"></select>
+                                <button class="btn btn-outline btn-dir" id="dir1" title="Cambiar el sentido"></button>
+                            </div>
+                            <span class="y-luego">y luego por</span>
+                            <div class="combo">
+                                <select class="select" id="orden2" title="Segundo criterio: desempata a los que quedan iguales en el primero"></select>
+                                <button class="btn btn-outline btn-dir" id="dir2" title="Cambiar el sentido"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bloque">
+                        <span class="analisis-label">Filtrar</span>
+                        <div class="controles">
+                            <select class="select" id="zonaDash" title="Filtrar por zona según el teléfono">
+                                <option value="">Todas las zonas</option>
+                                <option value="interior">Solo interior</option>
+                                <option value="amba">Solo CABA / GBA</option>
+                            </select>
+                            <select class="select" id="comprasDash">
+                                <option value="">Con y sin compras</option>
+                                <option value="con">Solo con compras</option>
+                                <option value="sin">Solo sin compras</option>
+                            </select>
+                            <button class="btn btn-outline btn-filtros" id="btnRangos"><i class="bi bi-sliders"></i> Más filtros <span class="num-filtros" id="numRangos" hidden></span></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="rangos" id="rangosDash" hidden></div>
+                <div class="analisis-pie">
+                    <span class="resultado" id="resultadoDash"></span>
+                    <div class="acciones">
+                        <select class="select" id="vistasDash" title="Vistas de análisis guardadas"></select>
+                        <button class="btn btn-outline" id="btnGuardarVista" title="Guardar el orden y los filtros actuales con un nombre"><i class="bi bi-bookmark-plus"></i> Guardar vista</button>
+                        <button class="btn btn-icon danger" id="btnBorrarVista" title="Borrar esta vista" aria-label="Borrar esta vista" hidden><i class="bi bi-trash3"></i></button>
+                        <span class="sep-v"></span>
+                        <button class="btn btn-outline" id="btnLimpiar" title="Quitar orden y filtros"><i class="bi bi-eraser"></i> Limpiar</button>
+                        <button class="btn btn-outline" id="btnExportar" title="Descargar la tabla como está en un archivo para Excel"><i class="bi bi-download"></i> Exportar a Excel</button>
+                    </div>
+                </div>
+            </div>
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -433,6 +549,7 @@
                             <th class="sortable num" data-sort="pedidos">Pedidos</th>
                             <th class="sortable num" data-sort="total">Total acumulado</th>
                             <th class="sortable num" data-sort="ticket">Ticket prom.</th>
+                            <th class="sortable num" data-sort="frecuencia" title="Días promedio entre un pedido y el siguiente">Frecuencia</th>
                             <th class="sortable" data-sort="primero">Primer pedido</th>
                             <th class="sortable" data-sort="ultimo">Último pedido</th>
                             <th class="sortable num" data-sort="dias">Días sin comprar</th>
@@ -525,6 +642,29 @@
         const normTel = s => (s || '').replace(/\D/g, '').slice(-8);
         const normEmail = s => (s || '').trim().toLowerCase();
 
+        // Interior = el teléfono tiene un código de área distinto de 11 (CABA y GBA).
+        // Antes se quitan el +54, el 9 de celular y el 0 de larga distancia. Los
+        // códigos del interior empiezan con 2 o 3; los números sin código de área
+        // ("15 4567-8901", "4567-8901") se toman como CABA/GBA. Sin teléfono no
+        // hay etiqueta.
+        function esInterior(tel) {
+            let d = (tel || '').replace(/\D/g, '');
+            if (d.length > 10 && d.startsWith('54')) d = d.slice(2);
+            if (d.length === 11 && d.startsWith('9')) d = d.slice(1);
+            if (d.startsWith('0')) d = d.slice(1);
+            return d.length >= 10 && /^[23]/.test(d);
+        }
+        const coincideZona = (tel, zona) => !zona || (zona === 'interior') === esInterior(tel);
+        const BADGE_INTERIOR = '<span class="badge badge-interior" title="Teléfono fuera del 11 (CABA/GBA)">Interior</span>';
+
+        // Preferencias del navegador: si el almacenamiento falla se sigue sin guardar.
+        function leerLocal(clave, defecto) {
+            try { const v = localStorage.getItem(clave); return v ? JSON.parse(v) : defecto; } catch { return defecto; }
+        }
+        function guardarLocal(clave, valor) {
+            try { localStorage.setItem(clave, JSON.stringify(valor)); } catch { }
+        }
+
         // Arma el número para wa.me en formato internacional argentino (549 + área + número).
         function telWhatsApp(tel) {
             let d = (tel || '').replace(/\D/g, '');
@@ -595,6 +735,7 @@
             renderPotenciales();
         });
         $('buscarPot').addEventListener('input', renderPotenciales);
+        $('zonaPot').addEventListener('change', renderPotenciales);
 
         const iniciales = n => (n || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase();
 
@@ -620,8 +761,10 @@
 
         function renderPotenciales() {
             const q = $('buscarPot').value.trim().toLowerCase();
+            const zona = $('zonaPot').value;
             const lista = potenciales.filter(p => {
                 if (filtroEstado && (p.estado || 'pendiente') !== filtroEstado) return false;
+                if (!coincideZona(p.telefono, zona)) return false;
                 if (!q) return true;
                 return [p.nombre, p.telefono, p.email, p.localidad, p.provincia, p.rubro].some(v => (v || '').toLowerCase().includes(q));
             });
@@ -651,6 +794,7 @@
                         <div class="pcard-name">
                             <span class="txt" title="${esc(p.nombre)}">${esc(p.nombre)}</span>
                             ${esNuevo ? '<span class="nuevo">Nuevo</span>' : ''}
+                            ${esInterior(p.telefono) ? BADGE_INTERIOR : ''}
                             ${estado !== 'pendiente' ? `<span class="badge badge-${estado}">${estado}</span>` : ''}
                         </div>
                         <div class="meta">
@@ -921,7 +1065,50 @@
         /* ======================================================= dashboard = */
         const ESTADO_VALIDO = 'DESPACHADO/ENTREGADO';
         let filasDash = [];
-        let ordenDash = { campo: 'total', asc: false };
+
+        // Campos por los que se puede ordenar; los que tienen "rango" también se filtran por mínimo y máximo.
+        const CAMPOS = {
+            nombre:     { texto: 'Cliente' },
+            pedidos:    { texto: 'Pedidos', rango: 'Pedidos' },
+            total:      { texto: 'Total acumulado', rango: 'Total $' },
+            ticket:     { texto: 'Ticket promedio', rango: 'Ticket $' },
+            frecuencia: { texto: 'Frecuencia', rango: 'Frecuencia (días)' },
+            primero:    { texto: 'Primer pedido', fecha: true },
+            ultimo:     { texto: 'Último pedido', fecha: true },
+            dias:       { texto: 'Días sin comprar', rango: 'Días sin comprar' }
+        };
+        const CAMPOS_RANGO = Object.keys(CAMPOS).filter(k => CAMPOS[k].rango);
+
+        // Todo lo que define una vista de análisis (sin la búsqueda ni el período).
+        const analisisVacio = () => ({
+            orden: [{ campo: 'total', asc: false }, null],
+            zona: '', compras: '', registro: '',
+            rangos: Object.fromEntries(CAMPOS_RANGO.map(k => [k, { min: '', max: '' }]))
+        });
+        // Vistas de ejemplo, siempre disponibles y no se pueden borrar.
+        const VISTAS_FIJAS = [
+            { nombre: 'Buenos clientes que dejaron de comprar', config: { orden: [{ campo: 'pedidos', asc: false }, { campo: 'dias', asc: false }], compras: 'con', rangos: { dias: { min: '30', max: '' } } } },
+            { nombre: 'Mayor facturación', config: { orden: [{ campo: 'total', asc: false }, { campo: 'ticket', asc: false }] } },
+            { nombre: 'Compran seguido', config: { orden: [{ campo: 'frecuencia', asc: true }, { campo: 'pedidos', asc: false }], compras: 'con' } },
+            { nombre: 'Nunca compraron', config: { orden: [{ campo: 'nombre', asc: true }, null], compras: 'sin' } },
+            { nombre: 'Interior: mejores clientes', config: { orden: [{ campo: 'total', asc: false }, { campo: 'dias', asc: true }], zona: 'interior', compras: 'con' } }
+        ];
+        const CLAVE_ANALISIS = 'clientesMayoristas.analisis';
+        const CLAVE_VISTAS = 'clientesMayoristas.vistas';
+
+        // Completa una configuración parcial (guardada o de ejemplo) con los valores por defecto.
+        function normalizarAnalisis(c) {
+            const base = analisisVacio();
+            c = c || {};
+            const orden = (c.orden || base.orden).map(o => o && CAMPOS[o.campo] ? { campo: o.campo, asc: !!o.asc } : null);
+            return {
+                orden: [orden[0] || base.orden[0], orden[1] || null],
+                zona: c.zona || '', compras: c.compras || '', registro: c.registro || '',
+                rangos: Object.fromEntries(CAMPOS_RANGO.map(k => [k, { min: '', max: '', ...((c.rangos || {})[k] || {}) }]))
+            };
+        }
+        let analisis = normalizarAnalisis(leerLocal(CLAVE_ANALISIS, null));
+        let vistasPropias = leerLocal(CLAVE_VISTAS, []);
 
         // Período en días (0 = todo el historial). Por defecto solo se bajan
         // los últimos 30 días para no consumir cuota de Firebase de más.
@@ -1071,7 +1258,10 @@
                         total,
                         ticket: lista.length ? total / lista.length : 0,
                         primero, ultimo,
-                        dias: ultimo ? Math.floor((hoy - ultimo) / 86400000) : null
+                        dias: ultimo ? Math.floor((hoy - ultimo) / 86400000) : null,
+                        // Días promedio entre pedidos; hacen falta al menos dos.
+                        frecuencia: lista.length > 1 ? Math.round((ultimo - primero) / 86400000 / (lista.length - 1)) : null,
+                        interior: esInterior(m.telefono)
                     };
                 });
 
@@ -1097,10 +1287,15 @@
         }
 
         $('buscarDash').addEventListener('input', renderDashboard);
+        // Tocar una columna la vuelve el primer criterio y el anterior pasa a ser
+        // el segundo; tocarla de nuevo invierte el sentido.
         document.querySelectorAll('#vista-dashboard th.sortable').forEach(th => th.addEventListener('click', () => {
             const campo = th.dataset.sort;
-            ordenDash = { campo, asc: ordenDash.campo === campo ? !ordenDash.asc : campo === 'nombre' };
-            renderDashboard();
+            const [o1] = analisis.orden;
+            analisis.orden = o1.campo === campo
+                ? [{ campo, asc: !o1.asc }, analisis.orden[1]]
+                : [{ campo, asc: campo === 'nombre' }, o1];
+            cambioAnalisis();
         }));
 
         // Opciones del filtro "registro" según los valores que existen (Local, Web, QR…),
@@ -1113,7 +1308,7 @@
 
         function cargarOpcionesRegistro() {
             const sel = $('registroDash');
-            const actual = sel.value;
+            const actual = analisis.registro;
             const grupos = new Map(); // clave → { total, variantes: Map(texto → cantidad) }
             filasDash.forEach(f => {
                 const k = normRegistro(f.registro) || SIN_REGISTRO;
@@ -1136,42 +1331,195 @@
             sel.innerHTML = `<option value="">Todos los registros (${filasDash.length})</option>` + claves.map(k =>
                 `<option value="${esc(k)}">${k === SIN_REGISTRO ? 'Sin especificar' : esc(etiquetaRegistro.get(k))} (${grupos.get(k).total})</option>`).join('');
             sel.value = grupos.has(actual) ? actual : '';
+            analisis.registro = sel.value;
         }
 
         const coincideRegistro = (f, r) => !r || (normRegistro(f.registro) || SIN_REGISTRO) === r;
 
-        $('registroDash').addEventListener('change', renderDashboard);
+        $('registroDash').addEventListener('change', e => { analisis.registro = e.target.value; cambioAnalisis(); });
+
+        /* ------------------------------------------------ panel de análisis - */
+        // Texto del botón de sentido, según el tipo de dato.
+        function textoSentido(campo, asc) {
+            if (campo === 'nombre') return asc ? 'A → Z' : 'Z → A';
+            if (CAMPOS[campo].fecha) return asc ? 'Antiguo → reciente' : 'Reciente → antiguo';
+            return asc ? 'Menor → mayor' : 'Mayor → menor';
+        }
+
+        function opcionesCampos(vacia) {
+            return (vacia ? `<option value="">${vacia}</option>` : '') +
+                Object.entries(CAMPOS).map(([k, c]) => `<option value="${k}">${c.texto}</option>`).join('');
+        }
+        $('orden1').innerHTML = opcionesCampos();
+        $('orden2').innerHTML = opcionesCampos('(ninguno)');
+        $('rangosDash').innerHTML = CAMPOS_RANGO.map(k => `
+            <label class="rango">${CAMPOS[k].rango}
+                <span class="rango-inputs">
+                    <input type="number" min="0" data-campo="${k}" data-lado="min" placeholder="Desde">–
+                    <input type="number" min="0" data-campo="${k}" data-lado="max" placeholder="Hasta">
+                </span>
+            </label>`).join('');
+
+        // Refleja el estado del análisis en los controles.
+        function pintarAnalisis() {
+            const [o1, o2] = analisis.orden;
+            $('orden1').value = o1.campo;
+            $('dir1').textContent = textoSentido(o1.campo, o1.asc);
+            $('orden2').value = o2 ? o2.campo : '';
+            $('dir2').textContent = o2 ? textoSentido(o2.campo, o2.asc) : '';
+            $('dir2').hidden = !o2;
+            $('zonaDash').value = analisis.zona;
+            $('comprasDash').value = analisis.compras;
+            document.querySelectorAll('#rangosDash input').forEach(inp => {
+                inp.value = analisis.rangos[inp.dataset.campo][inp.dataset.lado];
+            });
+            const activos = CAMPOS_RANGO.filter(k => analisis.rangos[k].min !== '' || analisis.rangos[k].max !== '').length;
+            $('numRangos').hidden = !activos;
+            $('btnRangos').classList.toggle('on', !!activos || !$('rangosDash').hidden);
+            $('numRangos').textContent = activos;
+        }
+
+        function cambioAnalisis() {
+            guardarLocal(CLAVE_ANALISIS, analisis);
+            $('vistasDash').value = '';
+            $('btnBorrarVista').hidden = true;
+            pintarAnalisis();
+            renderDashboard();
+        }
+
+        $('orden1').addEventListener('change', e => {
+            const campo = e.target.value;
+            analisis.orden[0] = { campo, asc: campo === 'nombre' };
+            if (analisis.orden[1] && analisis.orden[1].campo === campo) analisis.orden[1] = null;
+            cambioAnalisis();
+        });
+        $('orden2').addEventListener('change', e => {
+            const campo = e.target.value;
+            analisis.orden[1] = campo ? { campo, asc: campo === 'nombre' } : null;
+            cambioAnalisis();
+        });
+        $('dir1').addEventListener('click', () => { analisis.orden[0].asc = !analisis.orden[0].asc; cambioAnalisis(); });
+        $('dir2').addEventListener('click', () => { if (analisis.orden[1]) { analisis.orden[1].asc = !analisis.orden[1].asc; cambioAnalisis(); } });
+        $('zonaDash').addEventListener('change', e => { analisis.zona = e.target.value; cambioAnalisis(); });
+        $('comprasDash').addEventListener('change', e => { analisis.compras = e.target.value; cambioAnalisis(); });
+        $('rangosDash').addEventListener('input', e => {
+            const inp = e.target;
+            if (!inp.dataset.campo) return;
+            analisis.rangos[inp.dataset.campo][inp.dataset.lado] = inp.value;
+            cambioAnalisis();
+        });
+        $('btnRangos').addEventListener('click', () => { $('rangosDash').hidden = !$('rangosDash').hidden; pintarAnalisis(); });
+        $('btnLimpiar').addEventListener('click', () => {
+            analisis = analisisVacio();
+            $('registroDash').value = '';
+            $('buscarDash').value = '';
+            cambioAnalisis();
+        });
+
+        /* Vistas guardadas: "f0", "f1"… son las de ejemplo; "p0", "p1"… las propias. */
+        function cargarOpcionesVistas() {
+            $('vistasDash').innerHTML = '<option value="">Elegir una vista guardada…</option>' +
+                `<optgroup label="Ejemplos">${VISTAS_FIJAS.map((v, i) => `<option value="f${i}">${esc(v.nombre)}</option>`).join('')}</optgroup>` +
+                (vistasPropias.length ? `<optgroup label="Mis vistas">${vistasPropias.map((v, i) => `<option value="p${i}">${esc(v.nombre)}</option>`).join('')}</optgroup>` : '');
+        }
+        $('vistasDash').addEventListener('change', e => {
+            const id = e.target.value;
+            if (!id) return;
+            const vista = (id[0] === 'f' ? VISTAS_FIJAS : vistasPropias)[Number(id.slice(1))];
+            analisis = normalizarAnalisis(vista.config);
+            $('registroDash').value = analisis.registro;
+            if ($('registroDash').value !== analisis.registro) analisis.registro = '';
+            guardarLocal(CLAVE_ANALISIS, analisis);
+            pintarAnalisis();
+            renderDashboard();
+            $('btnBorrarVista').hidden = id[0] !== 'p';
+        });
+        $('btnGuardarVista').addEventListener('click', () => {
+            const nombre = (prompt('Nombre para esta vista de análisis:') || '').trim();
+            if (!nombre) return;
+            const i = vistasPropias.findIndex(v => v.nombre.toLowerCase() === nombre.toLowerCase());
+            if (i >= 0 && !confirm(`Ya existe una vista llamada "${vistasPropias[i].nombre}". ¿Reemplazarla?`)) return;
+            const vista = { nombre, config: JSON.parse(JSON.stringify(analisis)) };
+            if (i >= 0) vistasPropias[i] = vista; else vistasPropias.push(vista);
+            guardarLocal(CLAVE_VISTAS, vistasPropias);
+            cargarOpcionesVistas();
+            $('vistasDash').value = 'p' + (i >= 0 ? i : vistasPropias.length - 1);
+            $('btnBorrarVista').hidden = false;
+        });
+        $('btnBorrarVista').addEventListener('click', () => {
+            const id = $('vistasDash').value;
+            if (id[0] !== 'p') return;
+            const i = Number(id.slice(1));
+            if (!confirm(`¿Borrar la vista "${vistasPropias[i].nombre}"?`)) return;
+            vistasPropias.splice(i, 1);
+            guardarLocal(CLAVE_VISTAS, vistasPropias);
+            cargarOpcionesVistas();
+            $('btnBorrarVista').hidden = true;
+        });
+
+        cargarOpcionesVistas();
+        pintarAnalisis();
+
+        // Valor para ordenar: los que nunca compraron no tienen total, ticket ni
+        // fechas, así que quedan al final (salvo al ordenar por pedidos o nombre).
+        function valorOrden(f, campo) {
+            if (campo !== 'pedidos' && !f.pedidos) return null;
+            return f[campo] == null ? null : f[campo];
+        }
+        function comparar(a, b, { campo, asc }) {
+            if (campo === 'nombre') return asc ? a.nombre.localeCompare(b.nombre, 'es') : b.nombre.localeCompare(a.nombre, 'es');
+            const va = valorOrden(a, campo), vb = valorOrden(b, campo);
+            if (va == null || vb == null) return (va == null) - (vb == null);
+            return asc ? va - vb : vb - va;
+        }
+
+        // Filtros del panel (todos menos la búsqueda por texto).
+        function pasaFiltros(f) {
+            if (!coincideRegistro(f, analisis.registro)) return false;
+            if (analisis.zona && (analisis.zona === 'interior') !== f.interior) return false;
+            if (analisis.compras === 'con' && !f.pedidos) return false;
+            if (analisis.compras === 'sin' && f.pedidos) return false;
+            return CAMPOS_RANGO.every(k => {
+                const { min, max } = analisis.rangos[k];
+                if (min === '' && max === '') return true;
+                const v = f[k];
+                if (v == null) return false;
+                return (min === '' || v >= Number(min)) && (max === '' || v <= Number(max));
+            });
+        }
+
+        let listaDash = [];
 
         function renderDashboard() {
             const q = $('buscarDash').value.trim().toLowerCase();
-            const r = $('registroDash').value;
-            const { campo, asc } = ordenDash;
+            const [o1, o2] = analisis.orden;
 
-            // Las tarjetas de arriba reflejan el registro elegido (no la búsqueda).
-            const delRegistro = filasDash.filter(f => coincideRegistro(f, r));
-            const conCompras = delRegistro.filter(f => f.pedidos > 0);
+            // Las tarjetas de arriba reflejan los filtros del panel (no la búsqueda).
+            const filtradas = filasDash.filter(pasaFiltros);
+            const conCompras = filtradas.filter(f => f.pedidos > 0);
             const totalGral = conCompras.reduce((s, f) => s + f.total, 0);
             const pedidosGral = conCompras.reduce((s, f) => s + f.pedidos, 0);
-            $('stMayoristas').textContent = delRegistro.length;
+            $('stMayoristas').textContent = filtradas.length;
             $('stConCompras').textContent = conCompras.length;
             $('stTotal').textContent = pesos(totalGral);
             $('stTicket').textContent = pedidosGral ? pesos(totalGral / pedidosGral) : '–';
 
-            const lista = delRegistro
+            const lista = listaDash = filtradas
                 .filter(f => !q || [f.nombre, f.telefono, f.email].some(v => (v || '').toLowerCase().includes(q)))
-                .sort((a, b) => {
-                    let va = a[campo], vb = b[campo];
-                    if (campo === 'nombre') return asc ? va.localeCompare(vb, 'es') : vb.localeCompare(va, 'es');
-                    // Los que nunca compraron van siempre al final.
-                    if (va == null || va === 0) va = asc ? Infinity : -Infinity;
-                    if (vb == null || vb === 0) vb = asc ? Infinity : -Infinity;
-                    return asc ? va - vb : vb - va;
-                });
+                .sort((a, b) => comparar(a, b, o1) || (o2 ? comparar(a, b, o2) : 0) || a.nombre.localeCompare(b.nombre, 'es'));
+
+            $('resultadoDash').innerHTML = dashboardCargado
+                ? `Mostrando <b>${lista.length}</b> de ${filasDash.length} mayoristas`
+                : '';
 
             document.querySelectorAll('#vista-dashboard th.sortable').forEach(th => {
-                th.classList.toggle('sorted', th.dataset.sort === campo);
-                th.querySelector('i')?.remove();
-                if (th.dataset.sort === campo) th.insertAdjacentHTML('beforeend', ` <i class="bi bi-caret-${asc ? 'up' : 'down'}-fill"></i>`);
+                const c = th.dataset.sort;
+                const nivel = c === o1.campo ? 1 : o2 && c === o2.campo ? 2 : 0;
+                const asc = nivel === 1 ? o1.asc : nivel === 2 ? o2.asc : false;
+                th.classList.toggle('sorted', nivel === 1);
+                th.classList.toggle('sorted2', nivel === 2);
+                th.querySelectorAll('i, .nivel').forEach(x => x.remove());
+                if (nivel) th.insertAdjacentHTML('beforeend', ` <i class="bi bi-caret-${asc ? 'up' : 'down'}-fill"></i>${o2 ? `<span class="nivel">${nivel}</span>` : ''}`);
             });
 
             $('emptyDash').style.display = lista.length ? 'none' : 'block';
@@ -1179,16 +1527,34 @@
 
             $('tbodyDash').innerHTML = lista.map(f => `
                 <tr onclick="verDetalle('${f.id}')">
-                    <td><strong>${esc(f.nombre)}</strong>${normRegistro(f.registro) ? ` <span class="badge badge-registro">${esc(etiquetaRegistro.get(normRegistro(f.registro)) || f.registro)}</span>` : ''}<br><span class="muted">${esc(f.email)}</span></td>
+                    <td><strong>${esc(f.nombre)}</strong>${normRegistro(f.registro) ? ` <span class="badge badge-registro">${esc(etiquetaRegistro.get(normRegistro(f.registro)) || f.registro)}</span>` : ''}${f.interior ? ' ' + BADGE_INTERIOR : ''}<br><span class="muted">${esc(f.email)}</span></td>
                     <td>${f.telefono ? `<button class="btn btn-wa btn-sm" onclick="event.stopPropagation(); waMayorista('${f.id}')"><i class="bi bi-whatsapp"></i> ${esc(f.telefono)}</button>` : '<span class="muted">—</span>'}</td>
                     <td class="num">${f.pedidos || '<span class="muted">0</span>'}</td>
                     <td class="num"><strong>${f.total ? pesos(f.total) : '<span class="muted">—</span>'}</strong></td>
                     <td class="num">${f.ticket ? pesos(f.ticket) : '<span class="muted">—</span>'}</td>
+                    <td class="num">${f.frecuencia == null ? '<span class="muted">—</span>' : `c/ ${f.frecuencia} d`}</td>
                     <td>${fechaCorta(f.primero) || '<span class="muted">—</span>'}</td>
                     <td>${fechaCorta(f.ultimo) || '<span class="muted">—</span>'}</td>
                     <td class="num ${f.dias > 60 ? 'dias-alerta' : ''}">${f.dias == null ? '<span class="muted">—</span>' : f.dias}</td>
                 </tr>`).join('');
         }
+
+        // Descarga lo que se ve en la tabla (con filtros y orden) como CSV para Excel.
+        $('btnExportar').addEventListener('click', () => {
+            if (!listaDash.length) { alert('No hay filas para exportar.'); return; }
+            const celda = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+            const cab = ['Cliente', 'Email', 'Teléfono', 'Zona', 'Registro', 'Pedidos', 'Total', 'Ticket promedio', 'Frecuencia (días)', 'Primer pedido', 'Último pedido', 'Días sin comprar'];
+            const filas = listaDash.map(f => [
+                f.nombre, f.email, f.telefono, f.interior ? 'Interior' : (f.telefono ? 'CABA/GBA' : ''), f.registro,
+                f.pedidos, Math.round(f.total), Math.round(f.ticket), f.frecuencia, fechaCorta(f.primero), fechaCorta(f.ultimo), f.dias
+            ]);
+            const csv = '﻿' + [cab, ...filas].map(r => r.map(celda).join(';')).join('\r\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+            a.download = `mayoristas-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        });
 
         function verDetalle(id) {
             const f = filasDash.find(x => x.id === id);

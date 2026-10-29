@@ -3496,6 +3496,24 @@
     .nec-remoto .ic-sm { width: 11px; height: 11px; stroke-width: 2.4; }
     .nec-remoto.is-separado { background: var(--ok-soft); color: var(--ok); }
 
+    /* Zona del depósito (Locator). Agrupando por categoría se ve en cada fila;
+       agrupando por zona solo en las de ubicación incierta ("¿Z12 izq?"). */
+    .nec-zona {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      height: 18px;
+      padding: 0 7px;
+      border-radius: 99px;
+      font-family: var(--font-ui);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .nec-zona.is-incierta { background: var(--warn-soft); color: var(--warn); }
+
     .nec-stock, .nec-nec {
       width: 52px;
       flex: none;
@@ -3912,6 +3930,7 @@
       .nec-search { flex-basis: 100%; }
       .nec-seg { flex: 1; }
       .nec-seg button { flex: 1; justify-content: center; padding: 0 8px; }
+      #necSegAgrupar { order: 5; flex-basis: 100%; }
       .nec-list { padding: 0 10px 20px; }
       .nec-cols { padding-left: 66px; gap: 9px; }
       .nec-cols .nc-stock, .nec-cols .nc-nec { width: 46px; }
@@ -5634,6 +5653,10 @@
           <button type="button" class="is-on" id="necSegFaltan" role="tab">Faltan <span class="nec-seg-n" id="necNFaltan">0</span></button>
           <button type="button" id="necSegTodos" role="tab">Todos <span class="nec-seg-n" id="necNTodos">0</span></button>
         </div>
+        <div class="nec-seg" role="tablist" aria-label="Agrupar por" id="necSegAgrupar">
+          <button type="button" id="necAgrZona" role="tab" title="En el orden del recorrido del depósito">Zona</button>
+          <button type="button" id="necAgrCat" role="tab" title="Por categoría de la planilla">Categoría</button>
+        </div>
         <button type="button" class="nec-btn-pedidos" id="necBtnPedidos" title="Elegir qué pedidos entran en el cálculo"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg><span id="necBtnPedidosTxt">Pedidos</span></button>
       </div>
 
@@ -5976,6 +5999,8 @@
   <!-- QZ Tray: puente local para impresion ESC-POS (fuente nativa de la 3nStar RPT008) -->
   <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script src="config.js"></script>
+  <!-- Zonas del depósito (relevamiento semanal de fotos, carpeta Locator) -->
+  <script src="../Locator/ubicaciones-api.js"></script>
 
   <script>
     // ==========================================
@@ -15296,11 +15321,65 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         });
       }
 
+      // ---------- Zonas del deposito (Locator) ----------
+      // El relevamiento semanal de fotos guarda en ubicaciones/mapa la zona de
+      // cada articulo: cada foto del recorrido es una zona (1, 2, 3...) con
+      // columna izquierda y derecha. ubicaciones-api.js escucha ese nodo y
+      // responde desde memoria (UBICACIONES). Si el script no esta o todavia
+      // no hay relevamiento guardado, la lista sigue agrupando por categoria.
+      const hayLocator = typeof escucharUbicaciones === 'function';
+      let agrupar = 'zona';
+      try { agrupar = localStorage.getItem('nec_agrupar') || 'zona'; } catch (e) { /* sin storage */ }
+      let escuchandoUbic = false;
+      const porZona = () => agrupar === 'zona' && hayLocator && UBICACIONES.size > 0;
+
+      function escucharUbic() {
+        if (!hayLocator || escuchandoUbic) return;
+        escuchandoUbic = true;
+        escucharUbicaciones(db, () => {
+          if (cargado && panel.classList.contains('active')) render();
+        });
+      }
+
+      function ubicacionDe(codigo) {
+        if (!hayLocator) return null;
+        const u = UBICACIONES.get(claveUbicacion(codigo));
+        return u ? { ...u, incierta: esUbicacionIncierta(u), texto: textoUbicacion(u) } : null;
+      }
+
+      // "Z12 izq": corto para que entre en la linea del codigo.
+      function zonaHtml(a) {
+        const u = a.ubicacion;
+        if (!u || u.zona == null) return '';
+        if (porZona() && !u.incierta) return '';   // ya lo dice el titulo del grupo
+        const corto = 'Z' + u.zona + (u.columna ? ' ' + (u.columna === 'D' ? 'der' : 'izq') : '');
+        return '<span class="nec-zona' + (u.incierta ? ' is-incierta' : '') + '" title="' +
+          escapeHtml(u.texto + (u.incierta ? ' (sin confirmar en el último relevamiento)' : '')) + '">' +
+          escapeHtml(u.incierta ? '¿' + corto + '?' : corto) + '</span>';
+      }
+
+      // Cada articulo sale con a.grupo (el titulo de su seccion) y a.ubicacion.
+      // Por zona: en el orden del recorrido (zona 1 izq, zona 1 der, zona 2
+      // izq...) y lo incierto al final, con la ultima zona donde se vio.
       function listaOrdenada() {
         const arr = Object.values(articulos);
         arr.forEach(a => {
           const si = sheetsData[a.codigo];
           a.categoria = (si && si.categoria) ? si.categoria : 'Sin categoría';
+        });
+        if (porZona()) {
+          const res = [];
+          ordenarPorZona(arr).forEach(g => g.items.forEach(it => {
+            const a = articulos[it.codigo];
+            a.ubicacion = it.ubicacion;
+            a.grupo = g.zona == null ? 'Sin ubicación segura' : g.titulo;
+            res.push(a);
+          }));
+          return res;
+        }
+        arr.forEach(a => {
+          a.grupo = a.categoria;
+          a.ubicacion = ubicacionDe(a.codigo);
         });
         arr.sort((a, b) => a.categoria.localeCompare(b.categoria, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
         return arr;
@@ -15343,9 +15422,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         let cat = null;
         let i = 0;
         visibles.forEach(a => {
-          if (a.categoria !== cat) {
-            cat = a.categoria;
-            const n = visibles.filter(x => x.categoria === cat).length;
+          if (a.grupo !== cat) {
+            cat = a.grupo;
+            const n = visibles.filter(x => x.grupo === cat).length;
             html += '<div class="nec-cat">' + escapeHtml(cat) + '<span class="nec-cat-n">' + n + '</span></div>';
           }
           html += filaHtml(a, Math.min(i * 0.025, 0.4));
@@ -15400,7 +15479,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             '<div class="nec-info">' +
               '<div class="nec-name" title="' + escapeHtml(a.nombre) + '">' + escapeHtml(a.nombre) + '</div>' +
               '<div class="nec-code"><span>' + codAttr + (barras ? ' · ' + escapeHtml(barras) : '') + '</span>' +
-                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + remotoHtml(a.codigo) + '</div>' +
+                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + zonaHtml(a) + remotoHtml(a.codigo) + '</div>' +
               (parcial !== null ? '<div class="nec-parcial">OK por ' + parcial + ' · faltan ' + (a.cantidad - parcial) + ' más</div>' : '') +
             '</div>' +
             stockCelda(stock) + stockCelda(si.stockCaseros) +
@@ -15445,6 +15524,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // ---------- Abrir / cerrar ----------
       function abrir() {
         panel.classList.add('active');
+        escucharUbic();
         escucharVerificados();
         escucharIncluidos();
         escucharSolicitudes();
@@ -15506,6 +15586,30 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
       segFaltan.addEventListener('click', () => setSoloFaltan(true));
       segTodos.addEventListener('click', () => setSoloFaltan(false));
+
+      // Agrupar por zona del deposito o por categoria (se recuerda en el equipo).
+      const agrZona = document.getElementById('necAgrZona');
+      const agrCat = document.getElementById('necAgrCat');
+      function pintarAgrupar() {
+        agrZona.classList.toggle('is-on', agrupar === 'zona');
+        agrCat.classList.toggle('is-on', agrupar !== 'zona');
+        agrZona.setAttribute('aria-selected', agrupar === 'zona' ? 'true' : 'false');
+        agrCat.setAttribute('aria-selected', agrupar !== 'zona' ? 'true' : 'false');
+      }
+      function setAgrupar(v) {
+        agrupar = v;
+        try { localStorage.setItem('nec_agrupar', v); } catch (e) { /* sin storage */ }
+        pintarAgrupar();
+        if (v === 'zona' && !UBICACIONES.size) showToast('Todavía no hay zonas cargadas: se agrupa por categoría');
+        render();
+      }
+      if (hayLocator) {
+        pintarAgrupar();
+        agrZona.addEventListener('click', () => setAgrupar('zona'));
+        agrCat.addEventListener('click', () => setAgrupar('categoria'));
+      } else {
+        document.getElementById('necSegAgrupar').style.display = 'none';
+      }
 
       // ---------- Interaccion sobre las filas ----------
       lista.addEventListener('click', (e) => {
@@ -16174,12 +16278,21 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         if (!arr.length) { showToast('No hay artículos para imprimir'); return; }
 
         const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        // Con relevamiento cargado se agrega la columna Zona (en el mismo
+        // orden y agrupado que la pantalla).
+        const conZona = hayLocator && UBICACIONES.size > 0;
+        const zonaCelda = (a) => {
+          const u = a.ubicacion;
+          if (!u || u.zona == null) return '—';
+          const t = u.zona + (u.columna ? ' ' + (u.columna === 'D' ? 'der' : 'izq') : '');
+          return u.incierta ? '¿' + t + '?' : t;
+        };
         let filas = '';
         let cat = null;
         arr.forEach((a, i) => {
-          if (a.categoria !== cat) {
-            cat = a.categoria;
-            filas += '<tr class="cat"><td colspan="7">' + escapeHtml(cat) + '</td></tr>';
+          if (a.grupo !== cat) {
+            cat = a.grupo;
+            filas += '<tr class="cat"><td colspan="' + (conZona ? 8 : 7) + '">' + escapeHtml(cat) + '</td></tr>';
           }
           const si = sheetsData[a.codigo] || {};
           const fmt = (v) => (v !== null && v !== undefined && Number.isFinite(v)) ? v : '—';
@@ -16190,6 +16303,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             '<td class="n">' + (i + 1) + '</td>' +
             '<td class="nombre">' + escapeHtml(a.nombre) + '</td>' +
             '<td class="cod">' + escapeHtml(a.codigo) + '</td>' +
+            (conZona ? '<td class="c z">' + escapeHtml(zonaCelda(a)) + '</td>' : '') +
             '<td class="c">' + stock + '</td>' +
             '<td class="c">' + stockCas + '</td>' +
             '<td class="c b">' + a.cantidad + '</td>' +
@@ -16206,12 +16320,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           'td{padding:5px 8px;border-bottom:1px solid #e2e2dc;vertical-align:middle}' +
           '.n{width:26px;text-align:center;color:#999;font-size:10px}.cod{font-family:"Courier New",monospace;font-size:10px;color:#666;width:96px}' +
           '.c{text-align:center;width:52px;font-family:"Courier New",monospace}.b{font-weight:700}.chk{width:30px;font-size:13px;color:#2e7d5b}' +
+          '.z{width:64px;font-weight:700;white-space:nowrap}' +
           'tr.cat td{background:#f5f5f2;color:#c2620f;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:7px 8px 4px;border-bottom:1px solid #c2620f}' +
           'tr.ok td{background:#eaf3ee}tr.ok td.nombre{color:#2e7d5b}' +
           '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
           '</style></head><body>' +
           '<div class="h"><h1>Artículos necesarios</h1><div class="m">' + fecha + '<br>' + pedidosEnCalculo + ' pedidos &middot; ' + arr.length + ' artículos</div></div>' +
-          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th><th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
+          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th>' + (conZona ? '<th class="c z">Zona</th>' : '') + '<th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
           '<tbody>' + filas + '</tbody></table>' +
           '<script>window.onload=function(){window.print()}<\/script></body></html>';
 

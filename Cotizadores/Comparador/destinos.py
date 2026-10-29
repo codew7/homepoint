@@ -1,5 +1,5 @@
 """
-Catalogo unificado de destinos para el comparador Correo Argentino + Via Cargo.
+Catalogo unificado de destinos para el comparador Correo Argentino + Via Cargo + Flecha Carga.
 
 Cada empresa tiene su propio listado (sucursales de MiCorreo por provincia;
 localidades con CP de Via Cargo). Este modulo los cruza por codigo postal y
@@ -11,6 +11,8 @@ arma un unico listado de destinos con, para cada CP:
     - si Via Cargo tiene cobertura en ese CP: solo cuenta si hay una agencia que
       recibe encomiendas en ese mismo CP (el comparador cotiza de sucursal a
       sucursal; los CP que Via Cargo solo atiende a domicilio quedan sin cobertura)
+    - si Flecha Carga tiene un Punto donde retirar en ese CP, con la tarifa que le
+      corresponde (flechacarga.cobertura_por_cp, mismo criterio de sucursal a sucursal)
 
 Tambien resuelve la provincia de un CP que no figura en ningun listado con una
 tabla aproximada de rangos (solo como ultimo recurso; el usuario puede corregirla).
@@ -27,14 +29,19 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 CORREO_DIR = BASE_DIR.parent / "Correo"
 VIACARGO_DIR = BASE_DIR.parent / "ViaCargo"
+FLECHA_DIR = BASE_DIR.parent / "Flecha Carga"
 DESTINOS_FILE = BASE_DIR / "destinos.json"
 
 for d in (CORREO_DIR, VIACARGO_DIR):
     if str(d) not in sys.path:
         sys.path.insert(0, str(d))
+# Al final: "Flecha Carga" tiene su propio servidor.py, que no debe tapar al del Comparador.
+if str(FLECHA_DIR) not in sys.path:
+    sys.path.append(str(FLECHA_DIR))
 
 from sucursales import cargar_sucursales, descargar_sucursales  # noqa: E402  (../Correo)
 from viacargo import cargar_agencias, cargar_localidades, descargar_localidades  # noqa: E402  (../ViaCargo)
+import flechacarga  # noqa: E402  (../Flecha Carga)
 
 PROVINCIAS = [
     "BUENOS AIRES", "CAPITAL FEDERAL", "CATAMARCA", "CHACO", "CHUBUT", "CORDOBA", "CORRIENTES",
@@ -160,7 +167,22 @@ def construir_destinos(sucursales: dict | None, localidades: dict | None, agenci
             "provincia_fuente": fuente,
             "correo": {"sucursales": sorted(e["sucursales"], key=lambda s: s["nombre"])},
             "viacargo": e["viacargo"],
+            "flechacarga": None,
         })
+    # Flecha Carga: sus Puntos traen CP, pero no provincia; se usa la de este catalogo para no
+    # cruzar una tarifa de otra provincia con el mismo nombre de ciudad.
+    provincia_de = {d["cp"]: d["provincia"] for d in destinos}
+    try:
+        nombres_de = {d["cp"]: [d["nombre"], *d["alias"]] for d in destinos}
+        cobertura = flechacarga.cobertura_por_cp(lambda cp: provincia_de.get(cp) or provincia_por_rango(cp),
+                                                 lambda cp: nombres_de.get(cp, []))
+    except Exception as e:  # sin tarifario o sin Puntos: el resto del catalogo sirve igual
+        print(f"aviso: sin cobertura de Flecha Carga ({e})")
+        cobertura = {}
+    for d in destinos:
+        c = cobertura.get(d["cp"])
+        if c:
+            d["flechacarga"] = {"etiqueta": c["etiqueta"], "nombre": c["nombre"], "puntos": c["puntos"], "general": c["general"]}
     destinos.sort(key=lambda d: (d["provincia"] or "ZZZ", d["nombre"], d["cp"]))
     return {"actualizado": time.strftime("%Y-%m-%dT%H:%M:%S"), "cantidad": len(destinos), "destinos": destinos,
             "fuentes": _firmas(sucursales, localidades, agencias)}
@@ -168,7 +190,21 @@ def construir_destinos(sucursales: dict | None, localidades: dict | None, agenci
 
 def _firmas(sucursales: dict | None, localidades: dict | None, agencias: dict | None) -> dict:
     return {"sucursales": (sucursales or {}).get("actualizado"), "localidades": (localidades or {}).get("actualizado"),
-            "agencias": (agencias or {}).get("actualizado")}
+            "agencias": (agencias or {}).get("actualizado"), **_firmas_flecha()}
+
+
+def _firmas_flecha() -> dict:
+    # Fecha del tarifario y de los Puntos: si cambia alguno (CSV nuevo o Puntos descargados), se reconstruye.
+    try:
+        tarifas = flechacarga.cargar_tarifas().get("actualizado")
+    except Exception:
+        tarifas = None
+    try:
+        puntos = flechacarga.cargar_sucursales().get("actualizado")
+    except Exception:
+        puntos = None
+    # flecha_criterio: subirlo al cambiar el cruce de cobertura, asi se reconstruye el catalogo guardado.
+    return {"flecha_tarifas": tarifas, "flecha_puntos": puntos, "flecha_criterio": 2}
 
 
 _cache: dict | None = None
@@ -236,7 +272,8 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1:
         for d in buscar(" ".join(sys.argv[1:])):
             vc = "VC" if d["viacargo"] else "--"
-            print(f"{d['cp']}  {d['nombre_bonito']:<32} {d['provincia'] or '?':<22} correo:{len(d['correo']['sucursales']):>2} suc  {vc}")
+            fc = "FC" if d.get("flechacarga") else "--"
+            print(f"{d['cp']}  {d['nombre_bonito']:<32} {d['provincia'] or '?':<22} correo:{len(d['correo']['sucursales']):>2} suc  {vc} {fc}")
     else:
         datos = cargar_destinos()
         print(f"{datos['cantidad']} destinos (fuentes: {datos['fuentes']})")
