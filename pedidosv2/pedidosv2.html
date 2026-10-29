@@ -1476,6 +1476,42 @@
       color: var(--ink-3);
     }
     .vc-link { display: block; margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--accent); text-align: center; }
+    /* Sucursales Via Cargo + Flecha Carga: arriba la respuesta corta de cada
+       empresa (toca para ir al detalle), abajo una seccion por empresa. El
+       color de marca solo aparece en el punto, el resto usa la paleta de la app. */
+    .suc-resumen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .suc-resumen:empty { display: none; }
+    .suc-chip {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r2);
+      background: var(--surface); font: inherit; text-align: left; cursor: pointer; color: var(--ink-2);
+      transition: border-color .16s, background .16s;
+    }
+    .suc-chip:hover { border-color: var(--ink-4); }
+    .suc-chip-emp { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+    .suc-chip-est { font-size: 13.5px; font-weight: 700; }
+    .suc-chip.ok { background: var(--ok-soft); border-color: transparent; }
+    .suc-chip.ok .suc-chip-est { color: var(--ok); }
+    .suc-chip.aviso { background: var(--warn-soft); border-color: transparent; }
+    .suc-chip.aviso .suc-chip-est { color: var(--warn); }
+    .suc-chip.error .suc-chip-est { color: var(--bad); }
+    .suc-chip.cargando .suc-chip-est { color: var(--ink-4); font-weight: 600; }
+    .suc-punto { width: 8px; height: 8px; border-radius: 50%; flex: none; background: currentColor; }
+    .suc-punto--vc { color: #2f6b34; }
+    .suc-punto--fc { color: #030b84; box-shadow: 2px 0 0 #e30613; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-tema="light"]) .suc-punto--vc { color: #6dbb72; }
+      :root:not([data-tema="light"]) .suc-punto--fc { color: #8f97ff; }
+    }
+    :root[data-tema="dark"] .suc-punto--vc { color: #6dbb72; }
+    :root[data-tema="dark"] .suc-punto--fc { color: #8f97ff; }
+    .suc-emp + .suc-emp { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .suc-emp-cab { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .04em; }
+    .suc-emp .vc-estado { font-size: 12.5px; padding: 8px 10px; }
+    .suc-mas { width: 100%; padding: 7px; border: 1px dashed var(--line); border-radius: var(--r2); background: transparent; color: var(--ink-3); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+    .suc-mas:hover { color: var(--ink); border-color: var(--ink-4); }
+    .vc-agencia a { color: var(--accent); font-weight: 600; }
+    .suc-emp .vc-link { text-align: left; margin-top: 0; }
     .pv-radio-title {
       font-size: 10px;
       font-weight: 700;
@@ -5482,18 +5518,18 @@
     </div>
   </div>
 
-  <!-- VIA CARGO: CONSULTA DE SUCURSALES -->
-  <div class="modal-backdrop" id="viaCargoModal">
+  <!-- SUCURSALES: VIA CARGO + FLECHA CARGA -->
+  <div class="modal-backdrop" id="sucModal">
     <div class="modal-box modal-box--form">
-      <p class="modal-titulo">Sucursales V&iacute;a Cargo</p>
-      <form class="vc-search-row" id="viaCargoForm">
-        <input class="edit-client-field" id="viaCargoLocalidad" type="text" placeholder="Localidad" autocomplete="off">
+      <p class="modal-titulo">Sucursales disponibles</p>
+      <form class="vc-search-row" id="sucForm">
+        <input class="edit-client-field" id="sucLocalidad" type="text" placeholder="Localidad" autocomplete="off">
         <button class="btn-primary" type="submit">Buscar</button>
       </form>
-      <div class="vc-result" id="viaCargoResult"></div>
-      <a class="vc-link" href="https://viacargo.com.ar/agencies/" target="_blank" rel="noopener">Ver en el sitio de V&iacute;a Cargo</a>
+      <div class="suc-resumen" id="sucResumen"></div>
+      <div class="vc-result" id="sucResult"></div>
       <div class="modal-btns">
-        <button class="btn-cancel" id="viaCargoCerrar">Cerrar</button>
+        <button class="btn-cancel" id="sucCerrar">Cerrar</button>
       </div>
     </div>
   </div>
@@ -7261,7 +7297,7 @@
       });
       panel += '</div>';
       // Solo consulta: disponible aunque el pedido este bloqueado
-      panel += '<button type="button" class="pv-opcional-btn" onclick="abrirViaCargoModal()">' + IC_CAMION + '<span>&iquest;Hay sucursal V&iacute;a Cargo?</span></button>';
+      panel += '<button type="button" class="pv-opcional-btn" onclick="abrirSucursalesModal()">' + IC_CAMION + '<span>Sucursales disponibles</span></button>';
       panel += '</div>';
 
       sidePanel.innerHTML = panel;
@@ -14532,7 +14568,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return vcAgencias;
     }
 
-    // La app guarda "Cordoba" y la API "Córdoba": comparar sin acentos ni signos
+    // La app guarda "Cordoba" y la API "Córdoba": comparar sin acentos ni signos.
+    // Tambien se expanden las abreviaturas tipicas ("Gral. Pacheco" = "General Pacheco").
+    const SUC_ABREV = { gral: 'general', grl: 'general', sta: 'santa', sto: 'santo', pte: 'presidente', pdte: 'presidente',
+      cnel: 'coronel', tte: 'teniente', ing: 'ingeniero', dr: 'doctor', pto: 'puerto', cdad: 'ciudad', sgo: 'santiago' };
     function vcNormalizar(txt) {
       return String(txt || '')
         .normalize('NFD')
@@ -14540,7 +14579,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         .toLowerCase()
         .replace(/[^a-z0-9ñ ]/g, ' ')
         .replace(/\s+/g, ' ')
-        .trim();
+        .trim()
+        .split(' ').map(p => SUC_ABREV[p] || p).join(' ');
     }
 
     function vcTarjeta(a) {
@@ -14556,69 +14596,205 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return html + '</div>';
     }
 
-    async function viaCargoBuscar() {
-      const cont = document.getElementById('viaCargoResult');
-      const buscado = vcNormalizar(document.getElementById('viaCargoLocalidad').value);
-      if (!buscado) {
-        cont.innerHTML = '<div class="vc-estado">Escrib&iacute; una localidad para buscar</div>';
-        return;
-      }
-      cont.innerHTML = '<div class="vc-estado">Buscando&hellip;</div>';
-
-      let agencias;
-      try {
-        agencias = await viaCargoCargarAgencias();
-      } catch (e) {
-        console.error('Via Cargo:', e);
-        cont.innerHTML = '<div class="vc-estado error">No se pudo consultar V&iacute;a Cargo. Revis&aacute; la conexi&oacute;n o us&aacute; el link al sitio.</div>';
-        showToast('No se pudo consultar Vía Cargo');
-        return;
-      }
-
+    // Devuelve { exactas, parciales } de Via Cargo para una localidad ya normalizada
+    async function viaCargoBuscar(buscado) {
+      const agencias = await viaCargoCargarAgencias();
       const exactas = agencias.filter(a => vcNormalizar(a.Localidad) === buscado);
       const parciales = exactas.length ? [] : agencias.filter(a => {
         const loc = vcNormalizar(a.Localidad);
         return loc && (loc.includes(buscado) || buscado.includes(loc));
       });
-      const lista = exactas.length ? exactas : parciales;
-
       // Primero las de la provincia del cliente, sin descartar el resto
       // ("CABA" o "Gran Buenos Aires" no coinciden 1:1 con la API)
       const prov = vcNormalizar(pedidoActual && pedidoActual.cliente && pedidoActual.cliente.provincia);
       if (prov) {
-        lista.sort((a, b) => (vcNormalizar(b.Provincia) === prov) - (vcNormalizar(a.Provincia) === prov));
+        const orden = (a, b) => (vcNormalizar(b.Provincia) === prov) - (vcNormalizar(a.Provincia) === prov);
+        exactas.sort(orden); parciales.sort(orden);
       }
-
-      let html;
-      if (exactas.length) {
-        html = '<div class="vc-estado ok">S&iacute; hay sucursal (' + exactas.length + ')</div>';
-      } else if (parciales.length) {
-        html = '<div class="vc-estado aviso">Sin coincidencia exacta. Posibles coincidencias (' + parciales.length + '):</div>';
-      } else {
-        html = '<div class="vc-estado error">No se encontr&oacute; sucursal en esa localidad</div>';
-      }
-      html += lista.map(vcTarjeta).join('');
-      cont.innerHTML = html;
+      return { exactas, parciales };
     }
 
-    function abrirViaCargoModal() {
+    // ==========================================
+    // FLECHA CARGA: CONSULTA DE SUCURSALES
+    // ==========================================
+    // El sitio de Flecha Carga no habilita CORS, asi que no se puede leer desde
+    // aca: flechacarga-sucursales.json lo genera el cotizador de Flecha Carga
+    // (Cotizadores/Flecha Carga: flechacarga.py --actualizar-sucursales) y se
+    // publica junto a esta pagina. Los Puntos no traen localidad ni provincia:
+    // se cruza por el nombre del punto ("LOBERIA BUE", "DETSA QUILMES").
+    let fcSucursales = null;
+    async function flechaCargarSucursales() {
+      if (fcSucursales) return fcSucursales;
+      const res = await fetch('./flechacarga-sucursales.json');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data || !Array.isArray(data.sucursales)) throw new Error('Respuesta inesperada');
+      fcSucursales = data.sucursales.map(s => Object.assign({ _n: vcNormalizar(s.nombre) }, s));
+      return fcSucursales;
+    }
+
+    // Flecha suele omitir el titulo del nombre ("PACHECO CENTRO" = General Pacheco,
+    // "SAENZ PEÑA" = Presidente Roque Saenz Peña): si con el nombre completo no hay
+    // exactas, se reintenta sin el titulo y despues sin el nombre de pila que le
+    // sigue (solo si quedan dos palabras o mas, para no caer en apellidos sueltos).
+    const FC_TITULOS = /^(general|presidente|coronel|teniente|doctor|ingeniero|comandante|capitan) (?=\S{4,})/;
+    async function flechaBuscar(buscado) {
+      const r = await flechaBuscarNombre(buscado);
+      const sinTitulo = buscado.replace(FC_TITULOS, '');
+      if (r.exactas.length || sinTitulo === buscado) return r;
+      const candidatos = [sinTitulo];
+      const palabras = sinTitulo.split(' ');
+      if (palabras.length >= 3) candidatos.push(palabras.slice(1).join(' '));
+      for (const c of candidatos) {
+        const r2 = await flechaBuscarNombre(c);
+        if (r2.exactas.length) return r2;
+      }
+      return r;
+    }
+
+    async function flechaBuscarNombre(buscado) {
+      const puntos = await flechaCargarSucursales();
+      const palabra = new RegExp('(^| )' + buscado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)');
+      const contienen = puntos.filter(s => palabra.test(s._n));
+      // Exacta = el nombre del punto empieza con la localidad. Los que solo la
+      // contienen ("DETSA QUILMES") cuentan si comparten CP con una exacta;
+      // asi "DEVOTO CORDOBA" no aparece al buscar Cordoba capital.
+      const empiezan = contienen.filter(s => s._n === buscado || s._n.startsWith(buscado + ' '));
+      const cps = new Set(empiezan.map(s => s.cp).filter(Boolean));
+      const exactas = empiezan.length ? contienen.filter(s => empiezan.includes(s) || (s.cp && cps.has(s.cp))) : [];
+      const parciales = exactas.length ? [] : contienen;
+      const orden = (a, b) => (!!a.solo_domicilio || !!a.solo_despacho) - (!!b.solo_domicilio || !!b.solo_despacho);
+      return { exactas: exactas.sort(orden), parciales: parciales.sort(orden) };
+    }
+
+    function fcTarjeta(s) {
+      let html = '<div class="vc-agencia"><strong>' + escapeHtml(s.nombre) + '</strong>';
+      if (s.solo_domicilio) html += 'Solo entrega a domicilio (no hay mostrador para retirar)';
+      else html += escapeHtml(s.direccion || '') + (s.cp ? ' (CP ' + escapeHtml(s.cp) + ')' : '');
+      if (s.solo_despacho) html += '<br>Solo despacho: no se puede retirar ac&aacute;';
+      if (s.horario) html += '<br>' + escapeHtml(s.horario);
+      if (s.contacto) html += '<br>' + escapeHtml(s.contacto);
+      if (s.lat && s.lng && !s.solo_domicilio) html += '<br><a href="https://www.google.com/maps?q=' + s.lat + ',' + s.lng + '" target="_blank" rel="noopener">Ver en el mapa</a>';
+      return html + '</div>';
+    }
+
+    // ==========================================
+    // MODAL "HAY SUCURSAL?" (las dos empresas a la vez)
+    // ==========================================
+    const SUC_VISIBLES = 3;  // tarjetas por empresa antes de "Ver mas"
+    const SUC_EMPRESAS = [
+      { id: 'vc', nombre: 'V&iacute;a Cargo', buscar: viaCargoBuscar, tarjeta: vcTarjeta,
+        retirable: () => true, sitio: 'https://viacargo.com.ar/agencies/' },
+      { id: 'fc', nombre: 'Flecha Carga', buscar: flechaBuscar, tarjeta: fcTarjeta,
+        retirable: s => !s.solo_domicilio && !s.solo_despacho, sitio: 'https://www.flechacarga.com/donde-estamos/' }
+    ];
+    let sucBusqueda = 0;  // descarta respuestas de una busqueda anterior
+
+    // Respuesta corta de una empresa: clase de color + texto
+    function sucEstado(emp, r) {
+      if (!r) return ['cargando', 'Buscando&hellip;'];
+      if (r.error) return ['error', 'Sin conexi&oacute;n'];
+      const retirables = r.exactas.filter(emp.retirable).length;
+      if (retirables) return ['ok', 'S&iacute; hay' + (retirables > 1 ? ' (' + retirables + ')' : '')];
+      if (r.exactas.length) return ['aviso', 'Solo a domicilio'];
+      if (r.parciales.length) return ['aviso', 'Posibles (' + r.parciales.length + ')'];
+      return ['error', 'No hay'];
+    }
+
+    function sucSeccion(emp, r) {
+      let html = '<div class="suc-emp-cab"><span class="suc-punto suc-punto--' + emp.id + '"></span>' + emp.nombre + '</div>';
+      if (!r) return html + '<div class="vc-estado">Buscando&hellip;</div>';
+      if (r.error) {
+        return html + '<div class="vc-estado error">No se pudo consultar ' + emp.nombre + '. Revis&aacute; la conexi&oacute;n o us&aacute; el sitio.</div>' +
+          '<a class="vc-link" href="' + emp.sitio + '" target="_blank" rel="noopener">Ver en el sitio de ' + emp.nombre + '</a>';
+      }
+      const lista = r.exactas.length ? r.exactas : r.parciales;
+      if (r.exactas.length && !r.exactas.some(emp.retirable)) {
+        html += '<div class="vc-estado aviso">Llega a la localidad, pero sin sucursal para retirar</div>';
+      } else if (!r.exactas.length && r.parciales.length) {
+        html += '<div class="vc-estado aviso">Sin coincidencia exacta. Posibles coincidencias:</div>';
+      } else if (!lista.length) {
+        html += '<div class="vc-estado error">No se encontr&oacute; sucursal en esa localidad</div>';
+      }
+      html += lista.slice(0, SUC_VISIBLES).map(emp.tarjeta).join('');
+      if (lista.length > SUC_VISIBLES) {
+        html += '<div class="suc-ocultas" hidden>' + lista.slice(SUC_VISIBLES).map(emp.tarjeta).join('') + '</div>' +
+          '<button type="button" class="suc-mas">Ver ' + (lista.length - SUC_VISIBLES) + ' m&aacute;s</button>';
+      }
+      return html + '<a class="vc-link" href="' + emp.sitio + '" target="_blank" rel="noopener">Ver en el sitio de ' + emp.nombre + '</a>';
+    }
+
+    // Sin "soloId" arma todo; con "soloId" refresca solo esa empresa (asi no se
+    // cierra un "Ver mas" abierto en la otra cuando llega la respuesta tardia).
+    function sucPintar(resultados, soloId) {
+      document.getElementById('sucResumen').innerHTML = SUC_EMPRESAS.map(emp => {
+        const [clase, texto] = sucEstado(emp, resultados[emp.id]);
+        return '<button type="button" class="suc-chip ' + clase + '" data-emp="' + emp.id + '">' +
+          '<span class="suc-chip-emp"><span class="suc-punto suc-punto--' + emp.id + '"></span>' + emp.nombre + '</span>' +
+          '<span class="suc-chip-est">' + texto + '</span></button>';
+      }).join('');
+      const sec = soloId && document.getElementById('sucEmp-' + soloId);
+      if (sec) {
+        sec.innerHTML = sucSeccion(SUC_EMPRESAS.find(e => e.id === soloId), resultados[soloId]);
+        return;
+      }
+      document.getElementById('sucResult').innerHTML = SUC_EMPRESAS.map(emp =>
+        '<section class="suc-emp" id="sucEmp-' + emp.id + '">' + sucSeccion(emp, resultados[emp.id]) + '</section>').join('');
+    }
+
+    function sucursalesBuscar() {
+      const buscado = vcNormalizar(document.getElementById('sucLocalidad').value);
+      const busqueda = ++sucBusqueda;
+      if (!buscado) {
+        document.getElementById('sucResumen').innerHTML = '';
+        document.getElementById('sucResult').innerHTML = '<div class="vc-estado">Escrib&iacute; una localidad para buscar</div>';
+        return;
+      }
+      // Las dos consultas salen juntas; cada una se pinta apenas llega.
+      const resultados = {};
+      sucPintar(resultados);
+      SUC_EMPRESAS.forEach(emp => {
+        emp.buscar(buscado)
+          .catch(e => { console.error(emp.id, e); return { error: true }; })
+          .then(r => {
+            if (busqueda !== sucBusqueda) return;
+            resultados[emp.id] = r;
+            sucPintar(resultados, emp.id);
+          });
+      });
+    }
+
+    function abrirSucursalesModal() {
       const c = (pedidoActual && pedidoActual.cliente) || {};
-      document.getElementById('viaCargoLocalidad').value = c.localidad || '';
-      document.getElementById('viaCargoResult').innerHTML = '';
-      document.getElementById('viaCargoModal').classList.add('active');
-      if (c.localidad) viaCargoBuscar();
-      else document.getElementById('viaCargoLocalidad').focus();
+      document.getElementById('sucLocalidad').value = c.localidad || '';
+      document.getElementById('sucResumen').innerHTML = '';
+      document.getElementById('sucResult').innerHTML = '';
+      document.getElementById('sucModal').classList.add('active');
+      if (c.localidad) sucursalesBuscar();
+      else document.getElementById('sucLocalidad').focus();
     }
 
-    document.getElementById('viaCargoForm').addEventListener('submit', (e) => {
+    document.getElementById('sucForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      viaCargoBuscar();
+      sucursalesBuscar();
     });
-    document.getElementById('viaCargoCerrar').addEventListener('click', () => {
-      document.getElementById('viaCargoModal').classList.remove('active');
+    // Tocar el resumen de una empresa lleva a su detalle
+    document.getElementById('sucResumen').addEventListener('click', (e) => {
+      const chip = e.target.closest('.suc-chip');
+      const sec = chip && document.getElementById('sucEmp-' + chip.dataset.emp);
+      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    document.getElementById('viaCargoModal').addEventListener('click', (e) => {
-      if (e.target.id === 'viaCargoModal') document.getElementById('viaCargoModal').classList.remove('active');
+    document.getElementById('sucResult').addEventListener('click', (e) => {
+      const mas = e.target.closest('.suc-mas');
+      if (!mas) return;
+      mas.previousElementSibling.hidden = false;
+      mas.remove();
+    });
+    document.getElementById('sucCerrar').addEventListener('click', () => {
+      document.getElementById('sucModal').classList.remove('active');
+    });
+    document.getElementById('sucModal').addEventListener('click', (e) => {
+      if (e.target.id === 'sucModal') document.getElementById('sucModal').classList.remove('active');
     });
 
     // ==========================================
