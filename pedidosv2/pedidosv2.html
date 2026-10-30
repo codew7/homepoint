@@ -3382,6 +3382,21 @@
       color: var(--accent);
     }
     .nec-cat::after { content: ''; flex: 1; height: 1px; background: var(--line); order: 3; }
+    /* Sector (grupo de zonas con nombre, puesto en LocatorPic): encima de las zonas. */
+    .nec-sector {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin: 22px 0 2px;
+      padding: 9px 12px;
+      border-radius: var(--r2);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: -.1px;
+    }
+    .nec-sector-n { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; opacity: .8; }
     .nec-cat-n {
       order: 2;
       font-family: var(--font-mono);
@@ -15358,7 +15373,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           escapeHtml(u.incierta ? '¿' + corto + '?' : corto) + '</span>';
       }
 
-      // Cada articulo sale con a.grupo (el titulo de su seccion) y a.ubicacion.
+      // Cada articulo sale con a.grupo (el titulo de su seccion), a.sector
+      // (nombre del grupo de zonas, si hay sectores cargados) y a.ubicacion.
       // Por zona: en el orden del recorrido (zona 1 izq, zona 1 der, zona 2
       // izq...) y lo incierto al final, con la ultima zona donde se vio.
       function listaOrdenada() {
@@ -15373,12 +15389,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             const a = articulos[it.codigo];
             a.ubicacion = it.ubicacion;
             a.grupo = g.zona == null ? 'Sin ubicación segura' : g.titulo;
+            a.sector = g.sector || null;
             res.push(a);
           }));
           return res;
         }
         arr.forEach(a => {
           a.grupo = a.categoria;
+          a.sector = null;
           a.ubicacion = ubicacionDe(a.codigo);
         });
         arr.sort((a, b) => a.categoria.localeCompare(b.categoria, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
@@ -15420,8 +15438,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         let html = '<div class="nec-cols"><span class="nc-art">Artículo</span><span class="nc-stock" title="Stock total (columna R)">Munro</span><span class="nc-stock" title="Stock de la otra sucursal (columna S)">Caseros</span><span class="nc-nec">Neces.</span><span class="nc-ok">OK</span></div>';
 
         let cat = null;
+        let sector = null;
         let i = 0;
         visibles.forEach(a => {
+          if (a.sector && a.sector !== sector) {
+            sector = a.sector;
+            const n = visibles.filter(x => x.sector === sector).length;
+            html += '<div class="nec-sector">' + escapeHtml(sector) +
+              '<span class="nec-sector-n">' + n + ' art.</span></div>';
+          }
           if (a.grupo !== cat) {
             cat = a.grupo;
             const n = visibles.filter(x => x.grupo === cat).length;
@@ -16289,7 +16314,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         };
         let filas = '';
         let cat = null;
+        let sector = null;
         arr.forEach((a, i) => {
+          if (a.sector && a.sector !== sector) {
+            sector = a.sector;
+            filas += '<tr class="sec"><td colspan="' + (conZona ? 8 : 7) + '">' + escapeHtml(sector) + '</td></tr>';
+          }
           if (a.grupo !== cat) {
             cat = a.grupo;
             filas += '<tr class="cat"><td colspan="' + (conZona ? 8 : 7) + '">' + escapeHtml(cat) + '</td></tr>';
@@ -16323,6 +16353,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           '.z{width:64px;font-weight:700;white-space:nowrap}' +
           'tr.cat td{background:#f5f5f2;color:#c2620f;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:7px 8px 4px;border-bottom:1px solid #c2620f}' +
           'tr.ok td{background:#eaf3ee}tr.ok td.nombre{color:#2e7d5b}' +
+          'tr.sec td{background:#17181a;color:#fff;font-size:11px;font-weight:800;padding:7px 8px;letter-spacing:.2px}' +
           '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
           '</style></head><body>' +
           '<div class="h"><h1>Artículos necesarios</h1><div class="m">' + fecha + '<br>' + pedidosEnCalculo + ' pedidos &middot; ' + arr.length + ' artículos</div></div>' +

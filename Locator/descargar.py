@@ -11,6 +11,9 @@ Qué hace:
        guardado falló, se reintenta sin volver a consultar a Claude).
     3. Si es nuevo, baja las fotos EN EL ORDEN DE LAS ZONAS a una carpeta
        temporal (Z001_..., Z002_...) y escribe sesion.json con ese orden.
+       Las zonas de tomas cercanas bajan como Z012_E2_T3_... (zona 12,
+       estante 2, toma 3), con la orientación del celular en cada toma.
+       También se anotan los sectores con nombre ("Adelante izquierda").
     4. Recién cuando todo bajó bien, borra las fotos anteriores y pone las
        nuevas en su lugar. Si algo falla, la carpeta anterior queda intacta.
     5. Marca el recorrido como "descargada" (la app lo muestra) y limpia de
@@ -41,6 +44,29 @@ def _lista_zonas(valor):
     if isinstance(valor, dict):
         return [valor[k] for k in sorted(valor, key=lambda k: int(k)) if valor[k]]
     return []
+
+
+def armar_recorrido(zonas, sesion):
+    """Lista de zonas para descargar: [{"id"} (foto única) o
+    {"id", "estantes": [[fotoId...]...]} (tomas cercanas)] y los sectores
+    como [{nombre, desde, hasta}] (números de zona)."""
+    barridos = sesion.get("barridos") or {}
+    recorrido = []
+    for zid in zonas:
+        b = barridos.get(zid) if isinstance(barridos, dict) else None
+        estantes = [_lista_zonas(fila) for fila in _lista_zonas((b or {}).get("estantes"))]
+        estantes = [fila for fila in estantes if fila]
+        recorrido.append({"id": zid, "estantes": estantes} if estantes else {"id": zid})
+
+    marcas = sesion.get("sectores") or {}
+    sectores = []
+    for n, z in enumerate(recorrido, 1):
+        nombre = str(marcas.get(z["id"]) or "").strip() if isinstance(marcas, dict) else ""
+        if nombre:
+            if sectores:
+                sectores[-1]["hasta"] = n - 1
+            sectores.append({"nombre": nombre, "desde": n, "hasta": len(recorrido)})
+    return recorrido, sectores
 
 
 def leer_manifiesto(carpeta: Path):
@@ -106,18 +132,39 @@ def obtener_ultimo(carpeta: Path, bucket_nombre: str):
         shutil.rmtree(temporal)
     temporal.mkdir(parents=True)
 
+    recorrido, sectores = armar_recorrido(zonas, sesion)
+    datos_fotos = sesion.get("fotos") or {}
+    cantidad = sum(sum(len(f) for f in z["estantes"]) if "estantes" in z else 1 for z in recorrido)
     nombres = []
     total_bytes = 0
+
+    def bajar_foto(foto_id, nombre, que):
+        nonlocal total_bytes
+        blob = bucket.blob(f"{RAIZ}/{sesion_id}/{foto_id}.jpg")
+        if not blob.exists():
+            raise FileNotFoundError(f"La foto de {que} no está en Storage (¿no terminó de subirse?)")
+        _bajar(blob, temporal / nombre)
+        nombres.append(nombre)
+        total_bytes += (temporal / nombre).stat().st_size
+        print(f"\r  {len(nombres)}/{cantidad} fotos  ({total_bytes / 1048576:.0f} MB)", end="", flush=True)
+
     try:
-        for i, foto_id in enumerate(zonas, 1):
-            blob = bucket.blob(f"{RAIZ}/{sesion_id}/{foto_id}.jpg")
-            if not blob.exists():
-                raise FileNotFoundError(f"La foto de la zona {i} no está en Storage (¿no terminó de subirse?)")
-            nombre = f"Z{i:03d}_{foto_id}.jpg"
-            _bajar(blob, temporal / nombre)
-            nombres.append(nombre)
-            total_bytes += (temporal / nombre).stat().st_size
-            print(f"\r  {i}/{len(zonas)} fotos  ({total_bytes / 1048576:.0f} MB)", end="", flush=True)
+        for i, z in enumerate(recorrido, 1):
+            if "estantes" not in z:
+                z["archivo"] = f"Z{i:03d}_{z['id']}.jpg"
+                bajar_foto(z["id"], z["archivo"], f"la zona {i}")
+                continue
+            filas = []
+            for e, fila in enumerate(z["estantes"], 1):
+                tomas = []
+                for t, foto_id in enumerate(fila, 1):
+                    archivo = f"Z{i:03d}_E{e}_T{t}_{foto_id}.jpg"
+                    bajar_foto(foto_id, archivo, f"la zona {i}, estante {e}, toma {t}")
+                    d = datos_fotos.get(foto_id) or {}
+                    tomas.append({"archivo": archivo, "fotoId": foto_id,
+                                  "orientacion": d.get("orientacion")})
+                filas.append(tomas)
+            z["estantes"] = filas
         print()
     except Exception as e:
         print()
@@ -130,6 +177,8 @@ def obtener_ultimo(carpeta: Path, bucket_nombre: str):
         "sesionId": sesion_id,
         "zonas": zonas,
         "fotos": nombres,
+        "recorrido": recorrido,
+        "sectores": sectores,
         "finalizada": ultima.get("finalizada"),
         "usuario": sesion.get("usuario"),
         "dispositivo": sesion.get("dispositivo"),
@@ -141,6 +190,8 @@ def obtener_ultimo(carpeta: Path, bucket_nombre: str):
         shutil.rmtree(carpeta)
     temporal.rename(carpeta)
     log.info("Listo: %d fotos (%.0f MB) en %s", len(nombres), total_bytes / 1048576, carpeta)
+    if sectores:
+        log.info("Sectores: %s", ", ".join(s["nombre"] for s in sectores))
 
     db.reference(f"{RAIZ}/sesiones/{sesion_id}").update({
         "estado": "descargada",

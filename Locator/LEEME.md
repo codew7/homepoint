@@ -32,6 +32,7 @@ Si la cantidad de fotos cambió respecto de la semana anterior, el programa **av
 | `relevar.py` | Programa principal: une todos los pasos. |
 | `planilla.py` | Lee la planilla y normaliza los precios. |
 | `fotos.py` | Ordena las fotos y las corta en dos columnas. |
+| `armar_mosaico.py` | Une las tomas cercanas de una zona como un rompecabezas y decide la columna de cada etiqueta. |
 | `lector_claude.py` | Le pasa las imágenes a Claude Code y valida el JSON que devuelve. |
 | `identificar.py` | Decide qué producto es cada etiqueta (incluye el desempate por categoría). |
 | `guardar_firebase.py` | Escribe el resultado en Firebase. |
@@ -108,6 +109,28 @@ Las fotos se sacan con la app **LocatorPic** en el Android: ver `..\LocatorPic\R
 
 Si volvés a ejecutar `relevar.bat` con el mismo recorrido (por ejemplo, porque falló el guardado), no vuelve a bajar nada ni a consultar a Claude.
 
+### Zonas con tomas cercanas
+
+En la app, una zona se puede sacar con **tomas cercanas**: varias fotos de cerca por estante, de izquierda a derecha, y los estantes de arriba hacia abajo. Sirve para los tramos con etiquetas chicas.
+
+Así se procesa esa zona en la PC:
+1. **Cada toma se lee entera.** No se corta en columnas, así Claude ve las etiquetas con mucho más detalle.
+2. **`armar_mosaico.py` une las tomas.** Busca los mismos detalles en dos tomas seguidas y calcula cuánto se corrió una respecto de la otra. Así sabe en qué parte del tramo cayó cada etiqueta:
+   - de la mitad para la izquierda, columna **izquierda**;
+   - de la mitad para la derecha, columna **derecha**.
+3. **Las etiquetas repetidas cuentan una sola vez.** Al pisarse las tomas, la misma etiqueta aparece dos veces.
+4. **Para pedidosv2 no cambia nada.** El resultado es el mismo de siempre ("Zona 12 · izquierda"). En el detalle también queda el número de **estante**.
+
+Si dos tomas no se pueden unir (pisaron poco o no tienen detalles en común), el programa estima la posición con la orientación del celular o con el promedio de las demás tomas. En el informe esa unión aparece como **"unión dudosa"**, marcada en rojo sobre el mosaico. El proceso no se corta.
+
+Sale más caro que una foto única: **cada toma gasta del límite de la suscripción como una imagen**. Por ejemplo, una zona de 3 estantes × 3 tomas son 9 imágenes, contra 2 de una foto única. Por eso conviene usarlo solo en los tramos que lo necesitan.
+
+Las tomas se unen con **OpenCV**, que se instala con `instalar.bat`. Si ya lo habías ejecutado antes, ejecutalo una vez más.
+
+### Sectores
+
+En la app se les puede poner **nombre a grupos de zonas seguidas** ("Adelante izquierda", "Atrás derecha"). La PC los guarda en `ubicaciones/sectores` y pedidosv2 agrupa la lista de recolección por sector. Cada relevamiento reemplaza los sectores anteriores.
+
 La carpeta se cambia en `.env` con `RELEVAMIENTO_CARPETA`. Por seguridad, el programa solo borra una carpeta que haya creado él (que tenga `sesion.json`) o que esté vacía. `descargar.py` también funciona solo (`python descargar.py`): baja el recorrido sin analizarlo.
 
 ## Uso semanal con fotos sueltas (sin la app)
@@ -141,7 +164,7 @@ python relevar.py "C:\Relevamientos\2026-10-29" --sin-guardar
 Lo que Claude ya analizó queda guardado dentro de la carpeta de fotos, en `.locator\analisis.json`. Si el programa se corta (por el límite de uso, porque se cerró la ventana o porque se cortó internet), **volvé a arrastrar la misma carpeta** y sigue desde donde quedó, sin gastar de nuevo.
 
 ### Límite de la suscripción
-Cada columna gasta una parte de tu límite del plan Pro, como si mandaras una imagen en un chat. Un recorrido de menos de 50 fotos debería entrar. Si se alcanza el límite, el programa lo avisa y se detiene: volvé a ejecutarlo más tarde y sigue desde ahí.
+Cada columna (y cada toma cercana) gasta una parte de tu límite del plan Pro, como si mandaras una imagen en un chat. Un recorrido de menos de 50 fotos debería entrar. Las tomas cercanas suman: usalas solo donde hagan falta. Si se alcanza el límite, el programa lo avisa y se detiene: volvé a ejecutarlo más tarde y sigue desde ahí.
 
 ---
 
@@ -174,7 +197,7 @@ Queda en `Locator\informes\` y muestra:
 - Etiquetas identificadas, ambiguas, no encontradas e ilegibles.
 - Precios repetidos: cuántos aparecieron y cuántos se desempataron por categoría.
 - Recomendaciones para sacar mejores fotos.
-- **Hoja de zonas**: la miniatura de cada foto con su número y cuántos productos hay en cada columna. Se puede imprimir.
+- **Hoja de zonas**: la miniatura de cada foto con su número y cuántos productos hay en cada columna, agrupada por sector. Las zonas de tomas cercanas muestran el **mosaico armado**: la línea naranja es el corte entre columnas y las uniones dudosas van en rojo. Se puede imprimir.
 - Las fotos con problemas.
 - El detalle de cada lectura.
 
@@ -191,7 +214,8 @@ Todo queda dentro de `ubicaciones`, en el proyecto pedidos-87064:
 | Ruta | Qué guarda | Quién lo usa |
 |---|---|---|
 | `mapa/{código}` | Solo lo necesario: `zona` (12), `columna` ("I"/"D"), `orden` (para ordenar el recorrido), `confianza`, `estado`, `fecha`. | **pedidosv2**: lo descarga entero de una vez (unos 150 KB con todo el catálogo) y queda escuchando los cambios. |
-| `detalle/{código}` | Nombre, categoría, precio leído, foto de origen, cómo se identificó. | Revisión. |
+| `detalle/{código}` | Nombre, categoría, precio leído, foto de origen, cómo se identificó y, en zonas de tomas cercanas, el estante. | Revisión. |
+| `sectores` | Nombres de los grupos de zonas: `[{ nombre: "Adelante izquierda", desde: 1, hasta: 6 }]`. | **pedidosv2**, para agrupar por sector. |
 | `historial/{código}` | Ubicaciones anteriores del producto. | Revisión. |
 | `ultimo` | Cantidad de fotos y fecha del último relevamiento. | El aviso de "cambió el recorrido". |
 | `relevamientos/{id}` | Cada recorrido: cada foto procesada (con errores) y el resumen. | Registro. |
@@ -201,9 +225,9 @@ Todo queda dentro de `ubicaciones`, en el proyecto pedidos-87064:
 
 Ya está integrado. En el panel **Artículos necesarios** hay un selector **Zona | Categoría**. La elección queda guardada en cada equipo.
 
-- **Zona:** los artículos salen en el orden del recorrido (Zona 1 · izquierda, Zona 1 · derecha, Zona 2 · izquierda…). Al final va el grupo **Sin ubicación segura**: los productos nunca vistos, los posiblemente movidos o los leídos con poca confianza. Si se sabe dónde se vio cada uno por última vez, lo muestra en naranja claro, por ejemplo **¿Z7 der?**.
+- **Zona:** los artículos salen en el orden del recorrido (Zona 1 · izquierda, Zona 1 · derecha, Zona 2 · izquierda…). Si hay sectores, cada sector tiene un encabezado con su nombre, por ejemplo "Adelante izquierda", y adentro van sus zonas. Al final va el grupo **Sin ubicación segura**: los productos nunca vistos, los posiblemente movidos o los leídos con poca confianza. Si se sabe dónde se vio cada uno por última vez, lo muestra en naranja claro, por ejemplo **¿Z7 der?**.
 - **Categoría:** como antes, pero cada fila muestra su zona (por ejemplo **Z12 izq**).
-- **El listado impreso** respeta el mismo orden y suma una columna **Zona**.
+- **El listado impreso** respeta el mismo orden, suma una columna **Zona** y una fila oscura por cada sector.
 - **Si todavía no hay un relevamiento guardado**, o no se publicó la regla de lectura en Firebase, agrupa por categoría como siempre.
 - **Si falta el archivo `Locator/ubicaciones-api.js` en el servidor**, el selector no aparece y la pantalla funciona como siempre.
 
@@ -231,6 +255,8 @@ const grupos = ordenarPorZona(Object.values(articulos));
 //  { titulo: 'Zona 2 · izquierda', items: [...] }, ...
 //  { titulo: 'Sin ubicación / incierta', items: [...] }]
 // Cada item trae item.ubicacion = { zona, columna, texto: 'Zona 12 · izquierda', incierta } o null.
+// Cada grupo trae además "sector" ('Adelante izquierda' o null).
+// sectorDeZona(12) -> 'Atrás derecha' (o null si no hay sectores).
 
 // Zona de un producto suelto
 const u = await obtenerUbicacion('12345');   // u.texto -> 'Zona 12 · izquierda'

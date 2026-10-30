@@ -12,7 +12,9 @@ import com.google.firebase.storage.FirebaseStorage;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,6 +24,10 @@ import java.util.concurrent.Executors;
  * Baja sus miniaturas al equipo para mostrar, al sacar la zona 12, como se
  * saco la zona 12 la vez anterior. Asi se repite el encuadre y los numeros de
  * zona no se corren de una semana a otra.
+ *
+ * Tambien recuerda que zonas se sacaron con tomas cercanas (para proponer el
+ * mismo modo) y donde empezaba cada sector (para proponer el mismo nombre).
+ * De una zona de tomas cercanas, la guia es su primera toma.
  */
 public final class GuiaAnterior {
 
@@ -44,6 +50,9 @@ public final class GuiaAnterior {
     private volatile String sesionId;
     private volatile long finalizada;
     private volatile List<String> zonas = new ArrayList<>();
+    // zona -> id de la foto que se usa de guia (la unica o la primera toma)
+    private volatile Map<String, String> guiaDeZona = new HashMap<>();
+    private volatile Map<String, String> sectores = new HashMap<>();
     private boolean escuchando;
 
     private GuiaAnterior(Context ctx) {
@@ -65,11 +74,30 @@ public final class GuiaAnterior {
                             String v = z.getValue(String.class);
                             if (v != null) lista.add(v);
                         }
+                        Map<String, String> guias = new HashMap<>();
+                        for (String z : lista) {
+                            String primera = null;
+                            for (DataSnapshot fila : snap.child("barridos").child(z).child("estantes").getChildren()) {
+                                for (DataSnapshot t : fila.getChildren()) {
+                                    primera = t.getValue(String.class);
+                                    if (primera != null) break;
+                                }
+                                if (primera != null) break;
+                            }
+                            guias.put(z, primera != null ? primera : z);
+                        }
+                        Map<String, String> sec = new HashMap<>();
+                        for (DataSnapshot x : snap.child("sectores").getChildren()) {
+                            String v = x.getValue(String.class);
+                            if (v != null) sec.put(x.getKey(), v);
+                        }
                         sesionId = id;
                         finalizada = fin != null ? fin : 0;
                         zonas = lista;
+                        guiaDeZona = guias;
+                        sectores = sec;
                         avisar();
-                        if (id != null) bajarMiniaturas(id, lista);
+                        if (id != null) bajarMiniaturas(id, new ArrayList<>(guias.values()));
                     }
 
                     @Override
@@ -94,8 +122,36 @@ public final class GuiaAnterior {
         List<String> z = zonas;
         String id = sesionId;
         if (id == null || zona < 1 || zona > z.size()) return null;
-        File f = archivo(id, z.get(zona - 1));
+        String zid = z.get(zona - 1);
+        String fotoId = guiaDeZona.get(zid);
+        File f = archivo(id, fotoId != null ? fotoId : zid);
         return f.exists() && f.length() > 0 ? f : null;
+    }
+
+    /** true si la zona (1, 2, 3...) se saco con tomas cercanas la vez anterior. */
+    public boolean fueConTomas(int zona) {
+        List<String> z = zonas;
+        if (zona < 1 || zona > z.size()) return false;
+        String zid = z.get(zona - 1);
+        String guia = guiaDeZona.get(zid);
+        return guia != null && !guia.equals(zid);
+    }
+
+    /** Nombre del sector que EMPEZABA en esa zona la vez anterior, o null. */
+    public String sectorQueEmpieza(int zona) {
+        List<String> z = zonas;
+        if (zona < 1 || zona > z.size()) return null;
+        return sectores.get(z.get(zona - 1));
+    }
+
+    /** Nombres de sector de la vez anterior, en el orden del recorrido. */
+    public List<String> nombresSectores() {
+        List<String> l = new ArrayList<>();
+        for (String zid : zonas) {
+            String n = sectores.get(zid);
+            if (n != null && !l.contains(n)) l.add(n);
+        }
+        return l;
     }
 
     public void agregarOyente(Oyente o) {

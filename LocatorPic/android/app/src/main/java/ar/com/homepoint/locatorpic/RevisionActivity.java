@@ -25,6 +25,9 @@ import java.util.concurrent.Executors;
  * Revision de la foto antes de confirmarla: se ve entera, con zoom, y avisa si
  * parece borrosa, oscura o torcida. "Confirmar" la guarda y la pone en cola
  * para subir; "Repetir" la descarta y vuelve a la camara en la misma zona.
+ *
+ * Con EXTRA_SOLO_REVISAR (tomas cercanas) no guarda nada: "Confirmar" solo
+ * devuelve OK y la camara guarda la toma con su estante y orientacion.
  */
 public class RevisionActivity extends AppCompatActivity {
 
@@ -33,10 +36,13 @@ public class RevisionActivity extends AppCompatActivity {
     public static final String EXTRA_POSICION = "posicion";
     public static final String EXTRA_REEMPLAZAR = "reemplazar";
     public static final String EXTRA_DERECHO = "derecho";
+    public static final String EXTRA_SOLO_REVISAR = "soloRevisar";
+    public static final String EXTRA_TITULO = "titulo";
 
     // Umbrales del control de calidad (sobre la foto achicada a 400 px).
-    private static final float NITIDEZ_MINIMA = 45f;
-    private static final float BRILLO_MINIMO = 55f;
+    // Los usa tambien la camara para confirmar sola las tomas cercanas.
+    public static final float NITIDEZ_MINIMA = 45f;
+    public static final float BRILLO_MINIMO = 55f;
 
     private final ExecutorService hilo = Executors.newSingleThreadExecutor();
     private final Handler principal = new Handler(Looper.getMainLooper());
@@ -44,7 +50,7 @@ public class RevisionActivity extends AppCompatActivity {
     private File archivo;
     private Sesiones.Sesion sesion;
     private int posicion;
-    private boolean reemplazar, guardado;
+    private boolean reemplazar, guardado, soloRevisar;
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -58,6 +64,7 @@ public class RevisionActivity extends AppCompatActivity {
         posicion = getIntent().getIntExtra(EXTRA_POSICION, 0);
         reemplazar = getIntent().getBooleanExtra(EXTRA_REEMPLAZAR, false);
         boolean derecho = getIntent().getBooleanExtra(EXTRA_DERECHO, true);
+        soloRevisar = getIntent().getBooleanExtra(EXTRA_SOLO_REVISAR, false);
         if (sesion == null || !archivo.exists()) {
             finish();
             return;
@@ -70,7 +77,8 @@ public class RevisionActivity extends AppCompatActivity {
         View aviso = findViewById(R.id.avisoCalidad);
         TextView avisoTxt = findViewById(R.id.avisoTxt);
 
-        titulo.setText("Zona " + (posicion + 1) + (reemplazar ? " · rehacer" : ""));
+        String tituloExtra = getIntent().getStringExtra(EXTRA_TITULO);
+        titulo.setText(tituloExtra != null ? tituloExtra : "Zona " + (posicion + 1) + (reemplazar ? " · rehacer" : ""));
         int[] dim = Imagenes.dimensiones(archivo);
         info.setText(String.format(Locale.US, "%d × %d · %.1f MP · %.1f MB",
                 dim[0], dim[1], dim[0] * dim[1] / 1e6, archivo.length() / 1048576.0));
@@ -109,6 +117,12 @@ public class RevisionActivity extends AppCompatActivity {
     }
 
     private void confirmar() {
+        if (soloRevisar) {
+            guardado = true;
+            setResult(RESULT_OK);
+            finish();
+            return;
+        }
         View guardando = findViewById(R.id.guardando);
         guardando.setVisibility(View.VISIBLE);
         hilo.execute(() -> {

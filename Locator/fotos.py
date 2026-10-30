@@ -6,6 +6,9 @@ Cada foto muestra DOS columnas de mercadería. Se corta en dos mitades
 (izquierda y derecha) y cada mitad se manda por separado: así Claude ve
 las etiquetas con el doble de detalle y además sabemos en qué columna
 está cada producto.
+
+Las zonas sacadas con TOMAS CERCANAS (LocatorPic) no se cortan: cada toma
+se manda entera y armar_mosaico.py decide la columna de cada etiqueta.
 """
 
 import base64
@@ -74,6 +77,38 @@ def buscar_fotos(carpeta: Path, orden="fecha"):
     return fotos, ignoradas
 
 
+def leer_recorrido(carpeta: Path, orden="fecha"):
+    """El recorrido completo, zona por zona. Devuelve (zonas, ignoradas, sectores):
+        zonas: [{"ruta": Path, "tomas": None}                 zona de foto única
+                {"ruta": Path (primera toma),
+                 "tomas": [[{"ruta", "orientacion"}, ...], ...]}]   por estante
+        sectores: [{"nombre", "desde", "hasta"}] (números de zona), o [] si no hay.
+    Las carpetas que no son de LocatorPic (o de una versión anterior) son
+    todas de foto única."""
+    manifiesto = carpeta / "sesion.json"
+    datos = json.loads(manifiesto.read_text("utf-8")) if manifiesto.is_file() else {}
+    if not datos.get("recorrido"):
+        rutas, ignoradas = buscar_fotos(carpeta, orden)
+        return [{"ruta": r, "tomas": None} for r in rutas], ignoradas, []
+
+    zonas, faltan = [], []
+    for z in datos["recorrido"]:
+        if z.get("estantes"):
+            estantes = [[{"ruta": carpeta / t["archivo"], "orientacion": t.get("orientacion")}
+                         for t in fila] for fila in z["estantes"] if fila]
+            todas = [t["ruta"] for fila in estantes for t in fila]
+            faltan += [r.name for r in todas if not r.is_file()]
+            zonas.append({"ruta": todas[0], "tomas": estantes})
+        else:
+            ruta = carpeta / z["archivo"]
+            if not ruta.is_file():
+                faltan.append(ruta.name)
+            zonas.append({"ruta": ruta, "tomas": None})
+    if faltan:
+        raise FileNotFoundError(f"Faltan {len(faltan)} foto(s) del recorrido en {carpeta}: {', '.join(faltan[:5])}")
+    return zonas, [], datos.get("sectores") or []
+
+
 def clave_de_cache(ruta: Path):
     """Identifica una foto por nombre, tamaño y fecha. Si la foto no cambió,
     no hace falta volver a analizarla."""
@@ -98,6 +133,15 @@ def partir_en_columnas(ruta: Path, carpeta_destino: Path, base: str):
             parte.save(carpeta_destino / nombre, "JPEG", quality=CALIDAD_JPEG)
             archivos[col] = nombre
     return archivos
+
+
+def preparar_toma(ruta: Path, carpeta_destino: Path, nombre: str):
+    """Copia achicada de una toma cercana, entera (no se corta en columnas)."""
+    with Image.open(ruta) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((LADO_MAX_PX, LADO_MAX_PX))
+        im.save(carpeta_destino / nombre, "JPEG", quality=CALIDAD_JPEG)
+    return nombre
 
 
 def miniatura_base64(ruta: Path, lado=260):

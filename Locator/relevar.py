@@ -26,7 +26,9 @@ Qué hace, paso a paso:
     1. Lee la configuración (.env), la planilla de precios y, si puede,
        las ubicaciones anteriores de Firebase.
     2. Ordena las fotos y corta cada una en columna izquierda y derecha.
-    3. Le pasa las columnas a Claude Code, de a lotes, para leer los precios.
+       Las zonas con tomas cercanas no se cortan: se lee cada toma entera
+       y después se arma el rompecabezas (armar_mosaico.py).
+    3. Le pasa las imágenes a Claude Code, de a lotes, para leer los precios.
        Lo ya analizado se guarda en <carpeta>\\.locator\\analisis.json:
        si el programa se corta, al volver a ejecutarlo sigue donde quedó.
     4. Identifica los productos por precio (y por categoría si hay empate).
@@ -46,6 +48,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+import armar_mosaico
 import fotos as modulo_fotos
 import informe
 from identificar import identificar_todo
@@ -55,6 +58,7 @@ from planilla import Planilla
 AQUI = Path(__file__).resolve().parent
 EN_PARALELO = 2          # lotes que se analizan al mismo tiempo
 VERSION_CACHE = "v2"     # si cambia la forma de analizar, se ignora lo guardado antes
+VERSION_CACHE_TOMAS = "t1"   # lo mismo, para las tomas cercanas
 
 log = logging.getLogger("locator")
 
@@ -117,17 +121,34 @@ def leer_firebase(cfg):
 def analizar_fotos(lista_fotos, carpeta_trabajo, modelo, tam_lote):
     """Llena foto["columnas"] = {"I": analisis, "D": analisis} en cada foto
     (o foto["error"] si no se pudo). Devuelve True si terminó, False si se
-    cortó por el límite de uso de la suscripción."""
+    cortó por el límite de uso de la suscripción.
+
+    Zona de foto única: se parte en dos imágenes, una "parte" por columna.
+    Zona de tomas cercanas: cada toma es una "parte"; al final se arma el
+    rompecabezas y de ahí sale la columna de cada etiqueta."""
     ruta_cache = carpeta_trabajo / "analisis.json"
     cache = json.loads(ruta_cache.read_text("utf-8")) if ruta_cache.exists() else {}
     candado = threading.Lock()
 
-    # Cada foto se parte en dos imágenes: una "parte" por columna.
     imagenes = carpeta_trabajo / "columnas"
     imagenes.mkdir(exist_ok=True)
     pendientes = []
+    total = 0
     for f in lista_fotos:
         f["columnas"] = {}
+        if f.get("tomas"):
+            for e, fila in enumerate(f["tomas"], 1):
+                for n, t in enumerate(fila, 1):
+                    total += 1
+                    clave = f"{VERSION_CACHE_TOMAS}|{modulo_fotos.clave_de_cache(t['ruta'])}"
+                    t["etiqueta"] = f"E{e}-T{n}"
+                    if clave in cache:
+                        t["analisis"] = cache[clave]
+                        continue
+                    nombre = modulo_fotos.preparar_toma(t["ruta"], imagenes, f"{f['zona']:03d}-E{e}-T{n}.jpg")
+                    pendientes.append({"foto": f, "toma": t, "parte": t["etiqueta"], "archivo": nombre, "clave": clave})
+            continue
+        total += 2
         claves = {col: f"{VERSION_CACHE}|{f['clave']}|{col}" for col in modulo_fotos.COLUMNAS}
         if all(c in cache for c in claves.values()):
             f["columnas"] = {col: cache[c] for col, c in claves.items()}
@@ -137,14 +158,17 @@ def analizar_fotos(lista_fotos, carpeta_trabajo, modelo, tam_lote):
             if claves[col] in cache:
                 f["columnas"][col] = cache[claves[col]]
             else:
-                pendientes.append({"foto": f, "columna": col, "archivo": nombre, "clave": claves[col]})
+                pendientes.append({"foto": f, "columna": col, "parte": col, "archivo": nombre, "clave": claves[col]})
 
-    total = len(lista_fotos) * 2
     hechas = total - len(pendientes)
     if hechas:
-        log.info("%d columna(s) ya estaban analizadas de antes.", hechas)
-    if not pendientes:
-        return True
+        log.info("%d imagen(es) ya estaban analizadas de antes.", hechas)
+
+    def guardar_resultado(p, resultado):
+        if "toma" in p:
+            p["toma"]["analisis"] = resultado
+        else:
+            p["foto"]["columnas"][p["columna"]] = resultado
 
     lotes = [pendientes[i:i + tam_lote] for i in range(0, len(pendientes), tam_lote)]
     limite = threading.Event()
@@ -167,31 +191,62 @@ def analizar_fotos(lista_fotos, carpeta_trabajo, modelo, tam_lote):
         with candado:
             for p in lote:
                 if p["archivo"] in resultado:
-                    p["foto"]["columnas"][p["columna"]] = resultado[p["archivo"]]
+                    guardar_resultado(p, resultado[p["archivo"]])
                     cache[p["clave"]] = resultado[p["archivo"]]
                 else:
                     faltantes.append(p)
             ruta_cache.write_text(json.dumps(cache, ensure_ascii=False), "utf-8")
 
-        # Las que no vinieron en el lote se prueban de a una.
+        # Las que no vinieron en el lote se prueban de a una. (Las tomas
+        # que sigan sin venir las marca armar_zonas_de_tomas.)
         if faltantes and reintentar_solas and len(lote) > 1:
             for p in faltantes:
                 procesar([p], reintentar_solas=False)
         else:
             for p in faltantes:
-                p["foto"]["error"] = f"Claude no devolvió la columna {p['columna']}"
+                if "columna" in p:
+                    p["foto"]["error"] = f"Claude no devolvió la columna {p['columna']}"
 
-    with ThreadPoolExecutor(max_workers=EN_PARALELO) as ejecutor:
-        trabajos = {ejecutor.submit(procesar, lote): lote for lote in lotes}
-        for t in as_completed(trabajos):
-            t.result()
-            hechas += len(trabajos[t])
-            detalle = "  ".join(
-                f"zona {p['foto']['zona']}{p['columna']}: {len(p['foto']['columnas'][p['columna']]['etiquetas'])}"
-                for p in trabajos[t] if p["columna"] in p["foto"]["columnas"])
-            log.info("[%d/%d] etiquetas -> %s", hechas, total, detalle or "sin resultado")
+    def etiquetas_de(p):
+        a = p["toma"].get("analisis") if "toma" in p else p["foto"]["columnas"].get(p["columna"])
+        return len(a["etiquetas"]) if a else None
 
-    return not limite.is_set()
+    if pendientes:
+        with ThreadPoolExecutor(max_workers=EN_PARALELO) as ejecutor:
+            trabajos = {ejecutor.submit(procesar, lote): lote for lote in lotes}
+            for t in as_completed(trabajos):
+                t.result()
+                hechas += len(trabajos[t])
+                detalle = "  ".join(f"zona {p['foto']['zona']} {p['parte']}: {etiquetas_de(p)}"
+                                    for p in trabajos[t] if etiquetas_de(p) is not None)
+                log.info("[%d/%d] etiquetas -> %s", hechas, total, detalle or "sin resultado")
+
+    if limite.is_set():
+        return False
+    armar_zonas_de_tomas(lista_fotos)
+    return True
+
+
+def armar_zonas_de_tomas(lista_fotos):
+    """Une las tomas cercanas de cada zona y reparte sus etiquetas en las
+    columnas izquierda y derecha."""
+    for f in lista_fotos:
+        if not f.get("tomas"):
+            continue
+        sin_leer = [t["etiqueta"] for fila in f["tomas"] for t in fila if not t.get("analisis")]
+        if sin_leer:
+            f["error"] = "Claude no devolvió las tomas " + ", ".join(sin_leer)
+            continue
+        armado = armar_mosaico.ubicar_tomas(f["tomas"])
+        f["columnas"] = armar_mosaico.lecturas_de_zona(f["tomas"], armado["anchos"])
+        f["uniones_dudosas"] = armado["dudosas"]
+        try:
+            f["mosaico"] = armar_mosaico.mosaico_base64(f["tomas"], armado["anchos"])
+        except Exception as e:
+            log.warning("  No se pudo dibujar el mosaico de la zona %d: %s", f["zona"], e)
+        cantidad = sum(len(fila) for fila in f["tomas"])
+        log.info("Zona %d: %d tomas en %d estante(s) unidas%s.", f["zona"], cantidad, len(f["tomas"]),
+                 f" ({armado['dudosas']} unión(es) dudosa(s))" if armado["dudosas"] else "")
 
 
 # ---------------------------------------------------------------------
@@ -246,18 +301,29 @@ def main():
         log.info("  %d productos ubicados en el relevamiento anterior.", len(mapa_anterior))
 
     # 2) Fotos: cada una es una zona, en el orden del recorrido
-    rutas, ignoradas = modulo_fotos.buscar_fotos(carpeta, args.orden)
+    zonas, ignoradas, sectores = modulo_fotos.leer_recorrido(carpeta, args.orden)
     if ignoradas:
         log.warning("Se ignoran %d foto(s) HEIC (configurá la cámara en JPG): %s", len(ignoradas), ", ".join(ignoradas))
-    if not rutas:
+    if not zonas:
         sys.exit("No hay fotos JPG/PNG en la carpeta.")
-    lista_fotos = [{"indice": i, "zona": i + 1, "ruta": r, "nombre": r.name,
-                    "clave": modulo_fotos.clave_de_cache(r)} for i, r in enumerate(rutas)]
-    log.info("%d fotos = %d zonas (orden: %s): de %s a %s.", len(rutas), len(rutas),
-             "el de la app LocatorPic" if sesion_locatorpic else args.orden, rutas[0].name, rutas[-1].name)
+    lista_fotos = []
+    for i, z in enumerate(zonas):
+        f = {"indice": i, "zona": i + 1, "ruta": z["ruta"], "nombre": z["ruta"].name,
+             "clave": modulo_fotos.clave_de_cache(z["ruta"])}
+        if z["tomas"]:
+            f["tomas"] = z["tomas"]
+            f["nombre"] = f"Zona {i + 1} ({sum(len(fila) for fila in z['tomas'])} tomas cercanas)"
+        lista_fotos.append(f)
+    con_tomas = sum(1 for f in lista_fotos if f.get("tomas"))
+    log.info("%d zonas (orden: %s)%s: de %s a %s.", len(zonas),
+             "el de la app LocatorPic" if sesion_locatorpic else args.orden,
+             f", {con_tomas} con tomas cercanas" if con_tomas else "",
+             lista_fotos[0]["nombre"], lista_fotos[-1]["nombre"])
+    if sectores:
+        log.info("Sectores: %s", " · ".join(f"{s['nombre']} (zonas {s['desde']}-{s['hasta']})" for s in sectores))
     aviso_recorrido = None
-    if ultimo.get("fotos") and ultimo["fotos"] != len(rutas):
-        aviso_recorrido = (f"El relevamiento anterior tuvo {ultimo['fotos']} fotos y este tiene {len(rutas)}: "
+    if ultimo.get("fotos") and ultimo["fotos"] != len(zonas):
+        aviso_recorrido = (f"El relevamiento anterior tuvo {ultimo['fotos']} zonas y este tiene {len(zonas)}: "
                            "los números de zona pueden haberse corrido. Revisá la hoja de zonas del informe.")
         log.warning(aviso_recorrido)
 
@@ -279,10 +345,11 @@ def main():
         (AQUI / nombre).mkdir(exist_ok=True)
     ruta_informe = AQUI / "informes" / f"informe-{relevamiento_id}.html"
     ruta_informe.write_text(informe.generar_html(relevamiento_id, lista_fotos, lecturas, resumen,
-                                                 modelo, aviso_recorrido), "utf-8")
+                                                 modelo, aviso_recorrido, sectores), "utf-8")
     (AQUI / "resultados" / f"resultado-{relevamiento_id}.json").write_text(json.dumps({
         "relevamientoId": relevamiento_id, "carpeta": str(carpeta), "resumen": resumen,
-        "fotos": [{k: v for k, v in f.items() if k != "ruta"} for f in lista_fotos],
+        "sectores": sectores,
+        "fotos": [{k: v for k, v in f.items() if k not in ("ruta", "mosaico")} for f in lista_fotos],
         "lecturas": lecturas,
     }, ensure_ascii=False, indent=1, default=str), "utf-8")
     webbrowser.open(ruta_informe.as_uri())
@@ -315,7 +382,7 @@ def main():
     try:
         guardar_firebase = conectar_firebase(cfg)
         cambios = guardar_firebase.guardar(relevamiento_id, lista_fotos, lecturas, resumen, modelo=modelo,
-                                           sesion_locatorpic=sesion_locatorpic)
+                                           sesion_locatorpic=sesion_locatorpic, sectores=sectores)
     except Exception as e:
         log.error("No se pudo guardar en Firebase: %s", e)
         log.error("Lo analizado no se pierde: corregí el problema y volvé a ejecutar relevar.bat "

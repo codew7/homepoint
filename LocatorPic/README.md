@@ -31,6 +31,8 @@ App Android para sacar las fotos del recorrido semanal del depósito. Saca cada 
 - **Al finalizar:** avisa si la cantidad de zonas no coincide con la vez anterior.
 - **Pantalla de inicio:** muestra si la PC ya bajó y analizó el último recorrido, y cuántos productos ubicó.
 - **Atajos:** la **tecla de volumen** también saca la foto. La pantalla no se apaga mientras sacás fotos.
+- **Tomas cercanas (opcional, por zona):** en vez de una foto lejana, varias fotos de cerca por estante, que la PC une como un rompecabezas. Ver más abajo.
+- **Sectores:** nombre para grupos de zonas ("Adelante izquierda", "Atrás derecha"). pedidosv2 agrupa la lista de recolección por sector.
 
 ---
 
@@ -88,6 +90,39 @@ Abrí LocatorPic y entrá con el mismo usuario y contraseña de pedidosv2.
 2. Al terminar: **Ver zonas → Finalizar**. Si todavía hay fotos subiendo, esperá a tener señal o WiFi.
 3. **En la PC**: doble clic en **`Locator\relevar.bat`**. Baja el recorrido, analiza, abre el informe y pregunta si guardar.
 4. En la app, la pantalla de inicio pasa a decir **"Analizado en la PC: N productos ubicados"**.
+
+### Tomas cercanas (para tramos con etiquetas chicas)
+
+Arriba a la izquierda de la cámara hay un selector: **Foto única | Tomas cercanas**. Se elige por zona. La app propone el modo que tuvo esa zona la semana anterior.
+
+Con **Tomas cercanas**:
+1. Acercate al **estante de arriba** y sacá la primera toma **del extremo izquierdo** del tramo.
+2. Correte un paso a la derecha. A la izquierda del visor vas a ver, semitransparente, **la franja derecha de la toma anterior**. Encuadrá para que esa franja coincida con lo que ves y sacá la toma siguiente.
+
+   Las tomas se tienen que pisar un poco. Si no se pisan, la PC no las puede unir.
+3. Seguí así hasta el extremo derecho del tramo.
+4. Tocá **↓ Siguiente estante** y repetí con el estante de abajo, otra vez de izquierda a derecha. Ahora la franja de guía aparece arriba: es la parte de abajo del estante anterior.
+5. Al terminar el último estante, tocá **✓ Terminar zona**. Pasa a la zona siguiente.
+
+Detalles:
+- **Confirmación automática:** si la toma sale nítida, con luz y derecha, se guarda sola. Durante unos segundos aparece **"Deshacer"** por si querés repetirla. Si sale borrosa u oscura, se abre la revisión completa.
+- **El encabezado** muestra en qué estante y toma vas: "Estante 2 · toma 3".
+- **Resolución:** las tomas se sacan a unos 8 MP, porque de cerca alcanza y suben más rápido.
+- **Orientación del celular:** se guarda en cada toma. La PC la usa si dos tomas no se pueden unir por imagen.
+- **En la grilla de zonas,** estas zonas muestran "3 est. · 9 tomas".
+- **Para pedidosv2 no cambia nada:** cada producto sigue siendo "Zona 12 · izquierda/derecha". Lo que mejora es la lectura de los precios.
+- **Gasta más límite de la suscripción.** Cada toma es una imagen para Claude: usalo solo donde haga falta.
+
+### Sectores
+
+El chip con la banderita, debajo del número de zona, pone un nombre al grupo de zonas que **empieza** en esa zona. El sector sigue hasta la zona donde empieza otro.
+
+- **Para ponerlo:** tocá el chip y elegí un nombre usado antes, o escribí uno nuevo.
+- **Si la semana anterior un sector empezaba en esa zona,** el chip se pone naranja: "¿Acá empieza «Adelante izquierda»? Tocá". Con un toque se aplica.
+- **Para cambiarlo después:** en la grilla de zonas, tocá una zona → **Cambiar sector desde acá**. Ahí también se puede quitar.
+- **Al eliminar la zona donde empieza un sector,** el sector pasa a empezar en la siguiente.
+
+En pedidosv2, "Artículos necesarios" muestra un encabezado por sector y adentro las zonas en orden. Así se junta la mercadería a medida que se avanza.
 
 ### Qué pasa con las fotos
 

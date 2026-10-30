@@ -160,6 +160,7 @@ def identificar_todo(fotos, planilla, mapa_anterior=None):
                     "indice": foto["indice"],
                     "zona": foto["zona"],
                     "columna": col,
+                    "estante": et.get("estante"),     # solo en zonas de tomas cercanas
                     "etiqueta": et,
                     **identificar_etiqueta(et, planilla),
                 })

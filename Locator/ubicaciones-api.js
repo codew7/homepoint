@@ -12,6 +12,11 @@
 //                                    estado: "ubicado" | "posible_movido",
 //                                    fecha: 1761740000000 }
 //
+//  Además, los SECTORES: nombres que se les ponen en LocatorPic a grupos de
+//  zonas seguidas, para recorrer el depósito por partes:
+//
+//      ubicaciones/sectores = [ { nombre: "Adelante izquierda", desde: 1, hasta: 6 }, ... ]
+//
 //  Uso típico en pedidosv2 (igual que armadoVerificados):
 //
 //      <script src="../Locator/ubicaciones-api.js"></script>
@@ -33,6 +38,20 @@ const NOMBRE_COLUMNA = { I: 'izquierda', D: 'derecha' };
 
 // Copia en memoria de ubicaciones/mapa: código -> ubicación.
 let UBICACIONES = new Map();
+// Copia en memoria de ubicaciones/sectores: [{ nombre, desde, hasta }].
+let SECTORES = [];
+
+// Firebase puede devolver la lista como array o como objeto {0: ..., 1: ...}.
+function _listaSectores(valor) {
+  return Object.values(valor || {}).filter(s => s && s.nombre && s.desde != null);
+}
+
+// Nombre del sector al que pertenece una zona, o null si no hay sectores.
+function sectorDeZona(zona, sectores = SECTORES) {
+  if (zona == null) return null;
+  const s = sectores.find(x => zona >= x.desde && zona <= (x.hasta != null ? x.hasta : Infinity));
+  return s ? s.nombre : null;
+}
 
 // Firebase no acepta . # $ [ ] / en las claves (mismo criterio que pedidosv2).
 function claveUbicacion(codigo) {
@@ -64,12 +83,18 @@ function esUbicacionIncierta(u) {
 // Devuelve una función para dejar de escuchar.
 function escucharUbicaciones(db = firebase.database(), alCambiar) {
   const ref = db.ref('ubicaciones/mapa');
+  const refSectores = db.ref('ubicaciones/sectores');
   const handler = snap => {
     UBICACIONES = new Map(Object.entries(snap.val() || {}));
     if (alCambiar) alCambiar(UBICACIONES);
   };
+  const handlerSectores = snap => {
+    SECTORES = _listaSectores(snap.val());
+    if (alCambiar && UBICACIONES.size) alCambiar(UBICACIONES);
+  };
   ref.on('value', handler, err => console.warn('No se pudieron leer las ubicaciones:', err));
-  return () => ref.off('value', handler);
+  refSectores.on('value', handlerSectores, err => console.warn('No se pudieron leer los sectores:', err));
+  return () => { ref.off('value', handler); refSectores.off('value', handlerSectores); };
 }
 
 // ---------------------------------------------------------------------
@@ -96,9 +121,11 @@ async function obtenerUbicacion(codigo, db = firebase.database()) {
 //   [{ codigo: '123', nombre: 'BALDE 10L', cantidad: 4, ... }, ...]
 //
 // Devuelve grupos en el orden del recorrido (zona 1 izq, zona 1 der,
-// zona 2 izq...) y al final los que no tienen ubicación segura:
+// zona 2 izq...) y al final los que no tienen ubicación segura. Cada grupo
+// trae "sector" (nombre o null): como los sectores siguen el orden del
+// recorrido, los grupos de un mismo sector quedan juntos.
 //   [
-//     { zona: 3,  columna: 'I', titulo: 'Zona 3 · izquierda', items: [...] },
+//     { zona: 3,  columna: 'I', sector: 'Adelante izquierda', titulo: 'Zona 3 · izquierda', items: [...] },
 //     { zona: 3,  columna: 'D', titulo: 'Zona 3 · derecha',   items: [...] },
 //     { zona: 12, columna: 'I', titulo: 'Zona 12 · izquierda', items: [...] },
 //     { zona: null, titulo: 'Sin ubicación / incierta', items: [...] }
@@ -122,7 +149,8 @@ function ordenarPorZona(items, mapa = UBICACIONES) {
     }
     const orden = u.orden != null ? u.orden : u.zona * 2 + (u.columna === 'D' ? 1 : 0);
     if (!grupos.has(orden)) {
-      grupos.set(orden, { zona: u.zona, columna: u.columna, titulo: textoUbicacion(u), items: [] });
+      grupos.set(orden, { zona: u.zona, columna: u.columna, sector: sectorDeZona(u.zona),
+                          titulo: textoUbicacion(u), items: [] });
     }
     grupos.get(orden).items.push(conUbicacion);
   });
@@ -134,7 +162,7 @@ function ordenarPorZona(items, mapa = UBICACIONES) {
     .map(([, g]) => ({ ...g, items: g.items.sort(porNombre) }));
 
   if (inciertos.length) {
-    resultado.push({ zona: null, columna: null, titulo: 'Sin ubicación / incierta', items: inciertos.sort(porNombre) });
+    resultado.push({ zona: null, columna: null, sector: null, titulo: 'Sin ubicación / incierta', items: inciertos.sort(porNombre) });
   }
   return resultado;
 }
@@ -143,8 +171,12 @@ function ordenarPorZona(items, mapa = UBICACIONES) {
 // lo descarga una vez y agrupa.
 async function armarRecorrido(items, db = firebase.database()) {
   if (!UBICACIONES.size) {
-    const snap = await db.ref('ubicaciones/mapa').once('value');
+    const [snap, snapSectores] = await Promise.all([
+      db.ref('ubicaciones/mapa').once('value'),
+      db.ref('ubicaciones/sectores').once('value'),
+    ]);
     UBICACIONES = new Map(Object.entries(snap.val() || {}));
+    SECTORES = _listaSectores(snapSectores.val());
   }
   return ordenarPorZona(items);
 }

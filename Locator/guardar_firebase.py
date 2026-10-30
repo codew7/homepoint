@@ -22,6 +22,9 @@ Estructura dentro de "ubicaciones" (pensada para que la app lea rápido):
                           de fotos, fecha) para avisar si cambió el recorrido.
     relevamientos/{id}    Cada recorrido: fotos procesadas y resumen.
     pendientes/{id}/{n}   Lecturas ambiguas o no encontradas, para revisar.
+    sectores              Nombres de grupos de zonas puestos en LocatorPic:
+                          [{ nombre: "Adelante izquierda", desde: 1, hasta: 6 }]
+                          pedidosv2 agrupa la lista de recolección por sector.
 
 La lectura desde las apps está en ubicaciones-api.js.
 """
@@ -69,12 +72,15 @@ def _resumir_candidatos(lista):
     return [{"codigo": p["codigo"], "nombre": p["nombre"], "categoria": p["categoria"]} for p in lista]
 
 
-def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic=None):
+def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic=None, sectores=None):
     """Guarda todo en UNA sola operación: o se guarda todo, o nada.
 
     sesion_locatorpic: id del recorrido de la app LocatorPic del que salieron
     las fotos (si salieron de ahí). Se marca "procesada" con el resultado,
     para que la app muestre cuántos productos se ubicaron.
+
+    sectores: [{nombre, desde, hasta}] del recorrido. Reemplazan a los
+    anteriores (los números de zona son de este recorrido).
 
     Cada relevamiento es del depósito COMPLETO: los productos que estaban
     ubicados y esta vez no aparecieron se marcan "posible_movido" (se
@@ -130,6 +136,7 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
             "metodo": l["metodo"],
             "precioLeido": l["etiqueta"]["precio"],
             "foto": l["foto"],
+            "estante": l.get("estante"),
             "relevamientoId": relevamiento_id,
             # Si se vio en más de un lugar en este mismo relevamiento, se anota.
             "tambienEn": sorted(v["lugares"] - {lugar}) or None,
@@ -152,6 +159,7 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
             "candidatos": _resumir_candidatos(l["candidatos"]),   # los más probables primero
             "zona": l["zona"],
             "columna": l["columna"],
+            "estante": l.get("estante"),
             "foto": l["foto"],
             "confianza": l["confianza"],
             "fecha": ahora,
@@ -168,6 +176,8 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
             "error": f.get("error"),
             "etiquetas": sum(len(a["etiquetas"]) for a in cols.values()),
             "problemas": sorted({p for a in cols.values() for p in a["problemas"]}),
+            "tomas": sum(len(fila) for fila in f["tomas"]) if f.get("tomas") else None,
+            "unionesDudosas": f.get("uniones_dudosas"),
         }
     updates[f"ubicaciones/relevamientos/{relevamiento_id}"] = {
         "fecha": ahora,
@@ -183,6 +193,9 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
         "primeraFoto": fotos[0]["nombre"] if fotos else None,
         "ultimaFoto": fotos[-1]["nombre"] if fotos else None,
     }
+
+    updates["ubicaciones/sectores"] = [
+        {"nombre": s["nombre"], "desde": s["desde"], "hasta": s["hasta"]} for s in (sectores or [])] or None
 
     if sesion_locatorpic:
         updates[f"locatorpic/sesiones/{sesion_locatorpic}/estado"] = "procesada"

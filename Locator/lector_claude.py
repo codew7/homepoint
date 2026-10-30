@@ -3,7 +3,9 @@ lector_claude.py — Le pide a Claude Code (con tu suscripción) que lea los
 precios de las etiquetas en cada imagen y los devuelva en JSON.
 
 Cada imagen es UNA columna de mercadería (la mitad izquierda o derecha de
-una foto de estantería).
+una foto de estantería) o UNA toma cercana de un estante (modo "tomas
+cercanas" de LocatorPic). De cada etiqueta se pide además su posición
+horizontal (x), que sirve para ubicarla dentro del estante.
 
 Cómo funciona: por cada lote de imágenes se ejecuta, sin ventana,
     claude -p "<instrucciones>" --json-schema <forma del JSON> ...
@@ -46,7 +48,10 @@ class ErrorDeLectura(Exception):
 
 INSTRUCCIONES = """Leés etiquetas de precio en fotos de las estanterías del depósito de una tienda de artículos del hogar en Argentina.
 
-Cada imagen es UNA columna de mercadería: la mitad izquierda o la mitad derecha de una foto de estantería. En el borde del corte puede asomar un poco de la otra columna: leé solo las etiquetas que estén mayormente dentro de la imagen.
+Cada imagen es de uno de estos dos tipos:
+   - UNA columna de mercadería: la mitad izquierda o la mitad derecha de una foto de estantería. En el borde del corte puede asomar un poco de la otra columna.
+   - UNA toma cercana de un tramo de estante. Las tomas se pisan entre sí, así que en los bordes puede haber etiquetas cortadas.
+En los dos casos, leé solo las etiquetas que estén mayormente dentro de la imagen.
 
 Las etiquetas son impresas, con este formato:
    - arriba, el nombre del artículo (a veces cortado);
@@ -60,6 +65,7 @@ Para CADA etiqueta visible devolvé:
    - texto_apoyo: cualquier otro texto legible de la etiqueta o del envase (nombre, marca, medida, color). "" si no hay.
    - confianza: "alta" si leíste el precio sin ninguna duda, "media" si hay algún dígito dudoso, "baja" si es casi ilegible.
    - legible: false si la etiqueta está pero el precio no se puede leer.
+   - x: dónde está el centro de la etiqueta, de izquierda a derecha, de 0 (borde izquierdo de la imagen) a 100 (borde derecho). Aproximado.
 
 Reglas:
 - No inventes precios. Si dudás de un dígito, bajá la confianza.
@@ -72,7 +78,7 @@ Reglas:
 _ETIQUETA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["precio_texto", "precio", "codigo_parcial", "texto_apoyo", "confianza", "legible"],
+    "required": ["precio_texto", "precio", "codigo_parcial", "texto_apoyo", "confianza", "legible", "x"],
     "properties": {
         "precio_texto": {"type": "string"},
         "precio": {"type": "number"},
@@ -80,6 +86,7 @@ _ETIQUETA = {
         "texto_apoyo": {"type": "string"},
         "confianza": {"type": "string", "enum": list(CONFIANZAS)},
         "legible": {"type": "boolean"},
+        "x": {"type": "number"},
     },
 }
 
@@ -110,6 +117,14 @@ ESQUEMA = {
 # Validación
 # ---------------------------------------------------------------------
 
+def _posicion(valor):
+    """Posición horizontal 0-100, o None si no vino o no es un número."""
+    try:
+        return min(max(float(valor), 0.0), 100.0)
+    except (TypeError, ValueError):
+        return None
+
+
 def validar_imagen(d):
     """Revisa el resultado de UNA imagen y lo devuelve limpio.
     Si algo no cierra, lanza ErrorDeLectura."""
@@ -129,6 +144,7 @@ def validar_imagen(d):
             "texto_apoyo": str(e.get("texto_apoyo") or "").strip(),
             "confianza": e["confianza"],
             "legible": e.get("legible") is not False,
+            "x": _posicion(e.get("x")),
         })
 
     return {

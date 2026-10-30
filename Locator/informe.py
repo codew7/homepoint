@@ -3,7 +3,9 @@ informe.py — Arma el resumen del relevamiento y el informe en HTML.
 
 El informe incluye una "hoja de zonas": la miniatura de cada foto con su
 número de zona y cuántos productos se ubicaron en cada columna. Sirve para
-saber a qué estantería corresponde cada número.
+saber a qué estantería corresponde cada número. Las zonas de tomas
+cercanas muestran el rompecabezas armado y, si hay sectores con nombre,
+la hoja se agrupa por sector.
 """
 
 from collections import Counter, defaultdict
@@ -15,8 +17,8 @@ from fotos import miniatura_base64
 NOMBRE_COLUMNA = {"I": "izquierda", "D": "derecha"}
 
 
-def texto_lugar(zona, columna):
-    return f"Zona {zona} · {NOMBRE_COLUMNA.get(columna, columna)}"
+def texto_lugar(zona, columna, estante=None):
+    return f"Zona {zona} · {NOMBRE_COLUMNA.get(columna, columna)}" + (f" · estante {estante}" if estante else "")
 
 
 def calcular_resumen(fotos, lecturas, planilla):
@@ -87,6 +89,9 @@ figure img{width:100%;border-radius:4px;display:block}
 figure .num{position:absolute;top:10px;left:10px;background:#1c1c1c;color:#fff;font-weight:700;
   font-size:16px;border-radius:6px;padding:2px 8px}
 figure.error{border-color:#c0392b}
+figure.ancho{grid-column:span 2}
+.sector{grid-column:1/-1;margin:10px 0 0;font-size:15px;border-bottom:2px solid #e67e22;padding-bottom:4px}
+.sector small{color:#6b6b6b;font-weight:400}
 .scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{border-bottom:1px solid #e2e2e2;padding:6px;text-align:left;vertical-align:top}th{background:#fafafa}
 .identificado{color:#1f8a4c;font-weight:600}.ambiguo{color:#c48a00;font-weight:600}
@@ -95,7 +100,7 @@ th,td{border-bottom:1px solid #e2e2e2;padding:6px;text-align:left;vertical-align
 """
 
 
-def generar_html(relevamiento_id, fotos, lecturas, resumen, modelo, aviso_recorrido=None):
+def generar_html(relevamiento_id, fotos, lecturas, resumen, modelo, aviso_recorrido=None, sectores=None):
     r = resumen
     fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -106,18 +111,28 @@ def generar_html(relevamiento_id, fotos, lecturas, resumen, modelo, aviso_recorr
             por_lugar[(l["zona"], l["columna"])].add(l["producto"]["codigo"])
 
     # Hoja de zonas + fotos con problemas.
+    inicio_sector = {s["desde"]: s for s in (sectores or [])}
     hoja, problemas = [], []
     for f in fotos:
+        if f["zona"] in inicio_sector:
+            s = inicio_sector[f["zona"]]
+            hoja.append(f"<h3 class='sector'>{escape(s['nombre'])} <small>· zonas {s['desde']}–{s['hasta']}</small></h3>")
         try:
-            img = f'<img src="{miniatura_base64(f["ruta"])}" alt="">'
+            img = f'<img src="{f.get("mosaico") or miniatura_base64(f["ruta"])}" alt="">'
         except Exception:
             img = ""
         cols = f.get("columnas") or {}
-        clase = " class='error'" if len(cols) < 2 else ""
+        clases = (["error"] if len(cols) < 2 else []) + (["ancho"] if f.get("tomas") else [])
+        clase = f" class='{' '.join(clases)}'" if clases else ""
+        extra = ""
+        if f.get("tomas"):
+            extra = f"<br>{sum(len(x) for x in f['tomas'])} tomas en {len(f['tomas'])} estante(s)"
+            if f.get("uniones_dudosas"):
+                extra += f" · <b style='color:#c0392b'>{f['uniones_dudosas']} unión(es) dudosa(s)</b> (en rojo)"
         hoja.append(
             f"<figure{clase}>{img}<span class='num'>{f['zona']}</span><figcaption>"
             f"{escape(f['nombre'])}<br>izq: {len(por_lugar[(f['zona'], 'I')])} · "
-            f"der: {len(por_lugar[(f['zona'], 'D')])} productos</figcaption></figure>")
+            f"der: {len(por_lugar[(f['zona'], 'D')])} productos{extra}</figcaption></figure>")
 
         motivos = [f"{NOMBRE_COLUMNA[c]}: " + ", ".join(a["problemas"]) + (f" — {a['comentario']}" if a["comentario"] else "")
                    for c, a in cols.items() if a["problemas"] or a["comentario"]]
@@ -139,7 +154,7 @@ def generar_html(relevamiento_id, fotos, lecturas, resumen, modelo, aviso_recorr
         else:
             producto = ""
         filas.append(
-            f"<tr><td>{escape(texto_lugar(l['zona'], l['columna']))}</td><td>{escape(l['foto'])}</td>"
+            f"<tr><td>{escape(texto_lugar(l['zona'], l['columna'], l.get('estante')))}</td><td>{escape(l['foto'])}</td>"
             f"<td>{escape(l['etiqueta']['precio_texto'])}</td><td>{l['etiqueta']['confianza']}</td>"
             f"<td class='{l['estado']}'>{l['estado'].replace('_', ' ')}</td>"
             f"<td>{producto}</td><td><small>{escape(l['etiqueta']['texto_apoyo'])}</small></td></tr>")
@@ -173,7 +188,8 @@ categoría de los productos vecinos y {r['ambiguos']} no se pudieron desempatar.
 <section><h2>Recomendaciones para las próximas fotos</h2><ul>{consejos}</ul></section>
 
 <section><h2>Hoja de zonas</h2>
-<p class="sub">Cada foto es una zona, en el orden del recorrido. Con borde rojo: fotos que no se pudieron analizar.</p>
+<p class="sub">Cada foto es una zona, en el orden del recorrido. Con borde rojo: fotos que no se pudieron analizar.
+En las zonas de tomas cercanas, la línea naranja es el corte entre la columna izquierda y la derecha.</p>
 <div class="grilla">{''.join(hoja)}</div></section>
 
 <section><h2>Fotos con problemas ({len(problemas)})</h2>

@@ -151,7 +151,7 @@ public class InicioActivity extends AppCompatActivity {
         if (s == null) return;
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Descartar recorrido")
-                .setMessage("Se borran las " + s.zonas.size() + " fotos de este recorrido en curso. La PC no lo va a recibir. ¿Seguro?")
+                .setMessage("Se borran las " + s.zonas.size() + " zonas (con todas sus fotos) de este recorrido en curso. La PC no lo va a recibir. ¿Seguro?")
                 .setPositiveButton("Descartar", (d, w) -> repo.descartar(s))
                 .setNegativeButton("Cancelar", null).show();
     }
