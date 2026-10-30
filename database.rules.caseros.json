@@ -1,0 +1,62 @@
+{
+  "rules": {
+
+    "pedidos": {
+      ".indexOn": ["timestamp", "createdby", "cliente/email", "status", "entrega", "fecha", "vendedor"],
+      ".read": true,
+      "$id": {
+        ".read": true,
+        ".write": "(!data.exists()) || (data.child('locked').val() === false) || (auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists())"
+      }
+    },
+
+    "clientes": {
+      ".indexOn": ["email", "nombre"],
+      ".read": true,
+      ".write": "newData.exists()"
+    },
+
+    "admins": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "movimientos": {
+      ".indexOn": ["timestamp", "tipo", "pedidoId", "codigo"],
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "facturacion": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "gastos": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "chat": { ".read": "auth != null", ".write": "auth != null" },
+
+    "transferenciasVerificadas": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$pedidoId": {
+        ".validate": "newData.isNumber()"
+      }
+    },
+
+    "cotizacionesVerificadas": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$pedidoId": {
+        ".validate": "newData.hasChildren(['blue', 'fecha']) && newData.child('blue').isNumber() && newData.child('blue').val() > 0 && newData.child('fecha').isNumber()"
+      }
+    },
+
+    "2026": { ".read": "auth != null" },
+    "2027": { ".read": "auth != null" },
+    "2028": { ".read": "auth != null" }
+  }
+}

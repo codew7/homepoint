@@ -34,7 +34,9 @@ Si un grupo tiene otra cantidad de columnas que la semana anterior, la app avisa
 | `planilla.py` | Lee la planilla y normaliza los precios. |
 | `fotos.py` | Lee los grupos y columnas del recorrido y prepara las fotos. |
 | `unir_columna.py` | Junta las etiquetas de las fotos de una misma columna (sin repetir las del solape). |
+| `modelos.py` | Selector del modelo de Claude: lista los vigentes y recuerda el último usado. |
 | `lector_claude.py` | Le pasa las fotos a Claude Code y valida el JSON que devuelve. |
+| `segunda_mirada.py` | Recorta las etiquetas en duda y le pide a Claude que elija entre los productos posibles. |
 | `identificar.py` | Decide qué producto es cada etiqueta (incluye el desempate por categoría). |
 | `guardar_firebase.py` | Escribe el resultado en Firebase. |
 | `informe.py` | Arma el informe HTML con la hoja de columnas. |
@@ -89,8 +91,27 @@ Las fotos se sacan con la app **LocatorPic** en el Android: ver `..\LocatorPic\R
    - baja el último recorrido terminado a `C:\HomePoint\Relevamiento\actual`, con las fotos nombradas por grupo, columna y estante (`FL_C03_E1_….jpg`);
    - **borra las fotos del recorrido anterior**, pero recién cuando las nuevas bajaron completas;
    - borra de Firebase Storage los recorridos viejos (deja solo el último).
-3. Se abre el informe. Respondé **s** para guardar.
-4. La app pasa a mostrar "Analizado en la PC: N productos ubicados".
+3. Elegí el modelo de Claude (ver abajo) o tocá Enter para usar el de la última vez.
+4. Se abre el informe. Respondé **s** para guardar.
+5. La app pasa a mostrar "Analizado en la PC: N productos ubicados".
+
+### Elegir el modelo
+Al empezar, `relevar.bat` muestra los modelos vigentes de tu cuenta, por ejemplo:
+
+```
+¿Con qué modelo de Claude se leen las fotos?
+  1. Opus 5.5             el más preciso; gasta más del límite
+  2. Sonnet 5.5           recomendado: lee bien y gasta menos del límite  <- el último usado
+  3. Fable 5.1            el más potente; gasta mucho más del límite
+  4. Haiku 5.5            rápido y barato; lee peor los números chicos
+  5. El que tengas elegido en Claude Code
+Número (Enter = 2):
+```
+
+- **La lista se actualiza sola:** sale del catálogo que Claude Code guarda en la PC y renueva cada vez que se usa. Cuando salga un modelo nuevo, aparece acá.
+- **Recuerda el último:** queda en `preferencias.json`. Si ese modelo deja de estar, propone el nuevo de la misma familia (por ejemplo, el Sonnet siguiente).
+- **Tamaño de las fotos:** cada foto se manda al tamaño máximo que acepta el modelo elegido (hoy 2576 px), así los números chicos se ven mejor.
+- Con `--modelo` o `--si` no pregunta: usa ese modelo o el último.
 
 Si volvés a ejecutar `relevar.bat` con el mismo recorrido (por ejemplo, porque falló el guardado), no vuelve a bajar nada ni a consultar a Claude.
 
@@ -118,33 +139,40 @@ python relevar.py "C:\Relevamientos\2026-10-29" --sin-guardar
 | `--forzar` | Guarda aunque haya columnas sin analizar. |
 | `--modelo sonnet` | Usa Sonnet en vez del modelo que tengas elegido. Rinde más con el límite de la suscripción. |
 | `--lote 8` | Cuántas fotos se mandan juntas a Claude (de 1 a 10). |
+| `--sin-segunda-mirada` | No vuelve a mirar las etiquetas en duda (gasta menos, identifica menos). |
 
 ### Si se corta a la mitad
 Lo que Claude ya analizó queda guardado dentro de la carpeta de fotos, en `.locator\analisis.json`. Si el programa se corta (por el límite de uso, porque se cerró la ventana o porque se cortó internet), **volvé a ejecutarlo** y sigue desde donde quedó, sin gastar de nuevo.
 
 ### Límite de la suscripción
-Cada foto gasta una parte de tu límite del plan Pro, como si mandaras una imagen en un chat. Una columna de una sola foto es una imagen; una de tres fotos, tres. Si se alcanza el límite, el programa lo avisa y se detiene: volvé a ejecutarlo más tarde y sigue desde ahí.
+Cada foto gasta una parte de tu límite del plan Pro, como si mandaras una imagen en un chat. Una columna de una sola foto es una imagen; una de tres fotos, tres. La segunda mirada suma recortes chicos, de a 8 por consulta. Si se alcanza el límite, el programa lo avisa y se detiene: volvé a ejecutarlo más tarde y sigue desde ahí (lo ya leído y lo ya revisado quedan guardados).
 
 ---
 
-## Precios repetidos: cómo se desempata
+## Cómo se identifica cada etiqueta
 
-En la planilla, **1079 de 1761 productos comparten precio** con otro. Cuando una etiqueta tiene un precio repetido, el programa prueba en este orden:
+En la planilla, **1079 de 1761 productos comparten precio** con otro. Por eso el precio solo no alcanza. Para cada etiqueta, el programa prueba en este orden:
 
-1. **El código de la etiqueta**, si llegó a leerse completo. Con las fotos de cerca, muchas veces se lee.
-2. **El texto de la etiqueta** (nombre, marca, medida), comparado con el nombre de cada candidato.
-3. **La categoría (columna A).** Como los productos suelen estar agrupados, cada candidato suma puntos por los productos de su misma categoría que hay:
-   - en la misma columna (lo que más pesa);
-   - en las columnas de al lado, del mismo grupo;
-   - a dos columnas, del mismo grupo;
-   - cerca de esa columna según el relevamiento anterior.
+1. **El código impreso.** Completo, o con algún carácter ilegible ("1207?"): si deja un solo producto posible, listo.
+2. **El precio.** Si es de un solo producto, listo. Pero si lo que se ve arriba no tiene nada que ver con ese producto, el precio pudo leerse mal y se manda a verificar en la segunda mirada.
+3. **El nombre impreso en la etiqueta**, comparado con el de la planilla (aunque esté cortado). Sirve también para **etiquetas viejas**, con un precio que ya cambió: se busca por nombre en toda la planilla.
+4. **Lo que se ve del producto** ("guantes deportivos negros"). Solo decide si coinciden dos palabras o más.
+5. **Segunda mirada.** Las etiquetas que siguen en duda se recortan de la foto original, a resolución completa, con el producto de arriba y la etiqueta marcada en naranja. Claude recibe el recorte y la lista de productos posibles, y elige cuál es mirando el nombre de la etiqueta y el producto (o dice que ninguno). Se revisan:
+   - los precios repetidos que no se pudieron decidir;
+   - los precios que no están en la planilla, contra los productos con un precio que difiere en un dígito (6 por 8, 3 por 9…);
+   - los precios con un dígito ilegible ("$ 10.12?");
+   - los precios únicos a verificar (paso 2).
 
-   Solo elige si un candidato gana con claridad.
-   - Si la pista es fuerte, queda con confianza **media**.
-   - Si es débil, queda con confianza **baja**, y la app lo muestra como incierto.
-   - Si no hay pistas, queda **ambiguo** y no adivina.
+   En el informe se ve el motivo de cada elección, por ejemplo "la etiqueta dice CHOP CERVECERO 500 CC".
+6. **Vecinos y semana anterior**, solo para lo que siga en duda. Cada candidato suma puntos:
+   - si el mismo producto estaba en esa columna (o en la de al lado) el relevamiento anterior;
+   - por los productos de su categoría en la misma columna y en las vecinas del mismo grupo.
 
-Los pesos se pueden ajustar al principio de la sección "Desempate por categoría" de `identificar.py`.
+   Solo elige si un candidato gana con claridad, y queda con confianza **media** o **baja** (la app lo muestra como incierto). Si no hay pistas, queda **ambiguo** y no adivina.
+
+Los pesos se pueden ajustar al principio de la sección "Desempate" de `identificar.py`.
+
+**Prueba con el último recorrido real** (3 columnas, 6 fotos, Sonnet 5.5): antes quedaban 16 etiquetas ambiguas y 25 decididas solo por los vecinos. Con este método quedaron 0 ambiguas antes de cortarse por el límite de uso, y la segunda mirada corrigió 2 que el método anterior había asignado mal.
 
 ---
 
@@ -154,7 +182,7 @@ Queda en `Locator\informes\` y muestra:
 - **Aviso** si en algún grupo cambió la cantidad de columnas respecto de la semana anterior.
 - Productos ubicados, precios leídos y qué porcentaje tiene confianza alta.
 - Etiquetas identificadas, ambiguas, no encontradas e ilegibles.
-- Precios repetidos: cuántos aparecieron y cuántos se desempataron por categoría.
+- Cómo se identificó cada etiqueta (código, nombre, segunda mirada, vecinos…), con el motivo de cada segunda mirada.
 - Recomendaciones para sacar mejores fotos.
 - **Hoja de columnas**, agrupada por grupo: las fotos de cada columna (una debajo de la otra, unidas con una línea naranja), su número y cuántos productos tiene. Se puede imprimir.
 - Las columnas con problemas.
