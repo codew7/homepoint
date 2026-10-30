@@ -2,29 +2,26 @@
 guardar_firebase.py — Escribe el resultado del relevamiento en Firebase
 (Realtime Database del proyecto pedidos-87064), con el Admin SDK.
 
-Cada foto del recorrido es una ZONA (1, 2, 3... en el orden en que se
-sacaron) y tiene dos COLUMNAS: "I" (izquierda) y "D" (derecha).
+El lugar de cada producto es un GRUPO del depósito (FL, FR, BL, BR, OT) y
+una COLUMNA dentro del grupo (1, 2, 3...).
 
 Estructura dentro de "ubicaciones" (pensada para que la app lea rápido):
 
     mapa/{codigo}         LO QUE USA LA APP. Liviano, uno por producto:
-                          { zona: 12, columna: "I", orden: 24,
+                          { grupo: "FL", columna: 3, orden: 3,
                             confianza: "alta" | "media" | "baja",
                             estado: "ubicado" | "posible_movido", fecha }
                           "orden" sirve para ordenar el recorrido:
-                          zona 12 izquierda = 24, zona 12 derecha = 25.
+                          FL columna 3 = 3, FR columna 1 = 1001...
                           pedidosv2 lo escucha completo (unos 150 KB con
                           todo el catálogo ubicado).
     detalle/{codigo}      Datos para revisar: nombre, categoría, precio
                           leído, foto, método, relevamiento...
     historial/{codigo}/{id}   Ubicaciones anteriores del producto.
-    ultimo                Datos del último relevamiento guardado (cantidad
-                          de fotos, fecha) para avisar si cambió el recorrido.
+    ultimo                Datos del último relevamiento guardado (columnas
+                          por grupo, fecha) para avisar si cambió el recorrido.
     relevamientos/{id}    Cada recorrido: fotos procesadas y resumen.
     pendientes/{id}/{n}   Lecturas ambiguas o no encontradas, para revisar.
-    sectores              Nombres de grupos de zonas puestos en LocatorPic:
-                          [{ nombre: "Adelante izquierda", desde: 1, hasta: 6 }]
-                          pedidosv2 agrupa la lista de recolección por sector.
 
 La lectura desde las apps está en ubicaciones-api.js.
 """
@@ -38,9 +35,17 @@ from firebase_admin import credentials, db
 from identificar import ORDEN_CONFIANZA
 
 
-def orden_de(zona, columna):
-    """Posición en el recorrido: zona 1 izq = 2, zona 1 der = 3, zona 2 izq = 4..."""
-    return zona * 2 + (1 if columna == "D" else 0)
+GRUPOS = ("FL", "FR", "BL", "BR", "OT")    # en el orden en que se recorren
+
+
+def orden_de(grupo, columna):
+    """Posición en el recorrido: FL 1 = 1, FL 2 = 2... FR 1 = 1001, BL 1 = 2001..."""
+    g = GRUPOS.index(grupo) if grupo in GRUPOS else len(GRUPOS)
+    return g * 1000 + int(columna)
+
+
+def lugar_de(l):
+    return f"{l['grupo']}-{l['columna']}"
 
 
 def clave_segura(texto):
@@ -59,7 +64,7 @@ def conectar(ruta_credenciales, url_base, bucket=None):
 
 
 def leer_mapa():
-    """Ubicaciones actuales: {codigo: {zona, columna, orden, confianza, estado, fecha}}."""
+    """Ubicaciones actuales: {codigo: {grupo, columna, orden, confianza, estado, fecha}}."""
     return db.reference("ubicaciones/mapa").get() or {}
 
 
@@ -72,15 +77,12 @@ def _resumir_candidatos(lista):
     return [{"codigo": p["codigo"], "nombre": p["nombre"], "categoria": p["categoria"]} for p in lista]
 
 
-def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic=None, sectores=None):
+def guardar(relevamiento_id, columnas, lecturas, resumen, modelo, sesion_locatorpic=None):
     """Guarda todo en UNA sola operación: o se guarda todo, o nada.
 
     sesion_locatorpic: id del recorrido de la app LocatorPic del que salieron
     las fotos (si salieron de ahí). Se marca "procesada" con el resultado,
     para que la app muestre cuántos productos se ubicaron.
-
-    sectores: [{nombre, desde, hasta}] del recorrido. Reemplazan a los
-    anteriores (los números de zona son de este recorrido).
 
     Cada relevamiento es del depósito COMPLETO: los productos que estaban
     ubicados y esta vez no aparecieron se marcan "posible_movido" (se
@@ -90,14 +92,14 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
     actuales = leer_mapa()
 
     # 1) Mejor lectura de cada producto identificado. Si aparece varias
-    #    veces (por ejemplo, en el borde entre las dos columnas), gana la de
+    #    veces (por ejemplo, en el borde entre dos columnas), gana la de
     #    mayor confianza; si empatan, la primera del recorrido.
     vistos = {}   # clave -> {"lectura": ..., "lugares": set()}
     for l in lecturas:
         if l["estado"] != "identificado":
             continue
         clave = clave_segura(l["producto"]["codigo"])
-        lugar = f"{l['zona']}-{l['columna']}"
+        lugar = lugar_de(l)
         if clave not in vistos:
             vistos[clave] = {"lectura": l, "lugares": {lugar}}
         else:
@@ -111,24 +113,26 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
     # 2) Ubicación nueva de cada producto visto.
     for n, (clave, v) in enumerate(vistos.items()):
         l, anterior = v["lectura"], actuales.get(clave) or {}
-        if anterior.get("zona") is not None and (anterior.get("zona"), anterior.get("columna")) != (l["zona"], l["columna"]):
+        estaba = anterior.get("grupo") is not None or anterior.get("zona") is not None
+        if estaba and (anterior.get("grupo"), anterior.get("columna")) != (l["grupo"], l["columna"]):
             # Cambió de lugar: el anterior pasa al historial.
             updates[f"ubicaciones/historial/{clave}/{relevamiento_id}_{n}"] = {
-                "zona": anterior.get("zona"),
+                "grupo": anterior.get("grupo"),
+                "zona": anterior.get("zona"),          # relevamientos viejos
                 "columna": anterior.get("columna"),
                 "desde": anterior.get("fecha"),
                 "hasta": ahora,
             }
             cambios += 1
         updates[f"ubicaciones/mapa/{clave}"] = {
-            "zona": l["zona"],
+            "grupo": l["grupo"],
             "columna": l["columna"],
-            "orden": orden_de(l["zona"], l["columna"]),
+            "orden": orden_de(l["grupo"], l["columna"]),
             "confianza": l["confianza"],
             "estado": "ubicado",
             "fecha": ahora,
         }
-        lugar = f"{l['zona']}-{l['columna']}"
+        lugar = lugar_de(l)
         updates[f"ubicaciones/detalle/{clave}"] = {
             "codigo": l["producto"]["codigo"],
             "nombre": l["producto"]["nombre"],
@@ -136,7 +140,6 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
             "metodo": l["metodo"],
             "precioLeido": l["etiqueta"]["precio"],
             "foto": l["foto"],
-            "estante": l.get("estante"),
             "relevamientoId": relevamiento_id,
             # Si se vio en más de un lugar en este mismo relevamiento, se anota.
             "tambienEn": sorted(v["lugares"] - {lugar}) or None,
@@ -157,45 +160,40 @@ def guardar(relevamiento_id, fotos, lecturas, resumen, modelo, sesion_locatorpic
             "precioTexto": l["etiqueta"]["precio_texto"],
             "textoApoyo": l["etiqueta"]["texto_apoyo"],
             "candidatos": _resumir_candidatos(l["candidatos"]),   # los más probables primero
-            "zona": l["zona"],
+            "grupo": l["grupo"],
             "columna": l["columna"],
-            "estante": l.get("estante"),
             "foto": l["foto"],
             "confianza": l["confianza"],
             "fecha": ahora,
         }
 
-    # 5) Registro del relevamiento (también sirve de log de fotos procesadas).
-    fotos_log = {}
-    for f in fotos:
-        cols = f.get("columnas") or {}
-        fotos_log[clave_segura(f["nombre"])] = {
-            "nombre": f["nombre"],
-            "zona": f["zona"],
-            "ok": len(cols) == 2,
-            "error": f.get("error"),
-            "etiquetas": sum(len(a["etiquetas"]) for a in cols.values()),
-            "problemas": sorted({p for a in cols.values() for p in a["problemas"]}),
-            "tomas": sum(len(fila) for fila in f["tomas"]) if f.get("tomas") else None,
-            "unionesDudosas": f.get("uniones_dudosas"),
+    # 5) Registro del relevamiento (también sirve de log de columnas procesadas).
+    columnas_log, por_grupo = {}, {}
+    for c in columnas:
+        a = c.get("analisis")
+        columnas_log[f"{c['grupo']}-{c['columna']:02d}"] = {
+            "nombre": c["nombre"],
+            "fotos": len(c["fotos"]),
+            "ok": a is not None,
+            "error": c.get("error"),
+            "etiquetas": len(a["etiquetas"]) if a else 0,
+            "problemas": a["problemas"] if a else [],
         }
+        por_grupo[c["grupo"]] = por_grupo.get(c["grupo"], 0) + 1
     updates[f"ubicaciones/relevamientos/{relevamiento_id}"] = {
         "fecha": ahora,
         "modelo": modelo or "predeterminado",
-        "fotos": fotos_log,
+        "columnas": columnas_log,
         "resumen": {**resumen, "productosUbicados": len(vistos),
                     "cambiosDeLugar": cambios, "marcadosMovidos": movidos},
     }
     updates["ubicaciones/ultimo"] = {
         "relevamientoId": relevamiento_id,
         "fecha": ahora,
-        "fotos": len(fotos),
-        "primeraFoto": fotos[0]["nombre"] if fotos else None,
-        "ultimaFoto": fotos[-1]["nombre"] if fotos else None,
+        "columnas": len(columnas),
+        "columnasPorGrupo": por_grupo,
     }
-
-    updates["ubicaciones/sectores"] = [
-        {"nombre": s["nombre"], "desde": s["desde"], "hasta": s["hasta"]} for s in (sectores or [])] or None
+    updates["ubicaciones/sectores"] = None     # de la versión anterior (zonas con sectores)
 
     if sesion_locatorpic:
         updates[f"locatorpic/sesiones/{sesion_locatorpic}/estado"] = "procesada"

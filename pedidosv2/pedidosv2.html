@@ -3382,7 +3382,7 @@
       color: var(--accent);
     }
     .nec-cat::after { content: ''; flex: 1; height: 1px; background: var(--line); order: 3; }
-    /* Sector (grupo de zonas con nombre, puesto en LocatorPic): encima de las zonas. */
+    /* Grupo del deposito (FL, FR, BL, BR, OT): encima de sus columnas. */
     .nec-sector {
       display: flex;
       align-items: baseline;
@@ -3512,7 +3512,7 @@
     .nec-remoto.is-separado { background: var(--ok-soft); color: var(--ok); }
 
     /* Zona del depósito (Locator). Agrupando por categoría se ve en cada fila;
-       agrupando por zona solo en las de ubicación incierta ("¿Z12 izq?"). */
+       agrupando por zona solo en las de ubicación incierta ("¿FL C3?"). */
     .nec-zona {
       flex: none;
       display: inline-flex;
@@ -5669,7 +5669,7 @@
           <button type="button" id="necSegTodos" role="tab">Todos <span class="nec-seg-n" id="necNTodos">0</span></button>
         </div>
         <div class="nec-seg" role="tablist" aria-label="Agrupar por" id="necSegAgrupar">
-          <button type="button" id="necAgrZona" role="tab" title="En el orden del recorrido del depósito">Zona</button>
+          <button type="button" id="necAgrZona" role="tab" title="Por grupo y columna, en el orden del recorrido del depósito">Ubicación</button>
           <button type="button" id="necAgrCat" role="tab" title="Por categoría de la planilla">Categoría</button>
         </div>
         <button type="button" class="nec-btn-pedidos" id="necBtnPedidos" title="Elegir qué pedidos entran en el cálculo"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg><span id="necBtnPedidosTxt">Pedidos</span></button>
@@ -15337,9 +15337,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
 
       // ---------- Zonas del deposito (Locator) ----------
-      // El relevamiento semanal de fotos guarda en ubicaciones/mapa la zona de
-      // cada articulo: cada foto del recorrido es una zona (1, 2, 3...) con
-      // columna izquierda y derecha. ubicaciones-api.js escucha ese nodo y
+      // El relevamiento semanal de fotos guarda en ubicaciones/mapa el lugar de
+      // cada articulo: grupo del deposito (FL, FR, BL, BR, OT) y columna dentro
+      // del grupo (1, 2, 3...). ubicaciones-api.js escucha ese nodo y
       // responde desde memoria (UBICACIONES). Si el script no esta o todavia
       // no hay relevamiento guardado, la lista sigue agrupando por categoria.
       const hayLocator = typeof escucharUbicaciones === 'function';
@@ -15362,21 +15362,21 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         return u ? { ...u, incierta: esUbicacionIncierta(u), texto: textoUbicacion(u) } : null;
       }
 
-      // "Z12 izq": corto para que entre en la linea del codigo.
+      // "FL C3": corto para que entre en la linea del codigo.
       function zonaHtml(a) {
         const u = a.ubicacion;
-        if (!u || u.zona == null) return '';
+        if (!tieneUbicacion(u)) return '';
         if (porZona() && !u.incierta) return '';   // ya lo dice el titulo del grupo
-        const corto = 'Z' + u.zona + (u.columna ? ' ' + (u.columna === 'D' ? 'der' : 'izq') : '');
+        const corto = textoCortoUbicacion(u);
         return '<span class="nec-zona' + (u.incierta ? ' is-incierta' : '') + '" title="' +
           escapeHtml(u.texto + (u.incierta ? ' (sin confirmar en el último relevamiento)' : '')) + '">' +
           escapeHtml(u.incierta ? '¿' + corto + '?' : corto) + '</span>';
       }
 
-      // Cada articulo sale con a.grupo (el titulo de su seccion), a.sector
-      // (nombre del grupo de zonas, si hay sectores cargados) y a.ubicacion.
-      // Por zona: en el orden del recorrido (zona 1 izq, zona 1 der, zona 2
-      // izq...) y lo incierto al final, con la ultima zona donde se vio.
+      // Cada articulo sale con a.grupo (el titulo de su seccion: "Columna 3"),
+      // a.sector (grupo del deposito: "FL · Adelante izquierda") y a.ubicacion.
+      // Por zona: primero el grupo (FL, FR, BL, BR, OT), despues la columna,
+      // y lo incierto al final, con el ultimo lugar donde se vio.
       function listaOrdenada() {
         const arr = Object.values(articulos);
         arr.forEach(a => {
@@ -16308,8 +16308,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const conZona = hayLocator && UBICACIONES.size > 0;
         const zonaCelda = (a) => {
           const u = a.ubicacion;
-          if (!u || u.zona == null) return '—';
-          const t = u.zona + (u.columna ? ' ' + (u.columna === 'D' ? 'der' : 'izq') : '');
+          if (!tieneUbicacion(u)) return '—';
+          const t = textoCortoUbicacion(u);
           return u.incierta ? '¿' + t + '?' : t;
         };
         let filas = '';
@@ -16357,7 +16357,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
           '</style></head><body>' +
           '<div class="h"><h1>Artículos necesarios</h1><div class="m">' + fecha + '<br>' + pedidosEnCalculo + ' pedidos &middot; ' + arr.length + ' artículos</div></div>' +
-          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th>' + (conZona ? '<th class="c z">Zona</th>' : '') + '<th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
+          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th>' + (conZona ? '<th class="c z">Ubic.</th>' : '') + '<th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
           '<tbody>' + filas + '</tbody></table>' +
           '<script>window.onload=function(){window.print()}<\/script></body></html>';
 

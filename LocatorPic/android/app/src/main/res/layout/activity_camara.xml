@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Camara en horizontal: visor 4:3 a pantalla completa, guia central del
-     corte entre columnas, nivel, foto guia de la vez anterior y controles.
-     En "tomas cercanas": franja de la toma anterior para encastrar la
-     siguiente, y botones de siguiente estante / terminar zona. -->
+<!-- Camara en vertical: visor 3:4, nivel, foto guia de la vez anterior.
+     Arriba: grupo del deposito (FL, FR, BL, BR, OT) y columna/estante que
+     se va a sacar. Abajo: hacia donde va la proxima foto (columna nueva a
+     la derecha, o un estante mas abajo) y el disparador. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -25,8 +25,8 @@
         android:scaleType="fitCenter"
         android:visibility="gone" />
 
-    <!-- Tomas cercanas: franja de la toma anterior (a la izquierda) o del
-         estante de arriba (arriba), para pisarla un 30% y que encastren. -->
+    <!-- Al bajar un estante: la franja de abajo de la foto de arriba, para
+         seguir desde ahi (se puede pisar un poco). -->
     <ImageView
         android:id="@+id/solape"
         android:layout_width="match_parent"
@@ -35,14 +35,6 @@
         android:contentDescription="@null"
         android:scaleType="fitCenter"
         android:visibility="gone" />
-
-    <!-- Donde se corta la foto en columna izquierda y derecha. -->
-    <View
-        android:id="@+id/lineaCorte"
-        android:layout_width="2dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="center_horizontal"
-        android:background="@color/cam_guia" />
 
     <ar.com.homepoint.locatorpic.NivelView
         android:id="@+id/nivel"
@@ -63,296 +55,278 @@
         android:alpha="0"
         android:background="#FFFFFF" />
 
-    <!-- Zona actual -->
+    <!-- Arriba: grupo, columna y estado -->
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:id="@+id/arriba"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_margin="16dp"
-        android:background="@drawable/fondo_panel_cam"
+        android:layout_gravity="top"
         android:orientation="vertical"
-        android:paddingHorizontal="18dp"
-        android:paddingVertical="12dp">
+        android:paddingHorizontal="12dp"
+        android:paddingTop="34dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:letterSpacing="0.12"
-            android:text="ZONA"
-            android:textColor="@color/cam_texto_2"
-            android:textFontWeight="800"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/zona"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/mono_bold"
-            android:includeFontPadding="false"
-            android:textColor="@color/cam_texto"
-            android:textSize="46sp" />
-
-        <TextView
-            android:id="@+id/subZona"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/cam_texto_2"
-            android:textSize="12sp" />
-
-        <!-- Modo de la zona -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/atras"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/fondo_boton_redondo_cam"
+                android:contentDescription="Volver"
+                android:src="@drawable/ic_atras" />
+
+            <!-- FL FR BL BR OT (se arman en el codigo) -->
+            <LinearLayout
+                android:id="@+id/grupos"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:background="@drawable/fondo_chip_cam"
+                android:orientation="horizontal"
+                android:padding="3dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
+            android:gravity="top"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/fondo_panel_cam"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.12"
+                    android:text="COLUMNA"
+                    android:textColor="@color/cam_texto_2"
+                    android:textFontWeight="800"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/columna"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/mono_bold"
+                    android:includeFontPadding="false"
+                    android:textColor="@color/cam_texto"
+                    android:textSize="40sp" />
+
+                <TextView
+                    android:id="@+id/subColumna"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:maxWidth="210dp"
+                    android:textColor="@color/cam_texto_2"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/chipSubidas"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:background="@drawable/fondo_chip_cam"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp">
+
+                    <ImageView
+                        android:id="@+id/icSubidas"
+                        android:layout_width="15dp"
+                        android:layout_height="15dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_nube" />
+
+                    <TextView
+                        android:id="@+id/txtSubidas"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="7dp"
+                        android:textColor="@color/cam_texto"
+                        android:textFontWeight="700"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/hdr"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="@drawable/fondo_boton_redondo_cam"
+                        android:contentDescription="HDR"
+                        android:src="@drawable/ic_hdr"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/linterna"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/fondo_boton_redondo_cam"
+                        android:contentDescription="Linterna"
+                        android:src="@drawable/ic_rayo_off" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Abajo: aviso, deshacer, direccion de la proxima foto y disparador -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingBottom="22dp">
+
+        <TextView
+            android:id="@+id/aviso"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/fondo_chip_cam"
+            android:gravity="center"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:textColor="@color/cam_texto"
+            android:textSize="12sp" />
+
+        <!-- "Foto guardada · Deshacer" (unos segundos) -->
+        <TextView
+            android:id="@+id/deshacer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/fondo_chip_cam"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="9dp"
+            android:textColor="@color/cam_texto"
+            android:textFontWeight="700"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- Hacia donde va la proxima foto -->
+        <LinearLayout
+            android:id="@+id/direccion"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
             android:background="@drawable/fondo_chip_cam"
             android:orientation="horizontal"
             android:padding="3dp">
 
             <TextView
-                android:id="@+id/modoUnica"
-                android:layout_width="wrap_content"
-                android:layout_height="30dp"
+                android:id="@+id/dirDerecha"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
                 android:background="@drawable/fondo_chip_cam"
                 android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:text="Foto única"
+                android:text="→  Columna nueva"
                 android:textColor="@color/cam_texto"
-                android:textFontWeight="700"
-                android:textSize="12sp" />
+                android:textFontWeight="800"
+                android:textSize="14sp" />
 
             <TextView
-                android:id="@+id/modoTomas"
-                android:layout_width="wrap_content"
-                android:layout_height="30dp"
+                android:id="@+id/dirAbajo"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
                 android:background="@drawable/fondo_chip_cam"
                 android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:text="Tomas cercanas"
+                android:text="↓  Estante de abajo"
                 android:textColor="@color/cam_texto"
-                android:textFontWeight="700"
-                android:textSize="12sp" />
+                android:textFontWeight="800"
+                android:textSize="14sp" />
         </LinearLayout>
 
-        <!-- Sector (grupo de zonas con nombre) -->
-        <TextView
-            android:id="@+id/sector"
-            android:layout_width="wrap_content"
-            android:layout_height="30dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/fondo_chip_cam"
-            android:drawablePadding="6dp"
-            android:ellipsize="end"
-            android:gravity="center_vertical"
-            android:maxWidth="230dp"
-            android:maxLines="1"
-            android:paddingHorizontal="12dp"
-            android:textColor="@color/cam_texto"
-            android:textFontWeight="700"
-            android:textSize="12sp"
-            app:drawableStartCompat="@drawable/ic_bandera"
-            app:drawableTint="@color/cam_texto" />
-    </LinearLayout>
-
-    <!-- Subidas -->
-    <LinearLayout
-        android:id="@+id/chipSubidas"
-        android:layout_width="wrap_content"
-        android:layout_height="34dp"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="16dp"
-        android:background="@drawable/fondo_chip_cam"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="14dp">
-
-        <ImageView
-            android:id="@+id/icSubidas"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_nube" />
-
-        <TextView
-            android:id="@+id/txtSubidas"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textColor="@color/cam_texto"
-            android:textFontWeight="700"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- Foto guia de la vez anterior (tocar = superponer) -->
-    <FrameLayout
-        android:id="@+id/guia"
-        android:layout_width="168dp"
-        android:layout_height="126dp"
-        android:layout_gravity="bottom|start"
-        android:layout_margin="16dp"
-        android:background="@drawable/fondo_panel_cam"
-        android:clipToOutline="true"
-        android:foreground="?attr/selectableItemBackground">
-
-        <ImageView
-            android:id="@+id/guiaImg"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:contentDescription="Foto guía de la vez anterior"
-            android:scaleType="centerCrop" />
-
-        <View
-            android:id="@+id/guiaBorde"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/guia_borde"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|start"
-            android:layout_margin="6dp"
-            android:background="@drawable/fondo_numero_zona"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="3dp">
+            android:layout_marginTop="16dp">
 
-            <ImageView
-                android:layout_width="12dp"
-                android:layout_height="12dp"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_capas" />
+            <!-- Foto guia de la vez anterior (tocar = superponer) -->
+            <FrameLayout
+                android:id="@+id/guia"
+                android:layout_width="78dp"
+                android:layout_height="104dp"
+                android:layout_gravity="start|center_vertical"
+                android:background="@drawable/fondo_panel_cam"
+                android:clipToOutline="true"
+                android:foreground="?attr/selectableItemBackground">
 
-            <TextView
-                android:id="@+id/guiaTxt"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="5dp"
-                android:textColor="@color/cam_texto"
-                android:textFontWeight="700"
-                android:textSize="11sp" />
-        </LinearLayout>
-    </FrameLayout>
+                <ImageView
+                    android:id="@+id/guiaImg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="Foto guía de la vez anterior"
+                    android:scaleType="centerCrop" />
 
-    <!-- Controles -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:layout_gravity="end"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:paddingHorizontal="18dp">
+                <View
+                    android:id="@+id/guiaBorde"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/guia_borde"
+                    android:visibility="gone" />
 
-        <ImageButton
-            android:id="@+id/atras"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/fondo_boton_redondo_cam"
-            android:contentDescription="Volver"
-            android:src="@drawable/ic_atras" />
+                <TextView
+                    android:id="@+id/guiaTxt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom"
+                    android:background="#99000000"
+                    android:gravity="center"
+                    android:paddingVertical="3dp"
+                    android:textColor="@color/cam_texto"
+                    android:textFontWeight="700"
+                    android:textSize="10sp" />
+            </FrameLayout>
 
-        <ImageButton
-            android:id="@+id/linterna"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/fondo_boton_redondo_cam"
-            android:contentDescription="Linterna"
-            android:src="@drawable/ic_rayo_off" />
+            <ImageButton
+                android:id="@+id/disparar"
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:layout_gravity="center"
+                android:background="@drawable/disparador"
+                android:contentDescription="Sacar foto" />
 
-        <ImageButton
-            android:id="@+id/disparar"
-            android:layout_width="84dp"
-            android:layout_height="84dp"
-            android:layout_marginVertical="18dp"
-            android:background="@drawable/disparador"
-            android:contentDescription="Sacar foto" />
-
-        <ImageButton
-            android:id="@+id/hdr"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/fondo_boton_redondo_cam"
-            android:contentDescription="HDR"
-            android:src="@drawable/ic_hdr"
-            android:visibility="gone" />
-
-        <ImageButton
-            android:id="@+id/zonas"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/fondo_boton_redondo_cam"
-            android:contentDescription="Ver zonas"
-            android:src="@drawable/ic_grilla" />
+            <ImageButton
+                android:id="@+id/verGrilla"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="end|center_vertical"
+                android:background="@drawable/fondo_boton_redondo_cam"
+                android:contentDescription="Ver la cuadrícula"
+                android:src="@drawable/ic_grilla" />
+        </FrameLayout>
     </LinearLayout>
-
-    <!-- Tomas cercanas: siguiente estante / terminar zona -->
-    <LinearLayout
-        android:id="@+id/barraTomas"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="18dp"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/sigEstante"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:background="@drawable/fondo_panel_cam"
-            android:foreground="?attr/selectableItemBackground"
-            android:gravity="center"
-            android:paddingHorizontal="20dp"
-            android:text="↓  Siguiente estante"
-            android:textColor="@color/cam_texto"
-            android:textFontWeight="800"
-            android:textSize="14sp" />
-
-        <TextView
-            android:id="@+id/terminarZona"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="10dp"
-            android:background="@drawable/fondo_panel_cam"
-            android:backgroundTint="@color/exito"
-            android:foreground="?attr/selectableItemBackground"
-            android:gravity="center"
-            android:paddingHorizontal="20dp"
-            android:text="✓  Terminar zona"
-            android:textColor="@color/cam_texto"
-            android:textFontWeight="800"
-            android:textSize="14sp" />
-    </LinearLayout>
-
-    <!-- "Toma guardada · Deshacer" (3 segundos) -->
-    <TextView
-        android:id="@+id/deshacer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="80dp"
-        android:background="@drawable/fondo_chip_cam"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="9dp"
-        android:textColor="@color/cam_texto"
-        android:textFontWeight="700"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/aviso"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="20dp"
-        android:background="@drawable/fondo_chip_cam"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="8dp"
-        android:text="Encuadrá las dos columnas: la línea marca el corte"
-        android:textColor="@color/cam_texto"
-        android:textSize="12sp" />
 </FrameLayout>

@@ -1807,5 +1807,80 @@
             cargarDatos();
         }
     </script>
+    <script>
+        // ------------------------------------- Dólar blue al verificar (agregado) --
+        // Al tildar un pedido se guarda aparte, en 'cotizacionesVerificadas/<pedidoId>',
+        // el dólar blue (venta) de ese momento: { blue, fecha }. CuentasCaseros.html lo usa
+        // para pasar cada transferencia a dólares con el valor del momento en que se
+        // verificó. No cambia 'transferenciasVerificadas', que sigue guardando solo la fecha.
+        // Si no se consigue la cotización no se guarda nada y CuentasCaseros usa el blue
+        // de ese día.
+        const NODO_COTIZACIONES = 'cotizacionesVerificadas';
+        const BLUELYTICS_URL = 'https://api.bluelytics.com.ar/v2/latest';
+        const COTIZACION_VIGENCIA_MS = 10 * 60 * 1000;
+        let blueActual = null; // { valor, leido }
+        const puntosCotizacionesLimpios = new Set();
+
+        // Blue de venta actual (se reutiliza hasta 10 minutos para no consultar en cada tilde)
+        async function obtenerBlue() {
+            if (blueActual && Date.now() - blueActual.leido < COTIZACION_VIGENCIA_MS) return blueActual.valor;
+            try {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 8000);
+                const res = await fetch(BLUELYTICS_URL, { cache: 'no-store', signal: ctrl.signal });
+                clearTimeout(t);
+                const d = await res.json();
+                const valor = Number(d && d.blue && d.blue.value_sell);
+                if (!(valor > 0)) throw new Error('respuesta inválida');
+                blueActual = { valor, leido: Date.now() };
+                return valor;
+            } catch (error) {
+                console.warn('No se pudo obtener el dólar blue:', error);
+                return null;
+            }
+        }
+
+        // Misma retención que los verificados: más de 60 días se borra, salvo en Caseros.
+        // Se hace una vez por punto de venta, la primera vez que se tilda algo.
+        function limpiarCotizacionesVencidas(base, punto) {
+            if (puntosCotizacionesLimpios.has(punto) || PUNTOS_SIN_LIMPIEZA.includes(punto)) return;
+            puntosCotizacionesLimpios.add(punto);
+            const ref = base.ref(NODO_COTIZACIONES);
+            ref.once('value').then(snap => {
+                const limite = Date.now() - DIAS_RETENCION_VERIFICADOS * 24 * 60 * 60 * 1000;
+                const vencidos = {};
+                snap.forEach(child => {
+                    const fecha = child.val() && child.val().fecha;
+                    if (typeof fecha !== 'number' || fecha < limite) vencidos[child.key] = null;
+                });
+                if (Object.keys(vencidos).length) return ref.update(vencidos);
+            }).catch(error => console.error('Error al limpiar cotizaciones vencidas:', error));
+        }
+
+        // Escucha los mismos checkboxes de la tabla, sin reemplazar su listener
+        document.addEventListener('change', async function(e) {
+            const checkbox = e.target.closest && e.target.closest('.custom-checkbox[data-pedido-id]');
+            if (!checkbox) return;
+            const pedidoId = checkbox.getAttribute('data-pedido-id');
+            const marcado = checkbox.checked;
+            // La base y el punto de venta de este momento (por si se cambia mientras espera)
+            const base = database;
+            const punto = puntoConsultado;
+            const ref = base.ref(`${NODO_COTIZACIONES}/${pedidoId}`);
+            try {
+                if (!marcado) {
+                    await ref.remove();
+                    return;
+                }
+                const blue = await obtenerBlue();
+                // Si se destildó mientras se consultaba, no se guarda
+                if (!blue || !checkbox.checked) return;
+                await ref.set({ blue, fecha: firebase.database.ServerValue.TIMESTAMP });
+                limpiarCotizacionesVencidas(base, punto);
+            } catch (error) {
+                console.error('Error al guardar la cotización del verificado:', error);
+            }
+        });
+    </script>
 </body>
 </html>

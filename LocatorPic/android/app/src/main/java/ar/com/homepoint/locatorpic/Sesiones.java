@@ -41,18 +41,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Recorridos ("sesiones") y sus fotos.
  *
  * Cada sesion vive en el equipo (carpeta propia con sesion.json y las fotos)
- * y se refleja en Firebase en locatorpic/sesiones/{id}. El ORDEN de la lista
- * "zonas" es la ubicacion: la primera foto es la zona 1, la segunda la zona 2...
- * Cada foto tiene un id propio, asi que rehacer, insertar o borrar una zona
- * solo reordena la lista, sin renombrar archivos.
+ * y se refleja en Firebase en locatorpic/sesiones/{id}.
  *
- * Una zona puede ser de FOTO UNICA (su id es el de la foto) o de TOMAS
- * CERCANAS (su id esta en "barridos"): varias fotos por estante, de izquierda
- * a derecha, y los estantes de arriba hacia abajo. La PC las une como un
- * rompecabezas.
+ * El deposito se divide en GRUPOS fijos (FL, FR, BL, BR, OT). Cada grupo es
+ * una cuadricula: cada COLUMNA es una lista de fotos de arriba hacia abajo
+ * (los estantes). Una foto puesta a la derecha de otra es una columna nueva;
+ * una puesta debajo es otro estante de la misma columna. El numero de
+ * columna es su lugar en la lista (1, 2, 3...), asi que insertar o borrar
+ * una columna solo reordena la lista, sin renombrar archivos.
  *
- * "sectores" marca la zona donde EMPIEZA cada grupo con nombre ("Adelante
- * izquierda"); el sector sigue hasta la zona donde empieza el siguiente.
+ *   grupos/{FL} = [ [fotoId, fotoId], [fotoId], ... ]   (columna 1, columna 2...)
  *
  * Estados: en_curso -> lista (finalizada en el equipo) -> descargada (la bajo
  * la PC) -> procesada (la PC guardo las ubicaciones) -> archivada.
@@ -62,6 +60,19 @@ public final class Sesiones {
     public static final String RAIZ = "locatorpic";
     public static final int LADO_MINIATURA = 480;
 
+    /** Grupos del deposito, en el orden en que se recorren. */
+    public static final String[] GRUPOS = {"FL", "FR", "BL", "BR", "OT"};
+
+    public static String nombreGrupo(String g) {
+        switch (g) {
+            case "FL": return "Adelante izquierda";
+            case "FR": return "Adelante derecha";
+            case "BL": return "Atrás izquierda";
+            case "BR": return "Atrás derecha";
+            default: return "Otros";
+        }
+    }
+
     public static final class Foto {
         public String id;
         public long tomada;
@@ -69,103 +80,71 @@ public final class Sesiones {
         public long bytes;
         public boolean subida;
         public String error;
-        // Solo en las tomas cercanas:
-        public String zona;             // id de la zona (barrido) a la que pertenece
-        public int estante, indice;     // 0 = primer estante / primera toma
-        public float[] orientacion;     // {azimut, inclinacion, giro} en grados, o null
-    }
-
-    /** Zona de tomas cercanas: una lista de tomas (ids de foto) por estante. */
-    public static final class Barrido {
-        public final List<List<String>> estantes = new ArrayList<>();
-
-        public int tomas() {
-            int n = 0;
-            for (List<String> e : estantes) n += e.size();
-            return n;
-        }
-
-        public String primera() {
-            for (List<String> e : estantes) if (!e.isEmpty()) return e.get(0);
-            return null;
-        }
-
-        public List<String> todas() {
-            List<String> l = new ArrayList<>();
-            for (List<String> e : estantes) l.addAll(e);
-            return l;
-        }
+        public String grupo;
     }
 
     public static final class Sesion {
         public String id;
         public long creada;
         public String estado = "en_curso";
-        public final List<String> zonas = new ArrayList<>();
         public final Map<String, Foto> fotos = new HashMap<>();
-        public final Map<String, Barrido> barridos = new HashMap<>();
-        public final Map<String, String> sectores = new HashMap<>();
+        // grupo -> columnas -> ids de foto (de arriba hacia abajo)
+        public final Map<String, List<List<String>>> grupos = new HashMap<>();
 
-        /** Ids de las fotos de una zona: la foto unica o todas sus tomas. */
-        public List<String> fotosDe(String zonaId) {
-            Barrido b = barridos.get(zonaId);
-            if (b != null) return b.todas();
+        /** Columnas del grupo (lista vacia si todavia no tiene). No modificar. */
+        public List<List<String>> columnas(String grupo) {
+            List<List<String>> c = grupos.get(grupo);
+            return c != null ? c : new ArrayList<>();
+        }
+
+        public int totalColumnas() {
+            int n = 0;
+            for (List<List<String>> c : grupos.values()) n += c.size();
+            return n;
+        }
+
+        /** Todas las fotos, en el orden del recorrido. */
+        public List<String> todasLasFotos() {
             List<String> l = new ArrayList<>();
-            l.add(zonaId);
+            for (String g : GRUPOS) for (List<String> col : columnas(g)) l.addAll(col);
             return l;
+        }
+
+        /** Id de la foto en ese lugar (columna y estante desde 0), o null. */
+        public String fotoEn(String grupo, int columna, int estante) {
+            List<List<String>> c = columnas(grupo);
+            if (columna < 0 || columna >= c.size()) return null;
+            List<String> col = c.get(columna);
+            return estante >= 0 && estante < col.size() ? col.get(estante) : null;
+        }
+
+        /** {columna, estante} (desde 0) de la foto dentro de su grupo, o null. */
+        public int[] lugarDe(String fotoId) {
+            for (List<List<String>> c : grupos.values()) {
+                for (int i = 0; i < c.size(); i++) {
+                    int e = c.get(i).indexOf(fotoId);
+                    if (e >= 0) return new int[]{i, e};
+                }
+            }
+            return null;
         }
 
         public int pendientes() {
             int n = 0;
-            for (String z : zonas) {
-                for (String id : fotosDe(z)) {
-                    Foto f = fotos.get(id);
-                    if (f != null && !f.subida) n++;
-                }
+            for (String id : todasLasFotos()) {
+                Foto f = fotos.get(id);
+                if (f != null && !f.subida) n++;
             }
             return n;
         }
 
         public int conError() {
             int n = 0;
-            for (String z : zonas) {
-                for (String id : fotosDe(z)) {
-                    Foto f = fotos.get(id);
-                    if (f != null && !f.subida && f.error != null) n++;
-                }
+            for (String id : todasLasFotos()) {
+                Foto f = fotos.get(id);
+                if (f != null && !f.subida && f.error != null) n++;
             }
             return n;
-        }
-
-        /** Foto que representa la zona: la unica, o la primera toma. */
-        public Foto fotoDeZona(int posicion) {
-            if (posicion < 0 || posicion >= zonas.size()) return null;
-            String z = zonas.get(posicion);
-            Barrido b = barridos.get(z);
-            return fotos.get(b != null ? b.primera() : z);
-        }
-
-        public Barrido barridoDeZona(int posicion) {
-            return (posicion >= 0 && posicion < zonas.size()) ? barridos.get(zonas.get(posicion)) : null;
-        }
-
-        /** Nombre del sector al que pertenece la zona (el ultimo que empezo antes), o null. */
-        public String sectorDe(int posicion) {
-            for (int i = Math.min(posicion, zonas.size() - 1); i >= 0; i--) {
-                String n = sectores.get(zonas.get(i));
-                if (n != null) return n;
-            }
-            return null;
-        }
-
-        /** Nombres de sector usados en este recorrido, en orden. */
-        public List<String> nombresSectores() {
-            List<String> l = new ArrayList<>();
-            for (String z : zonas) {
-                String n = sectores.get(z);
-                if (n != null && !l.contains(n)) l.add(n);
-            }
-            return l;
         }
     }
 
@@ -234,11 +213,9 @@ public final class Sesiones {
     public synchronized List<Pendiente> pendientes() {
         List<Pendiente> lista = new ArrayList<>();
         for (Sesion s : sesiones.values()) {
-            for (String z : s.zonas) {
-                for (String id : s.fotosDe(z)) {
-                    Foto f = s.fotos.get(id);
-                    if (f != null && !f.subida) lista.add(new Pendiente(s.id, id, archivoFoto(s, id), archivoMiniatura(s, id)));
-                }
+            for (String id : s.todasLasFotos()) {
+                Foto f = s.fotos.get(id);
+                if (f != null && !f.subida) lista.add(new Pendiente(s.id, id, archivoFoto(s, id), archivoMiniatura(s, id)));
             }
         }
         return lista;
@@ -288,54 +265,41 @@ public final class Sesiones {
     }
 
     /**
-     * Agrega una foto confirmada.
-     * posicion: lugar en la lista (0 = zona 1). Si es igual a la cantidad de
-     * zonas, va al final. reemplazar=true cambia la foto de esa zona (rehacer).
+     * Agrega una foto confirmada al grupo.
+     *   nuevaColumna=true: crea una columna nueva en la posicion "columna"
+     *                      (si es igual a la cantidad, va al final).
+     *   reemplazar=true:   cambia la foto de ese lugar (rehacer).
+     *   si no:             la agrega en la columna, en la posicion "estante"
+     *                      (si es igual a la cantidad, va abajo de todo).
      */
-    public synchronized Foto agregar(Sesion s, File tomada, int posicion, boolean reemplazar) throws IOException {
+    public synchronized Foto agregar(Sesion s, String grupo, int columna, int estante,
+                                     boolean nuevaColumna, boolean reemplazar, File tomada) throws IOException {
         Foto f = nuevaFoto(s, tomada);
+        f.grupo = grupo;
         Map<String, Object> datos = new HashMap<>();
-        ubicarZona(s, f.id, posicion, reemplazar, datos);
-        s.fotos.put(f.id, f);
-        guardar(s);
-
-        datos.put("zonas", new ArrayList<>(s.zonas));
-        datos.put("fotos/" + f.id, metaFoto(s, f));
-        ref(s).updateChildren(datos);
-
-        avisar();
-        SubidaWorker.encolar(ctx);
-        return f;
-    }
-
-    /**
-     * Agrega una TOMA CERCANA a una zona de tomas. La primera toma crea la zona
-     * (en "posicion", igual que agregar). estante: 0 = el de mas arriba; si es
-     * uno mas que los que hay, empieza un estante nuevo.
-     * Devuelve la foto guardada.
-     */
-    public synchronized Foto agregarToma(Sesion s, String zonaId, int posicion, boolean reemplazar,
-                                         int estante, File tomada, float[] orientacion) throws IOException {
-        Foto f = nuevaFoto(s, tomada);
-        Map<String, Object> datos = new HashMap<>();
-        Barrido b = s.barridos.get(zonaId);
-        if (b == null) {
-            b = new Barrido();
-            s.barridos.put(zonaId, b);
-            ubicarZona(s, zonaId, posicion, reemplazar, datos);
+        List<List<String>> cols = s.grupos.get(grupo);
+        if (cols == null) {
+            cols = new ArrayList<>();
+            s.grupos.put(grupo, cols);
         }
-        while (b.estantes.size() <= estante) b.estantes.add(new ArrayList<>());
-        List<String> fila = b.estantes.get(estante);
-        f.zona = zonaId;
-        f.estante = estante;
-        f.indice = fila.size();
-        f.orientacion = orientacion;
-        fila.add(f.id);
+        if (nuevaColumna || columna >= cols.size()) {
+            List<String> col = new ArrayList<>();
+            col.add(f.id);
+            cols.add(Math.min(Math.max(columna, 0), cols.size()), col);
+        } else {
+            List<String> col = cols.get(Math.max(columna, 0));
+            if (reemplazar && estante >= 0 && estante < col.size()) {
+                String vieja = col.set(estante, f.id);
+                borrarFotoLocal(s, vieja);
+                datos.put("fotos/" + vieja, null);
+            } else {
+                col.add(Math.min(Math.max(estante, 0), col.size()), f.id);
+            }
+        }
         s.fotos.put(f.id, f);
         guardar(s);
 
-        datos.put("zonas", new ArrayList<>(s.zonas));
-        datos.put("barridos/" + zonaId + "/estantes", copiaEstantes(b));
+        datos.put("grupos/" + grupo, copia(cols));
         datos.put("fotos/" + f.id, metaFoto(s, f));
         ref(s).updateChildren(datos);
 
@@ -344,96 +308,39 @@ public final class Sesiones {
         return f;
     }
 
-    /** Deshace una toma. Si la zona queda sin tomas, se saca del recorrido. */
-    public synchronized void quitarToma(Sesion s, String zonaId, String fotoId) {
-        Barrido b = s.barridos.get(zonaId);
-        if (b == null) return;
-        for (List<String> fila : b.estantes) fila.remove(fotoId);
-        while (!b.estantes.isEmpty() && b.estantes.get(b.estantes.size() - 1).isEmpty()) {
-            b.estantes.remove(b.estantes.size() - 1);
+    /** Saca una foto. Si su columna queda vacia, la columna desaparece (las siguientes se renumeran). */
+    public synchronized void quitarFoto(Sesion s, String fotoId) {
+        Foto f = s.fotos.get(fotoId);
+        if (f == null || f.grupo == null) return;
+        List<List<String>> cols = s.columnas(f.grupo);
+        for (int i = 0; i < cols.size(); i++) {
+            if (cols.get(i).remove(fotoId)) {
+                if (cols.get(i).isEmpty()) cols.remove(i);
+                break;
+            }
         }
         borrarFotoLocal(s, fotoId);
+        guardar(s);
         Map<String, Object> datos = new HashMap<>();
         datos.put("fotos/" + fotoId, null);
-        if (b.tomas() == 0) {
-            int pos = s.zonas.indexOf(zonaId);
-            if (pos >= 0) {
-                s.zonas.remove(pos);
-                moverSector(s, zonaId, pos, datos);
-            }
-            s.barridos.remove(zonaId);
-            datos.put("barridos/" + zonaId, null);
-            datos.put("zonas", new ArrayList<>(s.zonas));
-        } else {
-            datos.put("barridos/" + zonaId + "/estantes", copiaEstantes(b));
-        }
-        guardar(s);
+        datos.put("grupos/" + f.grupo, cols.isEmpty() ? null : copia(cols));
         ref(s).updateChildren(datos);
         avisar();
     }
 
-    /** Id para una zona de tomas cercanas nueva (se crea con su primera toma). */
-    public String nuevoIdZona() {
-        return "b" + Long.toString(System.currentTimeMillis(), 36) + aleatorio(4);
-    }
-
-    /**
-     * Marca que en esta zona empieza un sector con nombre (o lo quita si el
-     * nombre es null o vacio).
-     */
-    public synchronized void ponerSector(Sesion s, String zonaId, String nombre) {
-        if (zonaId == null || !s.zonas.contains(zonaId)) return;
-        String limpio = nombre != null ? nombre.trim() : "";
-        if (limpio.isEmpty()) s.sectores.remove(zonaId);
-        else s.sectores.put(zonaId, limpio);
-        guardar(s);
-        ref(s).child("sectores").child(zonaId).setValue(limpio.isEmpty() ? null : limpio);
-        avisar();
-    }
-
-    /** Saca una zona del recorrido; las siguientes se renumeran solas. */
-    public synchronized void eliminar(Sesion s, int posicion) {
-        if (posicion < 0 || posicion >= s.zonas.size()) return;
-        String id = s.zonas.remove(posicion);
+    /** Saca una columna entera con sus fotos; las siguientes se renumeran. */
+    public synchronized void eliminarColumna(Sesion s, String grupo, int columna) {
+        List<List<String>> cols = s.columnas(grupo);
+        if (columna < 0 || columna >= cols.size()) return;
         Map<String, Object> datos = new HashMap<>();
-        borrarZonaLocal(s, id, datos);
-        moverSector(s, id, posicion, datos);
+        for (String id : cols.remove(columna)) {
+            borrarFotoLocal(s, id);
+            datos.put("fotos/" + id, null);
+        }
         guardar(s);
-        datos.put("zonas", new ArrayList<>(s.zonas));
+        datos.put("grupos/" + grupo, cols.isEmpty() ? null : copia(cols));
         ref(s).updateChildren(datos);
         avisar();
-    }
-
-    // Pone la zona nueva en su lugar (al final, antes de otra, o en lugar de
-    // otra si se esta rehaciendo). La reemplazada se borra y le pasa su sector.
-    private void ubicarZona(Sesion s, String zonaId, int posicion, boolean reemplazar, Map<String, Object> datos) {
-        if (reemplazar && posicion >= 0 && posicion < s.zonas.size()) {
-            String vieja = s.zonas.set(posicion, zonaId);
-            borrarZonaLocal(s, vieja, datos);
-            String sector = s.sectores.remove(vieja);
-            if (sector != null) {
-                s.sectores.put(zonaId, sector);
-                datos.put("sectores/" + vieja, null);
-                datos.put("sectores/" + zonaId, sector);
-            }
-        } else {
-            s.zonas.add(Math.min(Math.max(posicion, 0), s.zonas.size()), zonaId);
-        }
-    }
-
-    // Si se saca la zona donde empezaba un sector, el sector pasa a empezar
-    // en la zona siguiente (si esa no empieza otro).
-    private void moverSector(Sesion s, String zonaId, int posicion, Map<String, Object> datos) {
-        String sector = s.sectores.remove(zonaId);
-        if (sector == null) return;
-        datos.put("sectores/" + zonaId, null);
-        if (posicion < s.zonas.size()) {
-            String siguiente = s.zonas.get(posicion);
-            if (!s.sectores.containsKey(siguiente)) {
-                s.sectores.put(siguiente, sector);
-                datos.put("sectores/" + siguiente, sector);
-            }
-        }
     }
 
     private Foto nuevaFoto(Sesion s, File tomada) throws IOException {
@@ -458,35 +365,21 @@ public final class Sesiones {
         meta.put("bytes", f.bytes);
         meta.put("ruta", rutaStorage(s.id, f.id));
         meta.put("min", rutaStorageMiniatura(s.id, f.id));
-        if (f.zona != null) {
-            meta.put("zona", f.zona);
-            meta.put("estante", f.estante);
-            meta.put("indice", f.indice);
-            if (f.orientacion != null) {
-                Map<String, Object> o = new HashMap<>();
-                o.put("azimut", (double) f.orientacion[0]);
-                o.put("inclinacion", (double) f.orientacion[1]);
-                o.put("giro", (double) f.orientacion[2]);
-                meta.put("orientacion", o);
-            }
-        }
+        meta.put("grupo", f.grupo);
         return meta;
     }
 
-    private static List<List<String>> copiaEstantes(Barrido b) {
+    private static List<List<String>> copia(List<List<String>> cols) {
         List<List<String>> l = new ArrayList<>();
-        for (List<String> fila : b.estantes) l.add(new ArrayList<>(fila));
+        for (List<String> c : cols) l.add(new ArrayList<>(c));
         return l;
     }
 
-    private static Map<String, Object> copiaBarridos(Sesion s) {
+    private static Map<String, Object> copiaGrupos(Sesion s) {
         Map<String, Object> m = new HashMap<>();
-        for (String z : s.zonas) {
-            Barrido b = s.barridos.get(z);
-            if (b == null) continue;
-            Map<String, Object> e = new HashMap<>();
-            e.put("estantes", copiaEstantes(b));
-            m.put(z, e);
+        for (String g : GRUPOS) {
+            List<List<String>> c = s.columnas(g);
+            if (!c.isEmpty()) m.put(g, copia(c));
         }
         return m;
     }
@@ -518,22 +411,16 @@ public final class Sesiones {
     public synchronized void finalizar(Sesion s) {
         s.estado = "lista";
         guardar(s);
-        List<String> zonas = new ArrayList<>(s.zonas);
+        Map<String, Object> grupos = copiaGrupos(s);
 
         Map<String, Object> datos = new HashMap<>();
         datos.put("sesiones/" + s.id + "/estado", "lista");
         datos.put("sesiones/" + s.id + "/finalizada", ServerValue.TIMESTAMP);
-        datos.put("sesiones/" + s.id + "/zonas", zonas);
-        Map<String, Object> barridos = copiaBarridos(s);
-        Map<String, Object> sectores = new HashMap<>(s.sectores);
-        datos.put("sesiones/" + s.id + "/barridos", barridos.isEmpty() ? null : barridos);
-        datos.put("sesiones/" + s.id + "/sectores", sectores.isEmpty() ? null : sectores);
+        datos.put("sesiones/" + s.id + "/grupos", grupos);
         Map<String, Object> ultima = new HashMap<>();
         ultima.put("sesionId", s.id);
         ultima.put("finalizada", ServerValue.TIMESTAMP);
-        ultima.put("zonas", zonas);
-        ultima.put("barridos", barridos.isEmpty() ? null : barridos);
-        ultima.put("sectores", sectores.isEmpty() ? null : sectores);
+        ultima.put("grupos", grupos);
         datos.put("ultima", ultima);
         FirebaseDatabase.getInstance().getReference(RAIZ).updateChildren(datos);
         avisar();
@@ -612,7 +499,6 @@ public final class Sesiones {
             o.put("id", s.id);
             o.put("creada", s.creada);
             o.put("estado", s.estado);
-            o.put("zonas", new JSONArray(s.zonas));
             JSONObject fotos = new JSONObject();
             for (Foto f : s.fotos.values()) {
                 JSONObject j = new JSONObject();
@@ -622,26 +508,17 @@ public final class Sesiones {
                 j.put("bytes", f.bytes);
                 j.put("subida", f.subida);
                 if (f.error != null) j.put("error", f.error);
-                if (f.zona != null) {
-                    j.put("zona", f.zona);
-                    j.put("estante", f.estante);
-                    j.put("indice", f.indice);
-                    if (f.orientacion != null) {
-                        j.put("orientacion", new JSONArray()
-                                .put(f.orientacion[0]).put(f.orientacion[1]).put(f.orientacion[2]));
-                    }
-                }
+                if (f.grupo != null) j.put("grupo", f.grupo);
                 fotos.put(f.id, j);
             }
             o.put("fotos", fotos);
-            JSONObject barridos = new JSONObject();
-            for (Map.Entry<String, Barrido> e : s.barridos.entrySet()) {
-                JSONArray estantes = new JSONArray();
-                for (List<String> fila : e.getValue().estantes) estantes.put(new JSONArray(fila));
-                barridos.put(e.getKey(), estantes);
+            JSONObject grupos = new JSONObject();
+            for (Map.Entry<String, List<List<String>>> e : s.grupos.entrySet()) {
+                JSONArray cols = new JSONArray();
+                for (List<String> col : e.getValue()) cols.put(new JSONArray(col));
+                grupos.put(e.getKey(), cols);
             }
-            o.put("barridos", barridos);
-            o.put("sectores", new JSONObject(s.sectores));
+            o.put("grupos", grupos);
             File dir = carpeta(s);
             if (!dir.exists()) dir.mkdirs();
             File tmp = new File(dir, "sesion.json.tmp");
@@ -673,8 +550,6 @@ public final class Sesiones {
             s.id = o.getString("id");
             s.creada = o.optLong("creada");
             s.estado = o.optString("estado", "en_curso");
-            JSONArray zonas = o.optJSONArray("zonas");
-            if (zonas != null) for (int i = 0; i < zonas.length(); i++) s.zonas.add(zonas.getString(i));
             JSONObject fotos = o.optJSONObject("fotos");
             if (fotos != null) {
                 JSONArray ids = fotos.names();
@@ -689,36 +564,27 @@ public final class Sesiones {
                         f.bytes = j.optLong("bytes");
                         f.subida = j.optBoolean("subida");
                         f.error = j.has("error") ? j.optString("error") : null;
-                        f.zona = j.has("zona") ? j.optString("zona") : null;
-                        f.estante = j.optInt("estante");
-                        f.indice = j.optInt("indice");
-                        JSONArray or = j.optJSONArray("orientacion");
-                        if (or != null && or.length() == 3) {
-                            f.orientacion = new float[]{(float) or.getDouble(0), (float) or.getDouble(1), (float) or.getDouble(2)};
-                        }
+                        f.grupo = j.has("grupo") ? j.optString("grupo") : null;
                         s.fotos.put(f.id, f);
                     }
                 }
             }
-            JSONObject barridos = o.optJSONObject("barridos");
-            if (barridos != null && barridos.names() != null) {
-                JSONArray ids = barridos.names();
+            JSONObject grupos = o.optJSONObject("grupos");
+            if (grupos != null && grupos.names() != null) {
+                JSONArray ids = grupos.names();
                 for (int i = 0; i < ids.length(); i++) {
-                    Barrido b = new Barrido();
-                    JSONArray estantes = barridos.getJSONArray(ids.getString(i));
-                    for (int e = 0; e < estantes.length(); e++) {
-                        JSONArray fila = estantes.getJSONArray(e);
-                        List<String> l = new ArrayList<>();
-                        for (int t = 0; t < fila.length(); t++) l.add(fila.getString(t));
-                        b.estantes.add(l);
+                    JSONArray cols = grupos.getJSONArray(ids.getString(i));
+                    List<List<String>> l = new ArrayList<>();
+                    for (int c = 0; c < cols.length(); c++) {
+                        JSONArray col = cols.getJSONArray(c);
+                        List<String> fotosCol = new ArrayList<>();
+                        for (int e = 0; e < col.length(); e++) fotosCol.add(col.getString(e));
+                        if (!fotosCol.isEmpty()) l.add(fotosCol);
                     }
-                    s.barridos.put(ids.getString(i), b);
+                    s.grupos.put(ids.getString(i), l);
                 }
-            }
-            JSONObject sectores = o.optJSONObject("sectores");
-            if (sectores != null && sectores.names() != null) {
-                JSONArray ids = sectores.names();
-                for (int i = 0; i < ids.length(); i++) s.sectores.put(ids.getString(i), sectores.getString(ids.getString(i)));
+            } else {
+                convertirVersionAnterior(s, o);
             }
             return s;
         } catch (IOException | JSONException e) {
@@ -727,14 +593,32 @@ public final class Sesiones {
         }
     }
 
-    // Borra la zona del equipo (la foto unica o todas sus tomas) y anota en
-    // "datos" lo que hay que borrar en Firebase.
-    private void borrarZonaLocal(Sesion s, String zonaId, Map<String, Object> datos) {
-        for (String id : s.fotosDe(zonaId)) {
-            borrarFotoLocal(s, id);
-            datos.put("fotos/" + id, null);
+    // Recorrido de la version 1 (zonas y tomas cercanas): cada zona pasa a ser
+    // una columna del grupo OT, para no perder fotos que falten subir.
+    private static void convertirVersionAnterior(Sesion s, JSONObject o) throws JSONException {
+        JSONArray zonas = o.optJSONArray("zonas");
+        if (zonas == null || zonas.length() == 0) return;
+        JSONObject barridos = o.optJSONObject("barridos");
+        List<List<String>> cols = new ArrayList<>();
+        for (int i = 0; i < zonas.length(); i++) {
+            String z = zonas.getString(i);
+            List<String> col = new ArrayList<>();
+            JSONArray estantes = barridos != null ? barridos.optJSONArray(z) : null;
+            if (estantes != null) {
+                for (int e = 0; e < estantes.length(); e++) {
+                    JSONArray fila = estantes.getJSONArray(e);
+                    for (int t = 0; t < fila.length(); t++) col.add(fila.getString(t));
+                }
+            } else {
+                col.add(z);
+            }
+            if (!col.isEmpty()) cols.add(col);
         }
-        if (s.barridos.remove(zonaId) != null) datos.put("barridos/" + zonaId, null);
+        s.grupos.put("OT", cols);
+        for (List<String> col : cols) for (String id : col) {
+            Foto f = s.fotos.get(id);
+            if (f != null) f.grupo = "OT";
+        }
     }
 
     private void borrarFotoLocal(Sesion s, String fotoId) {

@@ -7,24 +7,20 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Rect;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Size;
 import android.view.ContextThemeWrapper;
+import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -55,7 +51,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executor;
@@ -63,59 +58,59 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Captura de cada zona.
+ * Captura en vertical. Cada foto va a un lugar de la cuadricula del grupo
+ * elegido (FL, FR, BL, BR, OT):
+ *   "→ Columna nueva":    la proxima foto es una columna nueva, a la derecha
+ *                         de la ultima que se saco.
+ *   "↓ Estante de abajo": la proxima foto va debajo, en la misma columna
+ *                         (para columnas que no entran en una sola foto).
+ * La eleccion queda hasta que se cambie.
  *
- * Modos de recorrido (EXTRA_MODO):
- *   seguir   -> agrega zonas al final, una tras otra (lo normal).
- *   rehacer  -> cambia la zona EXTRA_POSICION.
- *   insertar -> agrega una zona nueva antes de EXTRA_POSICION.
+ * Si la foto sale nitida, con luz y derecha se guarda sola (con "Deshacer");
+ * si no, se abre la revision completa.
  *
- * Cada zona se puede sacar de dos formas:
- *   Foto unica     -> una foto con la maxima calidad del equipo; se revisa y
- *                     se confirma (RevisionActivity).
- *   Tomas cercanas -> varias fotos por estante, de izquierda a derecha, cada
- *                     una pisando ~30% de la anterior (se muestra esa franja
- *                     sobre el visor). Si la toma sale nitida y con luz se
- *                     confirma sola, con "Deshacer". Se guarda la orientacion
- *                     del equipo en cada toma; la PC las une como un
- *                     rompecabezas.
- *
- * El chip "Sector" pone nombre a un grupo de zonas ("Adelante izquierda"):
- * vale desde esta zona hasta que empiece otro sector.
+ * Desde la cuadricula (RecorridoActivity) se abre en un lugar puntual con
+ * EXTRA_ACCION: columna nueva en una posicion, otro estante debajo de una
+ * columna, o rehacer una foto.
  */
-public class CamaraActivity extends AppCompatActivity implements SensorEventListener {
+public class CamaraActivity extends AppCompatActivity {
 
     public static final String EXTRA_SESION = "sesion";
-    public static final String EXTRA_MODO = "modo";
-    public static final String EXTRA_POSICION = "posicion";
-    public static final String MODO_SEGUIR = "seguir", MODO_REHACER = "rehacer", MODO_INSERTAR = "insertar";
+    public static final String EXTRA_GRUPO = "grupo";
+    public static final String EXTRA_ACCION = "accion";
+    public static final String EXTRA_COLUMNA = "columna";   // desde 0
+    public static final String EXTRA_ESTANTE = "estante";   // desde 0
+    public static final String ACCION_SEGUIR = "seguir", ACCION_COLUMNA = "columna",
+            ACCION_ABAJO = "abajo", ACCION_REHACER = "rehacer";
 
     private static final String PREF_HDR = "hdr";
-    private static final String PREF_TOMAS = "tomasCercanas";
-    private static final float SOLAPE = 0.3f;              // franja de la toma anterior
-    private static final Size RESOLUCION_TOMA = new Size(3264, 2448);   // ~8 MP: de cerca alcanza
-    private static final int CALIDAD_TOMA = 90;
+    private static final String PREF_GRUPO = "grupo";
+    private static final String PREF_ABAJO = "abajo";
+    private static final float SOLAPE = 0.25f;             // franja de la foto de arriba
+    private static final Size RESOLUCION = new Size(3264, 2448);   // ~8 MP: de cerca alcanza
+    private static final int CALIDAD = 90;
     private static final long DURACION_DESHACER = 3500;
 
     private Sesiones repo;
     private Sesiones.Sesion sesion;
     private GuiaAnterior guia;
-    private String modo;
-    private int posicion;   // 0 = zona 1
+    private String accion;
 
-    // Tomas cercanas
-    private boolean tomasCercanas;
-    private String barridoId;        // zona de tomas en curso (null hasta la primera toma)
-    private int estante;             // 0 = el de mas arriba
-    private String ultimaToma;       // para "Deshacer"
-    private File enRevision;         // toma que fue a revision completa
-    private float[] orientacionEnRevision;
-    private String sectorPendiente;  // sector elegido antes de que exista la zona
+    // Donde va la proxima foto
+    private String grupo;
+    private boolean abajo;        // true: debajo de la columna "ancla"; false: columna nueva a su derecha
+    private int ancla = -1;       // columna de referencia (desde 0); -1 = ninguna
+    private int rehacerColumna, rehacerEstante;
+
+    private String ultimaFoto;    // para "Deshacer"
+    private int anclaAntes;
+    private File enRevision;
 
     private PreviewView visor;
     private ImageView piel, guiaImg, solape;
-    private View foco, destello, guiaBorde, guiaPanel, barraTomas, lineaCorte;
-    private TextView zona, subZona, txtSubidas, guiaTxt, aviso, modoUnica, modoTomas, sector, sigEstante, terminarZona, deshacer;
+    private View foco, destello, guiaBorde, guiaPanel, direccion;
+    private TextView columna, subColumna, txtSubidas, guiaTxt, aviso, dirDerecha, dirAbajo, deshacer;
+    private LinearLayout grupos;
     private ImageButton disparar, linterna, hdr;
     private NivelView nivel;
 
@@ -127,37 +122,19 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
     private Executor principal;
     private final ExecutorService hilo = Executors.newSingleThreadExecutor();
 
-    private SensorManager sensores;
-    private Sensor rotacion;
-    private volatile float[] orientacion;   // {azimut, inclinacion, giro}
-
     private final Sesiones.Oyente alCambiar = this::pintarSubidas;
-    private final GuiaAnterior.Oyente alCambiarGuia = this::pintarZona;
+    private final GuiaAnterior.Oyente alCambiarGuia = this::pintar;
     private final Runnable ocultarDeshacer = () -> {
         deshacer.animate().alpha(0f).setDuration(200).withEndAction(() -> deshacer.setVisibility(View.GONE));
-        ultimaToma = null;
+        ultimaFoto = null;
     };
 
     private final ActivityResultLauncher<Intent> revision =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
-                if (tomasCercanas) {
-                    File f = enRevision;
-                    enRevision = null;
-                    if (r.getResultCode() == RESULT_OK && f != null && f.exists()) {
-                        guardarToma(f, orientacionEnRevision);
-                    } else {
-                        listoParaOtra();
-                    }
-                    return;
-                }
-                listoParaOtra();
-                if (r.getResultCode() != RESULT_OK) return;   // "Repetir": misma zona
-                aplicarSectorPendiente(posicion);
-                if (MODO_SEGUIR.equals(modo)) {
-                    pasarALaSiguienteZona();
-                } else {
-                    finish();   // rehacer / insertar: vuelve a la grilla
-                }
+                File f = enRevision;
+                enRevision = null;
+                if (r.getResultCode() == RESULT_OK && f != null && f.exists()) guardar(f);
+                else listoParaOtra();
             });
 
     @Override
@@ -174,44 +151,42 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
             finish();
             return;
         }
-        modo = getIntent().getStringExtra(EXTRA_MODO);
-        if (modo == null) modo = MODO_SEGUIR;
-        posicion = MODO_SEGUIR.equals(modo) ? sesion.zonas.size() : getIntent().getIntExtra(EXTRA_POSICION, 0);
         principal = ContextCompat.getMainExecutor(this);
         hdrActivo = getPreferences(MODE_PRIVATE).getBoolean(PREF_HDR, false);
-        sensores = (SensorManager) getSystemService(SENSOR_SERVICE);
-        rotacion = sensores != null ? sensores.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) : null;
 
         visor = findViewById(R.id.visor);
         piel = findViewById(R.id.piel);
         solape = findViewById(R.id.solape);
-        lineaCorte = findViewById(R.id.lineaCorte);
         foco = findViewById(R.id.foco);
         destello = findViewById(R.id.destello);
-        zona = findViewById(R.id.zona);
-        subZona = findViewById(R.id.subZona);
+        columna = findViewById(R.id.columna);
+        subColumna = findViewById(R.id.subColumna);
         txtSubidas = findViewById(R.id.txtSubidas);
+        grupos = findViewById(R.id.grupos);
         guiaPanel = findViewById(R.id.guia);
         guiaImg = findViewById(R.id.guiaImg);
         guiaBorde = findViewById(R.id.guiaBorde);
         guiaTxt = findViewById(R.id.guiaTxt);
         aviso = findViewById(R.id.aviso);
+        direccion = findViewById(R.id.direccion);
+        dirDerecha = findViewById(R.id.dirDerecha);
+        dirAbajo = findViewById(R.id.dirAbajo);
+        deshacer = findViewById(R.id.deshacer);
         disparar = findViewById(R.id.disparar);
         linterna = findViewById(R.id.linterna);
         hdr = findViewById(R.id.hdr);
         nivel = findViewById(R.id.nivel);
-        modoUnica = findViewById(R.id.modoUnica);
-        modoTomas = findViewById(R.id.modoTomas);
-        sector = findViewById(R.id.sector);
-        barraTomas = findViewById(R.id.barraTomas);
-        sigEstante = findViewById(R.id.sigEstante);
-        terminarZona = findViewById(R.id.terminarZona);
-        deshacer = findViewById(R.id.deshacer);
 
         disparar.setOnClickListener(v -> sacar());
         findViewById(R.id.atras).setOnClickListener(v -> finish());
-        findViewById(R.id.zonas).setOnClickListener(v -> {
-            startActivity(new Intent(this, RecorridoActivity.class));
+        findViewById(R.id.verGrilla).setOnClickListener(v -> {
+            if (!ACCION_SEGUIR.equals(accion)) {   // se abrio desde la cuadricula: se vuelve a ella
+                finish();
+                return;
+            }
+            Intent i = new Intent(this, RecorridoActivity.class);
+            i.putExtra(RecorridoActivity.EXTRA_GRUPO, grupo);
+            startActivity(i);
             finish();
         });
         linterna.setOnClickListener(v -> alternarLinterna());
@@ -223,17 +198,46 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
             Toast.makeText(this, hdrActivo ? "HDR activado" : "HDR desactivado", Toast.LENGTH_SHORT).show();
         });
         guiaPanel.setOnClickListener(v -> alternarPiel());
-        modoUnica.setOnClickListener(v -> cambiarModo(false));
-        modoTomas.setOnClickListener(v -> cambiarModo(true));
-        sector.setOnClickListener(v -> elegirSector());
-        sigEstante.setOnClickListener(v -> siguienteEstante());
-        terminarZona.setOnClickListener(v -> terminarZonaDeTomas());
-        deshacer.setOnClickListener(v -> deshacerToma());
+        dirDerecha.setOnClickListener(v -> cambiarDireccion(false));
+        dirAbajo.setOnClickListener(v -> cambiarDireccion(true));
+        deshacer.setOnClickListener(v -> deshacerFoto());
         configurarEnfoque();
+        armarBotonesDeGrupo();
 
-        tomasCercanas = modoInicial();
-        pintarZona();
-        aviso.postDelayed(() -> aviso.animate().alpha(0f).setDuration(400), 4000);
+        accion = getIntent().getStringExtra(EXTRA_ACCION);
+        if (accion == null) accion = ACCION_SEGUIR;
+        String g = getIntent().getStringExtra(EXTRA_GRUPO);
+        int col = getIntent().getIntExtra(EXTRA_COLUMNA, 0);
+        switch (accion) {
+            case ACCION_COLUMNA:      // columna nueva en la posicion "col"
+                grupo = g;
+                ancla = col - 1;
+                abajo = false;
+                break;
+            case ACCION_ABAJO:        // otro estante debajo de la columna "col"
+                grupo = g;
+                ancla = col;
+                abajo = true;
+                break;
+            case ACCION_REHACER:
+                grupo = g;
+                rehacerColumna = col;
+                rehacerEstante = getIntent().getIntExtra(EXTRA_ESTANTE, 0);
+                break;
+            default:
+                grupo = g;
+                abajo = getPreferences(MODE_PRIVATE).getBoolean(PREF_ABAJO, false);
+        }
+        if (grupo == null) {
+            // Empezando o siguiendo el recorrido: se elige el grupo a mano.
+            ponerGrupo(getPreferences(MODE_PRIVATE).getString(PREF_GRUPO, Sesiones.GRUPOS[0]));
+            aviso.post(this::elegirGrupo);
+        } else if (ACCION_SEGUIR.equals(accion)) {
+            ponerGrupo(grupo);
+        } else {
+            pintar();
+        }
+        aviso.postDelayed(() -> aviso.animate().alpha(0f).setDuration(400), 5000);
         iniciarCamara();
     }
 
@@ -254,18 +258,6 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (rotacion != null) sensores.registerListener(this, rotacion, SensorManager.SENSOR_DELAY_UI);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (sensores != null) sensores.unregisterListener(this);
-    }
-
-    @Override
     public void onWindowFocusChanged(boolean foco) {
         super.onWindowFocusChanged(foco);
         if (foco) pantallaCompleta();
@@ -282,27 +274,88 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
     }
 
     // ------------------------------------------------------------------
-    // Orientacion del equipo (para ubicar las tomas cercanas)
+    // Grupo y lugar de la proxima foto
     // ------------------------------------------------------------------
 
-    @Override
-    public void onSensorChanged(SensorEvent e) {
-        float[] r = new float[9];
-        SensorManager.getRotationMatrixFromVector(r, e.values);
-        // Hacia donde mira la camara (eje -Z del equipo) en el mundo: este, norte, arriba.
-        float x = -r[2], y = -r[5], z = -r[8];
-        float azimut = (float) Math.toDegrees(Math.atan2(x, y));
-        if (azimut < 0) azimut += 360f;
-        float inclinacion = (float) Math.toDegrees(Math.asin(Math.max(-1f, Math.min(1f, z))));
-        // Giro: cuanto se inclina el borde largo de la pantalla respecto de la horizontal.
-        int rot = visor.getDisplay() != null ? visor.getDisplay().getRotation() : Surface.ROTATION_90;
-        float lateral = (rot == Surface.ROTATION_90 || rot == Surface.ROTATION_270) ? r[7] : r[6];
-        float giro = (float) Math.toDegrees(Math.asin(Math.max(-1f, Math.min(1f, lateral))));
-        orientacion = new float[]{azimut, inclinacion, giro};
+    private void armarBotonesDeGrupo() {
+        for (String g : Sesiones.GRUPOS) {
+            TextView t = new TextView(this);
+            t.setText(g);
+            t.setTag(g);
+            t.setGravity(Gravity.CENTER);
+            t.setTextSize(15);
+            t.setTypeface(getResources().getFont(R.font.mono_bold));
+            t.setBackgroundResource(R.drawable.fondo_chip_cam);
+            t.setOnClickListener(v -> {
+                if (ACCION_REHACER.equals(accion)) {
+                    Toast.makeText(this, "Estás rehaciendo una foto de " + grupo, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                ponerGrupo(g);
+            });
+            grupos.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+        }
     }
 
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) { }
+    private void elegirGrupo() {
+        String[] opciones = new String[Sesiones.GRUPOS.length];
+        int actual = 0;
+        for (int i = 0; i < opciones.length; i++) {
+            String g = Sesiones.GRUPOS[i];
+            int n = sesion.columnas(g).size();
+            opciones[i] = g + " · " + Sesiones.nombreGrupo(g) + (n > 0 ? "  (" + n + (n == 1 ? " columna)" : " columnas)") : "");
+            if (g.equals(grupo)) actual = i;
+        }
+        new MaterialAlertDialogBuilder(new ContextThemeWrapper(this, R.style.Tema_LocatorPic))
+                .setTitle("¿Qué grupo vas a fotografiar?")
+                .setSingleChoiceItems(opciones, actual, (d, cual) -> {
+                    ponerGrupo(Sesiones.GRUPOS[cual]);
+                    d.dismiss();
+                })
+                .setPositiveButton("Listo", null)
+                .show();
+    }
+
+    /** Cambia de grupo: la proxima foto sigue despues de su ultima columna. */
+    private void ponerGrupo(String g) {
+        grupo = g;
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_GRUPO, g).apply();
+        ancla = sesion.columnas(g).size() - 1;
+        ultimaFoto = null;
+        deshacer.setVisibility(View.GONE);
+        pintar();
+    }
+
+    private void cambiarDireccion(boolean haciaAbajo) {
+        if (ACCION_REHACER.equals(accion) || haciaAbajo == abajo) return;
+        if (haciaAbajo && ancla < 0) {
+            Toast.makeText(this, "Primero sacá una columna", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        abajo = haciaAbajo;
+        getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_ABAJO, abajo).apply();
+        pintar();
+    }
+
+    private boolean rehaciendo() {
+        return ACCION_REHACER.equals(accion);
+    }
+
+    /** Columna (desde 0) donde cae la proxima foto. */
+    private int columnaObjetivo() {
+        if (rehaciendo()) return rehacerColumna;
+        return abajo && ancla >= 0 ? ancla : ancla + 1;
+    }
+
+    /** Estante (desde 0) donde cae la proxima foto. */
+    private int estanteObjetivo() {
+        if (rehaciendo()) return rehacerEstante;
+        return abajo && ancla >= 0 ? sesion.columnas(grupo).get(ancla).size() : 0;
+    }
+
+    private boolean columnaNueva() {
+        return !rehaciendo() && !(abajo && ancla >= 0);
+    }
 
     // ------------------------------------------------------------------
     // Camara
@@ -333,11 +386,7 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         }, principal);
     }
 
-    /**
-     * Conecta el visor y la captura a la camara trasera en 4:3: con la maxima
-     * resolucion en foto unica, y unos 8 MP en tomas cercanas (de cerca
-     * alcanza, y son muchas fotos para subir).
-     */
+    /** Conecta el visor y la captura a la camara trasera, en 4:3 y unos 8 MP. */
     private void vincular() {
         if (proveedor == null) return;
         proveedor.unbindAll();
@@ -346,14 +395,11 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         if (hdrActivo && hdrDisponible && extensiones != null) {
             selector = extensiones.getExtensionEnabledCameraSelector(selector, ExtensionMode.HDR);
         }
-        int rotacionPantalla = visor.getDisplay() != null ? visor.getDisplay().getRotation() : Surface.ROTATION_90;
+        int rotacionPantalla = visor.getDisplay() != null ? visor.getDisplay().getRotation() : Surface.ROTATION_0;
 
-        ResolutionStrategy estrategia = tomasCercanas
-                ? new ResolutionStrategy(RESOLUCION_TOMA, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
-                : ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY;
         ResolutionSelector paraFoto = new ResolutionSelector.Builder()
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                .setResolutionStrategy(estrategia)
+                .setResolutionStrategy(new ResolutionStrategy(RESOLUCION, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
                 .build();
         ResolutionSelector paraVisor = new ResolutionSelector.Builder()
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
@@ -363,7 +409,7 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         preview.setSurfaceProvider(visor.getSurfaceProvider());
         captura = new ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setJpegQuality(tomasCercanas ? CALIDAD_TOMA : 95)
+                .setJpegQuality(CALIDAD)
                 .setResolutionSelector(paraFoto)
                 .setTargetRotation(rotacionPantalla)
                 .build();
@@ -386,13 +432,12 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
     }
 
     private void sacar() {
-        if (captura == null || tomando) return;
+        if (captura == null || tomando || grupo == null) return;
         tomando = true;
         disparar.setEnabled(false);
         vibrar();
         destello.setAlpha(0.85f);
         destello.animate().alpha(0f).setDuration(260).start();
-        float[] orientacionAlSacar = orientacion;
         boolean derecho = nivel.estaDerecho();
 
         File tmp = new File(getCacheDir(), "captura-" + System.currentTimeMillis() + ".jpg");
@@ -400,8 +445,7 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         captura.takePicture(op, principal, new ImageCapture.OnImageSavedCallback() {
             @Override
             public void onImageSaved(@NonNull ImageCapture.OutputFileResults r) {
-                if (tomasCercanas) revisarToma(tmp, orientacionAlSacar, derecho);
-                else abrirRevision(tmp, derecho, false, null);
+                revisar(tmp, derecho);
             }
 
             @Override
@@ -413,29 +457,8 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         });
     }
 
-    private void abrirRevision(File archivo, boolean derecho, boolean soloRevisar, String titulo) {
-        Intent i = new Intent(this, RevisionActivity.class);
-        i.putExtra(RevisionActivity.EXTRA_SESION, sesion.id);
-        i.putExtra(RevisionActivity.EXTRA_ARCHIVO, archivo.getAbsolutePath());
-        i.putExtra(RevisionActivity.EXTRA_POSICION, posicion);
-        i.putExtra(RevisionActivity.EXTRA_REEMPLAZAR, MODO_REHACER.equals(modo));
-        i.putExtra(RevisionActivity.EXTRA_DERECHO, derecho);
-        i.putExtra(RevisionActivity.EXTRA_SOLO_REVISAR, soloRevisar);
-        if (titulo != null) i.putExtra(RevisionActivity.EXTRA_TITULO, titulo);
-        revision.launch(i);
-    }
-
-    private void listoParaOtra() {
-        tomando = false;
-        disparar.setEnabled(true);
-    }
-
-    // ------------------------------------------------------------------
-    // Tomas cercanas
-    // ------------------------------------------------------------------
-
-    /** Si la toma salio nitida, con luz y derecha, se guarda sola; si no, a revision. */
-    private void revisarToma(File tmp, float[] orient, boolean derecho) {
+    /** Si la foto salio nitida, con luz y derecha, se guarda sola; si no, a revision. */
+    private void revisar(File tmp, boolean derecho) {
         hilo.execute(() -> {
             Bitmap bmp = Imagenes.cargar(tmp, 1200);
             float[] q = bmp != null ? Imagenes.calidad(bmp) : new float[]{0, 0};
@@ -443,56 +466,62 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
             boolean bien = derecho && q[0] >= RevisionActivity.NITIDEZ_MINIMA && q[1] >= RevisionActivity.BRILLO_MINIMO;
             runOnUiThread(() -> {
                 if (bien) {
-                    guardarToma(tmp, orient);
-                } else {
-                    enRevision = tmp;
-                    orientacionEnRevision = orient;
-                    abrirRevision(tmp, derecho, true, "Zona " + (posicion + 1) + " · Estante " + (estante + 1)
-                            + " · Toma " + (tomasEnEstante() + 1));
+                    guardar(tmp);
+                    return;
                 }
+                enRevision = tmp;
+                Intent i = new Intent(this, RevisionActivity.class);
+                i.putExtra(RevisionActivity.EXTRA_ARCHIVO, tmp.getAbsolutePath());
+                i.putExtra(RevisionActivity.EXTRA_DERECHO, derecho);
+                i.putExtra(RevisionActivity.EXTRA_TITULO, textoLugar(columnaObjetivo(), estanteObjetivo()));
+                revision.launch(i);
             });
         });
     }
 
-    private void guardarToma(File tmp, float[] orient) {
-        boolean primera = barridoId == null;
-        String zid = primera ? repo.nuevoIdZona() : barridoId;
-        int est = estante;
+    private void guardar(File tmp) {
+        String g = grupo;
+        int col = columnaObjetivo(), est = estanteObjetivo();
+        boolean nueva = columnaNueva(), reemplazar = rehaciendo();
         hilo.execute(() -> {
             try {
-                Sesiones.Foto f = repo.agregarToma(sesion, zid, posicion, primera && MODO_REHACER.equals(modo), est, tmp, orient);
+                Sesiones.Foto f = repo.agregar(sesion, g, col, est, nueva, reemplazar, tmp);
                 runOnUiThread(() -> {
-                    barridoId = zid;
-                    if (primera) aplicarSectorPendiente(posicion);
-                    ultimaToma = f.id;
                     listoParaOtra();
-                    pintarZona();
-                    mostrarDeshacer("Estante " + (est + 1) + " · toma " + (f.indice + 1) + " guardada");
+                    int[] lugar = sesion.lugarDe(f.id);
+                    String texto = lugar != null ? textoLugar(lugar[0], lugar[1]) : g;
+                    if (reemplazar) {
+                        Toast.makeText(this, texto + ": foto cambiada", Toast.LENGTH_SHORT).show();
+                        finish();
+                        return;
+                    }
+                    anclaAntes = ancla;
+                    if (lugar != null) ancla = lugar[0];
+                    ultimaFoto = f.id;
+                    pintar();
+                    mostrarDeshacer(texto + " guardada");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     listoParaOtra();
-                    Toast.makeText(this, "No se pudo guardar la toma: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "No se pudo guardar la foto: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         });
     }
 
-    private void deshacerToma() {
-        if (ultimaToma == null || barridoId == null) return;
-        String zid = barridoId, foto = ultimaToma;
-        ultimaToma = null;
+    private void deshacerFoto() {
+        if (ultimaFoto == null) return;
+        String foto = ultimaFoto;
+        ultimaFoto = null;
         deshacer.removeCallbacks(ocultarDeshacer);
         deshacer.setVisibility(View.GONE);
         hilo.execute(() -> {
-            repo.quitarToma(sesion, zid, foto);
+            repo.quitarFoto(sesion, foto);
             runOnUiThread(() -> {
-                if (!sesion.barridos.containsKey(zid)) {
-                    barridoId = null;
-                    estante = 0;
-                }
-                pintarZona();
-                Toast.makeText(this, "Toma descartada: sacala de nuevo", Toast.LENGTH_SHORT).show();
+                ancla = Math.min(anclaAntes, sesion.columnas(grupo).size() - 1);
+                pintar();
+                Toast.makeText(this, "Foto descartada: sacala de nuevo", Toast.LENGTH_SHORT).show();
             });
         });
     }
@@ -505,227 +534,51 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         deshacer.postDelayed(ocultarDeshacer, DURACION_DESHACER);
     }
 
-    private void siguienteEstante() {
-        if (tomasEnEstante() == 0) {
-            Toast.makeText(this, "Sacá al menos una toma de este estante", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        estante++;
-        pintarZona();
-        Toast.makeText(this, "Estante " + (estante + 1) + ": empezá por la izquierda", Toast.LENGTH_SHORT).show();
-    }
-
-    private void terminarZonaDeTomas() {
-        if (barridoId == null) {
-            Toast.makeText(this, "Todavía no hay tomas en esta zona", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Sesiones.Barrido b = sesion.barridos.get(barridoId);
-        int n = b != null ? b.tomas() : 0;
-        Toast.makeText(this, "Zona " + (posicion + 1) + " lista: " + n + " tomas", Toast.LENGTH_SHORT).show();
-        if (MODO_SEGUIR.equals(modo)) pasarALaSiguienteZona();
-        else finish();
-    }
-
-    private int tomasEnEstante() {
-        Sesiones.Barrido b = barridoId != null ? sesion.barridos.get(barridoId) : null;
-        return b != null && estante < b.estantes.size() ? b.estantes.get(estante).size() : 0;
-    }
-
-    /**
-     * Franja para encastrar la proxima toma: el 30% derecho de la toma
-     * anterior, a la izquierda del visor; o, al empezar un estante, el 30% de
-     * abajo de la primera toma del estante de arriba, arriba del visor.
-     */
-    private void pintarSolape() {
-        Sesiones.Barrido b = barridoId != null ? sesion.barridos.get(barridoId) : null;
-        String fotoId = null;
-        boolean deArriba = false;
-        if (tomasCercanas && b != null) {
-            if (estante < b.estantes.size() && !b.estantes.get(estante).isEmpty()) {
-                List<String> fila = b.estantes.get(estante);
-                fotoId = fila.get(fila.size() - 1);
-            } else if (estante > 0 && estante - 1 < b.estantes.size() && !b.estantes.get(estante - 1).isEmpty()) {
-                fotoId = b.estantes.get(estante - 1).get(0);
-                deArriba = true;
-            }
-        }
-        if (fotoId == null) {
-            solape.setTag(null);
-            solape.setImageDrawable(null);
-            solape.setVisibility(View.GONE);
-            return;
-        }
-        File archivo = repo.archivoFoto(sesion, fotoId);
-        boolean arriba = deArriba;
-        String esperado = fotoId + arriba;
-        if (esperado.equals(solape.getTag())) return;   // ya esta dibujada
-        solape.setTag(esperado);
-        hilo.execute(() -> {
-            Bitmap bmp = Imagenes.cargar(archivo, 1000);
-            if (bmp == null) return;
-            int w = bmp.getWidth(), h = bmp.getHeight();
-            Bitmap franja = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            Canvas c = new Canvas(franja);
-            if (arriba) {
-                int alto = Math.round(h * SOLAPE);
-                c.drawBitmap(bmp, new Rect(0, h - alto, w, h), new Rect(0, 0, w, alto), null);
-            } else {
-                int ancho = Math.round(w * SOLAPE);
-                c.drawBitmap(bmp, new Rect(w - ancho, 0, w, h), new Rect(0, 0, ancho, h), null);
-            }
-            bmp.recycle();
-            runOnUiThread(() -> {
-                if (!esperado.equals(solape.getTag())) return;
-                solape.setImageBitmap(franja);
-                solape.setVisibility(View.VISIBLE);
-            });
-        });
-    }
-
-    private void cambiarModo(boolean tomas) {
-        if (tomas == tomasCercanas) return;
-        if (barridoId != null) {
-            Toast.makeText(this, "Esta zona ya tiene tomas. Terminala o deshacé las tomas para cambiar.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        tomasCercanas = tomas;
-        getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_TOMAS, tomas).apply();
-        vincular();
-        pintarZona();
-        if (tomas) {
-            Toast.makeText(this, "Tomas cercanas: de izquierda a derecha, pisando un poco la anterior", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    /**
-     * Modo con que empieza la zona: el de la zona que se rehace; si no, el que
-     * tuvo esa zona la vez anterior; si no hay datos, el ultimo que se uso.
-     */
-    private boolean modoInicial() {
-        if (MODO_REHACER.equals(modo)) return sesion.barridoDeZona(posicion) != null;
-        int numero = posicion + 1;
-        if (numero <= guia.cantidadZonas()) return guia.fueConTomas(numero);
-        return getPreferences(MODE_PRIVATE).getBoolean(PREF_TOMAS, false);
-    }
-
-    private void pasarALaSiguienteZona() {
-        posicion = sesion.zonas.size();
-        barridoId = null;
-        estante = 0;
-        ultimaToma = null;
-        deshacer.setVisibility(View.GONE);
-        boolean antes = tomasCercanas;
-        tomasCercanas = modoInicial();
-        if (antes != tomasCercanas) vincular();
-        pintarZona();
-    }
-
-    // ------------------------------------------------------------------
-    // Sectores
-    // ------------------------------------------------------------------
-
-    /** Sector en que cae la zona actual (o el que se va a aplicar). */
-    private String sectorActual() {
-        if (sectorPendiente != null) return sectorPendiente;
-        boolean existe = MODO_REHACER.equals(modo) || barridoId != null;
-        return sesion.sectorDe(existe ? posicion : posicion - 1);
-    }
-
-    /** Sector que empezaba en esta zona la vez anterior, si no es el que ya rige. */
-    private String sectorSugerido() {
-        String s = guia.sectorQueEmpieza(posicion + 1);
-        return s != null && !s.equals(sectorActual()) ? s : null;
-    }
-
-    private void elegirSector() {
-        String sugerido = sectorSugerido();
-        if (sugerido != null) {
-            ponerSector(sugerido);
-            return;
-        }
-        List<String> nombres = new ArrayList<>(sesion.nombresSectores());
-        for (String n : guia.nombresSectores()) if (!nombres.contains(n)) nombres.add(n);
-        List<String> opciones = new ArrayList<>(nombres);
-        opciones.add("Nombre nuevo…");
-        ContextThemeWrapper tema = new ContextThemeWrapper(this, R.style.Tema_LocatorPic);
-        new MaterialAlertDialogBuilder(tema)
-                .setTitle("Sector desde la zona " + (posicion + 1))
-                .setItems(opciones.toArray(new String[0]), (d, cual) -> {
-                    if (cual < nombres.size()) ponerSector(nombres.get(cual));
-                    else pedirNombreSector(tema);
-                })
-                .setNegativeButton("Cancelar", null)
-                .show();
-    }
-
-    private void pedirNombreSector(ContextThemeWrapper tema) {
-        EditText campo = new EditText(tema);
-        campo.setHint("Ej.: Adelante izquierda");
-        campo.setSingleLine(true);
-        FrameLayout marco = new FrameLayout(tema);
-        int m = Math.round(20 * getResources().getDisplayMetrics().density);
-        marco.setPadding(m, m / 2, m, 0);
-        marco.addView(campo);
-        new MaterialAlertDialogBuilder(tema)
-                .setTitle("Nombre del sector")
-                .setView(marco)
-                .setPositiveButton("Aplicar", (d, w) -> {
-                    String n = campo.getText().toString().trim();
-                    if (!n.isEmpty()) ponerSector(n);
-                })
-                .setNegativeButton("Cancelar", null)
-                .show();
-    }
-
-    /** Si la zona ya existe se marca ya; si no, cuando se guarde su primera foto. */
-    private void ponerSector(String nombre) {
-        boolean existe = MODO_REHACER.equals(modo) || barridoId != null;
-        if (existe && posicion < sesion.zonas.size()) {
-            repo.ponerSector(sesion, sesion.zonas.get(posicion), nombre);
-            sectorPendiente = null;
-        } else {
-            sectorPendiente = nombre;
-        }
-        Toast.makeText(this, "Sector «" + nombre + "» desde la zona " + (posicion + 1), Toast.LENGTH_SHORT).show();
-        pintarSector();
-    }
-
-    private void aplicarSectorPendiente(int pos) {
-        if (sectorPendiente == null || pos < 0 || pos >= sesion.zonas.size()) return;
-        repo.ponerSector(sesion, sesion.zonas.get(pos), sectorPendiente);
-        sectorPendiente = null;
+    private void listoParaOtra() {
+        tomando = false;
+        disparar.setEnabled(true);
     }
 
     // ------------------------------------------------------------------
     // Pantalla
     // ------------------------------------------------------------------
 
-    private void pintarZona() {
-        int numero = posicion + 1;
-        zona.setText(String.valueOf(numero));
-        int anterior = guia.cantidadZonas();
-        String sub;
-        if (tomasCercanas) {
-            sub = "Estante " + (estante + 1) + " · toma " + (tomasEnEstante() + 1);
-            if (MODO_REHACER.equals(modo) && barridoId == null) sub += " · rehaciendo";
-        } else if (MODO_REHACER.equals(modo)) sub = "Rehaciendo la foto";
-        else if (MODO_INSERTAR.equals(modo)) sub = "Zona nueva (se insertan antes de la " + numero + ")";
-        else if (anterior > 0) sub = "Vez anterior: " + anterior + " zonas";
-        else sub = "Primer recorrido";
-        subZona.setText(sub);
+    /** "FL · Columna 3 · estante 2" (columna y estante desde 0). */
+    private String textoLugar(int col, int est) {
+        String t = grupo + " · Columna " + (col + 1);
+        boolean variosEstantes = est > 0 || (col < sesion.columnas(grupo).size() && sesion.columnas(grupo).get(col).size() > 1);
+        return variosEstantes ? t + " · estante " + (est + 1) : t;
+    }
 
-        pintarSegmento(modoUnica, !tomasCercanas);
-        pintarSegmento(modoTomas, tomasCercanas);
-        barraTomas.setVisibility(tomasCercanas ? View.VISIBLE : View.GONE);
-        sigEstante.setAlpha(tomasEnEstante() > 0 ? 1f : 0.45f);
-        terminarZona.setAlpha(barridoId != null ? 1f : 0.45f);
-        lineaCorte.setVisibility(tomasCercanas ? View.GONE : View.VISIBLE);
-        aviso.setText(tomasCercanas
-                ? "De izquierda a derecha: encastrá cada toma con la franja de la anterior"
-                : "Encuadrá las dos columnas: la línea marca el corte");
+    private void pintar() {
+        if (grupo == null) return;
+        int col = columnaObjetivo(), est = estanteObjetivo();
+        int hay = sesion.columnas(grupo).size();
+        columna.setText(grupo + " " + (col + 1));
+
+        String sub;
+        if (rehaciendo()) sub = "Rehaciendo" + (est > 0 || sesion.columnas(grupo).get(col).size() > 1 ? " el estante " + (est + 1) : " la foto");
+        else if (!columnaNueva()) sub = "Estante " + (est + 1) + " (debajo del " + est + ")";
+        else if (col < hay) sub = "Columna nueva: se inserta antes de la " + (col + 1);
+        else sub = "Columna nueva";
+        int antes = guia.columnas(grupo);
+        if (antes > 0 && !rehaciendo()) sub += "\nVez anterior: " + antes + (antes == 1 ? " columna" : " columnas");
+        subColumna.setText(sub);
+
+        for (int i = 0; i < grupos.getChildCount(); i++) {
+            TextView t = (TextView) grupos.getChildAt(i);
+            boolean activo = grupo.equals(t.getTag());
+            t.setBackgroundTintList(ColorStateList.valueOf(activo ? getColor(R.color.acento) : 0x00000000));
+            t.setTextColor(activo ? 0xFFFFFFFF : getColor(R.color.cam_texto_2));
+        }
+        direccion.setVisibility(rehaciendo() ? View.GONE : View.VISIBLE);
+        pintarSegmento(dirDerecha, !abajo || ancla < 0);
+        pintarSegmento(dirAbajo, abajo && ancla >= 0);
+        dirAbajo.setAlpha(ancla >= 0 ? 1f : 0.45f);
+        aviso.setText(columnaNueva()
+                ? "Encuadrá la columna entera, de ancho completo"
+                : "Seguí hacia abajo: encastrá con la franja de la foto de arriba");
         pintarSolape();
-        pintarSector();
         pintarGuia();
     }
 
@@ -734,33 +587,49 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         t.setTextColor(activo ? 0xFFFFFFFF : getColor(R.color.cam_texto_2));
     }
 
-    private void pintarSector() {
-        String sugerido = sectorSugerido();
-        String actual = sectorActual();
-        if (sugerido != null) {
-            sector.setText("¿Acá empieza «" + sugerido + "»? Tocá");
-            sector.setBackgroundTintList(ColorStateList.valueOf(getColor(R.color.acento)));
-        } else {
-            sector.setText(actual != null ? actual : "Sin sector · tocá para nombrar");
-            sector.setBackgroundTintList(null);
+    /** Al bajar un estante: el 25% de abajo de la foto de arriba, arriba del visor. */
+    private void pintarSolape() {
+        String fotoId = columnaNueva() ? null : sesion.fotoEn(grupo, columnaObjetivo(), estanteObjetivo() - 1);
+        if (fotoId == null) {
+            solape.setTag(null);
+            solape.setImageDrawable(null);
+            solape.setVisibility(View.GONE);
+            return;
         }
+        if (fotoId.equals(solape.getTag())) return;   // ya esta dibujada
+        solape.setTag(fotoId);
+        File archivo = repo.archivoFoto(sesion, fotoId);
+        hilo.execute(() -> {
+            Bitmap bmp = Imagenes.cargar(archivo, 1000);
+            if (bmp == null) return;
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            int alto = Math.round(h * SOLAPE);
+            Bitmap franja = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            new Canvas(franja).drawBitmap(bmp, new Rect(0, h - alto, w, h), new Rect(0, 0, w, alto), null);
+            bmp.recycle();
+            runOnUiThread(() -> {
+                if (!fotoId.equals(solape.getTag())) return;
+                solape.setImageBitmap(franja);
+                solape.setVisibility(View.VISIBLE);
+            });
+        });
     }
 
     private void pintarGuia() {
-        int anterior = guia.cantidadZonas();
-        File f = guia.miniatura(posicion + 1);
+        int col = columnaObjetivo(), est = estanteObjetivo();
+        File f = guia.miniatura(grupo, col, est);
         Bitmap bmp = f != null ? BitmapFactory.decodeFile(f.getAbsolutePath()) : null;
         if (bmp != null) {
             guiaImg.setImageBitmap(bmp);
             piel.setImageBitmap(bmp);
-            guiaTxt.setText("Vez anterior · zona " + (posicion + 1) + (guia.fueConTomas(posicion + 1) ? " · tomas" : ""));
+            guiaTxt.setText("Antes: " + grupo + " " + (col + 1) + (guia.estantes(grupo, col) > 1 ? "·" + (est + 1) : ""));
             guiaPanel.setAlpha(1f);
         } else {
             guiaImg.setImageDrawable(null);
             piel.setImageDrawable(null);
             piel.setVisibility(View.GONE);
             guiaBorde.setVisibility(View.GONE);
-            guiaTxt.setText(anterior > 0 && posicion + 1 > anterior ? "Zona nueva" : "Sin foto guía");
+            guiaTxt.setText(guia.columnas(grupo) > 0 && col >= guia.columnas(grupo) ? "Nueva" : "Sin guía");
             guiaPanel.setAlpha(0.7f);
         }
     }
@@ -774,8 +643,7 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
     }
 
     private void pintarSubidas() {
-        int total = 0;
-        for (String z : sesion.zonas) total += sesion.fotosDe(z).size();
+        int total = sesion.todasLasFotos().size();
         int pendientes = sesion.pendientes();
         if (total == 0) txtSubidas.setText("Recorrido nuevo");
         else if (pendientes == 0) txtSubidas.setText(total + (total == 1 ? " foto subida" : " fotos subidas"));
@@ -788,10 +656,10 @@ public class CamaraActivity extends AppCompatActivity implements SensorEventList
         visor.setOnTouchListener((v, e) -> {
             if (e.getAction() != MotionEvent.ACTION_UP || camara == null) return true;
             MeteringPoint punto = visor.getMeteringPointFactory().createPoint(e.getX(), e.getY());
-            FocusMeteringAction accion = new FocusMeteringAction.Builder(punto,
+            FocusMeteringAction accionFoco = new FocusMeteringAction.Builder(punto,
                     FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
                     .setAutoCancelDuration(4, TimeUnit.SECONDS).build();
-            camara.getCameraControl().startFocusAndMetering(accion);
+            camara.getCameraControl().startFocusAndMetering(accionFoco);
             foco.setX(e.getX() - foco.getWidth() / 2f);
             foco.setY(e.getY() - foco.getHeight() / 2f);
             foco.setScaleX(1.4f);

@@ -8,18 +8,16 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.LruCache;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.EditText;
-import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -30,26 +28,27 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Grilla con las zonas del recorrido en curso: miniatura, numero y estado de
- * subida, agrupadas por sector si hay. Tocando una zona se puede rehacer,
- * insertar otra antes, eliminarla (las demas se renumeran solas) o cambiar el
- * sector desde ahi. Desde aca se finaliza el recorrido.
+ * Cuadricula del recorrido en curso, un grupo por pestaña (FL, FR, BL, BR,
+ * OT). Cada columna va al lado de la otra y sus fotos de arriba hacia abajo.
+ *   "+" a la derecha de todo      -> columna nueva al final.
+ *   "+" debajo de una columna     -> otro estante en esa columna.
+ *   tocar el numero de columna    -> insertar una antes, eliminarla.
+ *   tocar una foto                -> rehacerla o eliminarla.
+ * Desde aca se finaliza el recorrido.
  */
 public class RecorridoActivity extends AppCompatActivity {
 
-    private static final int TIPO_SECTOR = 0, TIPO_ZONA = 1;
+    public static final String EXTRA_GRUPO = "grupo";
+    private static final String PREF_GRUPO = "grupoGrilla";
 
     private Sesiones repo;
     private Sesiones.Sesion sesion;
     private GuiaAnterior guia;
-    private TextView resumen, vacio;
-    private RecyclerView grilla;
-    private int columnas;
-    private final Adaptador adaptador = new Adaptador();
+    private String grupo;
+    private TextView resumen, infoGrupo;
+    private LinearLayout pestanias, cuadricula;
+    private HorizontalScrollView desplazar;
     private final Sesiones.Oyente alCambiar = this::pintar;
-
-    // Lo que muestra la grilla: un encabezado (String) o una zona (Integer = posicion).
-    private final List<Object> elementos = new ArrayList<>();
 
     private final ExecutorService hilo = Executors.newFixedThreadPool(2);
     private final Handler principal = new Handler(Looper.getMainLooper());
@@ -67,22 +66,34 @@ public class RecorridoActivity extends AppCompatActivity {
         repo = Sesiones.get(this);
         guia = GuiaAnterior.get(this);
         resumen = findViewById(R.id.resumen);
-        vacio = findViewById(R.id.vacio);
-        grilla = findViewById(R.id.grilla);
-        columnas = Math.max(3, getResources().getDisplayMetrics().widthPixels
-                / (int) (120 * getResources().getDisplayMetrics().density));
-        GridLayoutManager gestor = new GridLayoutManager(this, columnas);
-        gestor.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
-            @Override
-            public int getSpanSize(int pos) {
-                return pos < elementos.size() && elementos.get(pos) instanceof String ? columnas : 1;
-            }
-        });
-        grilla.setLayoutManager(gestor);
-        grilla.setAdapter(adaptador);
+        infoGrupo = findViewById(R.id.infoGrupo);
+        pestanias = findViewById(R.id.pestanias);
+        cuadricula = findViewById(R.id.cuadricula);
+        desplazar = findViewById(R.id.desplazar);
+
+        grupo = getIntent().getStringExtra(EXTRA_GRUPO);
+        if (grupo == null) grupo = getPreferences(MODE_PRIVATE).getString(PREF_GRUPO, Sesiones.GRUPOS[0]);
+        for (String g : Sesiones.GRUPOS) {
+            TextView t = new TextView(this);
+            t.setTag(g);
+            t.setGravity(Gravity.CENTER);
+            t.setTextSize(14);
+            t.setTypeface(getResources().getFont(R.font.mono_bold));
+            t.setBackgroundResource(R.drawable.fondo_foto_celda);
+            t.setOnClickListener(v -> {
+                grupo = g;
+                getPreferences(MODE_PRIVATE).edit().putString(PREF_GRUPO, g).apply();
+                pintar();
+            });
+            pestanias.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+        }
 
         findViewById(R.id.atras).setOnClickListener(v -> finish());
-        findViewById(R.id.seguir).setOnClickListener(v -> abrirCamara(CamaraActivity.MODO_SEGUIR, 0));
+        findViewById(R.id.seguir).setOnClickListener(v -> {
+            Intent i = camara(CamaraActivity.ACCION_SEGUIR, 0, 0);
+            startActivity(i);
+            finish();
+        });
         findViewById(R.id.finalizar).setOnClickListener(v -> finalizar());
     }
 
@@ -104,101 +115,197 @@ public class RecorridoActivity extends AppCompatActivity {
         repo.quitarOyente(alCambiar);
     }
 
-    private void pintar() {
-        if (sesion == null) return;
-        int total = sesion.zonas.size();
-        int pendientes = sesion.pendientes();
-        String txt = total + (total == 1 ? " zona" : " zonas");
-        txt += pendientes == 0 ? " · todo subido" : " · " + pendientes + " sin subir";
-        int anterior = guia.cantidadZonas();
-        if (anterior > 0) txt += " · vez anterior: " + anterior;
-        resumen.setText(txt);
-        vacio.setVisibility(total == 0 ? View.VISIBLE : View.GONE);
-        grilla.setVisibility(total == 0 ? View.GONE : View.VISIBLE);
-
-        elementos.clear();
-        for (int i = 0; i < total; i++) {
-            String nombre = sesion.sectores.get(sesion.zonas.get(i));
-            if (nombre != null) {
-                int hasta = i;
-                while (hasta + 1 < total && !sesion.sectores.containsKey(sesion.zonas.get(hasta + 1))) hasta++;
-                elementos.add(nombre + "  ·  " + (hasta > i ? "zonas " + (i + 1) + "–" + (hasta + 1) : "zona " + (i + 1)));
-            }
-            elementos.add(i);
-        }
-        adaptador.notifyDataSetChanged();
-    }
-
-    private void abrirCamara(String modo, int posicion) {
+    private Intent camara(String accion, int columna, int estante) {
         Intent i = new Intent(this, CamaraActivity.class);
         i.putExtra(CamaraActivity.EXTRA_SESION, sesion.id);
-        i.putExtra(CamaraActivity.EXTRA_MODO, modo);
-        i.putExtra(CamaraActivity.EXTRA_POSICION, posicion);
-        startActivity(i);
-        if (CamaraActivity.MODO_SEGUIR.equals(modo)) finish();
+        i.putExtra(CamaraActivity.EXTRA_GRUPO, grupo);
+        i.putExtra(CamaraActivity.EXTRA_ACCION, accion);
+        i.putExtra(CamaraActivity.EXTRA_COLUMNA, columna);
+        i.putExtra(CamaraActivity.EXTRA_ESTANTE, estante);
+        return i;
     }
 
-    private void opcionesZona(int posicion) {
-        boolean conTomas = sesion.barridoDeZona(posicion) != null;
-        String[] opciones = {conTomas ? "Rehacer las tomas" : "Rehacer la foto", "Insertar una zona antes",
-                "Cambiar sector desde acá", "Eliminar esta zona"};
+    // ------------------------------------------------------------------
+    // Pantalla
+    // ------------------------------------------------------------------
+
+    private void pintar() {
+        if (sesion == null) return;
+        int total = sesion.totalColumnas();
+        int pendientes = sesion.pendientes();
+        String txt = total + (total == 1 ? " columna" : " columnas");
+        txt += pendientes == 0 ? " · todo subido" : " · " + pendientes + " fotos sin subir";
+        resumen.setText(txt);
+
+        for (int i = 0; i < pestanias.getChildCount(); i++) {
+            TextView t = (TextView) pestanias.getChildAt(i);
+            String g = (String) t.getTag();
+            int n = sesion.columnas(g).size();
+            boolean activa = g.equals(grupo);
+            t.setText(n > 0 ? g + " · " + n : g);
+            t.setBackgroundTintList(ColorStateList.valueOf(activa ? getColor(R.color.acento) : 0x00000000));
+            t.setTextColor(activa ? 0xFFFFFFFF : getColor(n > 0 ? R.color.texto : R.color.apagado));
+        }
+
+        List<List<String>> cols = sesion.columnas(grupo);
+        String info = grupo + " · " + Sesiones.nombreGrupo(grupo) + " · "
+                + (cols.isEmpty() ? "sin fotos" : cols.size() + (cols.size() == 1 ? " columna" : " columnas"));
+        int antes = guia.columnas(grupo);
+        if (antes > 0) info += " · vez anterior: " + antes;
+        infoGrupo.setText(info);
+
+        cuadricula.removeAllViews();
+        LayoutInflater inf = LayoutInflater.from(this);
+        for (int c = 0; c < cols.size(); c++) {
+            final int col = c;
+            List<String> fotos = cols.get(c);
+            LinearLayout columna = new LinearLayout(this);
+            columna.setOrientation(LinearLayout.VERTICAL);
+            columna.setPadding(dp(4), 0, dp(4), 0);
+
+            TextView titulo = new TextView(this);
+            titulo.setText("C" + (c + 1));
+            titulo.setGravity(Gravity.CENTER);
+            titulo.setTextSize(15);
+            titulo.setTypeface(getResources().getFont(R.font.mono_bold));
+            titulo.setTextColor(getColor(R.color.texto));
+            titulo.setPadding(0, dp(6), 0, dp(6));
+            fondoTocable(titulo);
+            titulo.setOnClickListener(v -> opcionesColumna(col));
+            columna.addView(titulo, new LinearLayout.LayoutParams(dp(104), LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            for (int e = 0; e < fotos.size(); e++) {
+                final int est = e;
+                View celda = inf.inflate(R.layout.item_foto, columna, false);
+                pintarFoto(celda, fotos.get(e), fotos.size() > 1 ? "E" + (e + 1) : null);
+                celda.setOnClickListener(v -> opcionesFoto(col, est));
+                columna.addView(celda);
+            }
+            columna.addView(celdaMas("↓", "Estante", dp(56),
+                    v -> startActivity(camara(CamaraActivity.ACCION_ABAJO, col, 0))));
+            cuadricula.addView(columna);
+        }
+        // Columna nueva al final
+        LinearLayout nueva = new LinearLayout(this);
+        nueva.setOrientation(LinearLayout.VERTICAL);
+        nueva.setPadding(dp(4), dp(6) + dp(30), dp(4), 0);
+        nueva.addView(celdaMas("→", cols.isEmpty() ? "Primera columna" : "Columna nueva", dp(138),
+                v -> startActivity(camara(CamaraActivity.ACCION_COLUMNA, cols.size(), 0))));
+        cuadricula.addView(nueva);
+    }
+
+    private View celdaMas(String flecha, String texto, int alto, View.OnClickListener alTocar) {
+        TextView t = new TextView(this);
+        t.setText("+ " + flecha + "\n" + texto);
+        t.setGravity(Gravity.CENTER);
+        t.setTextSize(12);
+        t.setTextColor(getColor(R.color.acento));
+        t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
+        t.setBackgroundResource(R.drawable.fondo_celda_mas);
+        t.setOnClickListener(alTocar);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(104), alto);
+        lp.bottomMargin = dp(6);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    private void pintarFoto(View celda, String fotoId, String estante) {
+        ImageView miniatura = celda.findViewById(R.id.miniatura);
+        ImageView estado = celda.findViewById(R.id.estado);
+        TextView est = celda.findViewById(R.id.estante);
+        est.setVisibility(estante != null ? View.VISIBLE : View.GONE);
+        if (estante != null) est.setText(estante);
+
+        Sesiones.Foto f = sesion.fotos.get(fotoId);
+        if (f == null) return;
+        if (f.subida) {
+            estado.setImageResource(R.drawable.ic_check);
+            estado.setBackgroundTintList(ColorStateList.valueOf(getColor(R.color.exito)));
+        } else if (f.error != null) {
+            estado.setImageResource(R.drawable.ic_alerta);
+            estado.setBackgroundTintList(ColorStateList.valueOf(getColor(R.color.alerta)));
+        } else {
+            estado.setImageResource(R.drawable.ic_reloj);
+            estado.setBackgroundTintList(ColorStateList.valueOf(0x99000000));
+        }
+
+        miniatura.setTag(fotoId);
+        Bitmap enCache = miniaturas.get(fotoId);
+        if (enCache != null) {
+            miniatura.setImageBitmap(enCache);
+            return;
+        }
+        File archivo = repo.archivoMiniatura(sesion, fotoId);
+        hilo.execute(() -> {
+            BitmapFactory.Options op = new BitmapFactory.Options();
+            op.inSampleSize = 2;
+            Bitmap bmp = BitmapFactory.decodeFile(archivo.getAbsolutePath(), op);
+            if (bmp == null) return;
+            miniaturas.put(fotoId, bmp);
+            principal.post(() -> {
+                if (fotoId.equals(miniatura.getTag())) miniatura.setImageBitmap(bmp);
+            });
+        });
+    }
+
+    private void fondoTocable(View v) {
+        TypedValue tv = new TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+        v.setBackgroundResource(tv.resourceId);
+    }
+
+    private int dp(int v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    // ------------------------------------------------------------------
+    // Opciones
+    // ------------------------------------------------------------------
+
+    private void opcionesColumna(int col) {
+        List<String> fotos = sesion.columnas(grupo).get(col);
+        String[] opciones = {"Insertar una columna antes", "Agregar un estante abajo", "Eliminar la columna"};
         new MaterialAlertDialogBuilder(this)
-                .setTitle("Zona " + (posicion + 1))
+                .setTitle(grupo + " · Columna " + (col + 1))
                 .setItems(opciones, (d, cual) -> {
-                    if (cual == 0) abrirCamara(CamaraActivity.MODO_REHACER, posicion);
-                    else if (cual == 1) abrirCamara(CamaraActivity.MODO_INSERTAR, posicion);
-                    else if (cual == 2) cambiarSector(posicion);
+                    if (cual == 0) startActivity(camara(CamaraActivity.ACCION_COLUMNA, col, 0));
+                    else if (cual == 1) startActivity(camara(CamaraActivity.ACCION_ABAJO, col, 0));
                     else new MaterialAlertDialogBuilder(this)
-                                .setTitle("Eliminar zona " + (posicion + 1))
-                                .setMessage("Las zonas siguientes se renumeran (la " + (posicion + 2) + " pasa a ser la " + (posicion + 1) + ")."
-                                        + (conTomas ? " Se borran todas sus tomas." : ""))
-                                .setPositiveButton("Eliminar", (d2, w) -> repo.eliminar(sesion, posicion))
+                                .setTitle("Eliminar " + grupo + " · Columna " + (col + 1))
+                                .setMessage("Se borra" + (fotos.size() == 1 ? " su foto" : "n sus " + fotos.size() + " fotos")
+                                        + ". Las columnas siguientes se renumeran (la " + (col + 2) + " pasa a ser la " + (col + 1) + ").")
+                                .setPositiveButton("Eliminar", (d2, w) -> repo.eliminarColumna(sesion, grupo, col))
                                 .setNegativeButton("Cancelar", null).show();
                 })
                 .show();
     }
 
-    /** Elegir (o quitar) el sector que empieza en esta zona. */
-    private void cambiarSector(int posicion) {
-        String zonaId = sesion.zonas.get(posicion);
-        boolean marcada = sesion.sectores.containsKey(zonaId);
-        List<String> nombres = new ArrayList<>(sesion.nombresSectores());
-        for (String n : guia.nombresSectores()) if (!nombres.contains(n)) nombres.add(n);
-        List<String> opciones = new ArrayList<>(nombres);
-        opciones.add("Nombre nuevo…");
-        if (marcada) opciones.add("Quitar el sector que empieza acá");
+    private void opcionesFoto(int col, int est) {
+        List<String> fotos = sesion.columnas(grupo).get(col);
+        String fotoId = fotos.get(est);
+        boolean unica = fotos.size() == 1;
+        String lugar = grupo + " · Columna " + (col + 1) + (unica ? "" : " · estante " + (est + 1));
+        String[] opciones = {"Rehacer esta foto", "Eliminar esta foto"};
         new MaterialAlertDialogBuilder(this)
-                .setTitle("Sector desde la zona " + (posicion + 1))
-                .setItems(opciones.toArray(new String[0]), (d, cual) -> {
-                    if (cual < nombres.size()) repo.ponerSector(sesion, zonaId, nombres.get(cual));
-                    else if (cual == nombres.size()) pedirNombre(zonaId);
-                    else repo.ponerSector(sesion, zonaId, null);
+                .setTitle(lugar)
+                .setItems(opciones, (d, cual) -> {
+                    if (cual == 0) {
+                        startActivity(camara(CamaraActivity.ACCION_REHACER, col, est));
+                        return;
+                    }
+                    new MaterialAlertDialogBuilder(this)
+                            .setTitle("Eliminar foto")
+                            .setMessage(unica
+                                    ? "Es la única foto de la columna: la columna desaparece y las siguientes se renumeran."
+                                    : "Las fotos de abajo suben un lugar.")
+                            .setPositiveButton("Eliminar", (d2, w) -> repo.quitarFoto(sesion, fotoId))
+                            .setNegativeButton("Cancelar", null).show();
                 })
-                .setNegativeButton("Cancelar", null)
-                .show();
-    }
-
-    private void pedirNombre(String zonaId) {
-        EditText campo = new EditText(this);
-        campo.setHint("Ej.: Adelante izquierda");
-        campo.setSingleLine(true);
-        FrameLayout marco = new FrameLayout(this);
-        int m = Math.round(20 * getResources().getDisplayMetrics().density);
-        marco.setPadding(m, m / 2, m, 0);
-        marco.addView(campo);
-        new MaterialAlertDialogBuilder(this)
-                .setTitle("Nombre del sector")
-                .setView(marco)
-                .setPositiveButton("Aplicar", (d, w) -> {
-                    String n = campo.getText().toString().trim();
-                    if (!n.isEmpty()) repo.ponerSector(sesion, zonaId, n);
-                })
-                .setNegativeButton("Cancelar", null)
                 .show();
     }
 
     private void finalizar() {
-        int total = sesion.zonas.size();
+        int total = sesion.totalColumnas();
         if (total == 0) {
             new MaterialAlertDialogBuilder(this).setMessage("El recorrido no tiene fotos.").setPositiveButton("Ok", null).show();
             return;
@@ -212,17 +319,19 @@ public class RecorridoActivity extends AppCompatActivity {
                     .setNegativeButton("Esperar", null).show();
             return;
         }
-        int anterior = guia.cantidadZonas();
-        String mensaje = "El recorrido tiene " + total + " zonas.";
-        if (anterior > 0 && anterior != total) {
-            int dif = total - anterior;
-            mensaje += "\n\n⚠ La vez anterior fueron " + anterior + " (" + (dif > 0 ? dif + " más" : -dif + " menos")
-                    + "). Si sobra o falta una foto, los números de zona se corren desde ahí. Revisá la grilla antes de finalizar.";
-        } else if (anterior > 0) {
-            mensaje += " Igual que la vez anterior.";
+        StringBuilder detalle = new StringBuilder();
+        List<String> distintos = new ArrayList<>();
+        boolean hayAnterior = guia.totalColumnas() > 0;
+        for (String g : Sesiones.GRUPOS) {
+            int n = sesion.columnas(g).size(), antes = guia.columnas(g);
+            if (n > 0) detalle.append("\n• ").append(g).append(": ").append(n).append(n == 1 ? " columna" : " columnas");
+            if (hayAnterior && n != antes) distintos.add(g + " (" + antes + " → " + n + ")");
         }
-        List<String> sectores = sesion.nombresSectores();
-        if (!sectores.isEmpty()) mensaje += "\n\nSectores: " + String.join(", ", sectores) + ".";
+        String mensaje = "El recorrido tiene " + total + (total == 1 ? " columna:" : " columnas:") + detalle;
+        if (!distintos.isEmpty()) {
+            mensaje += "\n\n⚠ Cambió la cantidad de columnas respecto de la vez anterior en " + String.join(", ", distintos)
+                    + ". Si sobra o falta una, los números de columna de ese grupo se corren desde ahí. Revisá la cuadrícula antes de finalizar.";
+        }
         mensaje += "\n\nDespués, en la PC: doble clic en relevar.bat.";
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Finalizar recorrido")
@@ -232,102 +341,5 @@ public class RecorridoActivity extends AppCompatActivity {
                     finish();
                 })
                 .setNegativeButton("Revisar", null).show();
-    }
-
-    // ------------------------------------------------------------------
-
-    private class Adaptador extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
-        @Override
-        public int getItemViewType(int pos) {
-            return elementos.get(pos) instanceof String ? TIPO_SECTOR : TIPO_ZONA;
-        }
-
-        @NonNull
-        @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int tipo) {
-            LayoutInflater inf = LayoutInflater.from(parent.getContext());
-            if (tipo == TIPO_SECTOR) {
-                return new RecyclerView.ViewHolder(inf.inflate(R.layout.item_sector, parent, false)) { };
-            }
-            return new Celda(inf.inflate(R.layout.item_zona, parent, false));
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder h, int i) {
-            Object e = elementos.get(i);
-            if (e instanceof String) {
-                ((TextView) h.itemView).setText((String) e);
-                return;
-            }
-            Celda c = (Celda) h;
-            int pos = (Integer) e;
-            Sesiones.Foto f = sesion.fotoDeZona(pos);
-            Sesiones.Barrido b = sesion.barridoDeZona(pos);
-            c.numero.setText(String.valueOf(pos + 1));
-            c.itemView.setOnClickListener(v -> opcionesZona(pos));
-            if (b != null) {
-                c.tomas.setText(b.estantes.size() + " est. · " + b.tomas() + " tomas");
-                c.tomas.setVisibility(View.VISIBLE);
-            } else {
-                c.tomas.setVisibility(View.GONE);
-            }
-            if (f == null) return;
-
-            // Estado de la zona: subida si subieron todas sus fotos.
-            boolean subida = true, error = false;
-            for (String id : sesion.fotosDe(sesion.zonas.get(pos))) {
-                Sesiones.Foto x = sesion.fotos.get(id);
-                if (x == null) continue;
-                subida &= x.subida;
-                error |= !x.subida && x.error != null;
-            }
-            if (subida) {
-                c.estado.setImageResource(R.drawable.ic_check);
-                c.estado.setBackgroundTintList(ColorStateList.valueOf(getColor(R.color.exito)));
-            } else if (error) {
-                c.estado.setImageResource(R.drawable.ic_alerta);
-                c.estado.setBackgroundTintList(ColorStateList.valueOf(getColor(R.color.alerta)));
-            } else {
-                c.estado.setImageResource(R.drawable.ic_reloj);
-                c.estado.setBackgroundTintList(ColorStateList.valueOf(0x99000000));
-            }
-
-            File archivo = repo.archivoMiniatura(sesion, f.id);
-            c.miniatura.setTag(f.id);
-            Bitmap enCache = miniaturas.get(f.id);
-            if (enCache != null) {
-                c.miniatura.setImageBitmap(enCache);
-                return;
-            }
-            c.miniatura.setImageDrawable(null);
-            hilo.execute(() -> {
-                BitmapFactory.Options op = new BitmapFactory.Options();
-                op.inSampleSize = 2;
-                Bitmap bmp = BitmapFactory.decodeFile(archivo.getAbsolutePath(), op);
-                if (bmp == null) return;
-                miniaturas.put(f.id, bmp);
-                principal.post(() -> {
-                    if (f.id.equals(c.miniatura.getTag())) c.miniatura.setImageBitmap(bmp);
-                });
-            });
-        }
-
-        @Override
-        public int getItemCount() {
-            return sesion != null ? elementos.size() : 0;
-        }
-    }
-
-    private static class Celda extends RecyclerView.ViewHolder {
-        final ImageView miniatura, estado;
-        final TextView numero, tomas;
-
-        Celda(View v) {
-            super(v);
-            miniatura = v.findViewById(R.id.miniatura);
-            estado = v.findViewById(R.id.estado);
-            numero = v.findViewById(R.id.numero);
-            tomas = v.findViewById(R.id.tomas);
-        }
     }
 }

@@ -21,13 +21,9 @@ import java.util.concurrent.Executors;
 
 /**
  * La "foto guia": el recorrido terminado anterior (locatorpic/ultima).
- * Baja sus miniaturas al equipo para mostrar, al sacar la zona 12, como se
- * saco la zona 12 la vez anterior. Asi se repite el encuadre y los numeros de
- * zona no se corren de una semana a otra.
- *
- * Tambien recuerda que zonas se sacaron con tomas cercanas (para proponer el
- * mismo modo) y donde empezaba cada sector (para proponer el mismo nombre).
- * De una zona de tomas cercanas, la guia es su primera toma.
+ * Baja sus miniaturas al equipo para mostrar, al sacar FL columna 3, como se
+ * saco FL columna 3 la vez anterior. Asi se repite el encuadre y los numeros
+ * de columna no se corren de una semana a otra.
  */
 public final class GuiaAnterior {
 
@@ -49,10 +45,8 @@ public final class GuiaAnterior {
 
     private volatile String sesionId;
     private volatile long finalizada;
-    private volatile List<String> zonas = new ArrayList<>();
-    // zona -> id de la foto que se usa de guia (la unica o la primera toma)
-    private volatile Map<String, String> guiaDeZona = new HashMap<>();
-    private volatile Map<String, String> sectores = new HashMap<>();
+    // grupo -> columnas -> ids de foto (de arriba hacia abajo)
+    private volatile Map<String, List<List<String>>> grupos = new HashMap<>();
     private boolean escuchando;
 
     private GuiaAnterior(Context ctx) {
@@ -69,35 +63,26 @@ public final class GuiaAnterior {
                     public void onDataChange(DataSnapshot snap) {
                         String id = snap.child("sesionId").getValue(String.class);
                         Long fin = snap.child("finalizada").getValue(Long.class);
-                        List<String> lista = new ArrayList<>();
-                        for (DataSnapshot z : snap.child("zonas").getChildren()) {
-                            String v = z.getValue(String.class);
-                            if (v != null) lista.add(v);
-                        }
-                        Map<String, String> guias = new HashMap<>();
-                        for (String z : lista) {
-                            String primera = null;
-                            for (DataSnapshot fila : snap.child("barridos").child(z).child("estantes").getChildren()) {
-                                for (DataSnapshot t : fila.getChildren()) {
-                                    primera = t.getValue(String.class);
-                                    if (primera != null) break;
+                        Map<String, List<List<String>>> g = new HashMap<>();
+                        List<String> todas = new ArrayList<>();
+                        for (String grupo : Sesiones.GRUPOS) {
+                            List<List<String>> cols = new ArrayList<>();
+                            for (DataSnapshot c : snap.child("grupos").child(grupo).getChildren()) {
+                                List<String> col = new ArrayList<>();
+                                for (DataSnapshot f : c.getChildren()) {
+                                    String v = f.getValue(String.class);
+                                    if (v != null) col.add(v);
                                 }
-                                if (primera != null) break;
+                                if (!col.isEmpty()) cols.add(col);
+                                todas.addAll(col);
                             }
-                            guias.put(z, primera != null ? primera : z);
-                        }
-                        Map<String, String> sec = new HashMap<>();
-                        for (DataSnapshot x : snap.child("sectores").getChildren()) {
-                            String v = x.getValue(String.class);
-                            if (v != null) sec.put(x.getKey(), v);
+                            g.put(grupo, cols);
                         }
                         sesionId = id;
                         finalizada = fin != null ? fin : 0;
-                        zonas = lista;
-                        guiaDeZona = guias;
-                        sectores = sec;
+                        grupos = g;
                         avisar();
-                        if (id != null) bajarMiniaturas(id, new ArrayList<>(guias.values()));
+                        if (id != null) bajarMiniaturas(id, todas);
                     }
 
                     @Override
@@ -113,45 +98,36 @@ public final class GuiaAnterior {
         return finalizada;
     }
 
-    public int cantidadZonas() {
-        return zonas.size();
+    /** Columnas que tuvo el grupo la vez anterior. */
+    public int columnas(String grupo) {
+        List<List<String>> c = grupos.get(grupo);
+        return c != null ? c.size() : 0;
     }
 
-    /** Miniatura de la zona (1, 2, 3...) del recorrido anterior, o null si no hay o todavia no bajo. */
-    public File miniatura(int zona) {
-        List<String> z = zonas;
+    public int totalColumnas() {
+        int n = 0;
+        for (List<List<String>> c : grupos.values()) n += c.size();
+        return n;
+    }
+
+    /** Fotos (estantes) que tuvo esa columna (desde 0) la vez anterior. */
+    public int estantes(String grupo, int columna) {
+        List<List<String>> c = grupos.get(grupo);
+        return c != null && columna >= 0 && columna < c.size() ? c.get(columna).size() : 0;
+    }
+
+    /**
+     * Miniatura de ese lugar (columna y estante desde 0) en el recorrido
+     * anterior, o null si no hay o todavia no bajo.
+     */
+    public File miniatura(String grupo, int columna, int estante) {
+        List<List<String>> c = grupos.get(grupo);
         String id = sesionId;
-        if (id == null || zona < 1 || zona > z.size()) return null;
-        String zid = z.get(zona - 1);
-        String fotoId = guiaDeZona.get(zid);
-        File f = archivo(id, fotoId != null ? fotoId : zid);
+        if (id == null || c == null || columna < 0 || columna >= c.size()) return null;
+        List<String> col = c.get(columna);
+        if (estante < 0 || estante >= col.size()) return null;
+        File f = archivo(id, col.get(estante));
         return f.exists() && f.length() > 0 ? f : null;
-    }
-
-    /** true si la zona (1, 2, 3...) se saco con tomas cercanas la vez anterior. */
-    public boolean fueConTomas(int zona) {
-        List<String> z = zonas;
-        if (zona < 1 || zona > z.size()) return false;
-        String zid = z.get(zona - 1);
-        String guia = guiaDeZona.get(zid);
-        return guia != null && !guia.equals(zid);
-    }
-
-    /** Nombre del sector que EMPEZABA en esa zona la vez anterior, o null. */
-    public String sectorQueEmpieza(int zona) {
-        List<String> z = zonas;
-        if (zona < 1 || zona > z.size()) return null;
-        return sectores.get(z.get(zona - 1));
-    }
-
-    /** Nombres de sector de la vez anterior, en el orden del recorrido. */
-    public List<String> nombresSectores() {
-        List<String> l = new ArrayList<>();
-        for (String zid : zonas) {
-            String n = sectores.get(zid);
-            if (n != null && !l.contains(n)) l.add(n);
-        }
-        return l;
     }
 
     public void agregarOyente(Oyente o) {

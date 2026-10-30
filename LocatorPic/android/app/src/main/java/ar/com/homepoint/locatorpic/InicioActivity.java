@@ -151,7 +151,7 @@ public class InicioActivity extends AppCompatActivity {
         if (s == null) return;
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Descartar recorrido")
-                .setMessage("Se borran las " + s.zonas.size() + " zonas (con todas sus fotos) de este recorrido en curso. La PC no lo va a recibir. ¿Seguro?")
+                .setMessage("Se borran las " + s.totalColumnas() + " columnas (con todas sus fotos) de este recorrido en curso. La PC no lo va a recibir. ¿Seguro?")
                 .setPositiveButton("Descartar", (d, w) -> repo.descartar(s))
                 .setNegativeButton("Cancelar", null).show();
     }
@@ -161,11 +161,11 @@ public class InicioActivity extends AppCompatActivity {
         Sesiones.Sesion s = repo.enCurso();
         if (s != null) {
             tituloActual.setText("Recorrido en curso");
-            numZonas.setText(String.valueOf(s.zonas.size()));
-            txtZonas.setText(s.zonas.size() == 1 ? "zona fotografiada" : "zonas fotografiadas");
+            numZonas.setText(String.valueOf(s.totalColumnas()));
+            txtZonas.setText(s.totalColumnas() == 1 ? "columna fotografiada" : "columnas fotografiadas");
             principal.setText("Seguir sacando fotos");
             accionesCurso.setVisibility(View.VISIBLE);
-            detalleActual.setText("Empezado el " + fecha(s.creada) + ". Cuando termines, finalizalo desde \"Ver zonas\".");
+            detalleActual.setText("Empezado el " + fecha(s.creada) + ". Cuando termines, finalizalo desde \"Ver columnas\".");
         } else {
             tituloActual.setText("Nuevo recorrido");
             principal.setText("Empezar recorrido");
@@ -198,12 +198,12 @@ public class InicioActivity extends AppCompatActivity {
     /** Ultimo recorrido terminado (de cualquier equipo) y que hizo la PC con el. */
     private void pintarGuia() {
         if (repo.enCurso() == null) {
-            int n = guia.cantidadZonas();
+            int n = guia.totalColumnas();
             numZonas.setText(n > 0 ? String.valueOf(n) : "—");
-            txtZonas.setText(n > 0 ? "zonas la vez anterior" : "zonas");
+            txtZonas.setText(n > 0 ? "columnas la vez anterior" : "columnas");
             detalleActual.setText(n > 0
-                    ? "Vas a ver la foto de cada zona de la vez anterior como guía."
-                    : "Primer recorrido: sacá una foto por tramo de estantería (dos columnas), siempre en el mismo orden.");
+                    ? "Vas a ver la foto de cada columna de la vez anterior como guía."
+                    : "Primer recorrido: elegí el grupo (FL, FR, BL, BR, OT) y sacá una foto por columna, de izquierda a derecha.");
         }
 
         String id = guia.sesionId();
@@ -212,7 +212,7 @@ public class InicioActivity extends AppCompatActivity {
             ultimoEstado.setText("");
             return;
         }
-        ultimoFecha.setText(fecha(guia.finalizada()) + " · " + guia.cantidadZonas() + " zonas");
+        ultimoFecha.setText(fecha(guia.finalizada()) + " · " + guia.totalColumnas() + " columnas");
         if (id.equals(ultimaEscuchada)) return;
         if (refUltimaSesion != null && oyenteUltima != null) refUltimaSesion.removeEventListener(oyenteUltima);
         ultimaEscuchada = id;

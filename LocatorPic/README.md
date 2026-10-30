@@ -1,38 +1,47 @@
 # LocatorPic
 
-App Android para sacar las fotos del recorrido semanal del depósito. Saca cada foto con la **máxima calidad de la cámara**, la subís a Firebase con un toque y en la PC un **doble clic en `Locator\relevar.bat`** baja el recorrido, borra las fotos anteriores, lo analiza y guarda las zonas que usa pedidosv2.
+App Android para sacar las fotos del recorrido semanal del depósito. El depósito se divide en **grupos** (FL, FR, BL, BR, OT) y cada grupo en **columnas**. En la app armás una **cuadrícula** por grupo: cada foto que agregás a la derecha es una columna nueva, y las que agregás debajo son otros estantes de la misma columna. Las fotos suben solas a Firebase y en la PC un **doble clic en `Locator\relevar.bat`** baja el recorrido, lo analiza y guarda dónde está cada producto ("FL · Columna 3"), que es lo que usa pedidosv2.
 
 ```
  Android (LocatorPic)                    Firebase (pedidos-87064)                PC (Locator)
  ───────────────────                     ────────────────────────                ────────────
- Zona 1 → foto → ✓ Confirmar  ──sube──►  Storage: locatorpic/{recorrido}/        relevar.bat (doble clic)
- Zona 2 → foto → ✓ Confirmar              RTDB:   locatorpic/sesiones/…   ──►     1. baja el último recorrido
- …                                                locatorpic/ultima               2. borra las fotos anteriores
- Finalizar recorrido  ─────────────────►  estado "lista"                          3. analiza con Claude
-                                                                                  4. guarda ubicaciones/mapa
+ FL: C1 → C2 → C3 …           ──sube──►  Storage: locatorpic/{recorrido}/        relevar.bat (doble clic)
+      ↓     ↓                            RTDB:   locatorpic/sesiones/…   ──►     1. baja el último recorrido
+     (estantes de abajo)                         locatorpic/ultima               2. borra las fotos anteriores
+ FR: C1 → C2 …                                                                   3. analiza con Claude
+ Finalizar recorrido  ─────────────────►  estado "lista"                          4. guarda ubicaciones/mapa
  "Analizado: 812 productos"  ◄──────────  estado "procesada"  ◄──────────────       (pedidosv2 lo usa)
 ```
 
+## Los grupos
+
+| Grupo | Qué es |
+|---|---|
+| **FL** | Adelante izquierda |
+| **FR** | Adelante derecha |
+| **BL** | Atrás izquierda |
+| **BR** | Atrás derecha |
+| **OT** | Otros |
+
+Las columnas se numeran **desde 1 en cada grupo**: FL · Columna 1, 2, 3… y FR · Columna 1, 2… En pedidosv2 los artículos salen primero por grupo (en el orden FL, FR, BL, BR, OT) y adentro por columna. Los estantes no se muestran.
+
 ## Qué tiene la app
 
-- **Calidad máxima:**
-  - CameraX con la resolución más alta del equipo en 4:3, modo "máxima calidad" y JPEG al 95%.
-  - Si el equipo lo soporta, botón **HDR**.
-- **Guías para encuadrar:**
-  - Una línea vertical marca dónde se corta la foto en columna izquierda y derecha.
-  - Un **nivel** se pone verde cuando el equipo está derecho.
-- **Foto guía de la vez anterior:** al sacar la zona 12 ves cómo quedó la zona 12 del recorrido anterior. Si la tocás, se **superpone** semitransparente sobre el visor, para repetir el mismo encuadre. Así los números de zona no se corren de una semana a otra.
-- **Revisión antes de confirmar:**
-  - zoom para ver que los precios se lean;
-  - aviso si la foto parece **borrosa, oscura o torcida**;
-  - botones **Confirmar** o **Repetir**.
-- **Funciona sin señal:** las fotos confirmadas quedan en el equipo y suben solas cuando hay conexión, aunque cierres la app. Si algo falla, reintenta.
-- **Grilla de zonas:** se puede **rehacer** una foto, **insertar** una zona que te salteaste o **eliminar** una que sobra, y las demás se renumeran solas.
-- **Al finalizar:** avisa si la cantidad de zonas no coincide con la vez anterior.
+- **En vertical**, como se usa el celular normalmente. Cada foto es una columna de ancho completo.
+- **Cuadrícula libre:** en la cámara elegís hacia dónde va la próxima foto:
+  - **→ Columna nueva:** la siguiente foto es otra columna, a la derecha de la última.
+  - **↓ Estante de abajo:** la siguiente foto va debajo, en la misma columna. Sirve cuando una columna no entra en una sola foto. Arriba del visor aparece la franja de abajo de la foto anterior, para seguir desde ahí.
+
+  La elección queda hasta que la cambies.
+- **Se guarda sola:** si la foto sale nítida, con luz y derecha, se guarda sin preguntar. Durante unos segundos aparece **"Deshacer"**. Si sale borrosa, oscura o torcida, se abre la revisión con zoom y los botones **Confirmar** o **Repetir**.
+- **Nivel:** se pone verde cuando el equipo está derecho.
+- **Foto guía de la vez anterior:** al sacar FL · Columna 3 ves, abajo a la izquierda, cómo quedó esa misma columna la semana anterior. Si la tocás, se **superpone** semitransparente sobre el visor, para repetir el encuadre. Así los números de columna no se corren de una semana a otra.
+- **Funciona sin señal:** las fotos quedan en el equipo y suben solas cuando hay conexión, aunque cierres la app.
+- **Cuadrícula para revisar** (botón de la grilla): una pestaña por grupo, con las columnas una al lado de la otra. Ahí se puede rehacer o eliminar una foto, insertar una columna que te salteaste, agregar un estante abajo o eliminar una columna. Las demás se renumeran solas.
+- **Al finalizar:** avisa en qué grupos cambió la cantidad de columnas respecto de la vez anterior.
 - **Pantalla de inicio:** muestra si la PC ya bajó y analizó el último recorrido, y cuántos productos ubicó.
 - **Atajos:** la **tecla de volumen** también saca la foto. La pantalla no se apaga mientras sacás fotos.
-- **Tomas cercanas (opcional, por zona):** en vez de una foto lejana, varias fotos de cerca por estante, que la PC une como un rompecabezas. Ver más abajo.
-- **Sectores:** nombre para grupos de zonas ("Adelante izquierda", "Atrás derecha"). pedidosv2 agrupa la lista de recolección por sector.
+- **Ícono:** el logo de HomePoint en blanco sobre naranja.
 
 ---
 
@@ -82,47 +91,26 @@ Abrí LocatorPic y entrá con el mismo usuario y contraseña de pedidosv2.
 
 ## Uso semanal
 
-1. **En el depósito**:
-   1. Abrí LocatorPic y tocá **Empezar recorrido**.
-   2. Para cada tramo de estantería: encuadrá las **dos columnas**, una a cada lado de la línea, y sacá la foto con el botón o con la tecla de volumen.
-   3. Revisá la foto y tocá **Confirmar**. Pasa sola a la zona siguiente.
-   4. Si hay foto guía, tocala para superponerla y repetir el encuadre.
-2. Al terminar: **Ver zonas → Finalizar**. Si todavía hay fotos subiendo, esperá a tener señal o WiFi.
-3. **En la PC**: doble clic en **`Locator\relevar.bat`**. Baja el recorrido, analiza, abre el informe y pregunta si guardar.
+1. **En el depósito:**
+   1. Abrí LocatorPic y tocá **Empezar recorrido**. La app pregunta **qué grupo vas a fotografiar** (FL, FR, BL, BR u OT). Después lo podés cambiar con los botones de arriba de la cámara.
+   2. Parate frente a la **primera columna de la izquierda** del grupo y encuadrala entera, de ancho completo. Sacá la foto con el botón o con la tecla de volumen.
+   3. Con **→ Columna nueva** marcado, correte a la columna siguiente y sacá otra foto. Así hasta terminar el grupo.
+   4. Si una columna no entra en una foto: sacá la parte de arriba, tocá **↓ Estante de abajo** y sacá la parte de abajo, haciendo coincidir la franja que aparece arriba del visor. Después volvé a **→ Columna nueva** para seguir.
+   5. Cambiá de grupo arriba y repetí.
+2. Al terminar: botón de la **grilla** → **Finalizar**. Si todavía hay fotos subiendo, esperá a tener señal o WiFi.
+3. **En la PC:** doble clic en **`Locator\relevar.bat`**. Baja el recorrido, analiza, abre el informe y pregunta si guardar.
 4. En la app, la pantalla de inicio pasa a decir **"Analizado en la PC: N productos ubicados"**.
 
-### Tomas cercanas (para tramos con etiquetas chicas)
+### Corregir en la cuadrícula
 
-Arriba a la izquierda de la cámara hay un selector: **Foto única | Tomas cercanas**. Se elige por zona. La app propone el modo que tuvo esa zona la semana anterior.
-
-Con **Tomas cercanas**:
-1. Acercate al **estante de arriba** y sacá la primera toma **del extremo izquierdo** del tramo.
-2. Correte un paso a la derecha. A la izquierda del visor vas a ver, semitransparente, **la franja derecha de la toma anterior**. Encuadrá para que esa franja coincida con lo que ves y sacá la toma siguiente.
-
-   Las tomas se tienen que pisar un poco. Si no se pisan, la PC no las puede unir.
-3. Seguí así hasta el extremo derecho del tramo.
-4. Tocá **↓ Siguiente estante** y repetí con el estante de abajo, otra vez de izquierda a derecha. Ahora la franja de guía aparece arriba: es la parte de abajo del estante anterior.
-5. Al terminar el último estante, tocá **✓ Terminar zona**. Pasa a la zona siguiente.
-
-Detalles:
-- **Confirmación automática:** si la toma sale nítida, con luz y derecha, se guarda sola. Durante unos segundos aparece **"Deshacer"** por si querés repetirla. Si sale borrosa u oscura, se abre la revisión completa.
-- **El encabezado** muestra en qué estante y toma vas: "Estante 2 · toma 3".
-- **Resolución:** las tomas se sacan a unos 8 MP, porque de cerca alcanza y suben más rápido.
-- **Orientación del celular:** se guarda en cada toma. La PC la usa si dos tomas no se pueden unir por imagen.
-- **En la grilla de zonas,** estas zonas muestran "3 est. · 9 tomas".
-- **Para pedidosv2 no cambia nada:** cada producto sigue siendo "Zona 12 · izquierda/derecha". Lo que mejora es la lectura de los precios.
-- **Gasta más límite de la suscripción.** Cada toma es una imagen para Claude: usalo solo donde haga falta.
-
-### Sectores
-
-El chip con la banderita, debajo del número de zona, pone un nombre al grupo de zonas que **empieza** en esa zona. El sector sigue hasta la zona donde empieza otro.
-
-- **Para ponerlo:** tocá el chip y elegí un nombre usado antes, o escribí uno nuevo.
-- **Si la semana anterior un sector empezaba en esa zona,** el chip se pone naranja: "¿Acá empieza «Adelante izquierda»? Tocá". Con un toque se aplica.
-- **Para cambiarlo después:** en la grilla de zonas, tocá una zona → **Cambiar sector desde acá**. Ahí también se puede quitar.
-- **Al eliminar la zona donde empieza un sector,** el sector pasa a empezar en la siguiente.
-
-En pedidosv2, "Artículos necesarios" muestra un encabezado por sector y adentro las zonas en orden. Así se junta la mercadería a medida que se avanza.
+| Para… | Tocá… |
+|---|---|
+| Rehacer una foto | la foto → **Rehacer esta foto** |
+| Borrar una foto | la foto → **Eliminar esta foto** (si era la única de la columna, la columna desaparece) |
+| Agregar una columna que te salteaste | el número de la columna siguiente (C4) → **Insertar una columna antes** |
+| Agregar un estante abajo | el **+ ↓ Estante** debajo de la columna |
+| Agregar columnas al final | el **+ → Columna nueva** a la derecha de todo |
+| Borrar una columna entera | el número de la columna → **Eliminar la columna** |
 
 ### Qué pasa con las fotos
 
@@ -131,6 +119,8 @@ En pedidosv2, "Artículos necesarios" muestra un encabezado por sector y adentro
 | Equipo Android | Las fotos de un recorrido se borran solas cuando la PC lo baja. |
 | Firebase Storage | Solo el **último** recorrido. Cuando la PC baja uno nuevo, borra los anteriores. Las miniaturas del último son la foto guía de la semana siguiente. |
 | PC (`C:\HomePoint\Relevamiento\actual`) | Solo el último recorrido. Se reemplaza recién cuando el nuevo bajó completo. |
+
+Cada foto se saca a unos **8 MP**: de cerca alcanza y suben más rápido.
 
 ### Estados de un recorrido
 
@@ -142,6 +132,14 @@ En pedidosv2, "Artículos necesarios" muestra un encabezado por sector y adentro
 | `procesada` | La PC guardó las ubicaciones. |
 | `archivada` | Recorrido viejo: sus fotos ya se borraron de Storage. |
 
+### Datos en Firebase
+
+```
+locatorpic/sesiones/{id}/grupos/FL = [ [fotoId, fotoId], [fotoId], … ]   columna 1, columna 2…
+                                                                          (fotos de arriba hacia abajo)
+locatorpic/ultima/grupos            lo mismo, del último recorrido terminado (foto guía)
+```
+
 ---
 
 ## Problemas frecuentes
@@ -150,7 +148,7 @@ En pedidosv2, "Artículos necesarios" muestra un encabezado por sector y adentro
 |---|---|
 | "Falta configurar Firebase" en la app | Falta `google-services.json` (paso 1). Copialo y volvé a compilar. |
 | Fotos que no suben ("sin subir · tocá para reintentar") | Revisá la señal. Si dice "Sin permiso en Storage", faltan las reglas del paso 3. |
-| La PC dice "La foto de la zona N no está en Storage" | Ese recorrido se finalizó sin terminar de subir. En la app, abrí la grilla, esperá a que todo tenga ✓ y volvé a ejecutar `relevar.bat`. |
+| La PC dice "La foto de FL columna N no está en Storage" | Ese recorrido se finalizó sin terminar de subir. En la app, abrí la grilla, esperá a que todo tenga ✓ y volvé a ejecutar `relevar.bat`. |
 | La PC dice "Todavía no hay recorridos terminados" | Falta tocar **Finalizar** en la app. |
 | El nivel o el HDR se comportan raro en algún equipo | El HDR se puede apagar con su botón; la app recuerda la elección. |
 

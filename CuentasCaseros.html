@@ -135,8 +135,8 @@ button{cursor:pointer;background:none;border:0}
 .seg button.on{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--line)}
 .seg button small{font-weight:500;color:var(--faint);margin-left:5px}
 .seg button.on small{color:var(--muted)}
-.tc-manual{width:96px;height:30px;border:1px solid var(--line);border-radius:7px;background:var(--paper);padding:0 8px;text-align:right}
-.tc-manual:focus{outline:none;border-color:var(--credito)}
+.tc-info span{display:inline-flex;align-items:center;height:30px;padding:0 11px;border-radius:7px;font-size:.8rem;font-weight:600;color:var(--muted);white-space:nowrap}
+.tc-info span small{font-weight:600;color:var(--ink);margin-left:5px}
 .icon-btn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;border:1px solid var(--line);background:var(--paper);color:var(--ink-2)}
 .icon-btn:hover{background:var(--paper-2)}
 .icon-btn svg{width:17px;height:17px}
@@ -425,14 +425,12 @@ tr.sub td{color:var(--muted);font-style:italic;background:var(--paper-2)}
         <h1>Cuentas Caseros</h1>
         <span class="live" id="actualizado"></span>
       </div>
-      <div class="tc" role="group" aria-label="Cotización del dólar para convertir facturas en pesos">
-        <span class="tc-lbl">US$ 1 =</span>
-        <div class="seg" id="tcSeg">
-          <button type="button" data-m="oficial">Oficial<small id="tcOf">…</small></button>
-          <button type="button" data-m="blue">Blue<small id="tcBl">…</small></button>
-          <button type="button" data-m="manual">Manual</button>
+      <div class="tc" role="group" aria-label="Cotización del dólar de hoy (informativa)" title="Solo informativa: cada importe en pesos se convierte con el blue de su fecha">
+        <span class="tc-lbl">Hoy US$ 1 =</span>
+        <div class="seg tc-info" id="tcSeg">
+          <span>Oficial<small id="tcOf">…</small></span>
+          <span>Blue<small id="tcBl">…</small></span>
         </div>
-        <input type="text" inputmode="decimal" class="tc-manual" id="tcManual" placeholder="$ 0,00" aria-label="Cotización manual en pesos" hidden>
       </div>
       <button type="button" class="tema-btn" data-tema></button>
       <button type="button" class="icon-btn" id="btnRecargar" title="Actualizar datos" aria-label="Actualizar datos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
@@ -483,6 +481,14 @@ tr.sub td{color:var(--muted);font-style:italic;background:var(--paper-2)}
 //                        + dinero Munro → Caseros
 //  Créditos de Caseros = mercadería Caseros → Munro + transferencias verificadas de Caseros
 //                        + dinero Caseros → Munro   (ARS ÷ la misma cotización)
+//  Cada importe en pesos se pasa a dólares con el blue (venta) de su momento:
+//   · Facturas: el blue del día de la factura.
+//   · Transferencias: el blue guardado al verificarla en controlTransferencias.html
+//     (cotizacionesVerificadas); si no tiene, el blue del día de la verificación.
+//   · Retiros: el blue guardado con el retiro; si no tiene, el blue del día del retiro.
+//  El blue de cada día sale del historial de Bluelytics y se guarda en
+//  cuentasCaseros/blueDia (compartido entre equipos, no se vuelve a pedir). Si falta,
+//  se usa el blue de hoy, con aviso. La cotización de la barra es solo informativa.
 //  Saldo = cargos − créditos   (> 0: Caseros tiene pendiente compensar; < 0: saldo a favor)
 // ============================================================
 
@@ -514,7 +520,8 @@ const SUC = {
   '2': { nombre: 'Caseros', tono: '#3f8fe6' }
 };
 const BLUELYTICS_URL = 'https://api.bluelytics.com.ar/v2/latest';
-const LS_TC = 'hpCuentasCaserosTC';
+const BLUELYTICS_DIA_URL = 'https://api.bluelytics.com.ar/v2/historical?day=';
+const BLUELYTICS_HIST_URL = 'https://api.bluelytics.com.ar/v2/evolution.json';
 const LS_PER = 'hpCuentasCaserosPeriodo';
 const TOL = 0.005;
 const NODO_CUENTA = 'cuentasCaseros';
@@ -715,10 +722,14 @@ const ui = {
   // Formulario de retiro (sobrevive a los repintados)
   retAbierto: false, retDir: 'CM', retMon: 'ARS', retFecha: '', retMonto: '', retNota: '', retGuardando: false
 };
-let tc = { modo: 'oficial', manual: null, oficial: null, blue: null, error: false };
+// Cotización de hoy (Bluelytics): se muestra en la barra y es el respaldo cuando falta
+// el blue de un día.
+let tc = { oficial: null, blue: null, error: false };
+// Blue guardado al verificar cada transferencia (por pedido) y blue de venta de cada día.
+let blueVerif = {};
+let blueDia = {};
 let per = { modo: 'todo', desde: '', hasta: '' };
 
-try { const g = JSON.parse(lsGet(LS_TC) || 'null'); if (g){ tc.modo = g.modo || 'oficial'; tc.manual = num(g.manual); } } catch(_){}
 try { const g = JSON.parse(lsGet(LS_PER) || 'null'); if (g && g.modo) per = Object.assign(per, g); } catch(_){}
 
 function iniciarApp(){
@@ -776,14 +787,85 @@ async function cargarPedidosVerificados(){
   const desde = transferenciasDesde();
   const ini = desde ? new Date(desde + 'T00:00:00').getTime() : null;
   const ids = ini == null ? [] : Object.keys(datos.verificadas).filter(id => Number(datos.verificadas[id]) >= ini);
-  const res = await Promise.all(ids.map(id => db.cas.ref('pedidos/' + id).once('value').then(s => [id, s.val()], () => [id, undefined])));
+  const res = await Promise.all(ids.map(id => Promise.all([
+    db.cas.ref('pedidos/' + id).once('value').then(s => s.val(), () => undefined),
+    db.cas.ref('cotizacionesVerificadas/' + id).once('value').then(s => s.val(), () => null)
+  ]).then(([p, c]) => [id, p, c])));
   datos.pedidos = {};
+  blueVerif = {};
   let fallidos = 0;
-  res.forEach(([id, p]) => { if (p === undefined) fallidos++; else if (p) datos.pedidos[id] = p; });
+  res.forEach(([id, p, c]) => {
+    if (p === undefined) fallidos++; else if (p) datos.pedidos[id] = p;
+    const v = num(c && c.blue);
+    if (v > 0) blueVerif[id] = v;
+  });
+  await cargarBlueDias();
   if (fallidos) errores.pedidos = `No se pudieron leer ${plural(fallidos, 'pedido verificado', 'pedidos verificados')} de Caseros: su transferencia no se descuenta. Probá Actualizar.`;
   else delete errores.pedidos;
   listos.add('pedidos');
 }
+
+function diaVerificacion(id){
+  const verif = Number(datos.verificadas[id]) || 0;
+  return verif ? isoDia(new Date(verif)) : '';
+}
+
+function fetchJson(url){
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  return fetch(url, { signal: ctrl.signal }).then(r => r.json()).finally(() => clearTimeout(t));
+}
+
+// Días anteriores a hoy cuyo blue hace falta: facturas y retiros en pesos (sin cotización
+// propia) y transferencias sin blue de la verificación.
+function diasSinBlue(){
+  const hoy = isoDia(new Date()), dias = new Set();
+  Object.values(datos.facturas).forEach(f => { if (f && f.sucursal === 'Caseros' && f.moneda !== 'USD' && f.fecha) dias.add(f.fecha); });
+  Object.values(datos.cuenta.retiros || {}).forEach(x => { if (x && x.moneda !== 'USD' && !(num(x.cotizacion) > 0) && x.fecha) dias.add(x.fecha); });
+  Object.keys(datos.pedidos).forEach(id => { if (!blueVerif[id]) dias.add(diaVerificacion(id)); });
+  return [...dias].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < hoy && !(num(blueDia[d]) > 0));
+}
+
+// Completa el blue de cada día: primero lo guardado en Firebase (cuentasCaseros/blueDia);
+// lo que falta se busca en el historial de Bluelytics (una sola descarga) y se guarda en
+// Firebase para que ningún equipo lo vuelva a pedir. Los fines de semana y feriados no
+// tienen cotización: toman la del último día hábil anterior.
+async function cargarBlueDias(){
+  Object.entries(datos.cuenta.blueDia || {}).forEach(([d, v]) => { if (num(v) > 0) blueDia[d] = num(v); });
+  const faltan = diasSinBlue();
+  if (!faltan.length) return;
+  try {
+    const hist = (await fetchJson(BLUELYTICS_HIST_URL))
+      .filter(x => x && x.source === 'Blue' && num(x.value_sell) > 0)
+      .map(x => [x.date, num(x.value_sell)])
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const nuevos = {};
+    faltan.forEach(d => {
+      let v = null;
+      for (const [f, val] of hist){ if (f > d) break; v = val; }
+      if (v){ blueDia[d] = v; nuevos[d] = v; }
+    });
+    if (Object.keys(nuevos).length) db.main.ref(NODO_CUENTA + '/blueDia').update(nuevos)
+      .catch(e => console.warn('No se pudo guardar el blue de cada día:', e));
+  } catch (e){ console.warn('No se pudo obtener el historial del blue:', e); }
+}
+
+// Blue de un día: el guardado; hoy, el actual; si falta, el de hoy como respaldo.
+function blueDeDia(d){
+  const v = num(blueDia[d]);
+  if (v > 0) return { valor: v, fuente: 'dia' };
+  if (tc.blue) return { valor: tc.blue, fuente: d === isoDia(new Date()) ? 'dia' : 'hoy' };
+  return null;
+}
+
+// Dólar con el que se convierte una transferencia: { valor, fuente } o null.
+function cotizacionTransferencia(id){
+  if (blueVerif[id]) return { valor: blueVerif[id], fuente: 'verif' };
+  return blueDeDia(diaVerificacion(id));
+}
+const FUENTE_TC = { verif: 'blue al verificar', retiro: 'blue al cargar el retiro', dia: 'blue del día', hoy: 'blue de hoy (falta el de ese día)' };
+// Texto "a $ X · fuente" debajo de un importe convertido
+function tcTxt(m){ return m.tc ? `<span class="sec-txt">a ${fmtARS(m.tc)} · ${esc(FUENTE_TC[m.tcFuente])}</span>` : ''; }
 
 // Solo vuelve a leer cuentasCaseros (después de guardar un retiro o la fecha).
 async function recargarCuenta(){
@@ -814,39 +896,35 @@ async function cargarCotizacion(){
   } catch (e){
     console.warn('No se pudo obtener la cotización:', e);
     tc.error = true;
-    if (tc.modo !== 'manual') tc.modo = 'manual';
   }
   pintarControlesTc();
   render();
 }
-function cotizacion(){
-  const v = tc.modo === 'manual' ? tc.manual : tc[tc.modo];
-  return v && v > 0 ? v : null;
-}
+// Blue de hoy (solo para mostrar y como respaldo)
+function cotizacion(){ return tc.blue && tc.blue > 0 ? tc.blue : null; }
 function pintarControlesTc(){
   $('tcOf').textContent = tc.oficial ? nf2.format(tc.oficial).replace(/,00$/, '') : (tc.error ? 's/d' : '…');
   $('tcBl').textContent = tc.blue ? nf2.format(tc.blue).replace(/,00$/, '') : (tc.error ? 's/d' : '…');
-  $('tcSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === tc.modo));
-  $('tcManual').hidden = tc.modo !== 'manual';
-  if (tc.modo === 'manual' && document.activeElement !== $('tcManual')) $('tcManual').value = tc.manual ? nf2.format(tc.manual) : '';
 }
-function guardarTc(){ lsSet(LS_TC, JSON.stringify({ modo: tc.modo, manual: tc.manual })); }
-$('tcSeg').addEventListener('click', e => {
-  const b = e.target.closest('[data-m]');
-  if (!b) return;
-  tc.modo = b.dataset.m;
-  if (tc.modo === 'manual' && !tc.manual) tc.manual = tc.oficial || null;
-  guardarTc(); pintarControlesTc(); render();
-  if (tc.modo === 'manual') $('tcManual').focus();
-});
-$('tcManual').addEventListener('input', () => {
-  // Acepta "1.250,50" o "1250.5"
-  let s = $('tcManual').value.replace(/[^\d.,]/g, '');
-  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
-  tc.manual = num(s);
-  guardarTc(); render();
-});
-$('tcManual').addEventListener('blur', pintarControlesTc);
+
+// Blue para guardar con un retiro: hoy, el actual; otro día, el de ese día.
+async function blueParaRetiro(fecha){
+  if (fecha === isoDia(new Date())){
+    try {
+      const d = await fetchJson(BLUELYTICS_URL);
+      const v = num(d && d.blue && d.blue.value_sell);
+      if (v > 0){ tc.blue = v; return v; }
+    } catch (e){ console.warn('No se pudo obtener el blue:', e); }
+    return cotizacion();
+  }
+  if (num(blueDia[fecha]) > 0) return num(blueDia[fecha]);
+  try {
+    const d = await fetchJson(BLUELYTICS_DIA_URL + fecha);
+    const v = num(d && d.blue && d.blue.value_sell);
+    if (v > 0) return v;
+  } catch (e){ console.warn('No se pudo obtener el blue del ' + fecha + ':', e); }
+  return null;
+}
 
 // ============================================================
 //  Período
@@ -933,17 +1011,18 @@ function montoTransferido(p){
 
 // Todos los movimientos de la cuenta, en orden cronológico.
 function construirMovimientos(){
-  const k = cotizacion();
   const movs = [];
   Object.entries(datos.facturas).forEach(([id, f]) => {
     if (!f || f.sucursal !== 'Caseros') return;
     f = Object.assign({ id }, f);
     const monto = Number(f.montoTotal) || 0;
     const moneda = f.moneda === 'USD' ? 'USD' : 'ARS';
+    const ct = moneda === 'ARS' ? blueDeDia(f.fecha || '') : null;
     movs.push({
       id: 'f_' + id, tipo: 'F', fecha: f.fecha || '', orden: f.creadoEn || 0,
       ref: f.numero || '—', det: nombreProveedor(f.proveedorId),
-      moneda, original: monto, usd: moneda === 'USD' ? monto : (k ? monto / k : null),
+      moneda, original: monto, usd: moneda === 'USD' ? monto : (ct ? monto / ct.valor : null),
+      tc: ct ? ct.valor : null, tcFuente: ct ? ct.fuente : null,
       lado: 'cargo', pago: estadoPagoFactura(f)
     });
   });
@@ -970,10 +1049,13 @@ function construirMovimientos(){
     if (!desde || fecha < desde) return;
     const monto = montoTransferido(p);
     if (!(monto > 0)) return;
+    const ct = cotizacionTransferencia(id);
+    const kp = ct ? ct.valor : null;
     movs.push({
       id: 'p_' + id, tipo: 'P', fecha, orden: isNaN(fp) ? verif : fp.getTime(),
       ref: (p.cliente && p.cliente.nombre) || 'Cliente sin nombre', det: (p.pagos && p.pagos.alias) || '',
-      moneda: 'ARS', original: monto, usd: k ? monto / k : null, lado: 'credito', dir: 'CM'
+      moneda: 'ARS', original: monto, usd: kp ? monto / kp : null, lado: 'credito', dir: 'CM',
+      tc: kp, tcFuente: ct ? ct.fuente : null
     });
   });
   // Retiros de dinero cargados a mano. CM: Caseros entrega dinero a Munro (baja la deuda).
@@ -981,10 +1063,12 @@ function construirMovimientos(){
     if (!x || (x.sentido !== 'CM' && x.sentido !== 'MC')) return;
     const monto = Number(x.monto) || 0;
     const moneda = x.moneda === 'USD' ? 'USD' : 'ARS';
+    const ct = moneda === 'USD' ? null : num(x.cotizacion) > 0 ? { valor: num(x.cotizacion), fuente: 'retiro' } : blueDeDia(x.fecha || '');
     movs.push({
       id: 'r_' + id, tipo: 'R', fecha: x.fecha || '', orden: x.creadoEn || 0,
       ref: 'Retiro de dinero', det: x.nota || '', moneda, original: monto,
-      usd: moneda === 'USD' ? monto : (k ? monto / k : null),
+      usd: moneda === 'USD' ? monto : (ct ? monto / ct.valor : null),
+      tc: ct ? ct.valor : null, tcFuente: ct ? ct.fuente : null,
       lado: x.sentido === 'CM' ? 'credito' : 'cargo', dir: x.sentido, retiroId: id, x
     });
   });
@@ -1067,9 +1151,11 @@ function render(){
   // --- Avisos ---
   const av = [];
   Object.values(errores).forEach(e => av.push(['bad', esc(e)]));
-  if (!k) av.push(['bad', 'Falta la cotización del dólar: las facturas, transferencias y retiros en pesos no entran en el balance hasta que cargues un valor (elegí <b>Manual</b> arriba).']);
+  const sinTc = r.mov.filter(m => m.moneda === 'ARS' && m.usd == null).length;
+  if (sinTc) av.push(['bad', `${plural(sinTc, 'movimiento', 'movimientos')} en pesos no ${sinTc === 1 ? 'tiene' : 'tienen'} cotización del dólar (no se pudo consultar Bluelytics) y no ${sinTc === 1 ? 'entra' : 'entran'} en el balance. Probá Actualizar.`]);
   if (!transferenciasDesde()) av.push(['', 'Todavía no se eligió desde qué fecha se descuentan las transferencias verificadas de Caseros. Elegila en la pestaña <b>Transferencias</b>.']);
-  else if (tc.error && tc.modo === 'manual') av.push(['', 'No se pudo traer la cotización de internet; se usa el valor cargado a mano.']);
+  const conBlueHoy = r.mov.filter(m => m.tcFuente === 'hoy').length;
+  if (conBlueHoy) av.push(['', `${plural(conBlueHoy, 'movimiento', 'movimientos')} en pesos no ${conBlueHoy === 1 ? 'tiene' : 'tienen'} el blue de su fecha y se ${conBlueHoy === 1 ? 'convierte' : 'convierten'} con el blue de hoy. Probá Actualizar.`]);
   const sinSuc = Object.values(datos.facturas).filter(f => f && !f.sucursal).length;
   if (sinSuc) av.push(['', `${plural(sinSuc, 'factura', 'facturas')} de Proveedores no ${sinSuc === 1 ? 'tiene' : 'tienen'} sucursal asignada y no se ${sinSuc === 1 ? 'incluye' : 'incluyen'}. Si alguna es de Caseros, asignale la sucursal en Proveedores.`]);
   if (r.sinCosto) av.push(['', `${plural(r.sinCosto, 'artículo despachado', 'artículos despachados')} en el período no ${r.sinCosto === 1 ? 'tiene' : 'tienen'} costo cargado y ${r.sinCosto === 1 ? 'cuenta' : 'cuentan'} como US$ 0.`]);
@@ -1079,7 +1165,7 @@ function render(){
   pintarPanel();
 
   $('printPeriodo').innerHTML = etiquetaPeriodo();
-  $('printMeta').textContent = 'Cotización ' + (k ? fmtARS(k) + ' (' + (tc.modo === 'manual' ? 'manual' : tc.modo) + ')' : 'sin cargar') + ' · Emitido ' + new Date().toLocaleString('es-AR');
+  $('printMeta').textContent = 'Pesos convertidos al blue de cada fecha' + (k ? ' · Blue de hoy ' + fmtARS(k) : '') + ' · Emitido ' + new Date().toLocaleString('es-AR');
 }
 
 function heroHtml(r, k){
@@ -1123,7 +1209,7 @@ function heroHtml(r, k){
       <div class="cob-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(cob, 1) * 100)}" aria-label="Cobertura"><i style="width:${Math.min(cob, 1) * 100}%"></i></div>
       <div class="kpis">
         <div class="kpi"><span><i class="sw" style="background:var(--cargo)"></i>Facturas en USD</span><b class="num">${fmtUSD(r.facUSD)}</b><em>${plural(r.nFac, 'factura', 'facturas')} en total</em></div>
-        <div class="kpi"><span><i class="sw" style="background:var(--cargo)"></i>Facturas en pesos</span><b class="num">${fmtARS(r.facARS)}</b><em>${k ? '≈ ' + fmtUSD(r.facARSusd) + ' a ' + fmtARS(k) : 'sin cotización'}</em></div>
+        <div class="kpi"><span><i class="sw" style="background:var(--cargo)"></i>Facturas en pesos</span><b class="num">${fmtARS(r.facARS)}</b><em>≈ ${fmtUSD(r.facARSusd)} al blue de cada fecha${r.nFacARSsinTc ? ' · ' + r.nFacARSsinTc + ' sin cotización' : ''}</em></div>
         <div class="kpi"><span>${dotHtml('2')}Caseros → Munro</span><b class="num">${fmtUSD(r.cm)}</b><em>${plural(r.nCM, 'traspaso', 'traspasos')} · ${r.uCM} u.</em></div>
         <div class="kpi"><span>${dotHtml('1')}Munro → Caseros</span><b class="num">${fmtUSD(r.mc)}</b><em>${plural(r.nMC, 'traspaso', 'traspasos')} · ${r.uMC} u.</em></div>
         <div class="kpi"><span><i class="sw" style="background:var(--credito)"></i>Transferencias</span><b class="num">${fmtUSD(r.trf)}</b><em>${plural(r.nTrf, 'verificada', 'verificadas')} · ${fmtARS(r.trfARS)}</em></div>
@@ -1319,7 +1405,7 @@ function pintarFacturas(){
       <td class="num">${fmtFecha(m.fecha)}</td>
       <td><b>${esc(m.det)}</b><span class="sec-txt mono">N° ${esc(m.ref)}</span></td>
       <td class="r num"><span class="mon">${m.moneda}</span>${fmtMon(m.original, m.moneda)}</td>
-      <td class="r num hide-sm">${m.usd == null ? '<span class="dim">—</span>' : m.moneda === 'USD' ? fmtUSD(m.usd) : '<span title="Convertido con la cotización elegida">≈ ' + fmtUSD(m.usd) + '</span>'}</td>
+      <td class="r num hide-sm">${m.usd == null ? '<span class="dim">—</span>' : m.moneda === 'USD' ? fmtUSD(m.usd) : '≈ ' + fmtUSD(m.usd) + tcTxt(m)}</td>
       <td class="hide-sm"><span class="chip ${m.pago.estado}" title="Pagado en Proveedores: ${fmtMon(m.pago.pagado, m.moneda)}">${m.pago.estado === 'pagada' ? 'Pagada' : m.pago.estado === 'parcial' ? 'Parcial' : 'Pendiente'}</span></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -1415,7 +1501,7 @@ function pintarTransferencias(){
       <td class="num">${fmtFecha(m.fecha)}</td>
       <td><b>${esc(m.ref)}</b>${m.det ? `<span class="sec-txt mono">${esc(m.det)}</span>` : ''}</td>
       <td class="r num">${fmtARS(m.original)}</td>
-      <td class="r num hide-sm">${m.usd == null ? '<span class="dim">—</span>' : '<span title="Convertido con la cotización elegida">≈ ' + fmtUSD(m.usd) + '</span>'}</td>
+      <td class="r num hide-sm">${m.usd == null ? '<span class="dim">—</span>' : '≈ ' + fmtUSD(m.usd) + tcTxt(m)}</td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -1434,7 +1520,7 @@ function pintarRetiros(){
       <td class="num">${fmtFecha(m.fecha)}</td>
       <td><span class="tr-ruta">${dotHtml(o)}${SUC[o].nombre}<em>→</em>${dotHtml(de)}${SUC[de].nombre}</span>${m.det ? `<span class="sec-txt">${esc(m.det)}</span>` : ''}</td>
       <td class="r num ${m.dir === 'CM' ? 'neg' : 'pos'}"><span class="mon">${m.moneda}</span>${fmtMon(m.original, m.moneda)}</td>
-      <td class="r num hide-sm">${m.usd == null ? '<span class="dim">—</span>' : m.moneda === 'USD' ? fmtUSD(m.usd) : '≈ ' + fmtUSD(m.usd)}</td>
+      <td class="r num hide-sm">${m.usd == null ? '<span class="dim">—</span>' : m.moneda === 'USD' ? fmtUSD(m.usd) : '≈ ' + fmtUSD(m.usd) + tcTxt(m)}</td>
       <td class="r no-print"><button type="button" class="del-btn" data-del-ret="${esc(m.retiroId)}" title="Borrar retiro" aria-label="Borrar retiro">${ICON.trash}</button></td>
     </tr>`; }).join('')}</tbody>
   </table></div>`;
@@ -1468,11 +1554,15 @@ async function guardarRetiro(form){
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){ err.textContent = 'Elegí la fecha.'; return; }
   if (!(monto > 0)){ err.textContent = 'Escribí un importe mayor a cero.'; form.monto.focus(); return; }
   const de = ui.retDir === 'CM' ? 'Caseros a Munro' : 'Munro a Caseros';
-  if (!confirm(`¿Guardar ${fmtMon(monto, ui.retMon)} entregados de ${de} el ${fmtFecha(fecha)}?`)) return;
+  // En pesos se guarda el blue de la fecha del retiro (si no se consigue, se usa el del día al calcular)
+  const blue = ui.retMon === 'ARS' ? await blueParaRetiro(fecha) : null;
+  const aBlue = blue ? ` (blue ${fmtARS(blue)} ≈ ${fmtUSD(monto / blue)})` : '';
+  if (!confirm(`¿Guardar ${fmtMon(monto, ui.retMon)}${aBlue} entregados de ${de} el ${fmtFecha(fecha)}?`)) return;
   ui.retGuardando = true; pintarPanel();
   try {
     const x = { fecha, sentido: ui.retDir, moneda: ui.retMon, monto: r2(monto), creadoEn: firebase.database.ServerValue.TIMESTAMP, creadoPor: (ses.main && ses.main.email) || '' };
     if (nota) x.nota = nota;
+    if (blue) x.cotizacion = blue;
     await db.main.ref(NODO_CUENTA + '/retiros').push(x);
     Object.assign(ui, { retAbierto: false, retFecha: '', retMonto: '', retNota: '' });
     await recargarCuenta();
@@ -1551,8 +1641,7 @@ function filasMayor(r){
 }
 function mayorHtml(r){
   const filas = filasMayor(r);
-  const k = cotizacion();
-  const importe = m => m.moneda === 'ARS' ? fmtARS(m.original) + (k ? ' a ' + fmtARS(k) : ' · sin cotización') : fmtUSD(m.original);
+  const importe = m => m.moneda === 'ARS' ? fmtARS(m.original) + (m.tc ? ' a ' + fmtARS(m.tc) : ' · sin cotización') : fmtUSD(m.original);
   const ruta = m => m.dir === 'CM' ? dotHtml('2') + ' Caseros → Munro' : dotHtml('1') + ' Munro → Caseros';
   const conc = m => m.tipo === 'F' ? `<b>Factura ${esc(m.ref)}</b><span class="sec-txt">${esc(m.det)} · ${importe(m)}</span>`
     : m.tipo === 'T' ? `<b class="mono">${esc(m.ref)}</b><span class="sec-txt">${ruta(m)} · ${m.unidades} u.</span>`
@@ -1580,7 +1669,7 @@ function mayorHtml(r){
 document.addEventListener('click', e => { if (e.target.closest('#btnCsv')) exportarCsv(); });
 function exportarCsv(){
   if (!ultimo) return;
-  const r = ultimo.r, k = cotizacion();
+  const r = ultimo.r;
   const n = v => v == null ? '' : r2(v).toFixed(2).replace('.', ',');
   const c = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
   const filas = [['Fecha', 'Tipo', 'Referencia', 'Detalle', 'Moneda original', 'Importe original', 'Cotización', 'Debe USD', 'Haber USD', 'Saldo USD']];
@@ -1588,7 +1677,7 @@ function exportarCsv(){
   filasMayor(r).forEach(({ m, debe, haber, saldo }) => filas.push([
     fmtFecha(m.fecha), { F: 'Factura', T: 'Traspaso', P: 'Transferencia', R: 'Retiro' }[m.tipo], m.ref,
     m.tipo === 'T' || m.tipo === 'R' ? (m.dir === 'CM' ? 'Caseros → Munro' : 'Munro → Caseros') + (m.det && m.tipo === 'R' ? ' · ' + m.det : '') : m.det,
-    m.moneda, n(m.original), m.moneda === 'ARS' && k ? n(k) : '', n(debe), n(haber), n(saldo)
+    m.moneda, n(m.original), m.moneda === 'ARS' ? n(m.tc) : '', n(debe), n(haber), n(saldo)
   ]));
   const csv = '﻿' + filas.map(f => f.map(c).join(';')).join('\r\n');
   const a = document.createElement('a');

@@ -79,7 +79,7 @@ public class SubidaWorker extends Worker {
                 algunaNueva = true;
                 try {
                     if (!p.foto.exists()) {
-                        // Se borro (por ejemplo, se rehizo la zona) mientras esperaba.
+                        // Se borro (por ejemplo, se rehizo la foto) mientras esperaba.
                         continue;
                     }
                     StorageMetadata meta = new StorageMetadata.Builder()
