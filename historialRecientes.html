@@ -837,6 +837,17 @@
       return out + texto + '\n';
     }
 
+    // Dirección y teléfono del encabezado del ticket según el punto de venta
+    // del equipo (puntoVenta.js). Sin punto conocido, queda Munro.
+    const DATOS_LOCAL = {
+      '1': { direccion: 'Vélez Sársfield 4127, Munro', tel: 'Tel. 11 2189-1006' },
+      '2': { direccion: 'Av San Martín 2724, Caseros', tel: 'Tel. 11 2403-8349' }
+    };
+    function datosLocal() {
+      const id = window.PuntoVenta ? PuntoVenta.actual() : null;
+      return DATOS_LOCAL[id] || DATOS_LOCAL['1'];
+    }
+
     // Comandos ESC-POS como bytes hex / texto plano (formato que entiende QZ)
     const escCmd = (hex) => ({ type: 'raw', format: 'hex', data: hex });
     const escTxt = (s) => ({ type: 'raw', format: 'plain', data: s });
@@ -899,8 +910,9 @@
         data.push(escCmd('1D2100')); // GS ! 0x00 -> tamaño normal
       }
       data.push(escTxt('\n'));
-      data.push(escTxt('Velez Sarsfield 4127, Munro\n'));
-      data.push(escTxt('Tel. 11 2189-1006\n'));
+      const local = datosLocal();
+      data.push(escTxt(posPlain(local.direccion) + '\n'));
+      data.push(escTxt(local.tel + '\n'));
       data.push(escTxt('\n')); // línea en blanco antes del título
       data.push(escCmd('1B4501')); // negrita on
       data.push(escTxt('PRESUPUESTO\n'));
@@ -1268,8 +1280,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         <body>
           <div class='recibo-box'>
             <img src="logo.png" alt="Logo" class="logo">
-            <div class="local">Vélez Sársfield 4127, Munro</div>
-            <div class="local">Tel. 11 2189-1006</div>
+            <div class="local">${datosLocal().direccion}</div>
+            <div class="local">${datosLocal().tel}</div>
             <div class="titulo">${cambio.esCambio ? '*** CAMBIO / DEVOLUCION ***' : 'PRESUPUESTO'}</div>
             <div class="fecha">${new Date(pedido.timestamp).toLocaleString('es-AR', { hour12: false })}</div>
             <hr class="sep">

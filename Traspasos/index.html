@@ -274,6 +274,10 @@ img{display:block}
 .remito-sum{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
 .remito-sum b{font-family:var(--f-mono);font-size:1.35rem;font-weight:600;letter-spacing:-.02em}
 .remito-sum span{font-size:.8rem;color:var(--muted);font-weight:600}
+.remito-who{display:flex;align-items:center;gap:7px;margin-bottom:7px;font-size:.78rem;color:var(--muted);font-weight:500;min-width:0}
+.remito-who i{flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--fog-2);color:var(--ink-2);display:grid;place-items:center;font-style:normal;font-size:.62rem;font-weight:700;text-transform:uppercase}
+.remito-who span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.remito-who b{color:var(--ink);font-weight:700}
 .remito-items{font-size:.8rem;color:var(--ink-2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* perforación: línea punteada con muescas a los lados */
 .remito-stub{position:relative;border-top:2px dashed var(--line);padding:11px 16px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -381,6 +385,19 @@ img{display:block}
 .pick-route{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);padding:16px}
 .pick-who{margin-top:12px;font-size:.78rem;color:var(--muted);font-weight:500}
 .pick-who b{color:var(--ink-2);font-weight:700}
+.pick-edit{margin-top:12px}
+.pick-edit .btn{width:100%}
+.pick-edit p{margin-top:6px;font-size:.74rem;color:var(--muted);text-align:center}
+
+/* edición de un pedido pendiente (Pedir) */
+.edit-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border-radius:var(--r-sm);background:var(--amber-soft);color:#6B4600;font-size:.84rem;line-height:1.35}
+.edit-bar b{font-family:var(--f-mono)}
+.edit-bar button{flex-shrink:0;height:38px;padding:0 14px;border-radius:11px;background:var(--paper);color:var(--ink);font-weight:700;font-size:.82rem}
+
+/* anulación de un despacho (root) */
+.anular-txt{font-size:.82rem;line-height:1.45;color:var(--ink-2)}
+.anular-txt b{font-weight:700;color:var(--ink)}
+.field.anular{margin-top:4px}
 .progress{margin-top:14px;display:flex;align-items:center;gap:12px}
 .progress-bar{flex:1;height:6px;border-radius:6px;background:var(--fog-2);overflow:hidden}
 .progress-bar i{display:block;height:100%;background:var(--ink);border-radius:6px;transition:width .35s var(--ease)}
@@ -518,7 +535,7 @@ img{display:block}
   <!-- PEDIR -->
   <section class="view on" id="v-pedir" aria-label="Pedir mercadería">
     <div class="hero">
-      <div class="eyebrow">Nuevo pedido</div>
+      <div class="eyebrow" id="pedirEyebrow">Nuevo pedido</div>
       <div class="ruta-sel" id="rutaSel">
         <div id="pedirRoute"></div>
         <button type="button" class="ruta-swap" id="rutaSwap">
@@ -527,6 +544,14 @@ img{display:block}
         </button>
       </div>
       <p class="hero-sub" id="pedirSub"></p>
+      <div class="edit-bar" id="editBar" hidden>
+        <span>Estás editando el pedido <b id="editBarNum"></b>. Los cambios se guardan desde el resumen.</span>
+        <button type="button" id="editBarSalir">Descartar</button>
+      </div>
+      <div class="edit-bar" id="pendBar" hidden>
+        <span id="pendBarTxt"></span>
+        <button type="button" id="pendBarBtn"></button>
+      </div>
     </div>
     <div class="search">
       <div class="search-box">
@@ -619,12 +644,14 @@ img{display:block}
   </div>
   <div class="sheet-body">
     <div class="cart-ruta" id="cartRuta"></div>
+    <div class="diff-note" id="cartAviso" hidden></div>
     <div id="cartList"></div>
     <label class="lbl" for="cartNota">Nota para quien prepara <span style="font-weight:500">(opcional)</span></label>
     <textarea class="nota" id="cartNota" placeholder="Ej.: Lo necesitamos para el sábado" maxlength="300"></textarea>
   </div>
   <div class="sheet-foot">
     <button type="button" class="btn btn-ink" id="sendBtn"></button>
+    <button type="button" class="btn btn-ghost" id="sendNewBtn" hidden>Hacer un pedido nuevo</button>
     <button type="button" class="btn btn-ghost" id="clearCartBtn">Vaciar pedido</button>
   </div>
 </div>
@@ -730,6 +757,8 @@ const LS_RUTA = 'hpTraspasoDestino';   // última dirección elegida en Pedir (i
 const LS_SUC_VIEJO = 'hpTraspasoSucursal';   // antes: sucursal fija del teléfono; solo da la dirección inicial
 const LS_CART = 'hpTraspasoCarrito';
 const LS_PICK = 'hpTraspasoPick_';      // + id del traspaso: avance de la preparación
+const LS_EDIT = 'hpTraspasoEdicion';    // pedido pendiente que se está editando (no pisa el carrito propio)
+const CLAVE_ANULAR = '2574';            // clave que pide la anulación de un despacho (además del rol root)
 const LIMITE_TRASPASOS = 300;
 const MAX_RESULTADOS = 40;
 
@@ -957,6 +986,7 @@ let vistosPendientes = new Set();  // ids pendientes ya notificados
 let creadosAca = new Set();        // pedidos hechos desde este teléfono (no se avisan como nuevos)
 let vistaActual = 'pedir';
 let carrito = {};                  // codigo -> {codigo, nombre, foto, cant}
+let edicion = null;                // {id, numero, destinoPrevio}: el carrito es el de un pedido pendiente
 let pick = null;                   // {id, items:{cod:{enviar, ok, quitado}}}
 let detalleId = null;
 // Link directo a un pedido (?tr=<id>, lo comparte Pedidos por WhatsApp): se abre al llegar la primera carga.
@@ -1173,6 +1203,9 @@ function escucharTraspasos(){
     traspasosCargados = true;
     avisarNuevos(primeraCarga);
     renderTodo();
+    // El aviso de "ya tenés un pedido pendiente" del resumen sigue al estado real de ese pedido.
+    if (!procesoCritico && $('cartSheet').classList.contains('open')) renderCarrito();
+    vigilarEdicion();
     sincronizarPickAbierto();
     if (detalleId && $('detSheet').classList.contains('open')) renderDetalle(detalleId);
     if (primeraCarga) abrirDesdeLink();
@@ -1396,12 +1429,31 @@ function setCantCarrito(cod, n){
   if ($('cartSheet').classList.contains('open')) renderCarrito();
 }
 function guardarCarrito(){
+  // Editando un pedido, el carrito es el de ese pedido: se guarda aparte y el propio queda intacto.
+  if (edicion){
+    lsSet(LS_EDIT, JSON.stringify({ id: edicion.id, numero: edicion.numero, destinoPrevio: edicion.destinoPrevio, destino: pedirDestino, items: carrito, nota: $('cartNota').value }));
+    return;
+  }
   // El carrito no depende de la dirección: invertirla no pierde lo cargado.
   lsSet(LS_CART, JSON.stringify({ items: carrito, nota: $('cartNota').value }));
 }
 function cargarCarrito(){
   carrito = {};
+  edicion = null;
   $('cartNota').value = '';
+  try {
+    // Una edición sin terminar (se cerró la app) se retoma; vigilarEdicion la corta si ya no es editable.
+    const e = JSON.parse(lsGet(LS_EDIT) || 'null');
+    if (e && e.id){
+      edicion = { id: e.id, numero: e.numero || '', destinoPrevio: e.destinoPrevio || null };
+      carrito = e.items || {};
+      $('cartNota').value = e.nota || '';
+      if (e.destino) elegirDestino(e.destino);
+      renderEdicion();
+      return;
+    }
+  } catch(_){}
+  renderEdicion();
   try {
     const d = JSON.parse(lsGet(LS_CART) || 'null');
     if (d){ carrito = d.items || {}; $('cartNota').value = d.nota || ''; }
@@ -1433,12 +1485,48 @@ function costoTotalHtml(costo, sinCosto, lbl){
 function renderDock(){
   const dock = $('cartDock');
   const { arts, unidades } = totalesCarrito();
-  const ver = vistaActual === 'pedir' && arts > 0;
+  // Editando, el dock queda aunque se vacíe: desde el resumen se guarda o se descarta.
+  const ver = vistaActual === 'pedir' && (arts > 0 || !!edicion);
   if (ver && dock.hidden){ dock.hidden = false; dock.classList.remove('dock-enter'); void dock.offsetWidth; dock.classList.add('dock-enter'); }
   if (!ver) dock.hidden = true;
-  $('cartCta').innerHTML = `<span>Pedido para ${escapeHtml(suc(pedirDestino).nombre)}</span><span class="cta-k">${plural(arts, 'artículo', 'artículos')} · ${unid(unidades)}</span>`;
+  const lbl = edicion ? 'Editando ' + (edicion.numero || 'pedido') : 'Pedido para ' + suc(pedirDestino).nombre;
+  $('cartCta').innerHTML = `<span>${escapeHtml(lbl)}</span><span class="cta-k">${plural(arts, 'artículo', 'artículos')} · ${unid(unidades)}</span>`;
+  renderAvisoPendiente();
 }
 $('cartCta').addEventListener('click', () => { renderCarrito(); abrirCapa($('cartSheet')); });
+
+// Pedidos chicos sueltos: si este usuario ya tiene uno PENDIENTE (nadie empezó a prepararlo) en
+// la misma dirección, se lo lleva a sumar ahí lo nuevo. Hacer uno aparte sigue siendo posible.
+// Devuelve el más reciente y cuántos hay, o null. Editando no aplica: ya se está en un pedido.
+function pendienteMio(){
+  if (!usuario || edicion) return null;
+  const origen = pedirOrigen();
+  const l = Object.values(traspasos).filter(t => t.estado === 'PENDIENTE' && t.origen === origen && t.destino === pedirDestino
+    && t.creadoPor && t.creadoPor.uid === usuario.uid).sort((a, b) => (b.creadoEn || 0) - (a.creadoEn || 0));
+  return l.length ? { t: l[0], n: l.length } : null;
+}
+// "3 artículos distintos y 8 unidades en total" (HTML, con las cantidades resaltadas).
+function resumenPendiente(t){
+  const tot = totalesTraspaso(t);
+  return `<b>${tot.arts}</b> ${tot.arts === 1 ? 'artículo' : 'artículos distintos'} y <b>${tot.solicitadas}</b> ${tot.solicitadas === 1 ? 'unidad' : 'unidades en total'}`;
+}
+
+function renderAvisoPendiente(){
+  const p = vistaActual === 'pedir' ? pendienteMio() : null;
+  $('pendBar').hidden = !p;
+  if (!p) return;
+  const vacio = !Object.keys(carrito).length;
+  const num = escapeHtml(p.t.numero || 'un pedido');
+  $('pendBarTxt').innerHTML = `Ya pediste <b>${num}</b> en esta dirección, con ${resumenPendiente(p.t)}, y todavía no lo prepararon (lo pediste ${escapeHtml(fmtHace(p.t.creadoEn))}). `
+    + (vacio ? 'Si te falta algo, sumalo ahí en vez de hacer otro pedido.' : 'Lo que estás cargando se puede sumar ahí para que viaje todo junto.');
+  $('pendBarBtn').textContent = vacio ? 'Continuar' : 'Sumar';
+  $('pendBarBtn').dataset.id = p.t.id;
+}
+// Con el carrito vacío se continúa el pedido existente (edición); con algo cargado, el resumen ofrece sumarlo.
+$('pendBarBtn').addEventListener('click', () => {
+  if (!Object.keys(carrito).length) editarPedido($('pendBarBtn').dataset.id);
+  else { renderCarrito(); abrirCapa($('cartSheet')); }
+});
 
 function renderCarrito(){
   const items = Object.values(carrito);
@@ -1446,30 +1534,75 @@ function renderCarrito(){
   const o = suc(pedirOrigen()), d = suc(pedirDestino);
   // La ruta encabeza el resumen: es lo último que se ve antes de pedir, para no errar la dirección.
   $('cartRuta').innerHTML = rutaHtml(o.id, d.id, 'md');
-  $('cartSub').textContent = arts ? plural(arts, 'artículo', 'artículos') + ' · ' + unid(unidades) + (esRoot ? ' · ' + fmtUSD(costo) : '') : 'Todavía no agregaste artículos';
+  $('cartTitle').textContent = edicion ? 'Editar ' + (edicion.numero || 'pedido') : 'Tu pedido';
+  $('cartSub').textContent = arts ? plural(arts, 'artículo', 'artículos') + ' · ' + unid(unidades) + (esRoot ? ' · ' + fmtUSD(costo) : '')
+    : edicion ? 'El pedido quedó vacío' : 'Todavía no agregaste artículos';
   $('cartList').innerHTML = items.length ? items.map(c => `
     <div class="cart-row">
       ${thumbHtml(c.foto, c.nombre)}
       <div class="art-info"><div class="art-name">${escapeHtml(c.nombre)}</div><div class="art-meta">#${escapeHtml(c.codigo)}</div>${stockHtml(c.codigo, c.cant)}<div class="art-costo">${costoLineaHtml(c, c.cant)}</div></div>
       ${stepperHtml('cart', c.codigo, c.cant, 0)}
     </div>`).join('') + costoTotalHtml(costo, sinCosto)
-    : `<div class="empty" style="padding:24px 10px"><p>Buscá artículos y tocá + para sumarlos.</p></div>`;
-  $('sendBtn').textContent = unidades ? `Pedir ${unid(unidades)} · ${o.nombre} → ${d.nombre}` : 'Pedir';
+    : `<div class="empty" style="padding:24px 10px"><p>${edicion ? 'Agregá artículos para guardar el pedido, o descartá los cambios. Para anularlo, eliminalo desde Preparar.' : 'Buscá artículos y tocá + para sumarlos.'}</p></div>`;
+  if (edicion){
+    $('sendBtn').textContent = unidades ? `Guardar cambios · ${unid(unidades)}` : 'Guardar cambios';
+    $('clearCartBtn').textContent = 'Descartar cambios';
+  } else {
+    $('sendBtn').textContent = unidades ? `Pedir ${unid(unidades)} · ${o.nombre} → ${d.nombre}` : 'Pedir';
+    $('clearCartBtn').textContent = 'Vaciar pedido';
+  }
+  // Pedido propio pendiente en esta dirección: la acción principal es sumar ahí; pedir aparte queda como segunda opción.
+  const p = unidades ? pendienteMio() : null;
+  $('cartAviso').hidden = !p;
+  $('sendNewBtn').hidden = !p;
+  $('sendBtn').dataset.sumar = p ? p.t.id : '';
+  if (p){
+    const num = escapeHtml(p.t.numero || '');
+    $('cartAviso').innerHTML = `${ICON.alert}<div><b>Ya tenés ${num} sin preparar</b> en esta dirección, con ${resumenPendiente(p.t)}. Sumá estos artículos ahí para que viaje todo junto${p.n > 1 ? ` (tenés ${p.n} pendientes; se suma al más reciente)` : ''}. Si es algo aparte, podés hacer un pedido nuevo.</div>`;
+    $('sendBtn').textContent = `Sumar a ${p.t.numero || 'ese pedido'} · ${unid(unidades)}`;
+  }
   $('sendBtn').disabled = !unidades;
-  $('clearCartBtn').hidden = !unidades;
-  if (!items.length && capas[capas.length - 1] === $('cartSheet')) cerrarCapa();
+  $('sendNewBtn').disabled = !unidades;
+  $('clearCartBtn').hidden = !unidades && !edicion;
+  if (!items.length && !edicion && capas[capas.length - 1] === $('cartSheet')) cerrarCapa();
 }
 $('clearCartBtn').addEventListener('click', () => {
+  if (edicion){
+    salirEdicion();
+    cerrarCapa();
+    toast('Cambios descartados');
+    return;
+  }
   carrito = {}; $('cartNota').value = ''; guardarCarrito();
   renderResultados(); renderDock(); cerrarCapa();
   toast('Pedido vaciado');
 });
 
-$('sendBtn').addEventListener('click', enviarPedido);
+$('sendBtn').addEventListener('click', () => {
+  if (edicion) guardarEdicion();
+  else if ($('sendBtn').dataset.sumar) sumarAPedido($('sendBtn').dataset.sumar);
+  else enviarPedido();
+});
+$('sendNewBtn').addEventListener('click', enviarPedido);
+
+// Items del pedido a partir del carrito. El costo unitario se congela al pedir: el historial no
+// cambia si después se edita el catálogo. Al editar, los artículos que ya estaban conservan el suyo.
+function armarItems(items){
+  const itemsObj = {};
+  let costoTotal = 0;
+  items.forEach(c => {
+    const u = costoItem(c);
+    const it = { codigo: c.codigo, nombre: c.nombre, foto: c.foto || '', solicitada: c.cant };
+    if (u != null){ it.costoUSD = round2(u); it.costoTotalUSD = round2(u * c.cant); costoTotal += it.costoTotalUSD; }
+    itemsObj[keySegura(c.codigo)] = it;
+  });
+  return { itemsObj, costoTotal: round2(costoTotal) };
+}
 async function enviarPedido(){
   const items = Object.values(carrito);
   if (!items.length || $('sendBtn').disabled) return;
   $('sendBtn').disabled = true;
+  $('sendNewBtn').disabled = true;
   procesoCritico = true;
   showBlock('Enviando pedido…');
   try {
@@ -1477,15 +1610,7 @@ async function enviarPedido(){
     // Número correlativo de remito. Si después falla el guardado queda un número salteado: es inocuo.
     const numero = 'TR-' + String(await tomarNumero()).padStart(4, '0');
     const id = db.ref('traspasos').push().key;
-    const itemsObj = {};
-    let costoTotal = 0;
-    items.forEach(c => {
-      // El costo unitario se congela al pedir: el historial no cambia si después se edita el catálogo.
-      const u = costoItem(c);
-      const it = { codigo: c.codigo, nombre: c.nombre, foto: c.foto || '', solicitada: c.cant };
-      if (u != null){ it.costoUSD = round2(u); it.costoTotalUSD = round2(u * c.cant); costoTotal += it.costoTotalUSD; }
-      itemsObj[keySegura(c.codigo)] = it;
-    });
+    const { itemsObj, costoTotal } = armarItems(items);
     const obj = {
       numero,
       origen: pedirOrigen(),
@@ -1509,15 +1634,190 @@ async function enviarPedido(){
     hideBlock();
     mostrarExito({
       titulo: 'Pedido enviado',
-      sub: 'Quedó en Preparar. Podés armarlo ahora o más tarde.',
+      sub: 'Quedó en Preparar, a la espera de que lo armen.',
       numero, origen: obj.origen, destino: obj.destino, viaje: false,
       detalle: `${plural(items.length, 'artículo', 'artículos')} · ${unid(unidades)}`,
-      boton: 'Prepararlo ahora', accion: () => { irA('preparar'); abrirPick(id); }
+      boton: 'Listo', accion: () => irA('pedir')
     }, $('cartSheet'));
   } catch (err){
     console.error('Error enviando pedido:', err);
     hideBlock();
     toast('No se envió el pedido: ' + err.message, 'err');
+  } finally {
+    procesoCritico = false;
+    $('sendBtn').disabled = false;
+    $('sendNewBtn').disabled = false;
+  }
+}
+
+// Suma lo del carrito a un pedido propio pendiente de la misma dirección: los artículos que ya
+// estaban suman unidades (con el costo que ya tenían congelado) y los nuevos se agregan.
+// Transacción: solo si sigue PENDIENTE; si justo empezaron a prepararlo, el carrito queda intacto.
+async function sumarAPedido(id){
+  const items = Object.values(carrito);
+  if (!items.length || $('sendBtn').disabled) return;
+  $('sendBtn').disabled = true;
+  $('sendNewBtn').disabled = true;
+  procesoCritico = true;
+  showBlock('Sumando al pedido…');
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase. Revisá internet.');
+    const { itemsObj } = armarItems(items);
+    const origen = pedirOrigen(), destino = pedirDestino, nota = $('cartNota').value.trim();
+    const yo = { uid: usuario.uid, email: usuario.email || '' };
+    const res = await conTimeout(db.ref('traspasos/' + id).transaction(t => {
+      if (!t) return t;
+      if (t.estado !== 'PENDIENTE' || t.origen !== origen || t.destino !== destino) return;   // aborta
+      t.items = t.items || {};
+      Object.entries(itemsObj).forEach(([k, it]) => {
+        const ya = t.items[k];
+        if (!ya){ t.items[k] = it; return; }
+        ya.solicitada = (Number(ya.solicitada) || 0) + it.solicitada;
+        const u = ya.costoUSD != null && !isNaN(Number(ya.costoUSD)) ? Number(ya.costoUSD) : it.costoUSD;
+        if (u != null){ ya.costoUSD = round2(u); ya.costoTotalUSD = round2(u * ya.solicitada); }
+      });
+      t.costoTotalUSD = round2(Object.values(t.items).reduce((s, i) => s + (Number(i.costoTotalUSD) || 0), 0));
+      if (nota && !String(t.nota || '').includes(nota)) t.nota = t.nota ? t.nota + ' · ' + nota : nota;
+      t.editadoPor = yo;
+      t.editadoEn = Date.now();
+      return t;
+    }), 15000, 'El guardado tardó demasiado.');
+    const v = res.snapshot.val();
+    if (!v) throw new Error('el pedido ya no existe. Podés hacer uno nuevo.');
+    if (!res.committed || v.estado !== 'PENDIENTE') throw new Error(`ya empezaron a preparar ${v.numero || 'ese pedido'}. Podés hacer uno nuevo.`);
+
+    // El avance de preparación guardado en este teléfono era sobre los items de antes.
+    lsDel(LS_PICK + id);
+    const unidades = items.reduce((s, c) => s + c.cant, 0);
+    const tot = totalesTraspaso(v);
+    carrito = {}; $('cartNota').value = ''; guardarCarrito();
+    $('q').value = ''; $('qClear').hidden = true;
+    renderResultados(); renderDock();
+    hideBlock();
+    mostrarExito({
+      titulo: 'Sumado al pedido',
+      sub: `Se agregaron ${unid(unidades)} a ${v.numero || 'tu pedido'}. Viaja todo junto cuando lo preparen.`,
+      numero: v.numero || '', origen: v.origen, destino: v.destino, viaje: false,
+      detalle: `Ahora: ${plural(tot.arts, 'artículo', 'artículos')} · ${unid(tot.solicitadas)}`,
+      boton: 'Listo', accion: null
+    }, $('cartSheet'));
+  } catch (err){
+    console.error('Error sumando al pedido:', err);
+    hideBlock();
+    toast('No se sumó: ' + err.message, 'err');
+  } finally {
+    procesoCritico = false;
+    $('sendBtn').disabled = false;
+    $('sendNewBtn').disabled = false;
+    // Si el pedido dejó de estar pendiente, el resumen vuelve a ofrecer "Pedir" normal.
+    if ($('cartSheet').classList.contains('open')) renderCarrito();
+  }
+}
+
+// ============================================================
+//  Edición de un pedido pendiente: se carga en el carrito y se usa todo lo de Pedir
+//  (buscar, escanear, cantidades, dirección, nota). Solo mientras nadie empezó a prepararlo.
+// ============================================================
+async function editarPedido(id){
+  const t = traspasos[id];
+  if (!t || t.estado !== 'PENDIENTE'){ toast('Ya empezaron a prepararlo: no se puede editar', 'aviso'); return; }
+  const items = {};
+  Object.values(t.items || {}).forEach(i => {
+    const cod = String(i.codigo);
+    items[cod] = { codigo: cod, nombre: i.nombre, foto: i.foto || '', cant: Number(i.solicitada) || 0 };
+    if (i.costoUSD != null) items[cod].costoUSD = i.costoUSD;
+  });
+  // Si ya se estaba editando otro, la dirección a la que se vuelve es la de antes de esa edición.
+  const destinoPrevio = edicion ? edicion.destinoPrevio : pedirDestino;
+  edicion = { id, numero: t.numero || '', destinoPrevio };
+  carrito = items;
+  $('cartNota').value = t.nota || '';
+  $('q').value = ''; $('qClear').hidden = true;
+  await cerrarCapaAsync();   // la pantalla de preparación
+  irA('pedir');
+  elegirDestino(t.destino);
+  guardarCarrito();
+  renderEdicion();
+  renderResultados();
+  renderDock();
+  renderCarrito();
+  abrirCapa($('cartSheet'));
+}
+
+function salirEdicion(){
+  const prev = edicion && edicion.destinoPrevio;
+  edicion = null;
+  lsDel(LS_EDIT);
+  cargarCarrito();   // vuelve el carrito propio, tal como estaba
+  if (prev) elegirDestino(prev);
+  renderEdicion();
+  renderResultados();
+  renderDock();
+  if ($('cartSheet').classList.contains('open')) renderCarrito();
+}
+
+function renderEdicion(){
+  $('editBar').hidden = !edicion;
+  $('pedirEyebrow').textContent = edicion ? 'Editando pedido' : 'Nuevo pedido';
+  if (edicion) $('editBarNum').textContent = edicion.numero || '';
+}
+$('editBarSalir').addEventListener('click', () => { salirEdicion(); toast('Cambios descartados'); });
+
+// Si mientras se edita el pedido empiezan a prepararlo (o lo despachan o eliminan), la edición se corta.
+function vigilarEdicion(){
+  if (!edicion || procesoCritico) return;
+  const t = traspasos[edicion.id];
+  if (t && t.estado === 'PENDIENTE') return;
+  const numero = edicion.numero;
+  const enCarrito = capas[capas.length - 1] === $('cartSheet');
+  salirEdicion();
+  if (enCarrito) cerrarCapa();
+  toast(!t ? `El pedido ${numero} ya no existe` : `Ya empezaron a preparar ${numero}: no se guardaron los cambios`, 'aviso');
+}
+
+async function guardarEdicion(){
+  const items = Object.values(carrito);
+  if (!edicion || !items.length || $('sendBtn').disabled) return;
+  const { id, numero } = edicion;
+  $('sendBtn').disabled = true;
+  procesoCritico = true;
+  showBlock('Guardando cambios…');
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase. Revisá internet.');
+    const { itemsObj, costoTotal } = armarItems(items);
+    const origen = pedirOrigen(), destino = pedirDestino, nota = $('cartNota').value.trim();
+    const yo = { uid: usuario.uid, email: usuario.email || '' };
+    // Transacción: se guarda solo si sigue pendiente (nadie empezó a prepararlo entretanto).
+    const res = await conTimeout(db.ref('traspasos/' + id).transaction(t => {
+      if (!t) return t;
+      if (t.estado !== 'PENDIENTE') return;   // aborta
+      t.items = itemsObj;
+      t.origen = origen;
+      t.destino = destino;
+      t.nota = nota;
+      t.costoTotalUSD = costoTotal;
+      t.editadoPor = yo;
+      t.editadoEn = Date.now();
+      return t;
+    }), 15000, 'El guardado tardó demasiado.');
+    const v = res.snapshot.val();
+    if (!v) throw new Error('el pedido ya no existe.');
+    if (!res.committed || v.estado !== 'PENDIENTE') throw new Error('ya empezaron a prepararlo.');
+    // El avance de preparación guardado en este teléfono era sobre los items viejos.
+    lsDel(LS_PICK + id);
+    hideBlock();
+    procesoCritico = false;
+    salirEdicion();
+    $('q').value = ''; $('qClear').hidden = true;
+    renderResultados();
+    if (capas[capas.length - 1] === $('cartSheet')) await cerrarCapaAsync();
+    toast(`Pedido ${numero} actualizado`);
+  } catch (err){
+    console.error('Error guardando la edición:', err);
+    hideBlock();
+    toast('No se guardaron los cambios: ' + err.message, 'err');
+    procesoCritico = false;
+    vigilarEdicion();
   } finally {
     procesoCritico = false;
     $('sendBtn').disabled = false;
@@ -1588,6 +1888,8 @@ function totalesTraspaso(t){
   };
 }
 const ESTADO_TXT = { PENDIENTE: 'Pendiente', PREPARANDO: 'Preparando', ENVIADO: 'Enviado', CANCELADO: 'Cancelado' };
+// Un despacho anulado por root queda CANCELADO con `revertido`: se rotula aparte.
+function estadoTxt(t){ return t.estado === 'CANCELADO' && t.revertido ? 'Anulado' : (ESTADO_TXT[t.estado] || t.estado); }
 
 function remitoHtml(t, modo){
   const tot = totalesTraspaso(t);
@@ -1600,7 +1902,7 @@ function remitoHtml(t, modo){
     if (enviado) meta = 'Despachado ' + fmtHora(t.enviadoEn);
     go = (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO') ? 'Preparar' : 'Ver';
   } else {
-    meta = enviado ? 'Despachado ' + fmtHora(t.enviadoEn) : t.estado === 'CANCELADO' ? 'Cancelado ' + fmtHora(t.canceladoEn) : 'Pedido ' + fmtHace(t.creadoEn);
+    meta = enviado ? 'Despachado ' + fmtHora(t.enviadoEn) : t.estado === 'CANCELADO' ? (t.revertido ? 'Anulado ' : 'Cancelado ') + fmtHora(t.canceladoEn) : 'Pedido ' + fmtHace(t.creadoEn);
     if (tot.conDif) meta += ' · ' + plural(tot.conDif, 'diferencia', 'diferencias');
     go = 'Ver';
   }
@@ -1608,9 +1910,10 @@ function remitoHtml(t, modo){
     <div class="remito-top">${rutaHtml(t.origen, t.destino, 'sm')}<span class="remito-num">${escapeHtml(t.numero || '')}</span></div>
     <div class="remito-body">
       <div class="remito-sum"><b>${n}</b><span>${n === 1 ? 'unidad' : 'unidades'} · ${plural(tot.arts, 'artículo', 'artículos')}${enviado && tot.enviadas !== tot.solicitadas ? ' · pedidas ' + tot.solicitadas : ''}${esRoot ? ' · ' + fmtUSD(tot.costo) : ''}</span></div>
+      ${modo === 'hist' ? `<div class="remito-who"><i aria-hidden="true">${escapeHtml(quien(t.creadoPor).slice(0, 1))}</i><span>Pidió <b>${escapeHtml(quien(t.creadoPor))}</b></span></div>` : ''}
       <div class="remito-items">${escapeHtml(nombres.join(' · '))}</div>
     </div>
-    <div class="remito-stub"><span class="chip ${t.estado}">${ESTADO_TXT[t.estado] || t.estado}</span><span class="remito-meta">${escapeHtml(meta)}</span><span class="remito-go">${go}${ICON.chev}</span></div>
+    <div class="remito-stub"><span class="chip ${t.estado}">${estadoTxt(t)}</span><span class="remito-meta">${escapeHtml(meta)}</span><span class="remito-go">${go}${ICON.chev}</span></div>
   </button>`;
 }
 const skeletons = '<div class="skeleton"></div><div class="skeleton"></div>';
@@ -1628,7 +1931,7 @@ function renderPreparar(){
 
 function renderHistorial(){
   const hist = Object.values(traspasos).filter(t => ['ENVIADO', 'CANCELADO'].includes(t.estado))
-    .sort((a, b) => (b.enviadoEn || b.canceladoEn || b.creadoEn || 0) - (a.enviadoEn || a.canceladoEn || a.creadoEn || 0));
+    .sort((a, b) => (b.canceladoEn || b.enviadoEn || b.creadoEn || 0) - (a.canceladoEn || a.enviadoEn || a.creadoEn || 0));
   if (!traspasosCargados){ $('listHist').innerHTML = skeletons; return; }
   $('listHist').innerHTML = hist.length ? hist.map(t => remitoHtml(t, 'hist')).join('')
     : `<div class="empty">${ICON.box}<b>Sin historial todavía</b><p>Acá quedan los pedidos enviados y los cancelados.</p></div>`;
@@ -1823,13 +2126,18 @@ $('repBody').addEventListener('click', e => {
 // ============================================================
 //  Detalle (solicitante y despachados)
 // ============================================================
+let anularAbierto = null;   // id del pedido con el formulario de anulación a la vista (no se redibuja)
 function abrirDetalle(id){
   detalleId = id;
+  anularAbierto = null;
   renderDetalle(id);
   abrirCapa($('detSheet'));
 }
 
 function timelineHtml(t){
+  if (t.estado === 'CANCELADO' && t.revertido){
+    return `<div class="diff-note" style="background:var(--red-soft);color:#7A1C20">${ICON.alert}<div><b>Despacho anulado</b> ${fmtHora(t.canceladoEn)}${t.canceladoPor ? ' por ' + escapeHtml(quien(t.canceladoPor)) : ''}. Se había enviado ${fmtHora(t.enviadoEn)}; el stock de las dos sucursales se revirtió.</div></div>`;
+  }
   if (t.estado === 'CANCELADO'){
     return `<div class="diff-note" style="background:var(--red-soft);color:#7A1C20">${ICON.alert}<div><b>Pedido cancelado</b> ${fmtHora(t.canceladoEn)}${t.canceladoPor ? ' por ' + escapeHtml(quien(t.canceladoPor)) : ''}${t.motivoCancelacion ? '. ' + escapeHtml(t.motivoCancelacion) : ''}</div></div>`;
   }
@@ -1847,10 +2155,11 @@ function renderDetalle(id){
   // Un despacho viejo abierto desde el reporte puede no estar entre los últimos que escucha la app.
   const t = traspasos[id] || repDatos[id];
   if (!t){ $('detBody').innerHTML = '<div class="empty"><b>El pedido ya no está disponible</b></div>'; $('detFoot').hidden = true; return; }
-  const enviado = t.estado === 'ENVIADO';
+  // Un despacho anulado se sigue mostrando con lo que se había enviado.
+  const enviado = t.estado === 'ENVIADO' || !!t.revertido;
   const tot = totalesTraspaso(t);
   $('detTitle').textContent = 'Pedido ' + (t.numero || '');
-  $('detSub').innerHTML = `<span class="chip ${t.estado}" style="height:22px;margin-top:4px">${ESTADO_TXT[t.estado] || t.estado}</span>`;
+  $('detSub').innerHTML = `<span class="chip ${t.estado}" style="height:22px;margin-top:4px">${estadoTxt(t)}</span>`;
   const items = Object.values(t.items || {}).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
   const filas = items.map(i => {
     const sol = Number(i.solicitada) || 0, env = Number(i.enviada) || 0;
@@ -1872,19 +2181,127 @@ function renderDetalle(id){
   $('detBody').innerHTML = `
     <div class="det-route">${rutaHtml(t.origen, t.destino, 'md')}</div>
     ${timelineHtml(t)}
-    ${enviado && tot.conDif ? `<div class="diff-note">${ICON.alert}<div>${escapeHtml(suc(t.origen).nombre)} envió distinto a lo pedido en ${plural(tot.conDif, 'artículo', 'artículos')}. Las cantidades tachadas son las que se pidieron.</div></div>` : ''}
+    ${t.estado === 'ENVIADO' && tot.conDif ? `<div class="diff-note">${ICON.alert}<div>${escapeHtml(suc(t.origen).nombre)} envió distinto a lo pedido en ${plural(tot.conDif, 'artículo', 'artículos')}. Las cantidades tachadas son las que se pidieron.</div></div>` : ''}
     ${t.nota ? `<div class="det-nota"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
     <dl class="det-meta">${meta.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>
     <div class="eyebrow" style="margin-bottom:2px">Artículos</div>
     ${filas}
-    ${costoTotalHtml(tot.costo, tot.sinCosto, enviado ? 'Costo total enviado' : t.estado === 'CANCELADO' ? 'Costo total (cancelado, no viajó)' : 'Costo total del traspaso')}`;
+    ${costoTotalHtml(tot.costo, tot.sinCosto, t.revertido ? 'Costo total (anulado, stock revertido)' : enviado ? 'Costo total enviado' : t.estado === 'CANCELADO' ? 'Costo total (cancelado, no viajó)' : 'Costo total del traspaso')}`;
 
   // El detalle es de consulta (enviados y cancelados). Un cancelado lo puede eliminar solo root;
-  // un enviado no, porque ya movió stock.
+  // un enviado no, porque ya movió stock: root lo puede anular (con clave), lo que revierte el stock.
+  const puedeAnular = esRoot && t.estado === 'ENVIADO';
+  if (anularAbierto === t.id && puedeAnular) return;   // no pisar la clave que se está escribiendo
+  anularAbierto = null;
   const puedeEliminar = esRoot && t.estado === 'CANCELADO';
-  $('detFoot').innerHTML = puedeEliminar ? eliminarBtnHtml() : '';
-  $('detFoot').hidden = !puedeEliminar;
+  $('detFoot').innerHTML = puedeEliminar ? eliminarBtnHtml()
+    : puedeAnular ? `<button type="button" class="btn btn-red" style="width:100%" id="anularBtn">Anular despacho y revertir stock</button>` : '';
+  $('detFoot').hidden = !puedeEliminar && !puedeAnular;
   if (puedeEliminar) $('eliminarBtn').addEventListener('click', () => eliminarPedido(t.id));
+  if (puedeAnular) $('anularBtn').addEventListener('click', () => pedirClaveAnular(t.id));
+}
+
+// Anular un despacho: solo root y con la clave. El paso de la clave queda en el pie del detalle.
+function pedirClaveAnular(id){
+  const t = traspasos[id] || repDatos[id];
+  if (!esRoot || !t) return;
+  anularAbierto = id;
+  const o = suc(t.origen), d = suc(t.destino), n = totalesTraspaso(t).enviadas;
+  $('detFoot').innerHTML = `
+    <p class="anular-txt">El pedido <b>${escapeHtml(t.numero || '')}</b> pasa a cancelado y se deshace su movimiento de stock: vuelven <b>${unid(n)}</b> a ${escapeHtml(o.nombre)} y se descuentan de ${escapeHtml(d.nombre)}.</p>
+    <div class="field anular"><label for="anularClave">Clave de anulación</label><input type="password" id="anularClave" inputmode="numeric" autocomplete="off"></div>
+    <div class="gate-err" id="anularErr" role="alert" style="margin-top:0;min-height:0"></div>
+    <div class="btn-row"><button type="button" class="btn btn-ghost" id="anularVolver">Volver</button><button type="button" class="btn btn-red" id="anularOk">Anular</button></div>`;
+  $('anularVolver').addEventListener('click', () => { anularAbierto = null; renderDetalle(id); });
+  $('anularOk').addEventListener('click', () => anularDespacho(id));
+  $('anularClave').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); anularDespacho(id); } });
+  setTimeout(() => $('anularClave') && $('anularClave').focus(), 50);
+}
+
+// Revierte un despacho: en lugar de borrar los movimientos SI/EI (pueden estar ya consolidados), se
+// registran los inversos —ENTRADA-INT en el origen y SALIDA-INT en el destino— con las mismas
+// cantidades. Claves determinísticas (tr_{id}_{codigo}_SI_ANUL / _EI_ANUL): reintentar no duplica.
+async function anularDespacho(id){
+  const btn = $('anularOk');
+  if (!esRoot || !btn || btn.disabled) return;
+  if ($('anularClave').value.trim() !== CLAVE_ANULAR){
+    $('anularErr').textContent = 'Clave incorrecta.';
+    $('anularClave').select();
+    vibrar([60, 40, 60]);
+    return;
+  }
+  $('anularErr').textContent = '';
+  btn.disabled = true;
+  procesoCritico = true;
+  showBlock('Anulando despacho…');
+  try {
+    if (!(await verificarConexionFirebase(5000))) throw new Error('Sin conexión a Firebase. Revisá internet.');
+    const actual = (await conTimeout(db.ref('traspasos/' + id).once('value'), 10000, 'No se pudo leer el pedido.')).val();
+    if (!actual) throw new Error('el pedido ya no existe.');
+    if (actual.estado !== 'ENVIADO' && actual.estado !== 'RECIBIDO') throw new Error('el pedido ya no está enviado.');
+
+    const o = suc(actual.origen), d = suc(actual.destino);
+    const cons = await conectarSucursales([o, d]);
+    showBlock('Revirtiendo stock…');
+
+    const movs = { [o.id]: {}, [d.id]: {} };
+    const movKeys = [];
+    const ts = Date.now();
+    let unidades = 0;
+    Object.keys(actual.items || {}).forEach(k => {
+      const i = actual.items[k];
+      const env = Math.max(0, Number(i.enviada) || 0);
+      if (env <= 0) return;
+      unidades += env;
+      const kSI = 'tr_' + id + '_' + k + '_SI_ANUL', kEI = 'tr_' + id + '_' + k + '_EI_ANUL';
+      const comun = { timestamp: ts, codigo: i.codigo, nombre: i.nombre, cantidad: env };
+      movs[o.id]['movimientos/' + kSI] = Object.assign({}, comun, { tipo: 'ENTRADA-INT', sucursal: o.id });
+      movs[d.id]['movimientos/' + kEI] = Object.assign({}, comun, { tipo: 'SALIDA-INT', sucursal: d.id });
+      movKeys.push([o.id, kSI], [d.id, kEI]);
+    });
+
+    // Igual que al despachar: primero los proyectos de sucursal. Si después falla el principal,
+    // el pedido sigue enviado y reintentar pisa las mismas claves.
+    for (const s of [o, d]){
+      if (!s.config || !Object.keys(movs[s.id]).length) continue;
+      showBlock(`Revirtiendo stock en ${s.nombre}…`);
+      await conTimeout(cons[s.id].db.ref().update(movs[s.id]), 15000, `La reversión de stock en ${s.nombre} tardó demasiado.`);
+    }
+    const updates = {};
+    [o, d].forEach(s => { if (!s.config) Object.assign(updates, movs[s.id]); });
+    const base = 'traspasos/' + id + '/';
+    updates[base + 'estado'] = 'CANCELADO';
+    updates[base + 'revertido'] = true;
+    updates[base + 'canceladoEn'] = firebase.database.ServerValue.TIMESTAMP;
+    updates[base + 'canceladoPor'] = { uid: usuario.uid, email: usuario.email || '' };
+    updates[base + 'motivoCancelacion'] = 'Despacho anulado: se revirtió el stock';
+    showBlock('Anulando despacho…');
+    await conTimeout(db.ref().update(updates), 15000, 'La anulación tardó demasiado.');
+
+    const check = await conTimeout(db.ref(base + 'estado').once('value'), 10000, 'No se pudo verificar la anulación.');
+    if (check.val() !== 'CANCELADO') throw new Error('La verificación de la anulación falló.');
+    for (const [sId, k] of movKeys){
+      const m = await conTimeout(cons[sId].db.ref('movimientos/' + k).once('value'), 10000, `No se pudo verificar la reversión de stock de ${suc(sId).nombre}.`);
+      if (!m.exists()) throw new Error(`La verificación de la reversión de ${suc(sId).nombre} falló.`);
+    }
+
+    hideBlock();
+    procesoCritico = false;
+    anularAbierto = null;
+    vibrar([40, 50, 40]);
+    toast(`${actual.numero || 'Pedido'} anulado: se revirtieron ${unid(unidades)}`);
+    // Se refleja sin esperar al listener (puede venir del reporte, fuera de los últimos que escucha la app).
+    const local = traspasos[id] || repDatos[id];
+    if (local) Object.assign(local, { estado: 'CANCELADO', revertido: true, canceladoEn: Date.now(), canceladoPor: updates[base + 'canceladoPor'] });
+    renderDetalle(id);
+  } catch (err){
+    console.error('Error anulando el despacho:', err);
+    hideBlock();
+    toast('No se anuló: ' + err.message, 'err');
+    if ($('anularOk')) $('anularOk').disabled = false;
+  } finally {
+    procesoCritico = false;
+  }
 }
 
 // Eliminar: solo root. Para el resto el botón no se dibuja.
@@ -2015,7 +2432,31 @@ function sincronizarPickAbierto(){
     }
     return;
   }
+  // Lo editaron antes de que se empezara a preparar: los items cambiaron.
+  Object.entries(t.items || {}).forEach(([k, i]) => {
+    const sol = Number(i.solicitada) || 0, p = pick.items[k];
+    if (!p) pick.items[k] = { enviar: sol, ok: false, quitado: false };
+    else if (!p.ok && !p.quitado) p.enviar = sol;
+    else p.enviar = Math.min(sol, p.enviar);
+  });
+  Object.keys(pick.items).forEach(k => { if (!t.items || !t.items[k]) delete pick.items[k]; });
   renderPick();
+}
+
+// La preparación empieza con la primera acción sobre un artículo: desde ahí el pedido pasa a
+// PREPARANDO y ya no se puede editar. Transacción: si justo lo estaban guardando editado, se aplica después.
+function marcarPreparando(id){
+  const t = traspasos[id];
+  if (!t || t.estado !== 'PENDIENTE') return;
+  const yo = { uid: usuario.uid, email: usuario.email || '' };
+  db.ref('traspasos/' + id).transaction(x => {
+    if (!x) return x;
+    if (x.estado !== 'PENDIENTE') return;   // aborta
+    x.estado = 'PREPARANDO';
+    x.preparadoPor = yo;
+    x.preparandoEn = Date.now();
+    return x;
+  }).catch(err => console.warn('No se pudo marcar el pedido en preparación:', err.code || err.message));
 }
 
 function estadoPick(t){
@@ -2075,12 +2516,14 @@ function renderPick(){
         <div class="progress"><div class="progress-bar"><i style="width:${st.total ? st.revisados / st.total * 100 : 0}%"></i></div><span>${st.revisados} de ${st.total} revisados</span></div>
       </div>
     </div>
-    ${t.nota ? `<div class="det-nota" style="margin-top:4px"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
+    ${t.estado === 'PENDIENTE' ? `<div class="pick-edit"><button type="button" class="btn btn-ghost" id="editarBtn">Editar pedido</button><p>Se puede editar hasta que alguien empiece a prepararlo.</p></div>` : ''}
+    ${t.nota ? `<div class="det-nota" style="margin-top:12px"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
     <div class="pick-list" style="margin-top:12px">${lista}</div>
     ${costoTotalHtml(st.costo, st.sinCosto, 'Costo total a enviar')}
     ${esRoot ? `<div style="margin-top:18px">${eliminarBtnHtml()}</div>` : ''}`;
 
   if (esRoot) $('eliminarBtn').addEventListener('click', () => eliminarPedido(t.id));
+  if (t.estado === 'PENDIENTE') $('editarBtn').addEventListener('click', () => editarPedido(t.id));
 
   const dock = $('pickDock'), cta = $('pickCta');
   dock.hidden = false;
@@ -2104,6 +2547,7 @@ function setEnviar(k, n){
   // Se puede bajar hasta 0, nunca enviar más de lo pedido.
   p.enviar = Math.min(sol, Math.max(0, Math.floor(Number(n) || 0)));
   p.ok = true;
+  marcarPreparando(pick.id);
   guardarPick();
   renderPick();
 }
@@ -2120,6 +2564,7 @@ $('pickInner').addEventListener('click', e => {
     case 'quitar': p.quitado = true; p.ok = true; toast('Artículo quitado del pedido'); break;
     case 'restaurar': p.quitado = false; p.ok = false; p.enviar = sol; break;
   }
+  marcarPreparando(pick.id);
   guardarPick();
   renderPick();
 });
@@ -2182,6 +2627,26 @@ function abrirConfirmacion(t){
 
 $('confBtn').addEventListener('click', despachar);
 
+// Cada sucursal registra su movimiento en su propio proyecto. Las que tienen proyecto
+// propio se preparan ANTES de escribir nada (sesión y conexión): si algo falta se corta acá.
+// Devuelve id de sucursal -> { db, auth }.
+async function conectarSucursales(lista){
+  const cons = {};
+  for (const s of lista){
+    if (!s.config){ cons[s.id] = { db, auth }; continue; }
+    showBlock(`Conectando con ${s.nombre}…`);
+    const con = await conexionSucursal(s);
+    if (!con.auth.currentUser){
+      hideBlock();
+      await pedirSesionSucursal(s, con);
+      showBlock(`Conectando con ${s.nombre}…`);
+    }
+    if (!(await verificarConexionDe(con.db, 8000))) throw new Error(`Sin conexión con ${s.nombre}. No se guardó nada.`);
+    cons[s.id] = con;
+  }
+  return cons;
+}
+
 async function despachar(){
   const btn = $('confBtn');
   if (btn.disabled || !pick) return;
@@ -2201,21 +2666,7 @@ async function despachar(){
     const yo = { uid: usuario.uid, email: usuario.email || '' };
     const o = suc(actual.origen), d = suc(actual.destino);
 
-    // Cada sucursal registra su movimiento en su propio proyecto. Las que tienen proyecto
-    // propio se preparan ANTES de escribir nada (sesión y conexión): si algo falta se corta acá.
-    const cons = {};   // id de sucursal -> { db, auth }
-    for (const s of [o, d]){
-      if (!s.config){ cons[s.id] = { db, auth }; continue; }
-      showBlock(`Conectando con ${s.nombre}…`);
-      const con = await conexionSucursal(s);
-      if (!con.auth.currentUser){
-        hideBlock();
-        await pedirSesionSucursal(s, con);
-        showBlock(`Conectando con ${s.nombre}…`);
-      }
-      if (!(await verificarConexionDe(con.db, 8000))) throw new Error(`Sin conexión con ${s.nombre}. No se guardó nada.`);
-      cons[s.id] = con;
-    }
+    const cons = await conectarSucursales([o, d]);
     showBlock('Despachando…');
 
     const updates = {};
