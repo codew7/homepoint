@@ -284,6 +284,8 @@ async function arrancar() {
   }
 
   urlCaja = `http://localhost:${servidor.puerto}/${PAGINA_INICIAL}`;
+  // Versión instalada: la muestra el selector de usuario (preload.js).
+  ipcMain.on('caja:version', (evento) => { evento.returnValue = app.getVersion(); });
   iniciarActualizador(log);
   iniciarOffline({ log, hayInternet });
   usarLibreriasLocales();

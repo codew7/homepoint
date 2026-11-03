@@ -139,13 +139,13 @@ python relevar.py "C:\Relevamientos\2026-10-29" --sin-guardar
 | `--forzar` | Guarda aunque haya columnas sin analizar. |
 | `--modelo sonnet` | Usa Sonnet en vez del modelo que tengas elegido. Rinde más con el límite de la suscripción. |
 | `--lote 8` | Cuántas fotos se mandan juntas a Claude (de 1 a 10). |
-| `--sin-segunda-mirada` | No vuelve a mirar las etiquetas en duda (gasta menos, identifica menos). |
+| `--segunda-mirada` | Vuelve a mirar las etiquetas en duda (gasta más, identifica más). Apagada por defecto. |
 
 ### Si se corta a la mitad
 Lo que Claude ya analizó queda guardado dentro de la carpeta de fotos, en `.locator\analisis.json`. Si el programa se corta (por el límite de uso, porque se cerró la ventana o porque se cortó internet), **volvé a ejecutarlo** y sigue desde donde quedó, sin gastar de nuevo.
 
 ### Límite de la suscripción
-Cada foto gasta una parte de tu límite del plan Pro, como si mandaras una imagen en un chat. Una columna de una sola foto es una imagen; una de tres fotos, tres. La segunda mirada suma recortes chicos, de a 8 por consulta. Si se alcanza el límite, el programa lo avisa y se detiene: volvé a ejecutarlo más tarde y sigue desde ahí (lo ya leído y lo ya revisado quedan guardados).
+Cada foto gasta una parte de tu límite del plan Pro, como si mandaras una imagen en un chat. Una columna de una sola foto es una imagen; una de tres fotos, tres. La segunda mirada (solo si se activa con `--segunda-mirada`) suma recortes chicos, de a 8 por consulta. Si se alcanza el límite, el programa lo avisa y se detiene: volvé a ejecutarlo más tarde y sigue desde ahí (lo ya leído y lo ya revisado quedan guardados).
 
 ---
 

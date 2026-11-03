@@ -271,8 +271,18 @@
           <span aria-hidden="true">·</span>
           <button type="button" class="usr-pv-cambiar">Cambiar punto de venta</button>
         </div>
-      </div>`;
+      </div>
+      <span class="usr-version" aria-hidden="true"></span>`;
     document.body.appendChild(overlay);
+
+    // Versión de la aplicación, discreta en la esquina. En la caja de
+    // escritorio la da la app (preload.js: cajaApp.version); en la web no hay
+    // número de versión, sólo se indica que es la web.
+    const app = window.cajaApp;
+    overlay.querySelector('.usr-version').textContent =
+      app && app.escritorio
+        ? 'Caja local' + (app.version ? ' · v' + app.version : '')
+        : 'Versión web';
 
     grilla = overlay.querySelector('#usrGrilla');
     estadoEl = overlay.querySelector('#usrEstado');

@@ -23,7 +23,8 @@ Opciones:
                       Si no se indica, al empezar se muestra la lista de
                       modelos vigentes y se propone el último usado.
     --lote N          cuántas imágenes se mandan juntas a Claude (por defecto 6)
-    --sin-segunda-mirada   no vuelve a mirar las etiquetas en duda
+    --segunda-mirada  vuelve a mirar las etiquetas en duda (apagado por
+                      defecto para gastar menos)
 
 Qué hace, paso a paso:
     1. Lee la configuración (.env), la planilla de precios y, si puede,
@@ -35,7 +36,7 @@ Qué hace, paso a paso:
     4. Junta las fotos de cada columna (una etiqueta repetida entre dos
        fotos seguidas cuenta una vez) e identifica los productos por
        código, precio y nombre impreso en la etiqueta.
-    5. Segunda mirada: las etiquetas en duda se recortan y Claude elige
+    5. Segunda mirada (solo con --segunda-mirada): las etiquetas en duda se recortan y Claude elige
        entre los productos posibles viendo el producto.
     6. Lo que siga en duda se desempata por la categoría de los vecinos y
        por dónde estaba cada producto la semana anterior.
@@ -249,7 +250,8 @@ def main():
     p.add_argument("--forzar", action="store_true", help="guardar aunque haya fotos sin analizar")
     p.add_argument("--modelo", help="modelo de Claude (sonnet, opus...)")
     p.add_argument("--lote", type=int, default=6, help="imágenes por consulta a Claude (1 a 10)")
-    p.add_argument("--sin-segunda-mirada", action="store_true", help="no revisar de nuevo las etiquetas en duda")
+    p.add_argument("--segunda-mirada", action="store_true",
+                   help="revisar de nuevo las etiquetas en duda (apagado por defecto)")
     args = p.parse_args()
 
     relevamiento_id = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -333,7 +335,7 @@ def main():
     # 4) Identificación: lo que dice cada etiqueta...
     lecturas = identificar_todo(lista_fotos, planilla)
     # ...segunda mirada a las que quedaron en duda...
-    if not args.sin_segunda_mirada:
+    if args.segunda_mirada:
         resueltas = segunda_mirada.revisar(lecturas, planilla, trabajo, modelo)
         if resueltas:
             log.info("Segunda mirada: %d etiqueta(s) resueltas.", resueltas)

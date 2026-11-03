@@ -23,6 +23,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 // en modo Offline" de la pantalla "Sin conexión").
 contextBridge.exposeInMainWorld('cajaApp', {
   escritorio: true,
+  // Versión instalada (la del package.json), p. ej. "2.1.2".
+  version: (() => { try { return ipcRenderer.sendSync('caja:version'); } catch (_) { return ''; } })(),
   reintentarConexion: () => ipcRenderer.send('conexion:reintentar'),
   offline: {
     obtener: () => ipcRenderer.invoke('offline:obtener'),
