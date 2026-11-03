@@ -1558,7 +1558,7 @@
     .pv-radio-row label .ic-sm { color: currentColor; }
     .pv-radio-row label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* Tres opciones no entran en linea: icono arriba, etiqueta abajo */
+    /* Tres o mas opciones no entran en linea: icono arriba, etiqueta abajo */
     .pv-radio-row--3 label {
       flex-direction: column;
       gap: 3px;
@@ -2822,7 +2822,7 @@
 
     /* Forma de envio del pedido: icono chico junto al nombre, con el color
        de cada servicio (Correo azul marino, Via Cargo verde arbol, moto
-       amarillo). En oscuro se aclaran para que no se pierdan sobre el fondo. */
+       amarillo, Flecha Carga rojo). En oscuro se aclaran para que no se pierdan sobre el fondo. */
     .pp-entrega-ind {
       flex: none;
       display: inline-flex;
@@ -2831,14 +2831,17 @@
     .pp-entrega-ind--correo { color: #1f3a6e; }
     .pp-entrega-ind--viacargo { color: #2f6b34; }
     .pp-entrega-ind--moto { color: #d9a300; }
+    .pp-entrega-ind--flechacarga { color: #c0392b; }
     @media (prefers-color-scheme: dark) {
       :root:not([data-tema="light"]) .pp-entrega-ind--correo { color: #7f9fe0; }
       :root:not([data-tema="light"]) .pp-entrega-ind--viacargo { color: #6dbb72; }
       :root:not([data-tema="light"]) .pp-entrega-ind--moto { color: #f2c230; }
+      :root:not([data-tema="light"]) .pp-entrega-ind--flechacarga { color: #ef7a6c; }
     }
     :root[data-tema="dark"] .pp-entrega-ind--correo { color: #7f9fe0; }
     :root[data-tema="dark"] .pp-entrega-ind--viacargo { color: #6dbb72; }
     :root[data-tema="dark"] .pp-entrega-ind--moto { color: #f2c230; }
+    :root[data-tema="dark"] .pp-entrega-ind--flechacarga { color: #ef7a6c; }
     .pp-entrega-ind svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
     /* Fila nueva que entra a la lista y fila que cambio por un dato en vivo */
@@ -3333,6 +3336,30 @@
       color: var(--accent);
     }
     .nec-btn-pedidos .ic-sm { width: 16px; height: 16px; }
+
+    /* Check "Ocultar solicitados": saca de la lista (Faltan y Todos) los
+       articulos ya pedidos a Caseros, enviados o todavia pendientes. */
+    .nec-chk-env {
+      flex: none;
+      height: 40px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .14s, color .14s, border-color .14s;
+    }
+    .nec-chk-env:hover { background: var(--surface-3); color: var(--ink); }
+    .nec-chk-env input { width: 16px; height: 16px; margin: 0; accent-color: var(--ok); cursor: pointer; }
+    .nec-chk-env:has(input:checked) { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 
     /* Lista */
     .nec-list {
@@ -5672,6 +5699,7 @@
           <button type="button" id="necAgrZona" role="tab" title="Por grupo y columna, en el orden del recorrido del depósito">Ubicación</button>
           <button type="button" id="necAgrCat" role="tab" title="Por categoría de la planilla">Categoría</button>
         </div>
+        <label class="nec-chk-env" title="Ocultar los artículos ya pedidos a Caseros: los enviados y los pendientes"><input type="checkbox" id="necChkEnviados"><span>Ocultar solicitados <span class="nec-seg-n" id="necNEnviados">0</span></span></label>
         <button type="button" class="nec-btn-pedidos" id="necBtnPedidos" title="Elegir qué pedidos entran en el cálculo"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg><span id="necBtnPedidosTxt">Pedidos</span></button>
       </div>
 
@@ -6783,7 +6811,7 @@
         // Verificar status bloqueado
         isBlocked = pedido.status === 'CANCELADO' || pedido.status === 'DESPACHADO/ENTREGADO';
         if (isBlocked) {
-          statusBar.textContent = 'Pedido ' + pedido.status + ' - Solo lectura' + textoConstanciaMovimientos(pedido);
+          statusBar.textContent = 'Pedido ' + pedido.status + textoFechaEntregaBar(pedido) + ' - Solo lectura' + textoConstanciaMovimientos(pedido);
           statusBar.className = claseStatusBar(pedido.status);
           statusBar.style.display = 'block';
         }
@@ -6852,7 +6880,7 @@
           const statusBar = document.getElementById('statusBar');
           isBlocked = nuevoPedido.status === 'CANCELADO' || nuevoPedido.status === 'DESPACHADO/ENTREGADO';
           if (isBlocked) {
-            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura' + textoConstanciaMovimientos(nuevoPedido);
+            statusBar.textContent = 'Pedido ' + nuevoPedido.status + textoFechaEntregaBar(nuevoPedido) + ' - Solo lectura' + textoConstanciaMovimientos(nuevoPedido);
             statusBar.className = claseStatusBar(nuevoPedido.status);
             statusBar.style.display = 'block';
             footer.style.display = 'none';
@@ -6900,11 +6928,12 @@
       if (v.includes('correo'))     return '\u{1F4E6} ';
       if (v.includes('moto'))       return '\u{1F3CD}\uFE0F ';
       if (v.includes('via'))        return '\u{1F69B} ';
+      if (v.includes('flecha'))     return '\u{1F69A} ';
       if (v.includes('retiro'))     return '\u{1F3EA} ';
       return '';
     }
 
-    // Constancia visible de que los movimientos quedaron registrados al despachar.
+    // Solo se avisa si los movimientos NO quedaron registrados al despachar.
     // La barra de solo lectura distingue el motivo: CANCELADO en rojo (default),
     // DESPACHADO/ENTREGADO en verde.
     function claseStatusBar(status) {
@@ -6913,10 +6942,33 @@
         : 'status-bar blocked';
     }
 
+    // Fecha de entrega: al marcar Entregado se reescribe pedido.fecha con
+    // "AAAA-MM-DD HH:MM:SS" (aca, en pedido.html y en pedidosv2T51), asi que
+    // en un pedido DESPACHADO/ENTREGADO ese campo es el momento de la entrega.
+    function fechaEntregaDe(pedido) {
+      if (!pedido || pedido.status !== 'DESPACHADO/ENTREGADO' || !pedido.fecha) return null;
+      const m = String(pedido.fecha).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+      const d = new Date(pedido.fecha);
+      return isNaN(d) ? null : d;
+    }
+    // "05/11/2026 14:32" (conHora) o "05/11/2026".
+    function fechaEntregaTexto(pedido, conHora) {
+      const d = fechaEntregaDe(pedido);
+      if (!d) return '';
+      const pad = n => String(n).padStart(2, '0');
+      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+        (conHora ? ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) : '');
+    }
+    function textoFechaEntregaBar(pedido) {
+      const t = fechaEntregaTexto(pedido, true);
+      return t ? ' el ' + t : '';
+    }
+
     function textoConstanciaMovimientos(pedido) {
       if (!pedido || pedido.status !== 'DESPACHADO/ENTREGADO') return '';
       return pedido.movimientosRegistrados
-        ? ' ✔ Movimientos registrados'
+        ? ''
         : ' ⚠ Movimientos NO registrados';
     }
 
@@ -7049,6 +7101,7 @@
     const IC_TARJETA = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>';
     const IC_MOTO = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17.5" r="3"></circle><circle cx="18.5" cy="17.5" r="3"></circle><path d="M8.5 17.5h6.8l-3.1-9.2H10"></path><path d="M15.6 8.3h3l2.2 9.2"></path></svg>';
     const IC_SOBRE = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><polyline points="3.5 7 12 13 20.5 7"></polyline></svg>';
+    const IC_FLECHA_CARGA = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h12"></path><path d="M15 6.5l5.5 5.5-5.5 5.5"></path><path d="M2.5 8h6"></path><path d="M2.5 16h6"></path></svg>';
     const IC_CAMION = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="6.5" width="12" height="9.5" rx="1.5"></rect><path d="M13.5 9.5h4l3 3.5V16h-7z"></path><circle cx="6" cy="18.5" r="1.9"></circle><circle cx="17" cy="18.5" r="1.9"></circle></svg>';
     const IC_LISTA = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><circle cx="4.5" cy="6" r="1.2"></circle><circle cx="4.5" cy="12" r="1.2"></circle><circle cx="4.5" cy="18" r="1.2"></circle></svg>';
 
@@ -7141,7 +7194,11 @@
       const ctxCatInt = document.getElementById('ctxCatInt');
       if (ctxCatInt) ctxCatInt.hidden = !esCatInt(pedidoActual);
       actualizarBtnCatInt();
-      document.getElementById('ctxFecha').textContent = fechaIngreso ? 'Ingresado ' + fechaIngreso : '';
+      const fechaEntrega = fechaEntregaTexto(pedidoActual, true);
+      document.getElementById('ctxFecha').textContent = [
+        fechaIngreso ? 'Ingresado ' + fechaIngreso : '',
+        fechaEntrega ? 'Entregado ' + fechaEntrega : ''
+      ].filter(Boolean).join(' · ');
 
       // ---------- COLUMNA IZQUIERDA: ARTICULOS ----------
       const pendientes = [];
@@ -7328,9 +7385,10 @@
       panel += '<div class="pv-radio-title">Entrega</div>';
       panel += '<div class="pv-radio-row pv-radio-row--3">';
       const entregaOpts = [
-        { valor: 'Motomensajeria', texto: 'Moto', icono: IC_MOTO },
+        { valor: 'Motomensajeria', texto: 'Flete', icono: IC_MOTO },
         { valor: 'Correo Argentino', texto: 'Correo', icono: IC_SOBRE },
-        { valor: 'Via Cargo', texto: 'Vía Cargo', icono: IC_CAMION }
+        { valor: 'Via Cargo', texto: 'Vía Cargo', icono: IC_CAMION },
+        { valor: 'Flecha Carga', texto: 'Flecha', icono: IC_FLECHA_CARGA }
       ];
       entregaOpts.forEach(opt => {
         panel += '<label><input type="radio" name="pvTipoEntrega" value="' + opt.valor + '"' + (pedidoActual.tipoEntrega === opt.valor ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '>' + opt.icono + '<span>' + opt.texto + '</span></label>';
@@ -8714,9 +8772,10 @@
     // Forma de envio elegida en el pedido, junto al nombre. Mismos iconos que
     // los radios de Entrega de la vista; sin entrega elegida no se muestra.
     const PP_ENTREGAS = {
-      'Motomensajeria': ['Motomensajería', IC_MOTO, 'moto'],
+      'Motomensajeria': ['Flete', IC_MOTO, 'moto'],
       'Correo Argentino': ['Correo Argentino', IC_SOBRE, 'correo'],
-      'Via Cargo': ['Vía Cargo', IC_CAMION, 'viacargo']
+      'Via Cargo': ['Vía Cargo', IC_CAMION, 'viacargo'],
+      'Flecha Carga': ['Flecha Carga', IC_FLECHA_CARGA, 'flechacarga']
     };
     function ppEntregaHtml(p) {
       const e = PP_ENTREGAS[p.tipoEntrega];
@@ -8953,15 +9012,16 @@
       // resumen y los encabezados de grupo no pueden discrepar.
       // Desglose por entrega de los listos para despachar. Mismos value que los
       // radios de Entrega del panel; solo se muestran los que tienen pedidos.
-      const porEntrega = { 'Via Cargo': 0, 'Correo Argentino': 0, 'Motomensajeria': 0, '': 0 };
+      const porEntrega = { 'Via Cargo': 0, 'Flecha Carga': 0, 'Correo Argentino': 0, 'Motomensajeria': 0, '': 0 };
       pedidosCache.forEach(p => {
         if (p.rank !== 3) return;
         porEntrega[p.tipoEntrega in porEntrega ? p.tipoEntrega : '']++;
       });
       const desglose = [
         [porEntrega['Via Cargo'], 'Vía Cargo'],
+        [porEntrega['Flecha Carga'], 'Flecha'],
         [porEntrega['Correo Argentino'], 'Correo'],
-        [porEntrega['Motomensajeria'], 'Moto'],
+        [porEntrega['Motomensajeria'], 'Flete'],
         [porEntrega[''], 'sin entrega']
       ].filter(([n]) => n > 0).map(([n, txt]) => n + ' ' + txt).join(' · ');
 
@@ -9347,15 +9407,18 @@
           if (p.status !== 'DESPACHADO/ENTREGADO') return;
           const ts = p.timestamp || 0;
           if (ts < CUTOFF_MS) return;
+          const entrega = fechaEntregaDe(p);
           historialCache.push({
             id: child.key,
             nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre',
-            timestamp: ts
+            timestamp: ts,
+            entregaMs: entrega ? entrega.getTime() : 0,
+            entregaTxt: fechaEntregaTexto(p, true)
           });
         });
 
-        // Mas recientes primero (por fecha de registro).
-        historialCache.sort((a, b) => b.timestamp - a.timestamp);
+        // Entregados mas recientes primero; sin fecha de entrega, por la de registro.
+        historialCache.sort((a, b) => (b.entregaMs || b.timestamp) - (a.entregaMs || a.timestamp));
 
         renderHistorial('');
       } catch (err) {
@@ -9384,7 +9447,8 @@
       historialPanelList.innerHTML = lista.map(p =>
         '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
         '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
-        '<span class="pedidos-panel-fecha">' + escapeHtml(new Date(p.timestamp).toLocaleDateString('es-AR')) + '</span>' +
+        '<span class="pedidos-panel-fecha" title="Ingresado el ' + escapeHtml(new Date(p.timestamp).toLocaleDateString('es-AR')) + '">' +
+          escapeHtml(p.entregaTxt ? 'Entregado ' + p.entregaTxt : new Date(p.timestamp).toLocaleDateString('es-AR')) + '</span>' +
         '</div>'
       ).join('');
     }
@@ -14528,7 +14592,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         ].filter(Boolean).join(' · ');
         return '<div class="pedidos-panel-item pc-item' + (actual ? ' is-actual' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
           '<span class="pedidos-panel-nombre">' + escapeHtml(fecha || 'Sin fecha') + (actual ? ' (este pedido)' : '') + '</span>' +
-          '<span class="pc-estado">' + escapeHtml(p.status || '') + '</span>' +
+          '<span class="pc-estado">' + escapeHtml(p.status || '') +
+            (fechaEntregaTexto(p) ? ' · ' + escapeHtml(fechaEntregaTexto(p)) : '') + '</span>' +
           '<span class="pc-detalle">' + escapeHtml(detalle) + '</span>' +
           '</div>';
       }).join('');
@@ -14937,7 +15002,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           const statusBar = document.getElementById('statusBar');
           isBlocked = nuevoPedido.status === 'CANCELADO' || nuevoPedido.status === 'DESPACHADO/ENTREGADO';
           if (isBlocked) {
-            statusBar.textContent = 'Pedido ' + nuevoPedido.status + ' - Solo lectura' + textoConstanciaMovimientos(nuevoPedido);
+            statusBar.textContent = 'Pedido ' + nuevoPedido.status + textoFechaEntregaBar(nuevoPedido) + ' - Solo lectura' + textoConstanciaMovimientos(nuevoPedido);
             statusBar.className = claseStatusBar(nuevoPedido.status);
             statusBar.style.display = 'block';
             footer.style.display = 'none';
@@ -15022,6 +15087,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let articulos = {};            // { codigo: { codigo, nombre, cantidad, pedidos: [{id, cliente, cantidad}] } }
       let pedidosEnCalculo = 0;
       let soloFaltan = true;
+      // Ocultar los ya pedidos a Caseros, "Solicitado" o "Enviado" (se recuerda en el equipo).
+      let ocultarEnviados = false;
+      try { ocultarEnviados = localStorage.getItem('nec_ocultar_enviados') === '1'; } catch (e) { /* sin storage */ }
       let busqueda = '';
       let abierta = null;            // codigo de la fila con el detalle desplegado
       let cargando = false;
@@ -15411,7 +15479,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // ---------- Render ----------
       function render() {
         const todos = listaOrdenada();
-        const visibles = todos.filter(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)));
+        const nEnviados = todos.filter(a => esEnviado(a.codigo)).length;
+        document.getElementById('necNEnviados').textContent = nEnviados;
+        const visibles = todos.filter(a => pasaBusqueda(a) &&
+          (!soloFaltan || !getVerificado(a.codigo)) &&
+          (!ocultarEnviados || !esEnviado(a.codigo)));
 
         // Hay pedidos pero ninguno elegido: no es lo mismo que "no hay nada".
         if (!todos.length && pedidos.length && !pedidosEnCalculo) {
@@ -15427,7 +15499,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           return;
         }
         if (!visibles.length) {
-          const html = busqueda
+          const quedanSinEnviados = ocultarEnviados && todos.some(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)));
+          const html = quedanSinEnviados
+            ? '<div class="nec-empty">' + IC_VACIO + '<b>Todo lo que queda ya fue solicitado a Caseros</b><span>Destildá "Ocultar solicitados" para verlos.</span></div>'
+            : busqueda
             ? '<div class="nec-empty">' + IC_VACIO + '<b>Sin resultados</b><span>Ningún artículo coincide con "' + escapeHtml(busqueda) + '".</span></div>'
             : '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>Todo verificado</b><span>No queda nada por juntar. Tocá "Todos" para revisar la lista completa.</span></div>';
           lista.innerHTML = html;
@@ -15610,6 +15685,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         render();
       }
       segFaltan.addEventListener('click', () => setSoloFaltan(true));
+      const chkEnviados = document.getElementById('necChkEnviados');
+      chkEnviados.checked = ocultarEnviados;
+      chkEnviados.addEventListener('change', () => {
+        ocultarEnviados = chkEnviados.checked;
+        try { localStorage.setItem('nec_ocultar_enviados', ocultarEnviados ? '1' : '0'); } catch (e) { /* sin storage */ }
+        render();
+      });
       segTodos.addEventListener('click', () => setSoloFaltan(false));
 
       // Agrupar por zona del deposito o por categoria (se recuerda en el equipo).
@@ -15892,6 +15974,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const cambio = firma !== firmaRemoto;
         firmaRemoto = firma;
         return cambio;
+      }
+
+      // Ya pedido a Caseros: tiene el indicador "Solicitado" o "Enviado" en la fila.
+      function esEnviado(codigo) {
+        const r = remoto[claveSegura(codigo)];
+        return !!r;
       }
 
       function remotoHtml(codigo) {
