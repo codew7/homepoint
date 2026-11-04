@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>¿Llega? · Envíos a sucursal</title>
+<meta name="description" content="Consultá si una localidad tiene sucursal de Vía Cargo, Flecha Carga o Correo Argentino.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16150f" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono.png" type="image/png">
+<link rel="apple-touch-icon" href="icono.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="¿Llega?">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preload" href="datos.json" as="fetch" crossorigin>
+<style>
+  :root {
+    color-scheme: light dark;
+    --papel: #f4f1ea;
+    --hoja: #fffdf8;
+    --tinta: #1d1b16;
+    --suave: #6b665a;
+    --linea: #dcd6c8;
+    --hundido: #ebe6da;
+    --si: #17693a;
+    --si-fondo: #dff0e2;
+    --no: #a32a1f;
+    --no-fondo: #f8e4df;
+    --vc: #1e8d34;
+    --fc: #030b84;
+    --ca: #152663;
+    --serif: "Fraunces", Georgia, serif;
+    --sans: "Instrument Sans", -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --papel: #16150f;
+      --hoja: #211f18;
+      --tinta: #f3efe4;
+      --suave: #a8a292;
+      --linea: #38352a;
+      --hundido: #2b2920;
+      --si: #7ad99a;
+      --si-fondo: #17351f;
+      --no: #ff9c8c;
+      --no-fondo: #3d1e18;
+      --vc: #58c26d;
+      --fc: #8f97ff;
+      --ca: #ffce00;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font: 400 16px/1.4 var(--sans);
+    min-height: 100dvh;
+  }
+  main {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  button, input { font: inherit; color: inherit; }
+  button { background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--tinta); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* Busqueda */
+  .barra {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--papel);
+    padding: calc(14px + env(safe-area-inset-top)) 0 10px;
+  }
+  .marca {
+    margin: 0 0 8px;
+    font: 600 22px/1.1 var(--serif);
+    letter-spacing: -.01em;
+  }
+  .marca small {
+    font: 400 13px var(--sans);
+    letter-spacing: 0;
+    color: var(--suave);
+    margin-left: 6px;
+  }
+  .campo { position: relative; }
+  .campo input {
+    width: 100%;
+    height: 54px;
+    padding: 0 50px 0 16px;
+    background: var(--hoja);
+    border: 2px solid var(--tinta);
+    border-radius: 10px;
+    font-size: 18px; /* 16 o mas: iOS no hace zoom al enfocar */
+    appearance: none;
+  }
+  .campo input:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--linea); }
+  .campo input::placeholder { color: var(--suave); }
+  .campo input::-webkit-search-cancel-button { display: none; }
+  .limpiar {
+    position: absolute;
+    right: 4px;
+    top: 5px;
+    width: 44px;
+    height: 44px;
+    text-align: center;
+    font-size: 22px;
+    color: var(--suave);
+  }
+
+  /* Lista de resultados */
+  .rotulo {
+    margin: 14px 0 6px;
+    font: 500 12px var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--suave);
+  }
+  .lista { list-style: none; margin: 0; padding: 0; }
+  .fila {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 60px;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--linea);
+  }
+  .fila:active { background: var(--hundido); }
+  .fila-texto { flex: 1; min-width: 0; }
+  .fila-nombre { display: block; font-weight: 600; font-size: 17px; line-height: 1.2; }
+  .fila-prov { display: block; font-size: 13.5px; color: var(--suave); }
+  .marcas { display: flex; gap: 4px; flex: none; }
+  .marquita {
+    width: 30px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 5px;
+    font: 500 11px var(--mono);
+    background: var(--si-fondo);
+    color: var(--si);
+  }
+  .marquita.no {
+    background: none;
+    color: var(--suave);
+    opacity: .55;
+    text-decoration: line-through;
+  }
+  .vacio { padding: 26px 4px; color: var(--suave); text-align: center; }
+  .vacio strong { display: block; color: var(--tinta); font-size: 17px; margin-bottom: 4px; }
+  .referencia {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--suave);
+  }
+  .referencia b { font: 500 12px var(--mono); color: var(--tinta); }
+
+  /* Resultado */
+  .volver {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    margin-top: calc(6px + env(safe-area-inset-top));
+    padding-right: 12px;
+    font-weight: 500;
+    color: var(--suave);
+  }
+  h1 {
+    margin: 2px 0 2px;
+    font: 600 clamp(29px, 8.5vw, 38px)/1.08 var(--serif);
+    letter-spacing: -.015em;
+    overflow-wrap: anywhere;
+  }
+  .lugar { margin: 0; color: var(--suave); font-size: 15px; }
+  .veredicto {
+    margin: 12px 0 14px;
+    font: 500 12.5px var(--mono);
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .empresa {
+    background: var(--hoja);
+    border: 1px solid var(--linea);
+    border-left: 5px solid var(--color);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    animation: entrar .22s cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+  .empresa:nth-child(2) { animation-delay: 45ms; }
+  .empresa:nth-child(3) { animation-delay: 90ms; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { .empresa { animation: none; } }
+  .cabeza {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-height: 68px;
+    padding: 11px 12px;
+  }
+  button.cabeza:active { background: var(--hundido); }
+  .sello {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 20px;
+    font-weight: 600;
+    background: var(--si-fondo);
+    color: var(--si);
+  }
+  .empresa.no .sello { background: var(--no-fondo); color: var(--no); }
+  .emp-texto { flex: 1; min-width: 0; }
+  .emp-nombre {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 3px 7px;
+    margin: 0 0 3px -7px;
+    background: #fff; /* los logos son para fondo claro, tambien en modo oscuro */
+    border-radius: 6px;
+    font-weight: 600;
+    color: #1d1b16;
+  }
+  .emp-nombre img { display: block; object-fit: contain; }
+  .emp-estado { display: block; font-size: 14px; color: var(--si); }
+  .empresa.no .emp-estado { color: var(--no); }
+  .flecha { color: var(--suave); font-size: 20px; transition: transform .16s; }
+  [aria-expanded="true"] .flecha { transform: rotate(90deg); }
+  .sucursales { border-top: 1px solid var(--linea); }
+  .sucursal { padding: 12px 12px 13px; border-bottom: 1px solid var(--linea); }
+  .sucursal:last-child { border-bottom: 0; }
+  .suc-rotulo {
+    display: block;
+    font: 500 11.5px var(--mono);
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--suave);
+    margin-bottom: 3px;
+  }
+  .suc-nombre { font-weight: 600; overflow-wrap: anywhere; }
+  .suc-dato { font-size: 14.5px; color: var(--suave); overflow-wrap: anywhere; }
+  .suc-dato.dir { color: var(--tinta); }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+  .accion {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--linea);
+    border-radius: 8px;
+    background: var(--papel);
+    font-size: 14.5px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .accion:active { background: var(--hundido); }
+  .pie {
+    margin-top: 18px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--suave);
+  }
+  .cargando { padding: 26px 4px; text-align: center; color: var(--suave); }
+  .error { padding: 22px 4px; text-align: center; }
+  .error .accion { margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="vistaBuscar">
+    <div class="barra">
+      <p class="marca">¿Llega?<small>Envíos a sucursal</small></p>
+      <div class="campo">
+        <input id="q" type="search" placeholder="Localidad, barrio o CP" aria-label="Buscar localidad, barrio o código postal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+        <button id="limpiar" class="limpiar" type="button" aria-label="Borrar búsqueda" hidden>×</button>
+      </div>
+    </div>
+    <div id="lista" aria-live="polite"><p class="cargando">Cargando…</p></div>
+    <p id="pie" class="pie"></p>
+  </section>
+  <section id="vistaLugar" hidden></section>
+</main>
+
+<script>
+"use strict";
+const EMPRESAS = [
+  { id: "v", pos: 1, nombre: "Vía Cargo", corto: "VC", color: "var(--vc)", logo: "../ViaCargo/logo-viacargo.png", w: 121, h: 24 },
+  { id: "f", pos: 2, nombre: "Flecha Carga", corto: "FC", color: "var(--fc)", logo: "../Flecha%20Carga/logo-flechacarga-claro.png", w: 140, h: 16 },
+  { id: "c", pos: 0, nombre: "Correo Argentino", corto: "CA", color: "var(--ca)", logo: "../Correo/logo-correo.png", w: 96, h: 26 },
+];
+const MAX_RESULTADOS = 30;
+const CLAVE_RECIENTES = "llega:recientes";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let DATOS = null;
+let LOCS = [];
+let POR_RUTA = new Map();
+
+/* ---------- Texto ---------- */
+function sinTildes(s) {
+  return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+}
+// Misma cuenta que clave() en preparar_datos.py: "Gral. de la Madrid" -> "GENERAL MADRID".
+function clave(s, conConectores) {
+  const palabras = sinTildes(s).replace(/[.,;:'´`"]/g, " ").split(/\s+/).filter(Boolean);
+  return palabras
+    .filter((p) => conConectores || !DATOS.conect.includes(p))
+    .map((p) => DATOS.abrev[p] || p)
+    .join(" ");
+}
+
+/* ---------- Datos ---------- */
+function preparar(d) {
+  DATOS = d;
+  LOCS = d.l.map(([nombre, prov, cps, lat, lon, otros, dep], i) => {
+    const provincia = d.prov[prov] || "";
+    const loc = { i, nombre, provincia, cps, lat, lon, dep, cob: null };
+    loc.claves = [nombre, ...otros].map((n) => clave(n)).join(" | ");
+    loc.ruta = [nombre, provincia, dep].filter(Boolean).join(" · ");
+    POR_RUTA.set(loc.ruta, loc);
+    return loc;
+  });
+}
+function cobertura(loc) {
+  if (loc.cob) return loc.cob;
+  const sets = [new Set(), new Set(), new Set()];
+  for (const cp of loc.cps) {
+    const g = DATOS.cp[cp];
+    if (g) g.forEach((lista, pos) => lista.forEach((idx) => sets[pos].add(idx)));
+  }
+  loc.cob = sets.map((s) => [...s]);
+  return loc.cob;
+}
+function cuantasEmpresas(loc) {
+  return cobertura(loc).filter((g) => g.length).length;
+}
+
+/* ---------- Busqueda ---------- */
+function buscar(texto) {
+  const crudo = texto.trim();
+  if (!crudo) return [];
+  if (/^\d+$/.test(crudo)) {
+    const exactos = [], parciales = [];
+    for (const l of LOCS) {
+      if (l.cps.includes(crudo)) exactos.push(l);
+      else if (l.cps.some((cp) => cp.startsWith(crudo))) parciales.push(l);
+    }
+    const orden = (a, b) => cuantasEmpresas(b) - cuantasEmpresas(a) || a.nombre.localeCompare(b.nombre, "es");
+    return [...exactos.sort(orden), ...parciales.sort(orden)].slice(0, MAX_RESULTADOS);
+  }
+  // Si lo escrito son solo conectores ("la"), se busca tal cual.
+  const q = clave(crudo) || clave(crudo, true);
+  const partes = q.split(" ");
+  const hallados = [];
+  for (const l of LOCS) {
+    if (!partes.every((p) => l.claves.includes(p))) continue;
+    let rango = 2;
+    if (l.claves.split(" | ").includes(q)) rango = -1;
+    else if (l.claves.startsWith(q) || l.claves.includes("| " + q)) rango = 0;
+    else if ((" " + l.claves).includes(" " + partes[0])) rango = 1;
+    hallados.push({ l, rango });
+  }
+  hallados.sort((a, b) => a.rango - b.rango
+    || (cuantasEmpresas(b.l) > 0) - (cuantasEmpresas(a.l) > 0)
+    || a.l.nombre.length - b.l.nombre.length
+    || a.l.nombre.localeCompare(b.l.nombre, "es"));
+  return hallados.slice(0, MAX_RESULTADOS).map((h) => h.l);
+}
+
+function filaLocalidad(l) {
+  const cob = cobertura(l);
+  const marcas = EMPRESAS.map((e) => {
+    const hay = cob[e.pos].length > 0;
+    return `<span class="marquita${hay ? "" : " no"}">${e.corto}</span>`;
+  }).join("");
+  const resumen = EMPRESAS.map((e) => `${e.nombre}: ${cob[e.pos].length ? "sí" : "no"}`).join(", ");
+  const lugar = [l.dep, l.provincia].filter(Boolean).join(", ");
+  return `<li><button class="fila" type="button" data-ruta="${esc(l.ruta)}" aria-label="${esc(l.nombre)}, ${esc(lugar)}. ${resumen}">
+    <span class="fila-texto"><span class="fila-nombre">${esc(l.nombre)}</span><span class="fila-prov">${esc(lugar)}</span></span>
+    <span class="marcas" aria-hidden="true">${marcas}</span>
+  </button></li>`;
+}
+
+function pintarLista() {
+  if (!DATOS) return;
+  const texto = $("q").value;
+  $("limpiar").hidden = !texto;
+  const lista = $("lista");
+  if (!texto.trim()) {
+    const recientes = leerRecientes().map((r) => POR_RUTA.get(r)).filter(Boolean);
+    lista.innerHTML = (recientes.length
+      ? `<p class="rotulo">Últimas consultas</p><ul class="lista">${recientes.map(filaLocalidad).join("")}</ul>`
+      : "")
+      + `<div class="referencia"><span><b>VC</b> Vía Cargo</span><span><b>FC</b> Flecha Carga</span><span><b>CA</b> Correo Argentino</span></div>`;
+    return;
+  }
+  const hallados = buscar(texto);
+  lista.innerHTML = hallados.length
+    ? `<ul class="lista">${hallados.map(filaLocalidad).join("")}</ul>`
+    : `<div class="vacio"><strong>No encontramos «${esc(texto.trim())}»</strong>Probá con otra forma de escribirlo, con la ciudad más cercana o con el código postal.</div>`;
+}
+
+/* ---------- Resultado ---------- */
+function distanciaKm(aLat, aLon, bLat, bLon) {
+  const rad = Math.PI / 180;
+  const x = Math.sin((bLat - aLat) * rad / 2) ** 2
+    + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin((bLon - aLon) * rad / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(x));
+}
+function masCercana(loc, empresa) {
+  if (loc.lat == null) return null;
+  let mejor = null;
+  for (const s of DATOS.suc[empresa.id]) {
+    if (s[5] == null) continue;
+    const km = distanciaKm(loc.lat, loc.lon, s[5], s[6]);
+    if (!mejor || km < mejor.km) mejor = { s, km };
+  }
+  return mejor;
+}
+function textoKm(km) {
+  return km < 1 ? "a menos de 1 km" : `a unos ${Math.round(km)} km`;
+}
+function urlMapa(s, empresa) {
+  // s[7]: ubicacion aproximada (centro del CP); ahi el mapa busca por direccion o por nombre.
+  const consulta = s[1] && s[5] != null && !s[7] ? `${s[5]},${s[6]}`
+    : s[1] ? `${s[1]}, CP ${s[2]}, Argentina`
+    : `${empresa.nombre} ${s[0]}, CP ${s[2]}, Argentina`;
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(consulta);
+}
+function telefonoDe(texto) {
+  const m = String(texto || "").match(/\+?\d[\d\s()-]{6,}\d/);
+  return m ? m[0].replace(/[^\d+]/g, "") : "";
+}
+function bloqueSucursal(s, empresa, rotulo) {
+  const [nombre, direccion, cp, horario, contacto] = s;
+  const tel = telefonoDe(contacto);
+  return `<article class="sucursal">
+    ${rotulo ? `<span class="suc-rotulo">${esc(rotulo)}</span>` : ""}
+    <div class="suc-nombre">${esc(nombre)}</div>
+    <div class="suc-dato dir">${direccion ? esc(direccion) : "Dirección no publicada"}${cp ? ` · CP ${esc(cp)}` : ""}</div>
+    ${horario ? `<div class="suc-dato">${esc(horario)}</div>` : ""}
+    ${contacto ? `<div class="suc-dato">${esc(contacto)}</div>` : ""}
+    <div class="acciones">
+      <a class="accion" href="${esc(urlMapa(s, empresa))}" target="_blank" rel="noopener">Ver en mapa</a>
+      ${tel ? `<a class="accion" href="tel:${esc(tel)}">Llamar</a>` : ""}
+    </div>
+  </article>`;
+}
+function ordenarSucursales(indices, empresa, loc) {
+  // Primero las que se llaman como la localidad buscada: un CP puede abarcar varias.
+  const base = clave(loc.nombre);
+  const puntaje = (s) => (clave(s[0]).includes(base) ? 0 : 1);
+  return indices.map((i) => DATOS.suc[empresa.id][i])
+    .sort((a, b) => puntaje(a) - puntaje(b) || a[0].localeCompare(b[0], "es"));
+}
+function tarjetaEmpresa(loc, empresa) {
+  const indices = cobertura(loc)[empresa.pos];
+  const n = indices.length;
+  if (n) {
+    return `<div class="empresa" style="--color:${empresa.color}">
+      <button class="cabeza" type="button" aria-expanded="false" data-empresa="${empresa.id}">
+        <span class="sello" aria-hidden="true">✓</span>
+        <span class="emp-texto"><span class="emp-nombre"><img src="${empresa.logo}" alt="${empresa.nombre}" width="${empresa.w}" height="${empresa.h}"></span>
+        <span class="emp-estado">Disponible · ${n} ${n === 1 ? "sucursal" : "sucursales"}</span></span>
+        <span class="flecha" aria-hidden="true">›</span>
+      </button>
+      <div class="sucursales" hidden></div>
+    </div>`;
+  }
+  const cerca = masCercana(loc, empresa);
+  return `<div class="empresa no" style="--color:${empresa.color}">
+    <div class="cabeza">
+      <span class="sello" aria-hidden="true">✕</span>
+      <span class="emp-texto"><span class="emp-nombre"><img src="${empresa.logo}" alt="${empresa.nombre}" width="${empresa.w}" height="${empresa.h}"></span>
+      <span class="emp-estado">No hay sucursal en esta localidad</span></span>
+    </div>
+    ${cerca ? `<div class="sucursales">${bloqueSucursal(cerca.s, empresa, `Más cercana, ${textoKm(cerca.km)} en línea recta`)}</div>` : ""}
+  </div>`;
+}
+function fechaCorta(iso) {
+  if (!iso) return "s/d";
+  const [a, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${a}`;
+}
+function pieFechas() {
+  const f = DATOS.fechas;
+  return `Listas de sucursales: Vía Cargo ${fechaCorta(f.v)} · Flecha Carga ${fechaCorta(f.f)} · Correo Argentino ${fechaCorta(f.c)}. Conviene confirmar con la sucursal antes de despachar.`;
+}
+function pintarLugar(loc) {
+  const cob = cobertura(loc);
+  const hay = cuantasEmpresas(loc);
+  const veredicto = hay === 3 ? "Llega con los tres" : hay === 0 ? "Ninguno tiene sucursal acá" : `Llega con ${hay} de 3`;
+  const cps = loc.cps.length === 1 ? `CP ${loc.cps[0]}` : "";
+  const lugar = [loc.dep, loc.provincia, cps].filter(Boolean).join(" · ");
+  const vista = $("vistaLugar");
+  vista.innerHTML = `
+    <button class="volver" type="button" id="volver">‹ Otra búsqueda</button>
+    <h1 tabindex="-1">${esc(loc.nombre)}</h1>
+    <p class="lugar">${esc(lugar)}</p>
+    <p class="veredicto">${veredicto}</p>
+    <div>${EMPRESAS.map((e) => tarjetaEmpresa(loc, e)).join("")}</div>
+    <p class="pie">${esc(pieFechas())}</p>`;
+  vista.querySelectorAll("button.cabeza").forEach((b) => {
+    b.addEventListener("click", () => {
+      const panel = b.nextElementSibling;
+      const abrir = b.getAttribute("aria-expanded") !== "true";
+      b.setAttribute("aria-expanded", abrir);
+      panel.hidden = !abrir;
+      if (abrir && !panel.dataset.listo) {
+        const empresa = EMPRESAS.find((e) => e.id === b.dataset.empresa);
+        panel.innerHTML = ordenarSucursales(cob[empresa.pos], empresa, loc).map((s) => bloqueSucursal(s, empresa)).join("");
+        panel.dataset.listo = "1";
+      }
+    });
+  });
+  $("volver").addEventListener("click", () => {
+    if (history.state && history.state.interna) history.back();
+    else { location.hash = ""; }
+  });
+}
+
+/* ---------- Recientes ---------- */
+function leerRecientes() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_RECIENTES)) || []; } catch { return []; }
+}
+function guardarReciente(ruta) {
+  try {
+    const lista = [ruta, ...leerRecientes().filter((r) => r !== ruta)].slice(0, 5);
+    localStorage.setItem(CLAVE_RECIENTES, JSON.stringify(lista));
+  } catch { /* sin almacenamiento: solo no se recuerdan */ }
+}
+
+/* ---------- Navegacion ---------- */
+function rutaActual() {
+  try { return decodeURIComponent(location.hash.slice(1)); } catch { return ""; }
+}
+function mostrar() {
+  if (!DATOS) return;
+  const loc = POR_RUTA.get(rutaActual());
+  $("vistaBuscar").hidden = !!loc;
+  $("vistaLugar").hidden = !loc;
+  if (loc) {
+    guardarReciente(loc.ruta);
+    pintarLugar(loc);
+    window.scrollTo(0, 0);
+    document.title = `${loc.nombre} · ¿Llega?`;
+  } else {
+    document.title = "¿Llega? · Envíos a sucursal";
+    pintarLista();
+  }
+}
+
+/* ---------- Inicio ---------- */
+async function cargar() {
+  $("lista").innerHTML = `<p class="cargando">Cargando…</p>`;
+  try {
+    const r = await fetch("datos.json");
+    if (!r.ok) throw new Error(r.status);
+    preparar(await r.json());
+    $("pie").textContent = pieFechas();
+    mostrar();
+    if (matchMedia("(hover: hover)").matches && !$("vistaBuscar").hidden) $("q").focus();
+  } catch (e) {
+    $("lista").innerHTML = `<div class="error"><strong>No se pudieron cargar las sucursales.</strong><br>Revisá la conexión e intentá de nuevo.<br><button class="accion" type="button" id="reintentar">Reintentar</button></div>`;
+    $("reintentar").addEventListener("click", cargar);
+  }
+}
+
+let cuadro = 0;
+$("q").addEventListener("input", () => {
+  cancelAnimationFrame(cuadro);
+  cuadro = requestAnimationFrame(pintarLista);
+});
+$("q").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const primero = $("lista").querySelector(".fila");
+  if (primero) primero.click();
+});
+$("limpiar").addEventListener("click", () => {
+  $("q").value = "";
+  pintarLista();
+  $("q").focus();
+});
+$("lista").addEventListener("click", (e) => {
+  const b = e.target.closest(".fila");
+  if (!b) return;
+  history.pushState({ interna: true }, "", "#" + encodeURIComponent(b.dataset.ruta));
+  mostrar();
+});
+addEventListener("hashchange", mostrar);
+addEventListener("popstate", mostrar);
+cargar();
+</script>
+</body>
+</html>
