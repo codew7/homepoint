@@ -278,6 +278,15 @@ img{display:block}
 .remito-who i{flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--fog-2);color:var(--ink-2);display:grid;place-items:center;font-style:normal;font-size:.62rem;font-weight:700;text-transform:uppercase}
 .remito-who span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .remito-who b{color:var(--ink);font-weight:700}
+.remito-who .remito-meta{margin-left:auto;flex-shrink:0}
+.remito-chips{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.hist-filtro{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:0 12px;min-height:48px;background:var(--paper);border-radius:var(--r-sm);box-shadow:var(--sh)}
+.hist-filtro span{flex-shrink:0;font-family:var(--f-display);font-stretch:112%;font-size:.58rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.hist-filtro select{flex:1;min-width:0;height:46px;border:none;outline:none;background:transparent;font:600 1rem var(--f-body);color:var(--ink);cursor:pointer}
+.hist-filtro:focus-within{box-shadow:0 0 0 2.5px var(--ink)}
+.hist-mas{margin-top:18px;text-align:center}
+.hist-mas p{margin-bottom:10px;font-size:.78rem;color:var(--muted);line-height:1.4}
+.hist-mas .btn{background:var(--paper);box-shadow:var(--sh)}
 .remito-items{font-size:.8rem;color:var(--ink-2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* perforación: línea punteada con muescas a los lados */
 .remito-stub{position:relative;border-top:2px dashed var(--line);padding:11px 16px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -298,6 +307,7 @@ img{display:block}
 @keyframes late{50%{opacity:.25}}
 .chip.ENVIADO{background:var(--ink);color:#fff}
 .chip.CANCELADO{background:var(--red-soft);color:#A3262B}
+.chip.INCOMPLETO{background:var(--amber-soft);color:#8A5A00}
 
 /* ====== CAPAS (sheets y pantallas) ====== */
 .scrim{position:fixed;inset:0;z-index:90;background:rgba(20,33,61,.42);opacity:0;pointer-events:none;transition:opacity .25s}
@@ -583,7 +593,15 @@ img{display:block}
       <div class="eyebrow">Historial</div>
       <p class="hero-sub" style="margin-top:0">Pedidos enviados y cancelados, los más nuevos primero.</p>
     </div>
+    <label class="hist-filtro" id="histFiltro" hidden>
+      <span>Pidió</span>
+      <select id="histUsuario"></select>
+    </label>
     <div class="remitos" id="listHist"></div>
+    <div class="hist-mas" id="histMas" hidden>
+      <p id="histMasTxt"></p>
+      <button type="button" class="btn btn-ghost" id="histTodos">Descargar todos los traspasos</button>
+    </div>
   </section>
 
   <!-- REPORTE: costo despachado entre sucursales y saldo (solo root) -->
@@ -759,7 +777,7 @@ const LS_CART = 'hpTraspasoCarrito';
 const LS_PICK = 'hpTraspasoPick_';      // + id del traspaso: avance de la preparación
 const LS_EDIT = 'hpTraspasoEdicion';    // pedido pendiente que se está editando (no pisa el carrito propio)
 const CLAVE_ANULAR = '2574';            // clave que pide la anulación de un despacho (además del rol root)
-const LIMITE_TRASPASOS = 300;
+const LIMITE_TRASPASOS = 30;
 const MAX_RESULTADOS = 40;
 
 firebase.initializeApp(firebaseConfig);
@@ -1126,9 +1144,16 @@ $('rutaSwap').addEventListener('click', () => {
 // ============================================================
 //  Arranque
 // ============================================================
-let traspasosRef = null;
+let traspasosRef = null;   // los últimos LIMITE_TRASPASOS
+let abiertosRef = null;    // los que todavía no salieron, aunque sean más viejos
+let todosRef = null;       // todos, sólo si se pidió con el botón del historial
+let fijados = {};          // id -> ref de los pedidos que se escuchan uno por uno
 function detenerListeners(){
   if (traspasosRef){ traspasosRef.off(); traspasosRef = null; }
+  if (abiertosRef){ abiertosRef.off(); abiertosRef = null; }
+  if (todosRef){ todosRef.off(); todosRef = null; }
+  Object.values(fijados).forEach(r => r.off());
+  fijados = {};
   detenerReporte();
   repDatos = {};
 }
@@ -1187,41 +1212,140 @@ function refrescarVistas(){
   if (detalleId && $('detSheet').classList.contains('open')) renderDetalle(detalleId);
 }
 
+// La lista combina tres fuentes para bajar lo mínimo de Firebase:
+// - recientes: los últimos LIMITE_TRASPASOS (o todos, si se pidió con el botón del historial).
+// - abiertos: un pedido sin preparar nunca debe perderse, por viejo que sea. Se piden los que no
+//   tienen enviadoEn (usa el índice que ya existe) y de ahí se toman pendientes y en preparación.
+// - sueltos: pedidos viejos que hay que seguir viendo aunque no estén en las otras dos, como uno
+//   abierto que acaba de despacharse o el de un link.
+let recientes = {}, abiertos = {}, sueltos = {};
+let recientesListos = false, abiertosListos = false;
+let hayMasTraspasos = false, todosCargados = false, descargandoTodos = false;
+
+function normalizarTraspaso(id, val){
+  const t = Object.assign({ id }, val);
+  // Ya no existe el paso "Recibido": los pedidos viejos marcados así se muestran como enviados.
+  if (t.estado === 'RECIBIDO') t.estado = 'ENVIADO';
+  return t;
+}
+function leerTraspasos(snap){
+  const nuevo = {};
+  snap.forEach(ch => { nuevo[ch.key] = normalizarTraspaso(ch.key, ch.val()); });
+  return nuevo;
+}
+function errorLeyendoTraspasos(err){
+  console.error('Error escuchando traspasos:', err);
+  toast('No se pudieron leer los pedidos: ' + err.message, 'err');
+}
+
 function escucharTraspasos(){
   detenerListeners();
-  traspasosRef = db.ref('traspasos').limitToLast(LIMITE_TRASPASOS);
-  traspasosRef.on('value', snap => {
+  recientes = {}; abiertos = {}; sueltos = {};
+  recientesListos = abiertosListos = false;
+  hayMasTraspasos = todosCargados = descargandoTodos = false;
+
+  const refRecientes = db.ref('traspasos').limitToLast(LIMITE_TRASPASOS);
+  traspasosRef = refRecientes;
+  refRecientes.on('value', snap => {
+    if (traspasosRef !== refRecientes) return;
+    recientes = leerTraspasos(snap);
+    hayMasTraspasos = snap.numChildren() >= LIMITE_TRASPASOS;
+    recientesListos = true;
+    aplicarTraspasos();
+  }, errorLeyendoTraspasos);
+
+  const refAbiertos = db.ref('traspasos').orderByChild('enviadoEn').equalTo(null);
+  abiertosRef = refAbiertos;
+  refAbiertos.on('value', snap => {
+    if (abiertosRef !== refAbiertos) return;
     const nuevo = {};
-    snap.forEach(ch => {
-      const t = Object.assign({ id: ch.key }, ch.val());
-      // Ya no existe el paso "Recibido": los pedidos viejos marcados así se muestran como enviados.
-      if (t.estado === 'RECIBIDO') t.estado = 'ENVIADO';
-      nuevo[ch.key] = t;
+    Object.values(leerTraspasos(snap)).forEach(t => {
+      if (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO') nuevo[t.id] = t;
     });
-    const primeraCarga = !traspasosCargados;
-    traspasos = nuevo;
-    traspasosCargados = true;
-    avisarNuevos(primeraCarga);
-    renderTodo();
-    // El aviso de "ya tenés un pedido pendiente" del resumen sigue al estado real de ese pedido.
-    if (!procesoCritico && $('cartSheet').classList.contains('open')) renderCarrito();
-    vigilarEdicion();
-    sincronizarPickAbierto();
-    if (detalleId && $('detSheet').classList.contains('open')) renderDetalle(detalleId);
-    if (primeraCarga) abrirDesdeLink();
-  }, err => {
-    console.error('Error escuchando traspasos:', err);
-    toast('No se pudieron leer los pedidos: ' + err.message, 'err');
+    // Salió de abiertos y no está entre los recientes: se sigue por su cuenta para saber qué le pasó.
+    Object.keys(abiertos).forEach(id => {
+      if (nuevo[id] || recientes[id]) return;
+      sueltos[id] = abiertos[id];
+      fijarTraspaso(id).catch(() => {});
+    });
+    abiertos = nuevo;
+    abiertosListos = true;
+    aplicarTraspasos();
+  }, errorLeyendoTraspasos);
+}
+
+// Escucha un pedido puntual. La promesa se resuelve cuando llega su primer dato.
+function fijarTraspaso(id){
+  if (fijados[id]) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const ref = db.ref('traspasos/' + id);
+    fijados[id] = ref;
+    ref.on('value', snap => {
+      if (fijados[id] !== ref) return;
+      if (snap.exists()) sueltos[id] = normalizarTraspaso(id, snap.val());
+      else delete sueltos[id];
+      aplicarTraspasos();
+      resolve();
+    }, err => {
+      console.error('Error leyendo el pedido ' + id + ':', err);
+      reject(err);
+    });
   });
+}
+
+// Se usa sólo a pedido: baja todo el nodo una vez y después sigue recibiendo únicamente los cambios.
+// Dura hasta recargar la app. Si falla, siguen funcionando los últimos LIMITE_TRASPASOS.
+function descargarTodos(){
+  if (todosCargados || descargandoTodos) return;
+  descargandoTodos = true;
+  renderHistorial();
+  const ref = db.ref('traspasos');
+  todosRef = ref;
+  ref.on('value', snap => {
+    if (todosRef !== ref) return;
+    recientes = leerTraspasos(snap);
+    if (!todosCargados){
+      todosCargados = true;
+      descargandoTodos = false;
+      // off() sólo sobre la consulta limitada: en db.ref('traspasos') cortaría también las demás.
+      if (traspasosRef){ traspasosRef.off(); traspasosRef = null; }
+      recientesListos = true;
+      toast(plural(snap.numChildren(), 'traspaso cargado', 'traspasos cargados'));
+    }
+    aplicarTraspasos();
+  }, err => {
+    console.error('Error descargando todos los traspasos:', err);
+    todosRef = null;
+    descargandoTodos = false;
+    toast('No se pudieron descargar los traspasos: ' + err.message, 'err');
+    renderHistorial();
+  });
+}
+
+function aplicarTraspasos(){
+  if (!recientesListos || !abiertosListos) return;
+  const primeraCarga = !traspasosCargados;
+  traspasos = Object.assign({}, sueltos, abiertos, recientes);
+  traspasosCargados = true;
+  avisarNuevos(primeraCarga);
+  renderTodo();
+  // El aviso de "ya tenés un pedido pendiente" del resumen sigue al estado real de ese pedido.
+  if (!procesoCritico && $('cartSheet').classList.contains('open')) renderCarrito();
+  vigilarEdicion();
+  sincronizarPickAbierto();
+  if (detalleId && $('detSheet').classList.contains('open')) renderDetalle(detalleId);
+  if (primeraCarga) abrirDesdeLink();
 }
 
 // Abre el pedido del link una sola vez: abierto → a preparar; despachado o cancelado → su detalle.
 // El parámetro se saca de la URL antes de apilar capas, para que recargar o volver no lo reabra.
-function abrirDesdeLink(){
+async function abrirDesdeLink(){
   const id = trDelLink;
   if (!id) return;
   trDelLink = null;
   try { history.replaceState(history.state, '', location.pathname + location.hash); } catch(_){}
+  // El link puede ser de un pedido que no está entre los últimos cargados.
+  if (!traspasos[id]){ try { await fijarTraspaso(id); } catch(_){} }
   const t = traspasos[id];
   if (!t){ toast('No se encontró el pedido del link', 'aviso'); return; }
   if (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO'){ irA('preparar'); abrirPick(id); }
@@ -1902,18 +2026,23 @@ function remitoHtml(t, modo){
     if (enviado) meta = 'Despachado ' + fmtHora(t.enviadoEn);
     go = (t.estado === 'PENDIENTE' || t.estado === 'PREPARANDO') ? 'Preparar' : 'Ver';
   } else {
-    meta = enviado ? 'Despachado ' + fmtHora(t.enviadoEn) : t.estado === 'CANCELADO' ? (t.revertido ? 'Anulado ' : 'Cancelado ') + fmtHora(t.canceladoEn) : 'Pedido ' + fmtHace(t.creadoEn);
-    if (tot.conDif) meta += ' · ' + plural(tot.conDif, 'diferencia', 'diferencias');
+    // El estado ya lo dice la etiqueta: acá alcanza con la fecha.
+    meta = fmtHora(enviado ? t.enviadoEn : t.estado === 'CANCELADO' ? t.canceladoEn : t.creadoEn);
     go = 'Ver';
   }
+  const hist = modo === 'hist';
+  // En el historial sólo importa cuántos artículos distintos tiene el pedido, no unidades ni costo.
+  const resumen = hist
+    ? `<b>${tot.arts}</b><span>${tot.arts === 1 ? 'artículo' : 'artículos'}</span>`
+    : `<b>${n}</b><span>${n === 1 ? 'unidad' : 'unidades'} · ${plural(tot.arts, 'artículo', 'artículos')}${enviado && tot.enviadas !== tot.solicitadas ? ' · pedidas ' + tot.solicitadas : ''}${esRoot ? ' · ' + fmtUSD(tot.costo) : ''}</span>`;
   return `<button type="button" class="remito" data-tr="${escapeHtml(t.id)}" data-modo="${modo}">
     <div class="remito-top">${rutaHtml(t.origen, t.destino, 'sm')}<span class="remito-num">${escapeHtml(t.numero || '')}</span></div>
     <div class="remito-body">
-      <div class="remito-sum"><b>${n}</b><span>${n === 1 ? 'unidad' : 'unidades'} · ${plural(tot.arts, 'artículo', 'artículos')}${enviado && tot.enviadas !== tot.solicitadas ? ' · pedidas ' + tot.solicitadas : ''}${esRoot ? ' · ' + fmtUSD(tot.costo) : ''}</span></div>
-      ${modo === 'hist' ? `<div class="remito-who"><i aria-hidden="true">${escapeHtml(quien(t.creadoPor).slice(0, 1))}</i><span>Pidió <b>${escapeHtml(quien(t.creadoPor))}</b></span></div>` : ''}
+      <div class="remito-sum">${resumen}</div>
+      ${hist ? `<div class="remito-who"><i aria-hidden="true">${escapeHtml(quien(t.creadoPor).slice(0, 1))}</i><span>Pidió <b>${escapeHtml(quien(t.creadoPor))}</b></span><span class="remito-meta">${escapeHtml(meta)}</span></div>` : ''}
       <div class="remito-items">${escapeHtml(nombres.join(' · '))}</div>
     </div>
-    <div class="remito-stub"><span class="chip ${t.estado}">${estadoTxt(t)}</span><span class="remito-meta">${escapeHtml(meta)}</span><span class="remito-go">${go}${ICON.chev}</span></div>
+    <div class="remito-stub"><span class="remito-chips"><span class="chip ${t.estado}">${estadoTxt(t)}</span>${hist && tot.conDif ? '<span class="chip INCOMPLETO">Incompleto</span>' : ''}</span>${hist ? '' : `<span class="remito-meta">${escapeHtml(meta)}</span>`}<span class="remito-go">${go}${ICON.chev}</span></div>
   </button>`;
 }
 const skeletons = '<div class="skeleton"></div><div class="skeleton"></div>';
@@ -1933,9 +2062,39 @@ function renderHistorial(){
   const hist = Object.values(traspasos).filter(t => ['ENVIADO', 'CANCELADO'].includes(t.estado))
     .sort((a, b) => (b.canceladoEn || b.enviadoEn || b.creadoEn || 0) - (a.canceladoEn || a.enviadoEn || a.creadoEn || 0));
   if (!traspasosCargados){ $('listHist').innerHTML = skeletons; return; }
-  $('listHist').innerHTML = hist.length ? hist.map(t => remitoHtml(t, 'hist')).join('')
+  renderFiltroHist(hist);
+  const visibles = filtroHistUsuario ? hist.filter(t => claveSolicitante(t) === filtroHistUsuario) : hist;
+  $('listHist').innerHTML = visibles.length ? visibles.map(t => remitoHtml(t, 'hist')).join('')
     : `<div class="empty">${ICON.box}<b>Sin historial todavía</b><p>Acá quedan los pedidos enviados y los cancelados.</p></div>`;
+  // Hay más para bajar sólo si la consulta limitada llegó al tope.
+  $('histMas').hidden = !hayMasTraspasos || todosCargados;
+  $('histMasTxt').textContent = `Se cargan los últimos ${LIMITE_TRASPASOS} traspasos. El filtro busca sólo entre los cargados.`;
+  $('histTodos').disabled = descargandoTodos;
+  $('histTodos').textContent = descargandoTodos ? 'Descargando…' : 'Descargar todos los traspasos';
 }
+$('histTodos').addEventListener('click', descargarTodos);
+
+// Filtro por quien hizo el pedido: las opciones salen de los pedidos del historial.
+let filtroHistUsuario = '';
+function claveSolicitante(t){ const u = t.creadoPor || {}; return u.uid || u.email || 'sin-usuario'; }
+function renderFiltroHist(hist){
+  const usuarios = new Map(hist.map(t => [claveSolicitante(t), quien(t.creadoPor)]));
+  if (!usuarios.has(filtroHistUsuario)) filtroHistUsuario = '';
+  const opciones = [...usuarios].sort((a, b) => a[1].localeCompare(b[1], 'es'))
+    .map(([clave, nombre]) => `<option value="${escapeHtml(clave)}">${escapeHtml(nombre)}</option>`).join('');
+  const sel = $('histUsuario');
+  // Sólo se reescribe si cambió: la lista se repinta sola y cerraría el desplegable abierto.
+  if (sel.dataset.opciones !== opciones){
+    sel.innerHTML = '<option value="">Todos</option>' + opciones;
+    sel.dataset.opciones = opciones;
+  }
+  sel.value = filtroHistUsuario;
+  $('histFiltro').hidden = !hist.length;
+}
+$('histUsuario').addEventListener('change', e => {
+  filtroHistUsuario = e.target.value;
+  renderHistorial();
+});
 
 document.addEventListener('click', e => {
   const ir = e.target.closest('[data-ir]');

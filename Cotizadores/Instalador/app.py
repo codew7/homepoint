@@ -57,10 +57,10 @@ else:
     sys.path.append(str(_RAIZ / "Flecha Carga"))
 
 DATOS = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / NOMBRE
-# Catalogos que vienen con el instalador y se copian a DATOS la primera vez (despues se
-# actualizan desde la app): nombre en DATOS -> (carpeta hermana, nombre ahi). Sin compilar se
-# toman de las carpetas hermanas. Los de Flecha Carga cambian de nombre: "sucursales.json" ya
-# es el del Correo.
+# Catalogos que vienen con el instalador: se copian a DATOS la primera vez y cuando el instalador
+# trae uno mas nuevo que el guardado (si la app ya bajo uno mas reciente, queda ese).
+# Nombre en DATOS -> (carpeta hermana, nombre ahi). Sin compilar se toman de las carpetas hermanas.
+# Los de Flecha Carga cambian de nombre: "sucursales.json" ya es el del Correo.
 CATALOGOS_INICIALES = {
     "sucursales.json": ("Correo", "sucursales.json"),
     "localidades.json": ("ViaCargo", "localidades.json"),
@@ -71,6 +71,16 @@ CATALOGOS_INICIALES = {
 }
 # El CSV del tarifario se lee desde el programa (solo para regenerar las tarifas si faltan).
 TARIFARIO_CSV = "Flecha Carga - TARIFARIO.csv"
+# Actualizacion sola al abrir la app. El Correo queda afuera: puede pedir el login con reCAPTCHA.
+DIAS_CATALOGO = 7
+CAIDA_MAXIMA = 0.20  # si un catalogo nuevo trae bastante menos, se conserva el anterior
+
+
+def _fecha_catalogo(ruta: Path) -> str:
+    try:
+        return str(json.loads(ruta.read_text(encoding="utf-8")).get("actualizado") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
 
 
 def preparar_entorno():
@@ -81,7 +91,10 @@ def preparar_entorno():
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(RECURSOS / "ms-playwright")
     for nombre, (carpeta, original) in CATALOGOS_INICIALES.items():
         origen = RECURSOS / "catalogos" / nombre if CONGELADO else _RAIZ / carpeta / original
-        if not (DATOS / nombre).exists() and origen.exists():
+        if not origen.exists():
+            continue
+        # destinos.json no se compara: se regenera solo cuando cambian los demas.
+        if not (DATOS / nombre).exists() or (nombre != "destinos.json" and _fecha_catalogo(origen) > _fecha_catalogo(DATOS / nombre)):
             shutil.copy2(origen, DATOS / nombre)
     os.chdir(DATOS)
     # auth.py busca el .env junto a su propio archivo; en la app vive en DATOS.
@@ -125,6 +138,44 @@ def reubicar_modulos():
             "/logo-flechacarga-icono.png": RECURSOS / "web" / "logo-flechacarga-icono.png",
         })
     return servidor
+
+
+def _renovar(ruta: Path, descargar, cantidad) -> None:
+    """Descarga un catalogo si esta viejo; ante una caida fuerte vuelve al anterior."""
+    limite = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - DIAS_CATALOGO * 86400))
+    if _fecha_catalogo(ruta) > limite:
+        return
+    anterior = ruta.read_bytes() if ruta.exists() else None
+    try:
+        antes = cantidad(json.loads(anterior.decode("utf-8"))) if anterior else 0
+    except (ValueError, AttributeError):
+        antes = 0
+    try:
+        ahora = cantidad(descargar())
+    except Exception as e:  # sin internet o sitio caido: se sigue con el catalogo que hay
+        print(f"{ruta.name}: no se pudo actualizar ({e})")
+        return
+    if antes and ahora < antes * (1 - CAIDA_MAXIMA):
+        ruta.write_bytes(anterior)
+        print(f"{ruta.name}: bajo de {antes} a {ahora} registros, se conserva el anterior")
+    else:
+        print(f"{ruta.name}: actualizado ({ahora} registros)")
+
+
+def actualizar_catalogos_viejos(servidor):
+    """Via Cargo y Flecha Carga, en segundo plano: la app se usa mientras tanto."""
+    import destinos
+    import flechacarga
+    import viacargo
+
+    try:
+        with servidor._lock_catalogos:
+            _renovar(viacargo.LOCALIDADES_FILE, viacargo.descargar_localidades, lambda d: len(d.get("localidades") or []))
+            _renovar(viacargo.AGENCIAS_FILE, viacargo.descargar_agencias, lambda d: len(d.get("agencias") or []))
+            _renovar(flechacarga.SUCURSALES_FILE, flechacarga.descargar_sucursales, lambda d: len(d.get("sucursales") or []))
+            destinos.cargar_destinos()
+    except Exception:
+        traceback.print_exc()
 
 
 def registro():
@@ -225,6 +276,7 @@ def modo_app():
     print(f"Servidor en {url} · datos en {DATOS}")
     servidor.ultimo_latido = time.time() + 60  # margen para que la ventana termine de abrir
     abrir_ventana(url)
+    threading.Thread(target=actualizar_catalogos_viejos, args=(servidor,), daemon=True).start()
     while time.time() - servidor.ultimo_latido < servidor.LATIDO_LIMITE:
         time.sleep(2)
     print("Sin ventanas abiertas: se cierra.")

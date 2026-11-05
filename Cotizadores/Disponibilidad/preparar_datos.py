@@ -513,6 +513,10 @@ def main() -> int:
     datos = {"generado": time.strftime("%Y-%m-%dT%H:%M:%S"), "fechas": fechas,
              "tot": {e: len(datos["suc"][e]) for e in "cvf"}, **datos}
 
+    sin_cp = [s["nombre"] for s in flechacarga.cargar_sucursales()["sucursales"]
+              if not s.get("cp") and not s["solo_domicilio"] and not s["solo_despacho"]]
+    if sin_cp:
+        avisos.append(f"Flecha Carga: Puntos sin código postal, no figuran hasta cargarlos en CP_FALTANTES: {', '.join(sin_cp)}")
     problemas = controlar(datos, cat["destinos"])
     tamano = len(json.dumps(datos, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
     guardar = not problemas or args.forzar

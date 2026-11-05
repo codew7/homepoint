@@ -196,6 +196,18 @@ def cotizar(destino, peso_kg: float, largo_cm: float = 0, ancho_cm: float = 0, a
 
 # ---------- Puntos Flecha (sucursales) ----------
 
+# Puntos que el sitio publica sin CP: sin este dato quedan fuera de la cobertura por CP (Comparador
+# y Disponibilidad). El CP del sitio manda si algun dia lo informa.
+CP_FALTANTES = {"SAN JUAN": "5400", "CAUCETE": "5442", "PARQUE PATRICIOS CABA": "1264"}
+
+
+def _completar_cp(sucursales: list) -> list:
+    for s in sucursales:
+        if not s.get("cp"):
+            s["cp"] = CP_FALTANTES.get(normalizar(s.get("nombre")), "")
+    return sucursales
+
+
 def descargar_sucursales() -> dict:
     req = urllib.request.Request(URL_SUCURSALES, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
@@ -219,7 +231,7 @@ def descargar_sucursales() -> dict:
             "solo_domicilio": "SOLO CON" in texto and "DOMI" in texto,
             "solo_despacho": "SOLO DESPACHO" in texto,
         })
-    datos = {"actualizado": time.strftime("%Y-%m-%dT%H:%M:%S"), "sucursales": sucursales}
+    datos = {"actualizado": time.strftime("%Y-%m-%dT%H:%M:%S"), "sucursales": _completar_cp(sucursales)}
     SUCURSALES_FILE.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
     exportar_para_pedidos(datos)
     return datos
@@ -244,7 +256,9 @@ def exportar_para_pedidos(datos: dict = None):
 
 def cargar_sucursales() -> dict:
     if SUCURSALES_FILE.exists():
-        return json.loads(SUCURSALES_FILE.read_text(encoding="utf-8"))
+        datos = json.loads(SUCURSALES_FILE.read_text(encoding="utf-8"))
+        _completar_cp(datos.get("sucursales", []))
+        return datos
     return descargar_sucursales()
 
 

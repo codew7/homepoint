@@ -204,7 +204,7 @@ def _firmas_flecha() -> dict:
     except Exception:
         puntos = None
     # flecha_criterio: subirlo al cambiar el cruce de cobertura, asi se reconstruye el catalogo guardado.
-    return {"flecha_tarifas": tarifas, "flecha_puntos": puntos, "flecha_criterio": 2}
+    return {"flecha_tarifas": tarifas, "flecha_puntos": puntos, "flecha_criterio": 3}
 
 
 _cache: dict | None = None

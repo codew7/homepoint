@@ -477,6 +477,15 @@
             }
         }
 
+        /* Modal del grupo Envíos: dos opciones, más angosto que el de administración */
+        .envios-modal-content {
+            max-width: 520px;
+        }
+
+        .admin-submenu-grid.envios-submenu-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
         .modal-title {
             font-size: 1.25rem;
             font-weight: 600;
@@ -1277,12 +1286,12 @@
                 <p class="nav-card-description">Gestión de pedidos por WhatsApp</p>
             </a>
 
-            <!-- Pedidos v2: sólo en el punto de venta 1 (se muestra al cargar la página).
-                 Pide la contraseña de administración; el rol root entra directo. -->
-            <a href="#" id="pedidosv2Card" class="nav-card secondary" tabindex="0" hidden onclick="abrirModal('pedidosv2', 'pedidosv2/pedidosv2.html'); return false;">
+            <!-- Grupo Envíos: reúne Gestión de envíos (sólo punto de venta 1) y ¿Llega?.
+                 Donde sólo está ¿Llega?, la tarjeta lo abre directo. -->
+            <a href="#" id="enviosCard" class="nav-card secondary" tabindex="0" onclick="abrirEnvios(); return false;">
                 <span class="nav-card-icon">🚚</span>
                 <h2 class="nav-card-title">Envíos</h2>
-                <p class="nav-card-description">Gestión de pedidos y envíos web</p>
+                <p id="enviosCardDescripcion" class="nav-card-description">Gestión de envíos y sucursales de transporte</p>
             </a>
 
             <a href="https://home-point.com.ar/catalogoLocal.html" class="nav-card blue" tabindex="0" target="_blank">
@@ -1315,12 +1324,6 @@
                 <span class="nav-card-icon"><i class="bi bi-display"></i></span>
                 <h2 class="nav-card-title">Cartelería</h2>
                 <p class="nav-card-description">Gestión de carteles digitales</p>
-            </a>
-
-            <a href="Cotizadores/Disponibilidad/index.html" class="nav-card teal" tabindex="0" target="_blank">
-                <span class="nav-card-icon">📍</span>
-                <h2 class="nav-card-title">¿Llega?</h2>
-                <p class="nav-card-description">Sucursales de Vía Cargo, Flecha y Correo</p>
             </a>
 
             <a href="#" class="nav-card orange" tabindex="0" onclick="abrirModal('administracion', 'admin'); return false;">
@@ -1357,6 +1360,33 @@
         <footer class="footer">
             <p class="footer-text">Sistema de Gestión HomePoint - v2.0.1</p>
         </footer>
+    </div>
+
+    <!-- Modal del grupo Envíos -->
+    <div id="enviosModal" class="modal-overlay">
+        <div class="admin-modal-content envios-modal-content">
+            <div class="admin-modal-header">
+                <h3 class="admin-modal-title">🚚 Envíos</h3>
+                <p class="admin-modal-subtitle">Elegí qué querés consultar</p>
+            </div>
+
+            <div class="admin-submenu-grid envios-submenu-grid">
+                <!-- Pide la contraseña de administración; el rol root entra directo. -->
+                <a href="#" class="admin-submenu-btn" onclick="abrirGestionEnvios(); return false;">
+                    <span class="admin-submenu-btn-icon">📦</span>
+                    <span class="admin-submenu-btn-title">Gestión de envíos</span>
+                </a>
+
+                <a href="Cotizadores/Disponibilidad/index.html" class="admin-submenu-btn" target="_blank" onclick="cerrarEnvios()">
+                    <span class="admin-submenu-btn-icon">📍</span>
+                    <span class="admin-submenu-btn-title">¿Llega?</span>
+                </a>
+            </div>
+
+            <button class="admin-modal-close-btn" onclick="cerrarEnvios()">
+                <i class="bi bi-x-circle"></i> Cerrar
+            </button>
+        </div>
     </div>
 
     <!-- Modal de autenticación -->
@@ -1673,6 +1703,28 @@
             }
         }
 
+        // Gestión de envíos es sólo del punto de venta 1; ¿Llega? está en todos.
+        function tieneGestionEnvios() {
+            return !window.PuntoVenta || PuntoVenta.actual() === '1';
+        }
+
+        function abrirEnvios() {
+            if (tieneGestionEnvios()) {
+                document.getElementById('enviosModal').classList.add('show');
+            } else {
+                window.open('Cotizadores/Disponibilidad/index.html', '_blank');
+            }
+        }
+
+        function cerrarEnvios() {
+            document.getElementById('enviosModal').classList.remove('show');
+        }
+
+        function abrirGestionEnvios() {
+            cerrarEnvios();
+            abrirModal('pedidosv2', 'pedidosv2/pedidosv2.html');
+        }
+
         let adminModalTimer = null;
 
         // Función para cerrar el modal de administración
@@ -1702,10 +1754,11 @@
             const modal = document.getElementById('authModal');
             const passwordInput = document.getElementById('passwordInput');
             const adminModal = document.getElementById('adminModal');
+            const enviosModal = document.getElementById('enviosModal');
 
-            // Pedidos v2 es sólo del punto de venta 1.
-            if (!window.PuntoVenta || PuntoVenta.actual() === '1') {
-                document.getElementById('pedidosv2Card').hidden = false;
+            // Sin Gestión de envíos, la tarjeta sólo lleva a ¿Llega?.
+            if (!tieneGestionEnvios()) {
+                document.getElementById('enviosCardDescripcion').textContent = 'Sucursales de Vía Cargo, Flecha y Correo';
             }
 
             // Punto de venta: en el login y en la barra de sesión, sólo si hay
@@ -1746,6 +1799,12 @@
                 }
             });
 
+            // Cerrar modal de Envíos al hacer clic fuera
+            enviosModal.addEventListener('click', function(e) {
+                if (e.target === enviosModal) {
+                    cerrarEnvios();
+                }
+            });
 
             // Manejar tecla Enter en el input
             passwordInput.addEventListener('keypress', function(e) {
@@ -1763,6 +1822,9 @@
                     }
                     if (adminModal.classList.contains('show')) {
                         cerrarModalAdministracion();
+                    }
+                    if (enviosModal.classList.contains('show')) {
+                        cerrarEnvios();
                     }
                 }
             });

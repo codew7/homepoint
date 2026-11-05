@@ -21,7 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 NOMBRE_EXE = "Cotizador de envios"
 
 AQUI = Path(__file__).resolve().parent
