@@ -810,8 +810,10 @@ function costoItem(i){
   return a ? a.costo : null;
 }
 function iniciales(nombre){ return escapeHtml(String(nombre || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('')); }
-function thumbHtml(foto, nombre){
-  return `<span class="thumb">${foto ? `<img src="${escapeHtml(foto)}" alt="" loading="lazy" onerror="this.remove()">` : ''}${foto ? '' : iniciales(nombre)}</span>`;
+function thumbHtml(foto, nombre, codigo){
+  // Sin foto guardada se usa directamente el 4to link de la planilla.
+  const src = foto || fotosAlternas[normCod(codigo)] || '';
+  return `<span class="thumb"${src ? '' : ` data-sin-foto="${escapeHtml(codigo)}"`}>${src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" data-cod="${escapeHtml(codigo)}" onerror="fotoAlterna(this)">` : iniciales(nombre)}</span>`;
 }
 
 function fmtHora(ts){
@@ -1168,6 +1170,7 @@ function iniciarApp(){
   renderTodo();
   cargarArticulos();
   cargarStock();
+  cargarFotosAlternas();
   escucharTraspasos();
 }
 
@@ -1460,6 +1463,51 @@ let stockCargadoEn = 0;
 let stockCargando = false;
 
 function normCod(c){ return String(c || '').trim().toUpperCase(); }
+// Respaldo de imágenes: 4to link de la columna B de la hoja `Lista` (4 links separados por coma).
+// Se usa cuando el artículo no tiene foto o su link no carga: el 1er link siempre está escrito,
+// aunque la imagen no exista en el servidor.
+let fotosAlternas = {};            // { CODIGO: url del 4to link }
+let fotosAlternasCarga = null;     // promesa de la carga en curso o terminada; null = hay que (re)intentar
+function cargarFotosAlternas(){
+  if (fotosAlternasCarga) return fotosAlternasCarga;
+  fotosAlternasCarga = (async () => {
+    try {
+      const cfg = typeof GOOGLE_SHEETS_CONFIG !== 'undefined' ? GOOGLE_SHEETS_CONFIG : {};
+      if (!cfg.SPREADSHEET_ID || !cfg.API_KEY) throw new Error('faltan datos de Google Sheets en config.js');
+      const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + cfg.SPREADSHEET_ID + '/values/Lista!B2:C?key=' + cfg.API_KEY;
+      const res = await conTimeout(fetch(url, { cache: 'no-store' }), 15000, 'las imágenes tardaron demasiado.');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const { values } = await res.json();
+      const mapa = {};
+      (values || []).forEach(r => {
+        const cod = normCod(r[1]);
+        const link4 = String(r[0] || '').split(',').map(u => u.trim())[3];   // posicional: no filtrar vacíos
+        if (cod && link4) mapa[cod] = link4;
+      });
+      fotosAlternas = mapa;
+      // Lo que ya está en pantalla sin foto (en cualquier vista) la recibe sin redibujar nada.
+      document.querySelectorAll('.thumb[data-sin-foto]').forEach(th => {
+        const cod = th.dataset.sinFoto;
+        if (mapa[normCod(cod)]) th.outerHTML = thumbHtml('', '', cod);
+      });
+    } catch (err){
+      console.error('Error cargando imágenes alternativas:', err);
+      fotosAlternasCarga = null;   // la próxima imagen que falle vuelve a intentar
+    }
+  })();
+  return fotosAlternasCarga;
+}
+// onerror de las miniaturas: prueba el 4to link una sola vez; si tampoco carga, quita la imagen.
+function fotoAlterna(img){
+  img.onerror = null;
+  cargarFotosAlternas().then(() => {
+    const alt = fotosAlternas[normCod(img.dataset.cod)];
+    if (!alt || alt === img.getAttribute('src')) { img.remove(); return; }
+    img.onerror = () => img.remove();
+    img.src = alt;
+  });
+}
+
 async function cargarStock(){
   if (stockCargando) return;
   stockCargando = true;
@@ -1512,7 +1560,7 @@ function stockHtml(cod, cant){
 function artHtml(a){
   const c = carrito[a.codigo];
   return `<div class="art${c ? ' in' : ''}">
-    ${thumbHtml(a.foto, a.nombre)}
+    ${thumbHtml(a.foto, a.nombre, a.codigo)}
     <div class="art-info">
       <div class="art-name">${escapeHtml(a.nombre || 'Sin nombre')}</div>
       <div class="art-meta">#${escapeHtml(a.codigo)}${a.disponible === false ? '<span class="tag">No disponible</span>' : ''}</div>
@@ -1666,7 +1714,7 @@ function renderCarrito(){
     : edicion ? 'El pedido quedó vacío' : 'Todavía no agregaste artículos';
   $('cartList').innerHTML = items.length ? items.map(c => `
     <div class="cart-row">
-      ${thumbHtml(c.foto, c.nombre)}
+      ${thumbHtml(c.foto, c.nombre, c.codigo)}
       <div class="art-info"><div class="art-name">${escapeHtml(c.nombre)}</div><div class="art-meta">#${escapeHtml(c.codigo)}</div>${stockHtml(c.codigo, c.cant)}<div class="art-costo">${costoLineaHtml(c, c.cant)}</div></div>
       ${stepperHtml('cart', c.codigo, c.cant, 0)}
     </div>`).join('') + costoTotalHtml(costo, sinCosto)
@@ -2329,7 +2377,7 @@ function renderDetalle(id){
     const sol = Number(i.solicitada) || 0, env = Number(i.enviada) || 0;
     const dif = enviado && env !== sol;
     return `<div class="det-row${enviado && env === 0 ? ' cero' : ''}">
-      ${thumbHtml(i.foto, i.nombre)}
+      ${thumbHtml(i.foto, i.nombre, i.codigo)}
       <div class="art-info"><div class="art-name">${escapeHtml(i.nombre)}</div><div class="art-meta">#${escapeHtml(i.codigo)}</div><div class="art-costo">${costoLineaHtml(i, enviado ? env : sol)}</div></div>
       <div class="det-q">
         <span class="q">${dif ? `<s>${sol}</s>${env}` : (enviado ? env : sol)}</span>
@@ -2694,7 +2742,7 @@ function renderPick(){
     const dif = p.enviar < sol;
     return `<div class="pk${p.ok ? ' ok' : ''}${cero ? ' cero' : ''}" data-k="${escapeHtml(k)}">
       <div class="pk-head">
-        ${thumbHtml(i.foto, i.nombre)}
+        ${thumbHtml(i.foto, i.nombre, i.codigo)}
         <div class="art-info">
           <div class="art-name">${escapeHtml(i.nombre)}</div>
           <div class="pk-req">#${escapeHtml(i.codigo)} · Pedido <b>${sol}</b></div>
@@ -2827,7 +2875,7 @@ function abrirConfirmacion(t){
       <div class="conf-sum"><div><b>${st.unidades}</b><span>${st.unidades === 1 ? 'unidad sale' : 'unidades salen'}</span></div><div><b>${arts}</b><span>${arts === 1 ? 'artículo' : 'artículos'}</span></div></div>
       ${costoTotalHtml(st.costo, st.sinCosto, 'Costo total a enviar')}
       ${difs.length ? `<div class="eyebrow" style="margin:4px 0 2px">Cambios sobre lo pedido</div>` + difs.map(x => `
-        <div class="det-row${x.env === 0 ? ' cero' : ''}">${thumbHtml(x.i.foto, x.i.nombre)}
+        <div class="det-row${x.env === 0 ? ' cero' : ''}">${thumbHtml(x.i.foto, x.i.nombre, x.i.codigo)}
           <div class="art-info"><div class="art-name">${escapeHtml(x.i.nombre)}</div></div>
           <div class="det-q"><span class="q"><s>${x.sol}</s>${x.env}</span><span class="motivo ${x.m}">${MOTIVO_TXT[x.m]}</span></div></div>`).join('')
         : `<div class="det-nota" style="margin-bottom:0">Se envía todo tal cual se pidió.</div>`}

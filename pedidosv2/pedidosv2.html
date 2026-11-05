@@ -15088,8 +15088,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let pedidosEnCalculo = 0;
       let soloFaltan = true;
       // Ocultar los ya pedidos a Caseros, "Solicitado" o "Enviado" (se recuerda en el equipo).
-      let ocultarEnviados = false;
-      try { ocultarEnviados = localStorage.getItem('nec_ocultar_enviados') === '1'; } catch (e) { /* sin storage */ }
+      let ocultarEnviados = true;
+      try { ocultarEnviados = localStorage.getItem('nec_ocultar_solicitados') !== '0'; } catch (e) { /* sin storage */ }
       let busqueda = '';
       let abierta = null;            // codigo de la fila con el detalle desplegado
       let cargando = false;
@@ -15411,8 +15411,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // responde desde memoria (UBICACIONES). Si el script no esta o todavia
       // no hay relevamiento guardado, la lista sigue agrupando por categoria.
       const hayLocator = typeof escucharUbicaciones === 'function';
-      let agrupar = 'zona';
-      try { agrupar = localStorage.getItem('nec_agrupar') || 'zona'; } catch (e) { /* sin storage */ }
+      let agrupar = 'categoria';
+      try { agrupar = localStorage.getItem('nec_agrupar_v2') || 'categoria'; } catch (e) { /* sin storage */ }
       let escuchandoUbic = false;
       const porZona = () => agrupar === 'zona' && hayLocator && UBICACIONES.size > 0;
 
@@ -15689,7 +15689,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       chkEnviados.checked = ocultarEnviados;
       chkEnviados.addEventListener('change', () => {
         ocultarEnviados = chkEnviados.checked;
-        try { localStorage.setItem('nec_ocultar_enviados', ocultarEnviados ? '1' : '0'); } catch (e) { /* sin storage */ }
+        try { localStorage.setItem('nec_ocultar_solicitados', ocultarEnviados ? '1' : '0'); } catch (e) { /* sin storage */ }
         render();
       });
       segTodos.addEventListener('click', () => setSoloFaltan(false));
@@ -15705,7 +15705,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
       function setAgrupar(v) {
         agrupar = v;
-        try { localStorage.setItem('nec_agrupar', v); } catch (e) { /* sin storage */ }
+        try { localStorage.setItem('nec_agrupar_v2', v); } catch (e) { /* sin storage */ }
         pintarAgrupar();
         if (v === 'zona' && !UBICACIONES.size) showToast('Todavía no hay zonas cargadas: se agrupa por categoría');
         render();
@@ -16119,12 +16119,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             (t.estado === 'PENDIENTE' ? '<button type="button" class="is-peligro" data-acc="cancelar">' + IC_CANCELAR + 'Cancelar</button>' : '')
           : '';
         solList.innerHTML = avisoTr(t, c) + itemsDe(t).map(it => {
+          const si = sheetsData[it.codigo] || {};
           const pedida = Number(it.solicitada) || 0;
           const env = Number(it.enviada) || 0;
           const motivo = enviado && it.motivo ? TR_MOTIVOS[it.motivo] || it.motivo : '';
           const cant = enviado ? env + '<small>/' + pedida + '</small>' : String(pedida);
           return '<div class="sol-art' + (enviado && env > 0 ? ' is-disp' : '') + (enviado && !env ? ' is-off' : '') + '">' +
-            imgSolHtml(it.foto, '') +
+            imgSolHtml(it.foto || si.imagen, si.imagenAlt) +
             '<div class="sol-art-info"><div class="sol-art-nombre">' + escapeHtml(it.nombre) + '</div>' +
             '<div class="sol-art-cod">' + escapeHtml(it.codigo) + (motivo ? ' · <span class="sol-motivo">' + escapeHtml(motivo) + '</span>' : '') + '</div>' +
             (abierto ? '<div class="sol-art-tags">' + stockSolHtml(it.codigo, pedida) + '</div>' : '') + '</div>' +
