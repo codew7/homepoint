@@ -1622,6 +1622,9 @@ $('cartCta').addEventListener('click', () => { renderCarrito(); abrirCapa($('car
 // Pedidos chicos sueltos: si este usuario ya tiene uno PENDIENTE (nadie empezó a prepararlo) en
 // la misma dirección, se lo lleva a sumar ahí lo nuevo. Hacer uno aparte sigue siendo posible.
 // Devuelve el más reciente y cuántos hay, o null. Editando no aplica: ya se está en un pedido.
+function pedidoEditable(t){
+  return !!(t && usuario && t.estado === 'PENDIENTE' && t.creadoPor && t.creadoPor.uid === usuario.uid);
+}
 function pendienteMio(){
   if (!usuario || edicion) return null;
   const origen = pedirOrigen();
@@ -1843,8 +1846,10 @@ async function sumarAPedido(id){
 //  (buscar, escanear, cantidades, dirección, nota). Solo mientras nadie empezó a prepararlo.
 // ============================================================
 async function editarPedido(id){
+  guardarCantidadesYa();
   const t = traspasos[id];
   if (!t || t.estado !== 'PENDIENTE'){ toast('Ya empezaron a prepararlo: no se puede editar', 'aviso'); return; }
+  if (!pedidoEditable(t)){ toast('Solo quien hizo el pedido puede editarlo', 'aviso'); return; }
   const items = {};
   Object.values(t.items || {}).forEach(i => {
     const cod = String(i.codigo);
@@ -2577,7 +2582,7 @@ function abrirPick(id){
   abrirCapa($('pickScreen'));
   $('pickScreen').scrollTop = 0;
 }
-function alCerrarPick(){ pick = null; $('pickDock').hidden = true; }
+function alCerrarPick(){ guardarCantidadesYa(); pick = null; $('pickDock').hidden = true; }
 
 // Si el pedido cambia mientras está abierto (lo despacharon desde otro teléfono, se canceló), se refleja.
 function sincronizarPickAbierto(){
@@ -2590,6 +2595,10 @@ function sincronizarPickAbierto(){
       cerrarCapa();
     }
     return;
+  }
+  // Un cambio de cantidad que todavía no se escribió no se pisa con lo que llega de Firebase.
+  if (t.estado === 'PENDIENTE' && cantPend && cantPend.id === pick.id){
+    Object.entries(cantPend.items).forEach(([k, n]) => { if (t.items && t.items[k]) t.items[k].solicitada = n; });
   }
   // Lo editaron antes de que se empezara a preparar: los items cambiaron.
   Object.entries(t.items || {}).forEach(([k, i]) => {
@@ -2605,6 +2614,7 @@ function sincronizarPickAbierto(){
 // La preparación empieza con la primera acción sobre un artículo: desde ahí el pedido pasa a
 // PREPARANDO y ya no se puede editar. Transacción: si justo lo estaban guardando editado, se aplica después.
 function marcarPreparando(id){
+  guardarCantidadesYa();   // primero la cantidad corregida, después el cambio de estado
   const t = traspasos[id];
   if (!t || t.estado !== 'PENDIENTE') return;
   const yo = { uid: usuario.uid, email: usuario.email || '' };
@@ -2616,6 +2626,47 @@ function marcarPreparando(id){
     x.preparandoEn = Date.now();
     return x;
   }).catch(err => console.warn('No se pudo marcar el pedido en preparación:', err.code || err.message));
+}
+
+// Pedido propio sin empezar: el stepper corrige la cantidad pedida (más o menos) sin iniciar la preparación.
+// Para cualquier otro usuario el stepper es de preparación: tope en lo pedido y bajar queda como envío parcial.
+// Se escribe un momento después del último toque, así mantener apretado no genera una escritura por unidad.
+let cantPend = null;   // {id, items:{clave: cantidad}, timer}
+function cambiarCantidadPedida(id, k, n){
+  if (cantPend && cantPend.id !== id) guardarCantidadesYa();
+  if (!cantPend) cantPend = { id, items: {}, timer: null };
+  cantPend.items[k] = n;
+  clearTimeout(cantPend.timer);
+  cantPend.timer = setTimeout(guardarCantidadesYa, 500);
+}
+function guardarCantidadesYa(){
+  if (!cantPend) return;
+  const { id, items, timer } = cantPend;
+  clearTimeout(timer);
+  cantPend = null;
+  const yo = { uid: usuario.uid, email: usuario.email || '' };
+  // Transacción: se guarda solo si sigue pendiente (nadie empezó a prepararlo entretanto).
+  db.ref('traspasos/' + id).transaction(x => {
+    if (!x) return x;
+    if (x.estado !== 'PENDIENTE') return;   // aborta
+    Object.entries(items).forEach(([k, n]) => {
+      const it = x.items && x.items[k];
+      if (!it) return;
+      it.solicitada = n;
+      const u = costoItem(it);
+      if (u != null){ it.costoUSD = round2(u); it.costoTotalUSD = round2(u * n); }
+    });
+    x.costoTotalUSD = round2(Object.values(x.items || {}).reduce((s, it) => s + (Number(it.costoTotalUSD) || 0), 0));
+    x.editadoPor = yo;
+    x.editadoEn = Date.now();
+    return x;
+  }).then(res => {
+    const v = res.snapshot.val();
+    if (v && !res.committed) toast(`Ya empezaron a preparar ${v.numero || 'el pedido'}: no se cambió la cantidad`, 'aviso');
+  }).catch(err => {
+    console.error('Error guardando la cantidad:', err);
+    toast('No se guardó la cantidad: ' + err.message, 'err');
+  });
 }
 
 function estadoPick(t){
@@ -2652,7 +2703,7 @@ function renderPick(){
         <button type="button" class="pk-check" data-act="ok" aria-pressed="${p.ok}" aria-label="Marcar como revisado">${ICON.check}</button>
       </div>
       <div class="pk-ctrl">
-        ${stepperHtml('pick', k, p.enviar, 0, sol)}
+        ${pedidoEditable(t) ? stepperHtml('pick', k, p.enviar, 1) : stepperHtml('pick', k, p.enviar, 0, sol)}
         <div class="pk-acts">
           <button type="button" class="pk-act${cero ? ' on' : ''}" data-act="sinstock" aria-pressed="${cero}">Sin stock</button>
           <button type="button" class="pk-act" data-act="quitar" aria-label="Quitar del pedido">${ICON.trash}</button>
@@ -2675,14 +2726,14 @@ function renderPick(){
         <div class="progress"><div class="progress-bar"><i style="width:${st.total ? st.revisados / st.total * 100 : 0}%"></i></div><span>${st.revisados} de ${st.total} revisados</span></div>
       </div>
     </div>
-    ${t.estado === 'PENDIENTE' ? `<div class="pick-edit"><button type="button" class="btn btn-ghost" id="editarBtn">Editar pedido</button><p>Se puede editar hasta que alguien empiece a prepararlo.</p></div>` : ''}
+    ${pedidoEditable(t) ? `<div class="pick-edit"><button type="button" class="btn btn-ghost" id="editarBtn">Editar pedido</button><p>Sin empezar a preparar, subir o bajar una cantidad cambia lo pedido. Para enviar menos de lo pedido, tocá primero el ✓ del artículo.</p></div>` : ''}
     ${t.nota ? `<div class="det-nota" style="margin-top:12px"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
     <div class="pick-list" style="margin-top:12px">${lista}</div>
     ${costoTotalHtml(st.costo, st.sinCosto, 'Costo total a enviar')}
     ${esRoot ? `<div style="margin-top:18px">${eliminarBtnHtml()}</div>` : ''}`;
 
   if (esRoot) $('eliminarBtn').addEventListener('click', () => eliminarPedido(t.id));
-  if (t.estado === 'PENDIENTE') $('editarBtn').addEventListener('click', () => editarPedido(t.id));
+  if (pedidoEditable(t)) $('editarBtn').addEventListener('click', () => editarPedido(t.id));
 
   const dock = $('pickDock'), cta = $('pickCta');
   dock.hidden = false;
@@ -2702,8 +2753,18 @@ function setEnviar(k, n){
   const p = pickItem(k);
   const t = pick && traspasos[pick.id];
   if (!p || !t) return;
+  if (pedidoEditable(t)){
+    // Quien lo pidió, sin empezar: cambia lo pedido, para arriba o para abajo. Mínimo 1: sacarlo es "quitar" o "Editar pedido".
+    const nueva = Math.max(1, Math.floor(Number(n) || 0));
+    t.items[k].solicitada = nueva;
+    p.enviar = nueva;
+    cambiarCantidadPedida(pick.id, k, nueva);
+    guardarPick();
+    renderPick();
+    return;
+  }
   const sol = Number(t.items[k].solicitada) || 0;
-  // Se puede bajar hasta 0, nunca enviar más de lo pedido.
+  // Preparando: se puede bajar hasta 0, nunca enviar más de lo pedido.
   p.enviar = Math.min(sol, Math.max(0, Math.floor(Number(n) || 0)));
   p.ok = true;
   marcarPreparando(pick.id);
