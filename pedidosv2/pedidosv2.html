@@ -392,6 +392,29 @@
     .tema-luna { display: none; }
     html.es-oscuro .tema-sol { display: none; }
     html.es-oscuro .tema-luna { display: block; }
+    /* Discreto y por debajo de los paneles. Con un pedido cargado se oculta:
+       esa esquina la ocupan los botones de accion del pedido. */
+    .tema-flotante {
+      position: fixed;
+      right: calc(14px + env(safe-area-inset-right, 0px));
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--ink-4);
+      transition: color .14s, transform .12s;
+    }
+    .tema-flotante:hover { color: var(--ink); }
+    .tema-flotante:active { transform: scale(.94); }
+    .tema-flotante .ic { width: 16px; height: 16px; }
+    body.con-pedido .tema-flotante { display: none; }
 
     /* =========================================
        FRANJA DE CONTEXTO DEL PEDIDO
@@ -672,18 +695,15 @@
       text-align: center;
       min-height: 100%;
     }
-    .welcome-icon {
-      width: 104px;
-      height: 104px;
-      border-radius: 30px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      box-shadow: var(--sh2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--ink-4);
-      margin-bottom: 26px;
+    /* Logo de la pantalla de bienvenida: una version por tema. */
+    .welcome-logo { margin-bottom: 70px; }
+    .welcome-logo img { display: block; width: min(300px, 70vw); height: auto; }
+    .welcome-logo-oscuro { display: none !important; }
+    :root[data-tema="dark"] .welcome-logo-claro { display: none; }
+    :root[data-tema="dark"] .welcome-logo-oscuro { display: block !important; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-tema="light"]) .welcome-logo-claro { display: none; }
+      :root:not([data-tema="light"]) .welcome-logo-oscuro { display: block !important; }
     }
     .welcome-screen p {
       font-size: 25px;
@@ -3519,7 +3539,8 @@
     .nec-code .nec-npedidos { flex: none; }
 
     /* Indicador de traspaso pedido a Caseros: celeste "Solicitado TR-NNNN"
-       mientras esta abierto, verde "Enviado" cuando Caseros lo despacho. */
+       mientras esta abierto, verde "Enviado" cuando Caseros lo despacho,
+       ambar si quedan unidades sin pedir. */
     .nec-remoto {
       flex: none;
       display: inline-flex;
@@ -3537,9 +3558,11 @@
     }
     .nec-remoto .ic-sm { width: 11px; height: 11px; stroke-width: 2.4; }
     .nec-remoto.is-separado { background: var(--ok-soft); color: var(--ok); }
+    /* Hay unidades que ese traspaso no atiende: "Enviado · 3 sin pedir" */
+    .nec-remoto.is-incompleto { background: var(--warn-soft); color: var(--warn); }
 
-    /* Zona del depósito (Locator). Agrupando por categoría se ve en cada fila;
-       agrupando por zona solo en las de ubicación incierta ("¿FL C3?"). */
+    /* Zona del depósito (Locator). Solo agrupando por zona, en las filas de
+       ubicación incierta ("¿FL C3?"). */
     .nec-zona {
       flex: none;
       display: inline-flex;
@@ -5351,19 +5374,20 @@
 
       <button class="header-btn header-btn--icon" id="btnHistorial" title="Historial de despachos"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg></button>
 
-      <button class="header-btn header-btn--icon" id="btnPedidos" title="Pedidos pendientes"><svg class="ic" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><line x1="4.2" y1="6" x2="4.21" y2="6"></line><line x1="4.2" y1="12" x2="4.21" y2="12"></line><line x1="4.2" y1="18" x2="4.21" y2="18"></line></svg><span class="header-badge" id="pedidosBadge"></span></button>
-
       <button class="header-btn header-btn--icon" id="btnNecesarios" title="Art&iacute;culos necesarios para armar"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4.5V3.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M8.8 13.2l2.2 2.2 4.4-4.6"></path></svg><span class="header-badge" id="necesariosBadge"></span></button>
 
       <span class="header-sep"></span>
 
-      <button class="header-btn header-btn--icon" id="btnTema" title="Cambiar entre tema claro y oscuro" aria-label="Cambiar tema"><svg class="ic tema-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="ic tema-luna" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5z"></path></svg></button>
+      <button class="header-btn header-btn--icon" id="btnPedidos" title="Pedidos pendientes"><svg class="ic" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><line x1="4.2" y1="6" x2="4.21" y2="6"></line><line x1="4.2" y1="12" x2="4.21" y2="12"></line><line x1="4.2" y1="18" x2="4.21" y2="18"></line></svg><span class="header-badge" id="pedidosBadge"></span></button>
 
       <button id="btnInstall" style="display:none" title="Instalar app">&#128242;</button>
 
       <button class="header-btn header-btn--accent" id="btnQR" title="Escanear QR"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1.2"></rect><rect x="15" y="3" width="6" height="6" rx="1.2"></rect><rect x="3" y="15" width="6" height="6" rx="1.2"></rect><path d="M15 15h2v2h-2z"></path><path d="M19.5 15H21"></path><path d="M15 19.5V21"></path><path d="M19 19h2v2"></path></svg><span class="header-btn-label">Escanear</span></button>
     </div>
   </header>
+
+  <!-- Conmutador de tema: esquina inferior derecha, solo sin pedido cargado -->
+  <button class="tema-flotante" id="btnTema" type="button" title="Cambiar entre tema claro y oscuro" aria-label="Cambiar tema"><svg class="ic tema-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="ic tema-luna" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5z"></path></svg></button>
 
   <!-- QR SCANNER -->
   <div id="qr-reader-container">
@@ -5413,7 +5437,7 @@
 
       <div class="main-content" id="mainContent">
         <div class="welcome-screen" id="welcomeScreen">
-          <div class="welcome-icon"><svg class="ic-lg" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1.2"></rect><rect x="15" y="3" width="6" height="6" rx="1.2"></rect><rect x="3" y="15" width="6" height="6" rx="1.2"></rect><path d="M15 15h2v2h-2z"></path><path d="M19.5 15H21"></path><path d="M15 19.5V21"></path><path d="M19 19h2v2"></path></svg></div>
+          <div class="welcome-logo"><img class="welcome-logo-claro" src="../logo.png" alt="HomePoint"><img class="welcome-logo-oscuro" src="../logoblanco.png" alt="HomePoint"></div>
           <p>Listo para despachar</p>
           <span class="welcome-hint">Escane&aacute; el QR del pedido o eleg&iacute;lo desde Pedidos pendientes para empezar a armarlo.</span>
           <div class="welcome-sesion"><span class="welcome-sesion-email"></span><span>&middot;</span><button class="welcome-sesion-btn" type="button" onclick="cerrarSesion()">Cerrar sesi&oacute;n</button></div>
@@ -6658,13 +6682,7 @@
     // Misma pantalla de inicio que trae el markup: resetView() la vuelve a poner.
     const HTML_BIENVENIDA =
       '<div class="welcome-screen" id="welcomeScreen">' +
-        '<div class="welcome-icon"><svg class="ic-lg" viewBox="0 0 24 24" aria-hidden="true">' +
-          '<rect x="3" y="3" width="6" height="6" rx="1.2"></rect>' +
-          '<rect x="15" y="3" width="6" height="6" rx="1.2"></rect>' +
-          '<rect x="3" y="15" width="6" height="6" rx="1.2"></rect>' +
-          '<path d="M15 15h2v2h-2z"></path><path d="M19.5 15H21"></path>' +
-          '<path d="M15 19.5V21"></path><path d="M19 19h2v2"></path>' +
-        '</svg></div>' +
+        '<div class="welcome-logo"><img class="welcome-logo-claro" src="../logo.png" alt="HomePoint"><img class="welcome-logo-oscuro" src="../logoblanco.png" alt="HomePoint"></div>' +
         '<p>Listo para despachar</p>' +
         '<span class="welcome-hint">Escane&aacute; el QR del pedido o eleg&iacute;lo desde Pedidos pendientes para empezar a armarlo.</span>' +
         '<div class="welcome-sesion"><span class="welcome-sesion-email"></span><span>&middot;</span><button class="welcome-sesion-btn" type="button" onclick="cerrarSesion()">Cerrar sesi&oacute;n</button></div>' +
@@ -9370,7 +9388,18 @@
     const historialSearch = document.getElementById('historialSearch');
     let historialCache = [];
 
-    document.getElementById('btnHistorial').addEventListener('click', () => {
+    // Cada apertura vuelve a descargar los pedidos web: se confirma para que un
+    // toque por error no consuma Firebase.
+    document.getElementById('btnHistorial').addEventListener('click', async () => {
+      const ok = await confirmarAccion({
+        titulo: '¿Abrir el historial de despachos?',
+        texto: 'Se descargan los pedidos desde el servidor, así que abrilo solo si lo necesitás.',
+        tono: 'aviso',
+        icono: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>',
+        confirmar: 'Abrir historial',
+        volver: 'Volver'
+      });
+      if (!ok) return;
       historialPanel.classList.add('active');
       historialSearch.value = '';
       cargarHistorial();
@@ -9563,10 +9592,9 @@
       if (p1) articuloFooter.style.display = 'none';
     }
 
-    // Abre el modal en paso 1. Con `conCamara` enciende el visor (boton de cabecera);
-    // la pistola lectora lo abre sin camara, que queda disponible con su boton.
+    // Abre el modal en paso 1 con la camara apagada: se enciende solo con su boton.
     // Resuelve cuando el catalogo ya esta cargado.
-    async function articuloAbrirModal({ conCamara }) {
+    async function articuloAbrirModal() {
       articuloModal.classList.add('active');
       articuloActual = null;
       articuloResultados = [];
@@ -9574,14 +9602,12 @@
       articuloMostrarPaso(1);
       articuloSearch.value = '';
       articuloList.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando catalogo...</div>';
-      // Sin await: el permiso/arranque de camara corre en paralelo con la carga del catalogo
-      if (conCamara) articuloIniciarScanner();
       await cargarSheets();
       articuloRenderLista('');
     }
 
     document.getElementById('btnBuscarArticulo').addEventListener('click', () => {
-      articuloAbrirModal({ conCamara: true });
+      articuloAbrirModal();
     });
 
     function articuloCerrarModal() {
@@ -10324,7 +10350,7 @@
         const eraPrimera = pistolaPendiente === null;
         pistolaPendiente = texto;
         if (!eraPrimera) return;
-        try { await articuloAbrirModal({ conCamara: false }); }
+        try { await articuloAbrirModal(); }
         finally { texto = pistolaPendiente; pistolaPendiente = null; }
       } else if (articuloActual) {
         // Estaba en el paso 2 de otro articulo: una lectura nueva lo reemplaza.
@@ -15310,6 +15336,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             cliente: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : ('Pedido ' + child.key),
             confirmado: normalizarNota(p.nota) === NOTA_CONFIRMADO,
             nota: String(p.nota || '').trim(),
+            timestamp: p.timestamp || 0,
             items
           });
         };
@@ -15399,7 +15426,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
               articulos[it.codigo] = { codigo: it.codigo, nombre: it.nombre, cantidad: 0, pedidos: [] };
             }
             articulos[it.codigo].cantidad += it.cantidad;
-            articulos[it.codigo].pedidos.push({ id: p.id, cliente: p.cliente, cantidad: it.cantidad });
+            articulos[it.codigo].pedidos.push({ id: p.id, cliente: p.cliente, cantidad: it.cantidad, timestamp: p.timestamp });
           });
         });
       }
@@ -15434,7 +15461,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       function zonaHtml(a) {
         const u = a.ubicacion;
         if (!tieneUbicacion(u)) return '';
-        if (porZona() && !u.incierta) return '';   // ya lo dice el titulo del grupo
+        // Por categoria no se muestra; por zona ya lo dice el titulo del grupo,
+        // salvo que la ubicacion sea incierta.
+        if (!porZona() || !u.incierta) return '';
         const corto = textoCortoUbicacion(u);
         return '<span class="nec-zona' + (u.incierta ? ' is-incierta' : '') + '" title="' +
           escapeHtml(u.texto + (u.incierta ? ' (sin confirmar en el último relevamiento)' : '')) + '">' +
@@ -15750,6 +15779,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           row.classList.remove('is-parcial');
           const avisoParcial = row.querySelector('.nec-parcial');
           if (avisoParcial) avisoParcial.remove();
+          // El OK cambia las unidades "sin pedir" del indicador.
+          const tagRemoto = row.querySelector('.nec-remoto');
+          if (tagRemoto) tagRemoto.outerHTML = remotoHtml(codigo);
           check.setAttribute('aria-pressed', nuevo ? 'true' : 'false');
           if (nuevo) {
             check.classList.add('is-rebote');
@@ -15849,8 +15881,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       //   estado: PENDIENTE | PREPARANDO | ENVIADO | CANCELADO,
       //   fuente: 'pedidos',               // marca los creados desde este panel
       //   nota, creadoPor: { uid, email }, creadoEn, costoTotalUSD,
-      //   items: { <claveSegura(codigo)>: { codigo, nombre, foto, solicitada, costoUSD?, costoTotalUSD?, orden } }
+      //   items: { <claveSegura(codigo)>: { codigo, nombre, foto, solicitada, costoUSD?, costoTotalUSD?, orden } },
+      //   cubre: { <claveSegura(codigo)>: { <pedidoId>: unidades } },  // que pedidos atiende
+      //   cubreOk: { <claveSegura(codigo)>: unidades }  // de esas, las que ya tenian OK al pedir
       // }
+      // `cubre` y `cubreOk` van aparte de `items` porque editar el traspaso en la
+      // app Traspasos reemplaza items entero.
       // Al despachar, Traspasos agrega enviada/motivo por item y enviadoEn.
       const refTr = db.ref('traspasos');
       const TR_ORIGEN = '2';    // Caseros
@@ -15933,7 +15969,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // Se pide por defecto lo que falta en Munro y Caseros puede mandar.
       function solTildadoPorDefecto(a) {
         const m = stockMunro(a.codigo);
-        return !a.yaPedido && m !== null && m <= 0 && stockCas(a.codigo) > 0;
+        return m !== null && m <= 0 && stockCas(a.codigo) > 0;
       }
       function stockSolHtml(codigo, cant) {
         const n = stockCas(codigo);
@@ -15950,17 +15986,30 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // Por articulo (clave segura del codigo): si esta en un traspaso abierto,
       // "Solicitado TR-NNNN" (el mas reciente); si no, y Caseros ya mando
       // unidades en alguno, "Enviado". Los cancelados no marcan nada.
+      //
+      // El indicador solo vale para los pedidos que ese traspaso atiende: lo que
+      // quede afuera (pedido nuevo, cantidad que subio, envio parcial) se cuenta
+      // como "N sin pedir" y el articulo no se oculta. Ver unidadesSinPedir().
       let remoto = {};                // { clave: { numero, creado, estado, enviadoEn } }
+      let aportes = {};               // { clave: [{ unidades, okPrevio, cubre, creado }] } de mas viejo a mas nuevo
       let firmaRemoto = '';
 
       function indexarRemoto() {
         const res = {};
+        const nuevosAportes = {};
         Object.keys(solDatos).forEach(id => {
           const t = solDatos[id];
           const abierto = trAbierto(t);
           if (!abierto && t.estado !== 'ENVIADO') return;
           Object.keys(t.items || {}).forEach(k => {
             if (!abierto && !(Number(t.items[k].enviada) > 0)) return;
+            (nuevosAportes[k] = nuevosAportes[k] || []).push({
+              // Abierto: lo que se pidio. Despachado: lo que realmente salio.
+              unidades: Number(abierto ? t.items[k].solicitada : t.items[k].enviada) || 0,
+              okPrevio: Number(t.cubreOk && t.cubreOk[k]) || 0,
+              cubre: (t.cubre && t.cubre[k]) || null,
+              creado: t.creadoEn || 0
+            });
             const r = res[k];
             const rAbierto = r && (r.estado === 'PENDIENTE' || r.estado === 'PREPARANDO');
             // Un abierto le gana a un enviado; entre iguales, el mas reciente.
@@ -15969,25 +16018,84 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             res[k] = { numero: t.numero || '', creado: t.creadoEn || 0, estado: t.estado, enviadoEn: t.enviadoEn || 0 };
           });
         });
+        Object.values(nuevosAportes).forEach(lista => lista.sort((a, b) => a.creado - b.creado));
         remoto = res;
-        const firma = Object.keys(res).sort().map(k => k + ':' + res[k].numero + ':' + res[k].estado).join('|');
+        aportes = nuevosAportes;
+        const firma = Object.keys(res).sort().map(k => k + ':' + res[k].numero + ':' + res[k].estado + ':' +
+          nuevosAportes[k].map(a => a.unidades).join('+')).join('|');
         const cambio = firma !== firmaRemoto;
         firmaRemoto = firma;
         return cambio;
       }
 
-      // Ya pedido a Caseros: tiene el indicador "Solicitado" o "Enviado" en la fila.
+      // Unidades que el OK da por juntadas. Un OK viejo (`true`) cubre todo.
+      function unidadesOk(codigo) {
+        const v = verificados.get(claveSegura(codigo));
+        if (v === true) return Infinity;
+        return typeof v === 'number' ? v : 0;
+      }
+
+      // Lo que cada pedido de hoy necesita, sin lo que ya atienden los traspasos:
+      // { pedidoId: unidades }. Un mismo pedido puede traer el articulo en varias
+      // lineas: se suman.
+      //
+      // Cada traspaso reparte sus unidades solo entre los pedidos que anoto en
+      // `cubre`, hasta lo que anoto para cada uno. A sus unidades se le suma el OK
+      // que ya existia al pedirlo (`cubreOk`), mientras ese OK siga en pie: si se
+      // destilda o se limpia, esas unidades vuelven a faltar.
+      // Los traspasos anteriores a este dato (o articulos agregados despues en
+      // Traspasos) no tienen `cubre`: ahi se toman como atendidos los pedidos
+      // ingresados antes del traspaso.
+      function pendientePorPedido(codigo) {
+        const a = articulos[codigo];
+        const res = {};
+        if (!a) return res;
+        const ingreso = {};
+        a.pedidos.forEach(p => {
+          res[p.id] = (res[p.id] || 0) + p.cantidad;
+          ingreso[p.id] = p.timestamp || 0;
+        });
+        const ok = unidadesOk(codigo);
+        (aportes[claveSegura(codigo)] || []).forEach(ap => {
+          let quedan = ap.unidades + Math.min(ap.okPrevio, ok);
+          Object.keys(res).forEach(id => {
+            if (quedan <= 0) return;
+            const tope = ap.cubre ? (Number(ap.cubre[id]) || 0) : (ingreso[id] <= ap.creado ? Infinity : 0);
+            const usa = Math.min(res[id], tope, quedan);
+            res[id] -= usa;
+            quedan -= usa;
+          });
+        });
+        return res;
+      }
+
+      // Lo que falta pedir: lo pendiente, sin pasarse de lo que el OK no cubre.
+      // No se resta el OK de lo pendiente porque un OK puede ser justamente de
+      // la mercaderia que llego por un traspaso: se contaria dos veces y un
+      // pedido nuevo quedaria escondido.
+      function unidadesSinPedir(codigo) {
+        const a = articulos[codigo];
+        if (!a) return 0;
+        const pendiente = Object.values(pendientePorPedido(codigo)).reduce((s, n) => s + n, 0);
+        return Math.max(0, Math.min(pendiente, a.cantidad - unidadesOk(codigo)));
+      }
+
+      // Ya pedido a Caseros por completo: tiene indicador y no queda nada afuera.
+      // Es lo que oculta "Ocultar solicitados".
       function esEnviado(codigo) {
-        const r = remoto[claveSegura(codigo)];
-        return !!r;
+        return !!remoto[claveSegura(codigo)] && unidadesSinPedir(codigo) === 0;
       }
 
       function remotoHtml(codigo) {
         const r = remoto[claveSegura(codigo)];
         if (!r) return '';
+        const n = unidadesSinPedir(codigo);
+        const extra = n > 0 ? ' · ' + n + ' sin pedir' : '';
+        const claseExtra = n > 0 ? ' is-incompleto' : '';
+        const tituloExtra = n > 0 ? '. Faltan pedir ' + n + (n === 1 ? ' unidad' : ' unidades') : '';
         return r.estado === 'ENVIADO'
-          ? '<span class="nec-remoto is-separado" title="Caseros lo envió el ' + fechaSol(r.enviadoEn) + ' (' + escapeHtml(r.numero) + ')">' + IC_CHECK + 'Enviado</span>'
-          : '<span class="nec-remoto" title="Pedido a Caseros el ' + fechaSol(r.creado) + ' · ' + escapeHtml(TR_ESTADOS[r.estado] || '') + '">' + IC_ENVIO + 'Solicitado ' + escapeHtml(r.numero) + '</span>';
+          ? '<span class="nec-remoto is-separado' + claseExtra + '" title="Caseros lo envió el ' + fechaSol(r.enviadoEn) + ' (' + escapeHtml(r.numero) + ')' + tituloExtra + '">' + IC_CHECK + 'Enviado' + extra + '</span>'
+          : '<span class="nec-remoto' + claseExtra + '" title="Pedido a Caseros el ' + fechaSol(r.creado) + ' · ' + escapeHtml(TR_ESTADOS[r.estado] || '') + tituloExtra + '">' + IC_ENVIO + 'Solicitado ' + escapeHtml(r.numero) + extra + '</span>';
       }
 
       // Queda activo desde que se abre el panel, como los verificados: los
@@ -16056,10 +16164,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         solVista = 'nueva';
         setSolCabecera('Nueva solicitud', '', true);
         solAcciones.innerHTML = '<button type="button" data-acc="todos">Todos</button><button type="button" data-acc="ninguno">Ninguno</button>' +
-          '<button type="button" data-acc="constock" title="Tilda solo los que Caseros tiene y no están ya pedidos">Con stock en Caseros</button>';
+          '<button type="button" data-acc="constock" title="Tilda solo los que Caseros tiene">Con stock en Caseros</button>';
         if (!solCandidatos.length) {
           solPie.hidden = true;
-          solList.innerHTML = '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>No hay artículos sin OK</b><span>Todo lo necesario ya está verificado.</span></div>';
+          solList.innerHTML = '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>No hay nada para pedir</b><span>Todo lo necesario ya está verificado o pedido a Caseros.</span></div>';
           return;
         }
         solPie.hidden = false;
@@ -16146,9 +16254,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         sol.classList.remove('active');
       }
 
-      // Articulos de la lista actual sin el OK manual. De un OK parcial se pide
-      // solo lo que falta. Los que ya estan en un traspaso abierto llevan la
-      // marca "Ya pedido TR-NNNN".
+      // Articulos de la lista actual con unidades sin pedir: se propone solo eso,
+      // sin lo que tiene OK ni lo que ya atiende otro traspaso. Los que ademas
+      // estan en un traspaso abierto llevan la marca "Ya pedido TR-NNNN".
       function prepararNueva() {
         const abiertos = {};          // { clave: numero del traspaso abierto mas reciente }
         Object.keys(solDatos)
@@ -16159,8 +16267,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           .filter(a => !getVerificado(a.codigo))
           .map(a => {
             const si = sheetsData[a.codigo] || {};
-            const parcial = getParcial(a.codigo);
             const k = claveSegura(a.codigo);
+            // Se anota todo lo pendiente, tambien lo que ya tiene OK (va en okPrevio).
+            const cubre = pendientePorPedido(a.codigo);
+            Object.keys(cubre).forEach(id => { if (cubre[id] <= 0) delete cubre[id]; });
+            const cantidad = unidadesSinPedir(a.codigo);
             return {
               k,
               codigo: a.codigo,
@@ -16168,13 +16279,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
               barras: (si.codigoBarras && si.codigoBarras.length) ? String(si.codigoBarras[0]) : '',
               imagen: si.imagen || '',
               imagenAlt: si.imagenAlt || '',
-              cantidad: parcial !== null ? a.cantidad - parcial : a.cantidad,
+              cantidad,
+              cubre,
+              okPrevio: Object.values(cubre).reduce((s, n) => s + n, 0) - cantidad,
               yaPedido: abiertos[k] || ''
             };
-          });
+          })
+          .filter(a => a.cantidad > 0);
         // Arranca tildado lo que Munro no tiene (stock <= 0) y Caseros si
-        // (stock > 0), salvo lo que ya esta en un traspaso abierto. El resto
-        // se elige a mano (o con Todos / Con stock en Caseros).
+        // (stock > 0). El resto se elige a mano (o con Todos / Con stock en Caseros).
         solElegidos = new Set(solCandidatos.filter(solTildadoPorDefecto).map(a => a.k));
         renderSolNueva();
         // Stock de Caseros al dia: si cambia, necRenderSiAbierto repinta esta vista.
@@ -16224,8 +16337,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           // El costo unitario se congela al pedir: el historial no cambia si despues se edita el catalogo.
           const costos = await Promise.all(elegidos.map(a => costoCatalogo(a.k)));
           const items = {};
+          const cubre = {};
+          const cubreOk = {};
           let costoTotal = 0;
           elegidos.forEach((a, i) => {
+            cubre[a.k] = a.cubre;
+            if (a.okPrevio > 0) cubreOk[a.k] = a.okPrevio;
             const it = { codigo: a.codigo, nombre: a.nombre, foto: a.imagen || a.imagenAlt || '', solicitada: a.cantidad, orden: i };
             if (costos[i] != null) {
               it.costoUSD = round2(costos[i]);
@@ -16245,7 +16362,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             creadoPor: { uid: (user && user.uid) || '', email: (user && user.email) || '' },
             creadoEn: firebase.database.ServerValue.TIMESTAMP,
             costoTotalUSD: round2(costoTotal),
-            items
+            items,
+            cubre,
+            cubreOk
           }));
           const check = await conTimeout(() => ref.child('numero').once('value'));
           if (check.val() !== numero) throw new Error('La verificación del traspaso falló');
@@ -16293,7 +16412,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           return;
         }
         if (acc === 'constock') {
-          solElegidos = new Set(solCandidatos.filter(a => !a.yaPedido && stockCas(a.codigo) > 0).map(a => a.k));
+          solElegidos = new Set(solCandidatos.filter(a => stockCas(a.codigo) > 0).map(a => a.k));
           renderSolNueva();
           return;
         }
