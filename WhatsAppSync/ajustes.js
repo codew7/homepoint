@@ -12,5 +12,16 @@ module.exports = {
   DATABASE_URL: 'https://whatsappsync-e3245-default-rtdb.firebaseio.com',
 
   // Del historial que manda el celular al vincular, cuantos dias se guardan.
-  DIAS_HISTORIAL: 90
+  DIAS_HISTORIAL: 90,
+
+  // Fotos que manda el cliente (las propias no se guardan). Se achican hasta
+  // FOTO_KB_MAX y se borran solas pasados DIAS_FOTOS dias, para no pasar el
+  // 1 GB gratis de la base.
+  DIAS_FOTOS: 90,
+  FOTO_ANCHO_MAX: 1280,
+  FOTO_KB_MAX: 120,
+
+  // Documentos del cliente (PDF o imagen, ej. comprobantes): se guardan como
+  // imagen (los PDF, su primera pagina). Un poco mas de calidad para leerlos.
+  DOC_KB_MAX: 200
 };

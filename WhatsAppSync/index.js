@@ -24,6 +24,7 @@ const { exec } = require('child_process');
 const qrTerminal = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const pino = require('pino');
+const sharp = require('sharp');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 const CFG = require('./ajustes');
@@ -129,7 +130,7 @@ setInterval(() => {
   const B = await import('baileys');
   const makeWASocket = B.default;
   const { useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason,
-    normalizeMessageContent, getContentType, isLidUser, isPnUser, proto } = B;
+    normalizeMessageContent, getContentType, isLidUser, isPnUser, proto, downloadMediaMessage } = B;
   const TIPO_REVOCAR = proto.Message.ProtocolMessage.Type.REVOKE;
   const TIPO_EDITAR = proto.Message.ProtocolMessage.Type.MESSAGE_EDIT;
 
@@ -231,7 +232,17 @@ setInterval(() => {
     const { tipo, tx } = textoDe(contenido);
     if (!tx) return;
     const t = (aNumero(msg.messageTimestamp) || Math.floor(Date.now() / 1000)) * 1000;
-    rutas[base + '/msgs/' + claveSegura(key.id)] = { t, yo: !!key.fromMe, tipo, tx };
+    const id = claveSegura(key.id);
+    const reg = { t, yo: !!key.fromMe, tipo, tx };
+    // Solo se guardan los adjuntos que manda el cliente (los propios quedan
+    // como texto): fotos, y documentos PDF o de imagen (comprobantes), estos
+    // convertidos a imagen. img:true = el visor busca la imagen en imgs/.
+    const clase = claseAdjunto(contenido);
+    if (clase && !key.fromMe && t >= Date.now() - CFG.DIAS_FOTOS * 86400000) {
+      reg.img = true;
+      encolarFoto(msg, tel, id, t, clase);
+    }
+    rutas[base + '/msgs/' + id] = reg;
 
     const meta = metas[tel] || (metas[tel] = { jid: key.remoteJid, ultimo: 0 });
     if (t > meta.ultimo) meta.ultimo = t;
@@ -349,6 +360,117 @@ setInterval(() => {
       try { await guardarMensajes(messages || [], 0); } catch (e) { log('Error guardando mensajes:', e.message); }
     });
   }
+
+  // -------------------------------------------------------------------
+  // Fotos de clientes: se bajan de a una, se achican y se guardan en
+  //   imgs/{tel}/{id}   { t, d }   (d = JPEG en base64)
+  //   imgsIdx/{id}      { tel, t } (indice liviano para borrar las viejas)
+  // Van separadas de los mensajes para que abrir un chat no descargue fotos:
+  // el visor pide cada una recien cuando la muestra.
+  // -------------------------------------------------------------------
+  const colaFotos = [];
+  let bajandoFotos = false;
+  let fotosOk = 0;
+  let fotosError = 0;
+
+  // 'foto' | 'pdf' | 'docimg' | '' (no se guarda)
+  function claseAdjunto(contenido) {
+    if (contenido.imageMessage) return 'foto';
+    const doc = contenido.documentMessage;
+    if (!doc) return '';
+    const tipo = String(doc.mimetype || '').toLowerCase();
+    const nombre = String(doc.fileName || '').toLowerCase();
+    if (tipo === 'application/pdf' || nombre.endsWith('.pdf')) return 'pdf';
+    if (tipo.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/.test(nombre)) return 'docimg';
+    return '';
+  }
+
+  function encolarFoto(msg, tel, id, t, clase) {
+    colaFotos.push({ msg, tel, id, t, clase });
+    if (!bajandoFotos) procesarFotos();
+  }
+
+  // Fotos: mas compresion. Documentos: mas calidad, para que se lean los numeros.
+  async function comprimir(buffer, esDocumento) {
+    let ancho = CFG.FOTO_ANCHO_MAX;
+    let calidad = esDocumento ? 80 : 70;
+    const kbMax = esDocumento ? CFG.DOC_KB_MAX : CFG.FOTO_KB_MAX;
+    let salida = null;
+    for (let intento = 0; intento < 4; intento++) {
+      salida = await sharp(buffer).rotate().flatten({ background: '#ffffff' })
+        .resize({ width: ancho, height: esDocumento ? 2400 : ancho, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: calidad, mozjpeg: true }).toBuffer();
+      if (salida.length <= kbMax * 1024) break;
+      ancho = Math.round(ancho * 0.8);
+      calidad = Math.max(55, calidad - 8);
+    }
+    return salida;
+  }
+
+  // PDF -> imagen de la primera pagina, sin los margenes en blanco
+  let pdfAImagen = null;
+  async function primeraPaginaPdf(buffer) {
+    if (!pdfAImagen) pdfAImagen = (await import('pdf-to-img')).pdf;
+    const doc = await pdfAImagen(buffer, { scale: 2.5 });
+    const png = await doc.getPage(1);
+    let img = sharp(png).flatten({ background: '#ffffff' });
+    try {
+      const recortada = await img.clone().trim({ background: '#ffffff', threshold: 12 }).toBuffer();
+      img = sharp(recortada).extend({ top: 24, bottom: 24, left: 24, right: 24, background: '#ffffff' });
+    } catch (_) { /* pagina en blanco: se deja como esta */ }
+    return { imagen: await img.png().toBuffer(), paginas: doc.length };
+  }
+
+  async function procesarFotos() {
+    bajandoFotos = true;
+    while (colaFotos.length) {
+      const { msg, tel, id, t, clase } = colaFotos.shift();
+      try {
+        if ((await db.ref('imgsIdx/' + id).once('value')).exists()) continue;
+        const original = await downloadMediaMessage(msg, 'buffer', {}, {
+          logger: pino({ level: 'silent' }),
+          reuploadRequest: sock.updateMediaMessage
+        });
+        let fuente = original;
+        const extra = {};
+        if (clase === 'pdf') {
+          const r = await primeraPaginaPdf(original);
+          fuente = r.imagen;
+          if (r.paginas > 1) extra['chats/' + tel + '/msgs/' + id + '/paginas'] = r.paginas;
+        }
+        const chica = await comprimir(fuente, clase !== 'foto');
+        await db.ref().update({
+          ...extra,
+          ['imgs/' + tel + '/' + id]: { t, d: chica.toString('base64') },
+          ['imgsIdx/' + id]: { tel, t }
+        });
+        fotosOk++;
+      } catch (_) {
+        // Fotos viejas que el celular ya no tiene: el visor muestra "no disponible"
+        fotosError++;
+      }
+      if ((fotosOk + fotosError) % 50 === 0) log('Fotos: guardadas', fotosOk, '- no disponibles', fotosError);
+    }
+    bajandoFotos = false;
+  }
+
+  // Una vez por dia se borran las fotos de mas de DIAS_FOTOS dias
+  async function borrarFotosViejas() {
+    try {
+      const corte = Date.now() - CFG.DIAS_FOTOS * 86400000;
+      const snap = await db.ref('imgsIdx').orderByChild('t').endAt(corte).limitToFirst(500).once('value');
+      const upd = {};
+      snap.forEach(x => {
+        const v = x.val() || {};
+        upd['imgsIdx/' + x.key] = null;
+        if (v.tel) upd['imgs/' + v.tel + '/' + x.key] = null;
+      });
+      const n = Object.keys(upd).length / 2;
+      if (n) { await db.ref().update(upd); log('Fotos viejas borradas:', Math.round(n)); }
+    } catch (e) { log('Error borrando fotos viejas:', e.message); }
+  }
+  setTimeout(borrarFotosViejas, 60000);
+  setInterval(borrarFotosViejas, 24 * 3600000);
 
   log('Iniciando WhatsApp...');
   await conectar();

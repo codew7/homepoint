@@ -2587,6 +2587,7 @@
       background: var(--bg);
       border-top: 1px solid var(--line);
     }
+    .wa-lista[hidden] { display: none; }
     .wa-dia {
       align-self: center;
       margin: 12px 0 6px;
@@ -2623,6 +2624,132 @@
     .wa-msg + .wa-msg:not(.is-yo), .wa-msg.is-yo + .wa-msg.is-yo { margin-top: 0; }
     .wa-msg:not(.is-yo) + .wa-msg.is-yo, .wa-msg.is-yo + .wa-msg:not(.is-yo) { margin-top: 8px; }
     .wa-msg.is-borrado .wa-tx { text-decoration: line-through; color: var(--ink-3); }
+    .wa-msg.is-foto { padding: 4px 4px 5px; }
+    .wa-msg.is-foto .wa-tx { display: block; }
+    .wa-msg.is-foto .wa-hora { padding-right: 6px; }
+    .wa-img {
+      display: block;
+      width: 100%;
+      margin: 0 0 3px;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: zoom-in;
+    }
+    .wa-img img {
+      display: block;
+      max-width: 100%;
+      max-height: 320px;
+      border-radius: 9px;
+      object-fit: cover;
+    }
+    .wa-img-ph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 220px;
+      max-width: 100%;
+      height: 150px;
+      border-radius: 9px;
+      background: var(--surface-3);
+      color: var(--ink-3);
+      font-size: 12px;
+      cursor: default;
+    }
+    /* Galeria: todas las fotos del cliente en cuadricula, la mas nueva primero */
+    .wa-gal-btn {
+      flex: none;
+      height: 36px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      border-radius: var(--r1);
+      color: var(--ink-2);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .14s, color .14s;
+    }
+    .wa-gal-btn[hidden] { display: none; }
+    .wa-gal-btn:hover { background: var(--surface-3); color: var(--ink); }
+    .wa-gal-btn[aria-pressed="true"] { background: var(--ok-soft); border-color: var(--ok-ring); color: var(--ok); }
+    .wa-galeria {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 12px 14px 14px;
+      background: var(--bg);
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+      grid-auto-rows: min-content;
+      gap: 8px;
+      align-content: start;
+    }
+    .wa-galeria[hidden] { display: none; }
+    .wa-galeria .wa-vacio { grid-column: 1 / -1; }
+    .wa-gal-mes {
+      grid-column: 1 / -1;
+      margin-top: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .wa-gal-mes:first-child { margin-top: 0; }
+    .wa-galeria .wa-img {
+      position: relative;
+      margin: 0;
+      aspect-ratio: 1;
+      border-radius: 9px;
+      overflow: hidden;
+      background: var(--surface-3);
+    }
+    .wa-galeria .wa-img img { width: 100%; height: 100%; max-height: none; border-radius: 0; }
+    .wa-galeria .wa-img-ph { width: 100%; height: 100%; border-radius: 0; text-align: center; padding: 6px; }
+    .wa-galeria .wa-img.is-doc img { object-fit: cover; object-position: top; background: #fff; }
+    .wa-gal-doc {
+      display: inline-block;
+      margin-right: 5px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .4px;
+    }
+    .wa-gal-fecha {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 12px 6px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #fff;
+      text-align: left;
+      background: linear-gradient(transparent, rgba(0, 0, 0, .55));
+      pointer-events: none;
+    }
+    .wa-foto-grande {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 210;
+      background: rgba(0, 0, 0, .86);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      cursor: zoom-out;
+      animation: fadeIn .16s ease both;
+    }
+    .wa-foto-grande.active { display: flex; }
+    .wa-foto-grande img { max-width: 100%; max-height: 100%; border-radius: 6px; }
     .wa-hora {
       display: block;
       margin-top: 2px;
@@ -5714,12 +5841,15 @@
           <h3 id="waChatTitulo">WhatsApp</h3>
           <span class="pp-resumen" id="waChatSub"></span>
         </div>
+        <button type="button" class="wa-gal-btn" id="waGaleriaBtn" hidden aria-pressed="false"></button>
         <button class="pedidos-panel-close" id="waChatClose" aria-label="Cerrar">&times;</button>
       </div>
       <div class="wa-lista" id="waChatLista"></div>
+      <div class="wa-galeria" id="waGaleria" hidden></div>
       <div class="wa-pie">Solo lectura &middot; se actualiza solo mientras est&aacute; abierto</div>
     </div>
   </div>
+  <div class="wa-foto-grande" id="waFotoGrande" title="Tocá para cerrar"><img alt="Foto enviada por el cliente"></div>
 
   <!-- SUCURSALES: VIA CARGO + FLECHA CARGA -->
   <div class="modal-backdrop" id="sucModal">
@@ -14824,6 +14954,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!waChatTel) return;
       document.getElementById('waChatTitulo').textContent = cliente.nombre || 'WhatsApp';
       document.getElementById('waChatSub').textContent = cliente.telefono || '';
+      waUltimaLista = [];
+      waMostrarGaleria(false);
       waChatPanel.classList.add('active');
       waEscucharChat();
     }
@@ -14852,7 +14984,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       waChatRef.on('value', snap => {
         if (tel !== waChatTel) return;
         const lista = [];
-        snap.forEach(ch => { lista.push(ch.val()); });
+        snap.forEach(ch => { const v = ch.val() || {}; v.k = ch.key; lista.push(v); });
         waPintarMensajes(lista);
       }, err => {
         console.error('WhatsApp: error leyendo la conversacion', err);
@@ -14863,6 +14995,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     function waPintarMensajes(lista) {
+      waUltimaLista = lista;
+      waActualizarGaleria();
       if (!lista.length) {
         waVacio('Todav&iacute;a no hay mensajes guardados con este n&uacute;mero.<br><br>' +
           'Se guardan desde que el programa de la PC del local est&aacute; encendido y vinculado al WhatsApp del local.');
@@ -14888,14 +15022,166 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         }
         const hora = f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
         const marcas = (m.editado ? 'editado · ' : '') + (m.borrado ? 'eliminado · ' : '');
-        html += '<div class="wa-msg' + (m.yo ? ' is-yo' : '') + (m.borrado ? ' is-borrado' : '') + '">' +
-          '<span class="wa-tx">' + escapeHtml(m.tx || '') + '</span>' +
+        // Fotos del cliente: el texto "📷 Foto · pie" se reemplaza por la foto
+        // (que se pide aparte) y queda solo el pie, si lo hay.
+        let cuerpo = escapeHtml(m.tx || '');
+        if (m.img) {
+          const pie = waPieAdjunto(m);
+          cuerpo = '<button type="button" class="wa-img" data-k="' + escapeHtml(m.k) + '">' + waHtmlFoto(m.k) + '</button>' +
+            (pie ? escapeHtml(pie) : '');
+        }
+        html += '<div class="wa-msg' + (m.yo ? ' is-yo' : '') + (m.borrado ? ' is-borrado' : '') + (m.img ? ' is-foto' : '') + '">' +
+          '<span class="wa-tx">' + cuerpo + '</span>' +
           '<span class="wa-hora">' + escapeHtml(marcas + hora) + '</span>' +
           '</div>';
       });
       waChatLista.innerHTML = html;
       if (alFinal) waChatLista.scrollTop = waChatLista.scrollHeight;
+      waObservarFotos();
     }
+
+    // Las fotos viven en imgs/{tel}/{id}, fuera de los mensajes: se piden de a
+    // una recien cuando el globo entra en pantalla, y quedan en memoria para
+    // que un mensaje nuevo (que repinta el chat) no las vuelva a descargar.
+    const waFotos = new Map();      // id -> 'data:image/jpeg;base64,...' | '' (no disponible)
+    const waFotosPedidas = new Set();
+
+    function waHtmlFoto(k) {
+      if (!waFotos.has(k)) return '<span class="wa-img-ph">Cargando&hellip;</span>';
+      const src = waFotos.get(k);
+      return src ? '<img src="' + src + '" alt="Adjunto enviado por el cliente">'
+        : '<span class="wa-img-ph">No disponible</span>';
+    }
+
+    // Texto bajo la imagen: el pie de la foto, o el nombre del documento
+    // (los PDF se guardan como imagen de la primera pagina).
+    function waPieAdjunto(m) {
+      const tx = String(m.tx || '');
+      if (m.tipo !== 'documento') return tx.replace(/^📷 Foto( · )?/, '');
+      const pie = tx.replace(/^📄 Documento ?/, '📄 ');
+      return m.paginas > 1 ? pie + ' (se ve la 1.ª de ' + m.paginas + ' páginas)' : pie;
+    }
+
+    // Un observador por contenedor (chat y galeria), cada uno con su scroll
+    const waObservadores = new Map();
+    function waObservarFotos(cont) {
+      cont = cont || waChatLista;
+      if (waObservadores.has(cont)) waObservadores.get(cont).disconnect();
+      const obs = new IntersectionObserver(entradas => {
+        entradas.forEach(e => {
+          if (!e.isIntersecting) return;
+          obs.unobserve(e.target);
+          waPedirFoto(e.target.dataset.k);
+        });
+      }, { root: cont, rootMargin: '300px 0px' });
+      waObservadores.set(cont, obs);
+      cont.querySelectorAll('.wa-img').forEach(b => {
+        if (!waFotos.has(b.dataset.k)) obs.observe(b);
+      });
+    }
+
+    function waPedirFoto(k) {
+      if (!k || waFotos.has(k) || waFotosPedidas.has(k)) return;
+      waFotosPedidas.add(k);
+      const tel = waChatTel;
+      waDb.ref('imgs/' + tel + '/' + k + '/d').once('value').then(snap => {
+        const d = snap.val();
+        waFotos.set(k, d ? 'data:image/jpeg;base64,' + d : '');
+      }).catch(() => {
+        waFotos.set(k, '');
+      }).then(() => {
+        waFotosPedidas.delete(k);
+        const enGaleria = waGaleria.querySelector('.wa-img[data-k="' + CSS.escape(k) + '"]');
+        if (enGaleria) enGaleria.innerHTML = waHtmlFoto(k) + waFechaGaleria(enGaleria.dataset.t, enGaleria.classList.contains('is-doc'));
+        const btn = waChatLista.querySelector('.wa-img[data-k="' + CSS.escape(k) + '"]');
+        if (!btn) return;
+        // Mantener la vista en su lugar si la foto agranda el globo estando al final
+        const alFinal = waChatLista.scrollHeight - waChatLista.scrollTop - waChatLista.clientHeight < 80;
+        btn.innerHTML = waHtmlFoto(k);
+        const img = btn.querySelector('img');
+        if (img && alFinal) img.addEventListener('load', () => { waChatLista.scrollTop = waChatLista.scrollHeight; }, { once: true });
+      });
+    }
+
+    // Tocar una foto la abre en grande; tocar otra vez (o Escape) la cierra
+    function waAbrirFotoGrande(e) {
+      const btn = e.target.closest('.wa-img');
+      const src = btn && waFotos.get(btn.dataset.k);
+      if (!src) return;
+      const visor = document.getElementById('waFotoGrande');
+      visor.querySelector('img').src = src;
+      visor.classList.add('active');
+    }
+    waChatLista.addEventListener('click', waAbrirFotoGrande);
+
+    // ---------- Galeria de fotos del cliente ----------
+    // Sale de los mismos mensajes ya cargados (los que tienen img), asi que no
+    // hace otra consulta: solo baja cada foto cuando entra en pantalla.
+    const waGaleria = document.getElementById('waGaleria');
+    const waGaleriaBtn = document.getElementById('waGaleriaBtn');
+    let waUltimaLista = [];
+    let waEnGaleria = false;
+    let waGaleriaHuella = '';
+    waGaleria.addEventListener('click', waAbrirFotoGrande);
+
+    function waFotosDeLista() {
+      return waUltimaLista.filter(m => m.img).sort((a, b) => (b.t || 0) - (a.t || 0));
+    }
+
+    function waFechaGaleria(t, esDoc) {
+      const f = new Date(Number(t) || 0);
+      return '<span class="wa-gal-fecha">' + (esDoc ? '<b class="wa-gal-doc">DOC</b>' : '') + escapeHtml(
+        f.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) + ' ' +
+        f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })) + '</span>';
+    }
+
+    function waActualizarGaleria() {
+      const fotos = waFotosDeLista();
+      waGaleriaBtn.hidden = !fotos.length && !waEnGaleria;
+      waGaleriaBtn.innerHTML = waEnGaleria
+        ? IC_CHAT + '<span>Chat</span>'
+        : '<span>📎 Adjuntos (' + fotos.length + ')</span>';
+      waGaleriaBtn.title = waEnGaleria ? 'Volver a la conversación' : 'Ver las fotos y comprobantes que mandó el cliente';
+      if (waEnGaleria) waPintarGaleria(fotos);
+    }
+
+    function waPintarGaleria(fotos) {
+      // Un mensaje nuevo sin fotos no repinta la cuadricula (no salta el scroll)
+      const huella = waChatTel + '|' + fotos.map(m => m.k).join(',');
+      if (huella === waGaleriaHuella) return;
+      waGaleriaHuella = huella;
+      if (!fotos.length) {
+        waGaleria.innerHTML = '<div class="wa-vacio">Este cliente todav&iacute;a no mand&oacute; fotos ni comprobantes.</div>';
+        return;
+      }
+      let html = '';
+      let mesPrevio = '';
+      fotos.forEach(m => {
+        const mes = new Date(m.t || 0).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+        if (mes !== mesPrevio) { html += '<div class="wa-gal-mes">' + escapeHtml(mes) + '</div>'; mesPrevio = mes; }
+        const pie = waPieAdjunto(m);
+        const esDoc = m.tipo === 'documento';
+        html += '<button type="button" class="wa-img wa-gal-item' + (esDoc ? ' is-doc' : '') + '" data-k="' + escapeHtml(m.k) + '" data-t="' + (Number(m.t) || 0) + '"' +
+          (pie ? ' title="' + escapeHtml(pie) + '"' : '') + '>' +
+          waHtmlFoto(m.k) + waFechaGaleria(m.t, esDoc) + '</button>';
+      });
+      waGaleria.innerHTML = html;
+      waObservarFotos(waGaleria);
+    }
+
+    function waMostrarGaleria(si) {
+      waEnGaleria = !!si;
+      waGaleriaHuella = '';
+      waChatLista.hidden = waEnGaleria;
+      waGaleria.hidden = !waEnGaleria;
+      waGaleriaBtn.setAttribute('aria-pressed', waEnGaleria ? 'true' : 'false');
+      if (waEnGaleria) waGaleria.scrollTop = 0;
+      waActualizarGaleria();
+    }
+    waGaleriaBtn.addEventListener('click', () => waMostrarGaleria(!waEnGaleria));
+    document.getElementById('waFotoGrande').addEventListener('click', e => {
+      e.currentTarget.classList.remove('active');
+    });
 
     // Sesiones abiertas antes de que existiera el visor (o usuario sin crear en
     // el proyecto de WhatsApp): se pide la contrasena una sola vez; despues
@@ -14936,7 +15222,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     document.getElementById('waChatClose').addEventListener('click', waCerrarChat);
     waChatPanel.addEventListener('click', e => { if (e.target === waChatPanel) waCerrarChat(); });
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && waChatPanel.classList.contains('active')) waCerrarChat();
+      if (e.key !== 'Escape') return;
+      const visor = document.getElementById('waFotoGrande');
+      if (visor.classList.contains('active')) { visor.classList.remove('active'); return; }
+      if (waChatPanel.classList.contains('active')) waCerrarChat();
     });
 
     // Al abrir un pedido ABIERTO, copia entrega y pago del pedido anterior del

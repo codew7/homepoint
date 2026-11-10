@@ -7,7 +7,9 @@ muestra el botón **"Ver conversación de WhatsApp"**.
 
 - No envía mensajes nunca.
 - Grupos, estados y canales no se guardan.
-- Fotos, audios y documentos aparecen como texto ("📷 Foto", "🎤 Audio"), sin el archivo.
+- Las **fotos y los documentos que manda el cliente** (PDF o imagen, como comprobantes) se guardan
+  como imagen comprimida (de un PDF, su primera página) y se borran solos a los 90 días.
+  Tus propios adjuntos, los audios y otros archivos (Word, Excel) aparecen solo como texto.
 - La PC tiene que estar prendida para que se guarden los mensajes. Al prenderla,
   recupera lo que entró mientras estuvo apagada.
 
