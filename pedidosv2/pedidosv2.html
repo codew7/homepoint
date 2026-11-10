@@ -2572,6 +2572,109 @@
     }
     .faltantes-panel-list { padding: 4px 14px 12px; }
 
+    /* Conversacion de WhatsApp (solo lectura): globos a la izquierda el
+       cliente, a la derecha lo que se le escribio desde el local. */
+    .wa-box { max-width: 520px; height: 86vh; }
+    .wa-lista {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 6px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      background: var(--bg);
+      border-top: 1px solid var(--line);
+    }
+    .wa-dia {
+      align-self: center;
+      margin: 12px 0 6px;
+      padding: 3px 10px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      background: var(--surface-3);
+      border-radius: 99px;
+    }
+    .wa-msg {
+      max-width: 82%;
+      padding: 7px 10px 5px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      line-height: 1.4;
+      color: var(--ink);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .wa-msg.is-yo {
+      align-self: flex-end;
+      background: var(--ok-soft);
+      border-color: var(--ok-ring);
+      border-bottom-left-radius: 12px;
+      border-bottom-right-radius: 4px;
+    }
+    .wa-msg + .wa-msg:not(.is-yo), .wa-msg.is-yo + .wa-msg.is-yo { margin-top: 0; }
+    .wa-msg:not(.is-yo) + .wa-msg.is-yo, .wa-msg.is-yo + .wa-msg:not(.is-yo) { margin-top: 8px; }
+    .wa-msg.is-borrado .wa-tx { text-decoration: line-through; color: var(--ink-3); }
+    .wa-hora {
+      display: block;
+      margin-top: 2px;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-4);
+      white-space: nowrap;
+    }
+    .wa-vacio {
+      margin: auto;
+      max-width: 320px;
+      padding: 24px 12px;
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--ink-3);
+      text-wrap: pretty;
+    }
+    .wa-vacio .spinner { margin: 0 auto 10px; }
+    .wa-login { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .wa-login input {
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+    }
+    .wa-login button {
+      height: 38px;
+      border: none;
+      border-radius: var(--r1);
+      background: var(--ok);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .wa-login button:disabled { opacity: .6; cursor: default; }
+    .wa-login-error { min-height: 16px; font-size: 12px; color: var(--accent); }
+    .wa-pie {
+      flex: none;
+      padding: 8px 16px;
+      font-size: 11px;
+      text-align: center;
+      color: var(--ink-4);
+      border-top: 1px solid var(--line);
+    }
+
     .pp-grupo {
       display: flex;
       align-items: center;
@@ -5603,6 +5706,21 @@
     </div>
   </div>
 
+  <!-- CONVERSACION DE WHATSAPP (solo lectura) -->
+  <div class="pedidos-panel wa-panel" id="waChatPanel">
+    <div class="pedidos-panel-box wa-box" role="dialog" aria-modal="true" aria-labelledby="waChatTitulo">
+      <div class="pedidos-panel-header">
+        <div class="pp-title">
+          <h3 id="waChatTitulo">WhatsApp</h3>
+          <span class="pp-resumen" id="waChatSub"></span>
+        </div>
+        <button class="pedidos-panel-close" id="waChatClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="wa-lista" id="waChatLista"></div>
+      <div class="wa-pie">Solo lectura &middot; se actualiza solo mientras est&aacute; abierto</div>
+    </div>
+  </div>
+
   <!-- SUCURSALES: VIA CARGO + FLECHA CARGA -->
   <div class="modal-backdrop" id="sucModal">
     <div class="modal-box modal-box--form">
@@ -6066,6 +6184,8 @@
   <!-- QZ Tray: puente local para impresion ESC-POS (fuente nativa de la 3nStar RPT008) -->
   <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script src="config.js"></script>
+  <!-- Conversaciones de WhatsApp: proyecto Firebase aparte (carpeta WhatsAppSync) -->
+  <script src="config-whatsapp.js"></script>
   <!-- Zonas del depósito (relevamiento semanal de fotos, carpeta Locator) -->
   <script src="../Locator/ubicaciones-api.js"></script>
 
@@ -6075,6 +6195,26 @@
     // ==========================================
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+
+    // Segunda app de Firebase, solo lectura, con las conversaciones de WhatsApp.
+    // Va en otro proyecto para no sumar consumo al de pedidos. Tiene su propio
+    // inicio de sesion (mismo email y contrasena, usuarios creados aparte).
+    // Si config-whatsapp.js falta o esta vacio, todo lo de WhatsApp se apaga.
+    let waApp = null;
+    let waDb = null;
+    try {
+      if (typeof whatsappFirebaseConfig !== 'undefined' && whatsappFirebaseConfig.apiKey) {
+        waApp = firebase.initializeApp(whatsappFirebaseConfig, 'whatsapp');
+        waDb = waApp.database();
+      }
+    } catch (err) {
+      console.warn('WhatsApp: no se pudo iniciar el proyecto aparte', err);
+      waApp = null; waDb = null;
+    }
+    function waIniciarSesion(email, pass) {
+      if (!waApp) return Promise.resolve(null);
+      return waApp.auth().signInWithEmailAndPassword(email, pass);
+    }
 
     // ==========================================
     // RESILIENCIA DE CONEXION (RTDB)
@@ -6369,6 +6509,11 @@
       btn.textContent = 'Ingresando...';
       errorEl.textContent = '';
       firebase.auth().signInWithEmailAndPassword(email, pass)
+        .then(() => {
+          // Sin esperar: si el usuario no existe en el proyecto de WhatsApp,
+          // el visor de conversaciones pide la contrasena cuando se abre.
+          waIniciarSesion(email, pass).catch(err => console.warn('WhatsApp: sesion no iniciada', err && err.code));
+        })
         .catch(err => {
           let msg = 'Error al iniciar sesion';
           if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
@@ -6397,6 +6542,7 @@
     }
 
     function cerrarSesion() {
+      if (waApp) waApp.auth().signOut().catch(() => {});
       firebase.auth().signOut()
         .then(() => resetView())
         .catch(err => {
@@ -7337,6 +7483,9 @@
         : '<span class="cli-wa disabled" title="Sin teléfono">' + IC_CHAT + '</span>';
       panel += '</div>';
       panel += '<button type="button" class="pv-opcional-btn pv-opcional-btn--pegado" onclick="abrirPedidosCliente()">' + IC_LISTA + '<span>Pedidos de este cliente</span></button>';
+      if (waDb && waClaveTelefono(cliente.telefono)) {
+        panel += '<button type="button" class="pv-opcional-btn pv-opcional-btn--pegado" onclick="abrirChatWhatsapp()">' + IC_CHAT + '<span>Ver conversaci&oacute;n de WhatsApp</span></button>';
+      }
 
       // Totales
       const totalSubtotal = pvCalcSubtotal();
@@ -14634,6 +14783,160 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!item || item.dataset.id === pedidoId) return;
       pedidosClientePanel.classList.remove('active');
       cargarPedido(item.dataset.id);
+    });
+
+    // ==========================================
+    // CONVERSACION DE WHATSAPP (solo lectura)
+    // ==========================================
+    // Los mensajes los guarda el programa WhatsAppSync de la PC del local en el
+    // proyecto Firebase aparte (waDb), bajo chats/{ultimos 10 digitos}/msgs.
+    // La clave se arma igual alla y aca: da lo mismo si el telefono del pedido
+    // se cargo con 0, +54 o 549.
+    const WA_MAX_MENSAJES = 300;
+    const waChatPanel = document.getElementById('waChatPanel');
+    const waChatLista = document.getElementById('waChatLista');
+    let waChatRef = null;      // consulta en vivo mientras el panel esta abierto
+    let waChatTel = '';
+
+    function waClaveTelefono(telefono) {
+      let d = String(telefono || '').replace(/\D/g, '');
+      if (d.startsWith('0')) d = d.slice(1);
+      return d.length >= 8 ? d.slice(-10) : '';
+    }
+
+    function waDejarDeEscuchar() {
+      if (waChatRef) { waChatRef.off(); waChatRef = null; }
+    }
+
+    function waCerrarChat() {
+      waDejarDeEscuchar();
+      waChatPanel.classList.remove('active');
+    }
+
+    function waVacio(html) {
+      waChatLista.innerHTML = '<div class="wa-vacio">' + html + '</div>';
+    }
+
+    function abrirChatWhatsapp() {
+      if (!pedidoActual || !waDb) return;
+      const cliente = pedidoActual.cliente || {};
+      waChatTel = waClaveTelefono(cliente.telefono);
+      if (!waChatTel) return;
+      document.getElementById('waChatTitulo').textContent = cliente.nombre || 'WhatsApp';
+      document.getElementById('waChatSub').textContent = cliente.telefono || '';
+      waChatPanel.classList.add('active');
+      waEscucharChat();
+    }
+
+    // Al recargar la pagina la sesion guardada tarda un instante en volver:
+    // se espera ese primer aviso para no pedir la contrasena de mas.
+    let waAuthListo = null;
+    function waEsperarAuth() {
+      if (!waAuthListo) {
+        waAuthListo = new Promise(resolver => {
+          const quitar = waApp.auth().onAuthStateChanged(user => { quitar(); resolver(user); });
+        });
+      }
+      return waAuthListo;
+    }
+
+    async function waEscucharChat() {
+      waDejarDeEscuchar();
+      waVacio('<div class="spinner"></div>Cargando conversaci&oacute;n...');
+      const tel = waChatTel;
+      await waEsperarAuth();
+      if (tel !== waChatTel || !waChatPanel.classList.contains('active')) return;
+      if (!waApp.auth().currentUser) { waPedirContrasena(); return; }
+
+      waChatRef = waDb.ref('chats/' + tel + '/msgs').orderByChild('t').limitToLast(WA_MAX_MENSAJES);
+      waChatRef.on('value', snap => {
+        if (tel !== waChatTel) return;
+        const lista = [];
+        snap.forEach(ch => { lista.push(ch.val()); });
+        waPintarMensajes(lista);
+      }, err => {
+        console.error('WhatsApp: error leyendo la conversacion', err);
+        waChatRef = null;
+        if (err && err.code === 'PERMISSION_DENIED') { waPedirContrasena(); return; }
+        waVacio('No se pudo cargar la conversaci&oacute;n.<br><button type="button" class="fa-m-link" onclick="waEscucharChat()">Reintentar</button>');
+      });
+    }
+
+    function waPintarMensajes(lista) {
+      if (!lista.length) {
+        waVacio('Todav&iacute;a no hay mensajes guardados con este n&uacute;mero.<br><br>' +
+          'Se guardan desde que el programa de la PC del local est&aacute; encendido y vinculado al WhatsApp del local.');
+        return;
+      }
+      // Si se estaba leyendo mas arriba, un mensaje nuevo no arrastra al final
+      const alFinal = waChatLista.scrollHeight - waChatLista.scrollTop - waChatLista.clientHeight < 80
+        || !waChatLista.querySelector('.wa-msg');
+
+      lista.sort((a, b) => (a.t || 0) - (b.t || 0));
+      let html = '';
+      let diaPrevio = '';
+      const hoy = new Date().toDateString();
+      const ayer = new Date(Date.now() - 86400000).toDateString();
+      lista.forEach(m => {
+        const f = new Date(m.t || 0);
+        const dia = f.toDateString();
+        if (dia !== diaPrevio) {
+          const etiqueta = dia === hoy ? 'Hoy' : dia === ayer ? 'Ayer'
+            : f.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+          html += '<div class="wa-dia">' + escapeHtml(etiqueta) + '</div>';
+          diaPrevio = dia;
+        }
+        const hora = f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        const marcas = (m.editado ? 'editado · ' : '') + (m.borrado ? 'eliminado · ' : '');
+        html += '<div class="wa-msg' + (m.yo ? ' is-yo' : '') + (m.borrado ? ' is-borrado' : '') + '">' +
+          '<span class="wa-tx">' + escapeHtml(m.tx || '') + '</span>' +
+          '<span class="wa-hora">' + escapeHtml(marcas + hora) + '</span>' +
+          '</div>';
+      });
+      waChatLista.innerHTML = html;
+      if (alFinal) waChatLista.scrollTop = waChatLista.scrollHeight;
+    }
+
+    // Sesiones abiertas antes de que existiera el visor (o usuario sin crear en
+    // el proyecto de WhatsApp): se pide la contrasena una sola vez; despues
+    // queda recordada como la sesion principal.
+    function waPedirContrasena() {
+      const user = firebase.auth().currentUser;
+      const email = user ? (user.email || '') : '';
+      waVacio('Para ver las conversaciones confirm&aacute; tu contrase&ntilde;a (se pide una sola vez).' +
+        '<div class="wa-login">' +
+          '<input type="password" id="waPass" placeholder="Contrase&ntilde;a de ' + escapeHtml(email) + '" autocomplete="current-password">' +
+          '<button type="button" id="waPassOk">Ver conversaci&oacute;n</button>' +
+          '<div class="wa-login-error" id="waPassError"></div>' +
+        '</div>');
+      const input = document.getElementById('waPass');
+      const btn = document.getElementById('waPassOk');
+      const enviar = () => {
+        const pass = input.value;
+        if (!pass || !email) return;
+        btn.disabled = true;
+        document.getElementById('waPassError').textContent = '';
+        waIniciarSesion(email, pass)
+          .then(() => waEscucharChat())
+          .catch(err => {
+            btn.disabled = false;
+            const code = err && err.code;
+            document.getElementById('waPassError').textContent =
+              code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password'
+                ? 'Contraseña incorrecta, o tu usuario no está creado en el proyecto de WhatsApp'
+                : code === 'auth/too-many-requests' ? 'Demasiados intentos. Esperá un momento'
+                : 'No se pudo iniciar sesión';
+          });
+      };
+      btn.addEventListener('click', enviar);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') enviar(); });
+      setTimeout(() => input.focus(), 50);
+    }
+
+    document.getElementById('waChatClose').addEventListener('click', waCerrarChat);
+    waChatPanel.addEventListener('click', e => { if (e.target === waChatPanel) waCerrarChat(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && waChatPanel.classList.contains('active')) waCerrarChat();
     });
 
     // Al abrir un pedido ABIERTO, copia entrega y pago del pedido anterior del
