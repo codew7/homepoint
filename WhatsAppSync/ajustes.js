@@ -23,5 +23,13 @@ module.exports = {
 
   // Documentos del cliente (PDF o imagen, ej. comprobantes): se guardan como
   // imagen (los PDF, su primera pagina). Un poco mas de calidad para leerlos.
-  DOC_KB_MAX: 200
+  DOC_KB_MAX: 200,
+
+  // Numeros que nunca hicieron un pedido ("curiosos"): sus mensajes de texto
+  // se borran pasados estos dias. Sus fotos/documentos NO se tocan.
+  DIAS_CURIOSOS: 30,
+
+  // Base de pedidosv2, de donde se sacan los telefonos de los clientes
+  // (solo lectura).
+  PEDIDOS_DATABASE_URL: 'https://pedidos-87064-default-rtdb.firebaseio.com'
 };

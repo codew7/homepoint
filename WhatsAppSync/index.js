@@ -29,13 +29,24 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 const CFG = require('./ajustes');
 
-const DIR = __dirname;
+// Instalado, la app de bandeja (app/main.js) lo lanza con WAS_DATOS apuntando
+// a %APPDATA%\WhatsAppSync, porque la carpeta de instalacion no se puede
+// escribir. Suelto (node index.js), todo queda junto a este archivo.
+const DIR = process.env.WAS_DATOS || __dirname;
+fs.mkdirSync(DIR, { recursive: true });
 const ARCHIVO_CLAVE = path.join(DIR, 'clave-firebase.json');
 const DIR_SESION = path.join(DIR, 'sesion');
 const ARCHIVO_LIDS = path.join(DIR, 'lids.json');
+const ARCHIVO_CLIENTES = path.join(DIR, 'clientes-tel.json');
 const ARCHIVO_QR = path.join(DIR, 'qr.html');
 let qrAbierto = false;
 const DIR_LOGS = path.join(DIR, 'logs');
+
+// Avisos a la ventana de la app de bandeja (si corre dentro de ella)
+const padre = process.parentPort || null;
+function avisar(evento) {
+  if (padre) { try { padre.postMessage(evento); } catch (_) { /* ventana cerrandose */ } }
+}
 
 // ---------------------------------------------------------------------
 // Log a consola y a archivo (uno por dia)
@@ -45,6 +56,7 @@ function log(...partes) {
   const ahora = new Date();
   const linea = '[' + ahora.toLocaleString('es-AR', { hour12: false }) + '] ' + partes.join(' ');
   console.log(linea);
+  avisar({ tipo: 'log', linea });
   try {
     const dia = ahora.toISOString().slice(0, 10);
     fs.appendFileSync(path.join(DIR_LOGS, dia + '.log'), linea + '\n');
@@ -57,7 +69,9 @@ function log(...partes) {
 if (!fs.existsSync(ARCHIVO_CLAVE)) {
   log('FALTA la clave de Firebase: guardala como', ARCHIVO_CLAVE);
   log('Ver LEEME.md, paso 5.');
-  process.exit(2);
+  avisar({ tipo: 'falta-clave' });
+  setTimeout(() => process.exit(2), 300);
+  return;
 }
 if (!CFG.DATABASE_URL || CFG.DATABASE_URL.includes('PEGAR-ACA')) {
   log('FALTA la URL de la base: completá DATABASE_URL en ajustes.js (LEEME.md, paso 6).');
@@ -272,6 +286,7 @@ setInterval(() => {
     if (!cuenta) return 0;
     volcarMetas(rutas, metas);
     await escribir(rutas);
+    avisar({ tipo: 'mensajes', n: cuenta });
     return cuenta;
   }
 
@@ -294,9 +309,10 @@ setInterval(() => {
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (qr) {
+        avisar({ tipo: 'qr', qr: await QRCode.toDataURL(qr, { width: 420, margin: 2 }) });
         log('Escaneá el QR desde el celular del', CFG.NUMERO_ESPERADO,
           '> WhatsApp > Dispositivos vinculados > Vincular un dispositivo');
-        qrTerminal.generate(qr, { small: true });
+        if (!padre) qrTerminal.generate(qr, { small: true });
         // El QR cambia cada ~20 s: se abre una sola pagina que se refresca sola
         try {
           const img = await QRCode.toDataURL(qr, { width: 420, margin: 2 });
@@ -305,7 +321,7 @@ setInterval(() => {
             '<h2>Escaneá con el celular del ' + CFG.NUMERO_ESPERADO + '</h2>' +
             '<p>WhatsApp → ⋮ → Dispositivos vinculados → Vincular un dispositivo</p>' +
             '<img src="' + img + '"><p style="color:#888">Se actualiza sola. Cerrala cuando el celular diga que se vinculó.</p>');
-          if (!qrAbierto) { exec('start "" "' + ARCHIVO_QR + '"'); qrAbierto = true; }
+          if (!qrAbierto && !padre) { exec('start "" "' + ARCHIVO_QR + '"'); qrAbierto = true; }
         } catch (e) { log('No se pudo generar el QR:', e.message); }
       }
 
@@ -319,9 +335,11 @@ setInterval(() => {
           process.exit(1);
         }
         log('Conectado como', propio + '. Guardando mensajes...');
+        avisar({ tipo: 'conectado', numero: propio });
       }
 
       if (connection === 'close') {
+        avisar({ tipo: 'desconectado' });
         const codigo = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output
           ? lastDisconnect.error.output.statusCode : 0;
         if (codigo === DisconnectReason.loggedOut) {
@@ -364,7 +382,8 @@ setInterval(() => {
   // -------------------------------------------------------------------
   // Fotos de clientes: se bajan de a una, se achican y se guardan en
   //   imgs/{tel}/{id}   { t, d }   (d = JPEG en base64)
-  //   imgsIdx/{id}      { tel, t } (indice liviano para borrar las viejas)
+  //   imgsIdx/{id}      { tel, t, doc } (indice liviano: borrar las viejas y
+  //                     el aviso de comprobante en la lista de pendientes)
   // Van separadas de los mensajes para que abrir un chat no descargue fotos:
   // el visor pide cada una recien cuando la muestra.
   // -------------------------------------------------------------------
@@ -442,9 +461,10 @@ setInterval(() => {
         await db.ref().update({
           ...extra,
           ['imgs/' + tel + '/' + id]: { t, d: chica.toString('base64') },
-          ['imgsIdx/' + id]: { tel, t }
+          ['imgsIdx/' + id]: { tel, t, doc: clase !== 'foto' }
         });
         fotosOk++;
+        avisar({ tipo: 'adjunto' });
       } catch (_) {
         // Fotos viejas que el celular ya no tiene: el visor muestra "no disponible"
         fotosError++;
@@ -471,6 +491,105 @@ setInterval(() => {
   }
   setTimeout(borrarFotosViejas, 60000);
   setInterval(borrarFotosViejas, 24 * 3600000);
+
+  // -------------------------------------------------------------------
+  // Curiosos: numeros que nunca tuvieron un pedido. Sus mensajes de TEXTO
+  // de mas de DIAS_CURIOSOS dias se borran. Nunca se toca:
+  //   - ningun chat de alguien con pedido (vigente o cerrado)
+  //   - ningun mensaje con foto o documento guardado (comprobantes), sea de
+  //     quien sea: esos siguen su propia regla (DIAS_FOTOS)
+  //
+  // Quien es cliente sale de la base de pedidosv2 (lectura publica por REST,
+  // sin clave): los telefonos de los pedidos y de la lista de clientes,
+  // comparados por los ultimos 10 digitos. Leer los ~65.000 pedidos pesa
+  // ~75 MB, asi que se hace completo una vez por mes y el resto de los dias
+  // solo se piden los pedidos nuevos (por fecha). Queda en clientes-tel.json.
+  //
+  // Si no se pudo armar la lista, NO se borra nada.
+  // -------------------------------------------------------------------
+  async function leerJson(url) {
+    const r = await fetch(url, { signal: AbortSignal.timeout(180000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' leyendo pedidos');
+    return r.json();
+  }
+
+  function sumarTelefonos(destino, objeto, sacarTel) {
+    for (const v of Object.values(objeto || {})) {
+      const tel = claveTelefono(sacarTel(v || {}));
+      if (tel) destino.add(tel);
+    }
+  }
+
+  async function telefonosDeClientes() {
+    const base = CFG.PEDIDOS_DATABASE_URL;
+    let guardado = {};
+    try { guardado = JSON.parse(fs.readFileSync(ARCHIVO_CLIENTES, 'utf8')); } catch (_) { guardado = {}; }
+    const tels = new Set(guardado.tels || []);
+    const ahora = Date.now();
+    const completo = !guardado.completoEn || ahora - guardado.completoEn > 30 * 86400000 || tels.size < 100;
+
+    let pedidos;
+    if (completo) {
+      log('Clientes: leyendo todos los pedidos (una vez por mes, tarda un poco)...');
+      pedidos = await leerJson(base + '/pedidos.json');
+      tels.clear();
+    } else {
+      const desde = Math.max(0, (guardado.ultimoTs || 0) - 86400000);   // 1 dia de margen
+      pedidos = await leerJson(base + '/pedidos.json?orderBy=%22timestamp%22&startAt=' + desde);
+    }
+    sumarTelefonos(tels, pedidos, p => (p.cliente || {}).telefono);
+    sumarTelefonos(tels, await leerJson(base + '/clientes.json'), c => c.telefono);
+
+    let ultimoTs = guardado.ultimoTs || 0;
+    for (const p of Object.values(pedidos || {})) {
+      if (p && typeof p.timestamp === 'number' && p.timestamp > ultimoTs) ultimoTs = p.timestamp;
+    }
+    const nuevo = { completoEn: completo ? ahora : guardado.completoEn, ultimoTs, tels: [...tels] };
+    fs.writeFileSync(ARCHIVO_CLIENTES, JSON.stringify(nuevo));
+    if (completo) log('Clientes: ' + tels.size + ' teléfonos con pedido.');
+    return tels;
+  }
+
+  async function borrarCuriosos() {
+    let clientes;
+    try {
+      clientes = await telefonosDeClientes();
+    } catch (e) {
+      log('Curiosos: no se pudo leer la lista de clientes (' + e.message + '). Hoy no se borra nada.');
+      return;
+    }
+    if (!clientes || clientes.size < 100) {
+      log('Curiosos: la lista de clientes vino casi vacía. Por seguridad no se borra nada.');
+      return;
+    }
+    try {
+      const corte = Date.now() - CFG.DIAS_CURIOSOS * 86400000;
+      const snap = await db.ref('chats').once('value');
+      const upd = {};
+      let mensajes = 0;
+      let chatsBorrados = 0;
+      snap.forEach(chat => {
+        if (clientes.has(chat.key)) return;
+        let quedan = 0;
+        const borrar = [];
+        chat.child('msgs').forEach(m => {
+          const v = m.val() || {};
+          if (v.img || (v.t || 0) >= corte) quedan++;
+          else borrar.push(m.key);
+        });
+        if (!borrar.length) return;
+        mensajes += borrar.length;
+        if (!quedan) { upd['chats/' + chat.key] = null; chatsBorrados++; }
+        else borrar.forEach(k => { upd['chats/' + chat.key + '/msgs/' + k] = null; });
+      });
+      if (mensajes) {
+        await escribir(upd);
+        log('Curiosos: borrados ' + mensajes + ' mensajes viejos de números sin pedido (' + chatsBorrados + ' chats completos).');
+      }
+    } catch (e) { log('Error borrando curiosos:', e.message); }
+  }
+  setTimeout(borrarCuriosos, 120000);
+  setInterval(borrarCuriosos, 24 * 3600000);
 
   log('Iniciando WhatsApp...');
   await conectar();

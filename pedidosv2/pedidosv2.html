@@ -3196,6 +3196,19 @@
       opacity: .75;
     }
     .pp-descuento { color: var(--bad); opacity: 1; }
+    /* Comprobante recibido por WhatsApp desde que se ingreso el pedido */
+    .pp-comprobante {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 1px 5px 1px 3px;
+      border-radius: 99px;
+      background: var(--pago-soft);
+      color: var(--pago);
+    }
+    .pp-comprobante svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .pp-comprobante b { font-family: var(--font-mono); font-size: 10px; font-weight: 800; line-height: 1; }
     .pp-rot-impreso svg, .pp-descuento svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
     .pp-rot-barra {
@@ -7390,6 +7403,7 @@
     const IC_MENOS = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9.5 12 15.5 18 9.5"></polyline></svg>';
     const IC_MAS = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 14.5 12 8.5 18 14.5"></polyline></svg>';
     const IC_LAPIZ = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>';
+    const IC_COMPROBANTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.8h12v18.4l-2.4-1.6-2.4 1.6-1.2-.8-1.2.8-2.4-1.6L6 21.2z"></path><line x1="9" y1="8" x2="15" y2="8"></line><line x1="9" y1="11.5" x2="15" y2="11.5"></line><line x1="9" y1="15" x2="12.5" y2="15"></line></svg>';
     const IC_CHAT = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg>';
     const IC_EFECTIVO = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.6"></circle></svg>';
     const IC_TARJETA = '<svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>';
@@ -8848,7 +8862,7 @@
     function ppFirmaFila(p) {
       return [p.nombre, p.telefono, p.nota, p.rank, p.pago, p.armado, p.enPreparacion,
         p.embalado, p.controlado, p.rotuloImpreso, p.tipoEntrega, p.cat, p.timestamp,
-        p.paquete ? paqueteTexto(p.paquete) : ''].join('\u0001');
+        p.paquete ? paqueteTexto(p.paquete) : '', waComprobantesFirma(p)].join('\u0001');
     }
 
     function ppReconstruirCache(vivo) {
@@ -8880,6 +8894,7 @@
 
     function ppSuscribir() {
       if (ppVivo) return;
+      waAdjSuscribir();
       const vivo = { snaps: {}, subs: [], plazo: null };
       ppVivo = vivo;
       ppHuellaPintada = null;
@@ -8927,6 +8942,7 @@
     }
 
     function ppDesuscribir() {
+      waAdjDesuscribir();
       clearTimeout(ppPintarTimer);
       ppPintarTimer = null;
       ppPintarPendiente = false;
@@ -9091,6 +9107,88 @@
         ' title="' + titulo + '" aria-label="' + titulo + '">' + IC_PAQUETE + '</span>';
     }
 
+    // ==========================================
+    // COMPROBANTES RECIBIDOS POR WHATSAPP (indicador en pendientes)
+    // ==========================================
+    // El sincronizador anota cada foto o documento que manda un cliente en
+    // imgsIdx/{id} = { tel, t, doc } del proyecto de WhatsApp (indice liviano,
+    // sin la imagen). Con la lista abierta se escucha solo desde el pedido
+    // pendiente mas viejo, y se agrupa por telefono.
+    //
+    // A cada pedido le corresponden SOLO los adjuntos recibidos despues de
+    // ingresado y antes del siguiente pedido pendiente del mismo cliente: los
+    // de compras anteriores no cuentan. Es un aviso: el pago se verifica a mano.
+    let waAdjRef = null;
+    let waAdjDesde = 0;
+    let waAdjPorTel = new Map();   // tel -> [{ t, doc }] ordenado por fecha
+
+    function waAdjSuscribir() {
+      if (!waDb || waAdjRef) return;
+      waEsperarAuth().then(user => {
+        if (!user || waAdjRef || !ppVivo) return;
+        // Margen: pedidos pendientes de hasta 120 dias (los adjuntos se guardan 90)
+        waAdjDesde = Date.now() - 120 * 86400000;
+        waAdjRef = waDb.ref('imgsIdx').orderByChild('t').startAt(waAdjDesde);
+        waAdjRef.on('value', snap => {
+          const mapa = new Map();
+          snap.forEach(ch => {
+            const v = ch.val() || {};
+            if (!v.tel || !v.t) return;
+            if (!mapa.has(v.tel)) mapa.set(v.tel, []);
+            mapa.get(v.tel).push({ t: v.t, doc: !!v.doc });
+          });
+          mapa.forEach(l => l.sort((a, b) => a.t - b.t));
+          waAdjPorTel = mapa;
+          if (ppVivo) ppProgramarPintado();
+        }, err => {
+          console.warn('WhatsApp: no se pudo leer el indice de comprobantes', err && err.code);
+          waAdjRef = null;
+        });
+      });
+    }
+
+    function waAdjDesuscribir() {
+      if (waAdjRef) { waAdjRef.off(); waAdjRef = null; }
+    }
+
+    // Adjuntos que corresponden a ESTE pedido
+    function waComprobantesDe(p) {
+      const tel = waClaveTelefono(p.telefono);
+      const lista = tel && waAdjPorTel.get(tel);
+      if (!lista || !lista.length || !p.timestamp) return null;
+      // Hasta el siguiente pedido pendiente del mismo cliente (si lo hay)
+      let hasta = Infinity;
+      for (const o of pedidosCache) {
+        if (o.id !== p.id && o.timestamp > p.timestamp && o.timestamp < hasta &&
+            waClaveTelefono(o.telefono) === tel) hasta = o.timestamp;
+      }
+      let docs = 0, fotos = 0, ultimo = 0;
+      for (const a of lista) {
+        if (a.t <= p.timestamp || a.t >= hasta) continue;
+        if (a.doc) docs++; else fotos++;
+        ultimo = a.t;
+      }
+      return docs + fotos ? { docs, fotos, ultimo } : null;
+    }
+
+    function waComprobantesFirma(p) {
+      const c = waComprobantesDe(p);
+      return c ? c.docs + '/' + c.fotos + '/' + c.ultimo : '';
+    }
+
+    function waComprobantesHtml(p) {
+      const c = waComprobantesDe(p);
+      if (!c) return '';
+      const partes = [];
+      if (c.docs) partes.push(c.docs + (c.docs === 1 ? ' documento' : ' documentos'));
+      if (c.fotos) partes.push(c.fotos + (c.fotos === 1 ? ' foto' : ' fotos'));
+      const cuando = new Date(c.ultimo).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const titulo = 'Posible comprobante: el cliente mandó ' + partes.join(' y ') +
+        ' por WhatsApp desde que se ingresó el pedido (último: ' + cuando + '). Verificalo en la conversación.';
+      return '<span class="pp-comprobante' + (c.docs ? ' is-doc' : '') + '" role="img" title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">' +
+        IC_COMPROBANTE + (c.docs + c.fotos > 1 ? '<b>' + (c.docs + c.fotos) + '</b>' : '') + '</span>';
+    }
+
     // Contacto por WhatsApp sin abrir el pedido. Mismo link y mismo estado
     // "sin telefono" que el boton de la barra plegada (dockPeekActualizar).
     function ppBotonWaHtml(p) {
@@ -9250,6 +9348,7 @@
             (listo ? '' : ppRotImpresoHtml(p)) +
             ppEntregaHtml(p) +
             ppEmbaladoHtml(p) +
+            waComprobantesHtml(p) +
           '</span>' +
           '<span class="pp-meta">' +
             (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
