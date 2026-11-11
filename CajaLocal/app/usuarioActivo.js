@@ -30,6 +30,11 @@
 // marca 'hpModoWhatsapp' de sessionStorage la lee ingresoPedidoV2.js para
 // prender la búsqueda manual y el vendedor WhatsApp.
 //
+// Tras 4 minutos sin uso se vuelve a este selector (ver "inactividad"). En
+// la caja sólo si el pedido no tiene artículos; en el historial siempre.
+// Excepción: "Puesto fijo", al pie del selector, deja a ese usuario en este
+// equipo sin límite de tiempo (localStorage 'hpPuestoFijo' = su nombre).
+//
 // Se carga en <head>, antes del script de login: el resto del archivo sólo
 // toca el DOM cuando hace falta.
 (function() {
@@ -38,6 +43,8 @@
   const RANGO = 'Usuarios!A:B';
   const SS_ACTUAL = 'hpUsuarioActivo';
   const LS_ULTIMO = 'hpUsuarioUltimo';
+  // Usuario con puesto fijo en este equipo: no vuelve al selector por inactividad.
+  const LS_PUESTO_FIJO = 'hpPuestoFijo';
   // La caché es por punto de venta: cada uno tiene su propia lista.
   const PUNTO_VENTA = window.PuntoVenta ? PuntoVenta.actual() : null;
   const LS_CACHE = 'hpVendedoresCache' + (PUNTO_VENTA && PUNTO_VENTA !== '1' ? '_' + PUNTO_VENTA : '');
@@ -141,6 +148,7 @@
   function ssDel(k) { try { sessionStorage.removeItem(k); } catch (_) {} }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (_) {} }
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -266,6 +274,11 @@
           <span class="usr-pie-tecla" aria-hidden="true">Enter</span>
           para elegir · Podés cambiar de usuario desde el encabezado
         </footer>
+        <button type="button" class="usr-fijo" aria-pressed="false"
+                title="Para quien trabaja siempre en este equipo. Con esto prendido, la caja no vuelve sola a esta pantalla aunque pase el tiempo.">
+          <span class="usr-fijo-switch" aria-hidden="true"></span>
+          Puesto fijo · no volver a esta pantalla por inactividad
+        </button>
         <div class="usr-pv" hidden>
           <span class="usr-pv-nombre"></span>
           <span aria-hidden="true">·</span>
@@ -296,6 +309,11 @@
       btn.addEventListener('click', () => PuntoVenta.pedirCambio(() => btn.focus({ preventScroll: true })));
       pv.hidden = false;
     }
+    fijoBtn = overlay.querySelector('.usr-fijo');
+    fijoBtn.addEventListener('click', () => {
+      fijoTocado = true;
+      pintarFijo(fijoBtn.getAttribute('aria-pressed') !== 'true');
+    });
     grilla.addEventListener('click', e => {
       const b = e.target.closest('.usr-tile');
       if (b) elegir(b.dataset.nombre, b);
@@ -784,7 +802,12 @@
     // Si un modal de la caja quedó abierto, el selector va por encima igual.
     const chatPanel = document.querySelector('.chat-abierto');
     if (chatPanel) chatPanel.classList.remove('chat-abierto');
+    // El interruptor arranca prendido sólo si quien suelta la caja tenía
+    // puesto fijo; si después elige otra persona, no lo hereda (ver establecer).
+    const fijoAntes = esPuestoFijo(actual);
     soltar();
+    fijoTocado = false;
+    pintarFijo(fijoAntes);
     pintarFecha();
     overlay.classList.remove('usr-saliendo', 'usr-eligiendo');
     overlay.hidden = false;
@@ -800,6 +823,7 @@
   function cerrar() {
     if (!abierto) return;
     abierto = false;
+    marcarActividad();
     escucharPresencia(false);
     overlay.classList.remove('usr-visible');
     overlay.classList.add('usr-saliendo');
@@ -906,6 +930,14 @@
 
   function establecer(nombre) {
     const anterior = actual || soltado;
+    // Puesto fijo: el que vuelve a entrar conserva lo que dice el interruptor;
+    // otra persona sólo queda fija si lo prendió ella misma.
+    if (fijoBtn) {
+      const prendido = fijoBtn.getAttribute('aria-pressed') === 'true';
+      const mismo = anterior && anterior.toLowerCase() === nombre.toLowerCase();
+      if (prendido && (mismo || fijoTocado)) lsSet(LS_PUESTO_FIJO, nombre);
+      else if (esPuestoFijo(nombre) || (mismo && esPuestoFijo(anterior))) lsDel(LS_PUESTO_FIJO);
+    }
     soltado = '';
     actual = nombre;
     ssSet(SS_ACTUAL, nombre);
@@ -924,7 +956,10 @@
       av.innerHTML = svgAvatar(id);
       headerBtn.style.setProperty('--tono', id.tono);
       nom.textContent = actual;
-      headerBtn.title = 'Usuario: ' + actual + ' · Cambiar de usuario';
+      const fijo = esPuestoFijo(actual);
+      const lbl = headerBtn.querySelector('.usr-chip-label');
+      if (lbl) lbl.textContent = fijo ? 'Puesto fijo' : 'Usuario';
+      headerBtn.title = 'Usuario: ' + actual + (fijo ? ' (puesto fijo)' : '') + ' · Cambiar de usuario';
       headerBtn.setAttribute('aria-label', 'Usuario actual: ' + actual + '. Cambiar de usuario');
       headerBtn.hidden = false;
     } else {
@@ -961,8 +996,56 @@
     cuandoListo(pintarHeader);
   });
 
+  // ---------------------------------------------------------- puesto fijo --
+  let fijoBtn = null;
+  let fijoTocado = false;
+  function esPuestoFijo(nombre) {
+    const f = lsGet(LS_PUESTO_FIJO);
+    return !!(nombre && f && f.toLowerCase() === nombre.toLowerCase());
+  }
+  function pintarFijo(si) {
+    if (fijoBtn) fijoBtn.setAttribute('aria-pressed', si ? 'true' : 'false');
+  }
+
+  // -------------------------------------------------------- inactividad --
+  // Pasados 4 minutos sin tocar la pantalla (teclado, mouse, pistola) se
+  // vuelve al selector: así quien llega a la caja no vende con el usuario de
+  // otro. La pantalla puede frenarlo (la caja lo hace si el pedido tiene
+  // artículos) y limpiar lo suyo antes, con UsuarioActivo.alInactividad().
+  const INACTIVIDAD_MS = 4 * 60 * 1000;
+  let ultimaActividad = Date.now();
+  let ganchoInactividad = null;
+
+  function marcarActividad() { ultimaActividad = Date.now(); }
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'input'].forEach(ev =>
+    document.addEventListener(ev, marcarActividad, { capture: true, passive: true }));
+
+  // Sólo con la pantalla a la vista: ni con el login de Firebase ni con el
+  // selector ya abierto.
+  function pantallaEnUso() {
+    const main = document.getElementById('mainContainer');
+    return !!main && main.style.display !== 'none' && !main.inert;
+  }
+
+  setInterval(() => {
+    if (!actual || abierto || esPuestoFijo(actual) || !pantallaEnUso()) return;
+    if (Date.now() - ultimaActividad < INACTIVIDAD_MS) return;
+    const g = ganchoInactividad;
+    try {
+      if (g && g.puede && !g.puede()) return;
+      if (g && g.limpiar) g.limpiar();
+    } catch (e) {
+      console.error('Inactividad:', e);
+      return;
+    }
+    abrir();
+  }, 10 * 1000);
+
   // ---------------------------------------------------------------- API --
   window.UsuarioActivo = {
+    // La pantalla dice si se puede volver al selector por inactividad
+    // (`puede`) y qué dejar en blanco antes de hacerlo (`limpiar`).
+    alInactividad(gancho) { ganchoInactividad = gancho || null; },
     EVENTO,
     actual: () => actual,
     cargarVendedores,

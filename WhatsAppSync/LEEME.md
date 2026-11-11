@@ -1,17 +1,48 @@
 # WhatsApp en pedidosv2 (solo lectura)
 
 Este programa corre en la PC del local. Se vincula al WhatsApp **+54 9 11 7646-0030**
-como "dispositivo vinculado" (igual que WhatsApp Web) y copia los mensajes de los
-chats individuales a un **proyecto de Firebase aparte**. En pedidosv2, cada pedido
+como "dispositivo vinculado" (igual que WhatsApp Web) y guarda en un **proyecto de Firebase aparte**
+lo necesario para **emparejar cada cotización con su comprobante de pago**. En pedidosv2, cada pedido
 muestra el botón **"Ver conversación de WhatsApp"**.
 
+Qué se guarda:
+- **Tus cotizaciones**: los mensajes que mandás desde el 11 7646-0030 con el texto `Subtotal $`,
+  con fecha y hora. El resto de tus mensajes no se guarda.
+- **Los comprobantes de pago que manda el cliente** (foto, captura o PDF), como imagen comprimida
+  (de un PDF, su primera página) y sin el texto que escribe abajo. Para saber si una imagen es un
+  comprobante, el programa **lee su texto en la PC** y busca palabras de pago (comprobante,
+  transferencia, CBU/CVU, operación, bancos, montos con `$`...). Las fotos de otras cosas
+  (productos, lugares) no se guardan. Si es dudosa, se guarda igual para no perder un pago.
+  Se marcan como **Comprobante de pago**.
+- **Tus remitos**: las fotos o documentos que mandás desde el 11 7646-0030 y que son remitos o
+  comprobantes de envío (Vía Cargo, Flecha Carga, Andreani, Correo Argentino, encomiendas, despachos...).
+  Se marcan como **Remito** y nunca cuentan como comprobante de pago. Tus otras fotos no se guardan,
+  y los remitos que manda otra persona tampoco.
+- En pedidosv2, la galería de adjuntos muestra las dos categorías por separado, y el aviso
+  "Posible comprobante" de la lista de pedidos solo cuenta los comprobantes de pago.
+- Nada más: los textos del cliente, audios, stickers, etc. no se guardan. Grupos, estados y canales tampoco.
+
+### Comprobantes asignados a su pedido
+Cada comprobante de pago se asigna solo a un pedido del mismo teléfono creado **antes** del comprobante
+(hasta 30 días antes, sin contar los cancelados). Para elegirlo usa, en este orden:
+1. El **código de pedido** que pedidosv2 agrega al final de la cotización (`- Pedido: xxxxxx`).
+2. El **importe exacto** del comprobante igual al total de un pedido.
+3. El **total de tu última cotización** antes del comprobante.
+4. Si el cliente tiene **un solo pedido** posible, ese.
+5. Si no, el más reciente, marcado **Revisar**.
+
+Los pagos en varias partes se suman: en pedidosv2 el pedido muestra "Pagado $X de $Y" o "Pagado completo",
+y el ícono de la lista se pone verde (completo) o ámbar (parcial), con un punto rojo si hay algo para revisar.
+Dentro del pedido se puede **Quitar** o **Asignar** un comprobante a mano; esa corrección no se vuelve a cambiar
+(el botón **Automático** la deshace). El plazo de 30 días está en `ajustes.js` (`DIAS_ASIGNAR`).
+
+**Reglas de la base:** para las correcciones a mano hay que publicar de nuevo `database.rules.json`
+(Firebase → Realtime Database → Reglas → pegar y **Publicar**).
+
 - No envía mensajes nunca.
-- Grupos, estados y canales no se guardan.
-- Las **fotos y los documentos que manda el cliente** (PDF o imagen, como comprobantes) se guardan
-  como imagen comprimida (de un PDF, su primera página) y se borran solos a los 90 días.
-  Tus propios adjuntos, los audios y otros archivos (Word, Excel) aparecen solo como texto.
-- Los **mensajes de texto** de números que nunca hicieron un pedido (curiosos) se borran a los 30 días.
-  Sus fotos y documentos no se tocan. Los chats de clientes (con pedido vigente o cerrado) quedan completos.
+- Comprobantes y cotizaciones se borran solos a los 90 días.
+- La primera vez que lee una imagen baja el idioma español del lector de texto (necesita internet).
+- Si a algún banco no lo reconoce, se agrega a la lista `BANCOS` al principio de `index.js`.
 - La PC tiene que estar prendida para que se guarden los mensajes. Al prenderla,
   recupera lo que entró mientras estuvo apagada.
 
@@ -69,6 +100,10 @@ Dos copias a la vez se pisan la conexión.
 - Sus datos (clave, sesión de WhatsApp, registros) están en `%APPDATA%\WhatsAppSync`
   (botón **Carpeta de datos**). Desinstalar la app no los borra.
 - La URL de la base y los plazos (90 días, 30 días) están en `ajustes.js`.
+- La primera vez que arranca esta versión hace una **limpieza única**: borra de Firebase los textos
+  que se guardaban antes y revisa las fotos ya guardadas, dejando solo cotizaciones y comprobantes.
+  Puede tardar un rato; el avance queda en `limpieza-cotizaciones.json` y, si se corta, sigue
+  en el próximo arranque.
 
 ### Armar un instalador nuevo (si se cambia el programa)
 En esta carpeta: `npm install` (una vez) y después `npm run instalador`. Sale en `dist`.

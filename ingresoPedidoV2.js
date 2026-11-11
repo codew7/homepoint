@@ -4703,15 +4703,16 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   }
 
   // === FUNCIÓN PARA RESTABLECER FORMULARIO (BOTÓN NUEVO) ===
-  function restablecerFormulario() {
+  // `sinPreguntar`: lo usa la vuelta al selector por inactividad.
+  function restablecerFormulario(sinPreguntar) {
     // Confirmar con el usuario si hay datos
     const nombreActual = form.nombre.value.trim().toLowerCase();
     const hayDatos = items.length > 0 ||
                      (nombreActual !== '' && nombreActual !== 'n/a') ||
                      form.telefono.value.trim() !== '' ||
                      form.direccion.value.trim() !== '';
-    
-    if (hayDatos) {
+
+    if (hayDatos && !sinPreguntar) {
       const confirmar = confirm('¿Está seguro de que desea crear un nuevo pedido? Se perderán los datos actuales.');
       if (!confirmar) return;
     }
@@ -4792,6 +4793,24 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         return;
       }
       restablecerFormulario();
+    });
+  }
+
+  // === VUELTA AL SELECTOR POR INACTIVIDAD (usuarioActivo.js) ===
+  // Tras 4 minutos sin uso, con el pedido sin artículos, la caja vuelve a
+  // preguntar quién la usa y el pedido queda en blanco. Con artículos cargados,
+  // editando un pedido existente o mientras se guarda, no se interrumpe.
+  if (window.UsuarioActivo && UsuarioActivo.alInactividad) {
+    UsuarioActivo.alInactividad({
+      puede: () => items.length === 0 && !pedidoId &&
+                   !procesoCriticoEnEjecucion && !enviandoPedido,
+      limpiar: () => {
+        ['adminPassOverlay', 'manualPassOverlay', 'calcCobroOverlay'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+        restablecerFormulario(true);
+      }
     });
   }
 

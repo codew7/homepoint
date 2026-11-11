@@ -26,10 +26,15 @@ module.exports = {
   DOC_KB_MAX: 200,
 
   // Numeros que nunca hicieron un pedido ("curiosos"): sus mensajes de texto
-  // se borran pasados estos dias. Sus fotos/documentos NO se tocan.
+  // se borran pasados estos dias. Sus comprobantes NO se tocan, y las
+  // cotizaciones ("Subtotal $") duran DIAS_FOTOS, como los comprobantes.
   DIAS_CURIOSOS: 30,
 
-  // Base de pedidosv2, de donde se sacan los telefonos de los clientes
-  // (solo lectura).
+  // Asignacion de comprobantes a pedidos: un comprobante solo se asigna a
+  // pedidos creados como mucho estos dias antes de recibirlo.
+  DIAS_ASIGNAR: 30,
+
+  // Base de pedidosv2, de donde se sacan los telefonos de los clientes y los
+  // pedidos para asignar comprobantes (solo lectura).
   PEDIDOS_DATABASE_URL: 'https://pedidos-87064-default-rtdb.firebaseio.com'
 };

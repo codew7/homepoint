@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f6f7fb">
+<title>Auditoría de Categorías · HomePoint</title>
+<link rel="icon" href="../faviconnegro.png" type="image/png">
+
+<!--
+  Auditoría de categorías.
+  Claude (con la suscripción, vía Claude Code) revisa el nombre de cada artículo
+  y sugiere otra categoría de la lista solo si la actual no encaja. Los de "Moda"
+  quedan afuera. Cada sugerencia se aplica o se descarta con un clic.
+
+  IMPORTANTE: se abre con Articulos/auditoria/"Auditar categorias.bat" en la PC.
+  Ese .bat levanta servidor.py en http://localhost:8787, que es quien llama a
+  Claude Code (una página web sola no puede usar la suscripción) y guarda los
+  resultados en auditoria/resultados.json. La categoría corregida se escribe en
+  Firebase (articulos/{codigo}/Categoria) directo desde esta página.
+-->
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="../config.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f6f7fb; --card:#fff; --card-2:#f8f9fc; --card-3:#f1f3f9;
+  --text:#0e1424; --text-2:#3a4256; --muted:#7a8398; --faint:#a9b0c1;
+  --border:#e8eaf1; --border-2:#dfe2ec;
+  --primary:#2b2f37; --primary-glow:rgba(31,35,42,.26);
+  --lime:#7cb342; --lime-600:#5a9216; --lime-soft:#eef6e2;
+  --amber:#d97706; --amber-soft:#fef3e2;
+  --danger:#e11d48; --danger-soft:#fdebee;
+  --blue:#3f6fd8; --blue-soft:#eaf0fd;
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',monospace;
+  --r:18px; --r-sm:12px; --r-xs:9px;
+  --sh-sm:0 1px 2px rgba(14,20,36,.05),0 1px 3px rgba(14,20,36,.04);
+  --sh-lg:0 18px 44px -16px rgba(14,20,36,.22),0 6px 16px -8px rgba(14,20,36,.10);
+  --ease:cubic-bezier(.2,.8,.25,1);
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font)}
+body{min-height:100dvh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,select,input{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+
+/* ===== Login ===== */
+.login{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);transition:opacity .4s ease}
+.login.hidden{opacity:0;pointer-events:none}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-lg);padding:34px 28px 28px}
+.logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--primary),#3d424c);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.tag{font-family:var(--mono);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;color:var(--lime-600);font-weight:600;margin-bottom:8px}
+.login-card h1{font-size:1.5rem;font-weight:800;letter-spacing:-.025em;margin-bottom:6px}
+.login-card .sub{color:var(--muted);font-size:.88rem;margin-bottom:24px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.74rem;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.inp{width:100%;padding:12px 14px;background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);font-size:.94rem;outline:none;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(43,47,55,.10)}
+.login-err{color:var(--danger);font-size:.8rem;min-height:1.2em;margin-top:12px;text-align:center}
+
+/* ===== Botones ===== */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 15px;border-radius:var(--r-xs);font-weight:700;font-size:.84rem;white-space:nowrap;transition:background .15s,border-color .15s,opacity .15s,transform .12s var(--ease)}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.btn-dark{background:var(--text);color:#fff}
+.btn-dark:hover:not(:disabled){background:#252a35}
+.btn-ok{background:var(--lime-600);color:#fff}
+.btn-ok:hover:not(:disabled){background:#4c7d12}
+.btn-ghost{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.btn-ghost:hover:not(:disabled){background:var(--card-2);border-color:var(--faint)}
+.btn-block{width:100%;height:46px;font-size:.92rem}
+.btn-sm{height:32px;padding:0 11px;font-size:.78rem}
+
+/* ===== Topbar ===== */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:rgba(246,247,251,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--primary),#3d424c);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand b{display:block;font-weight:800;font-size:.98rem;letter-spacing:-.02em}
+.brand small{display:block;font-size:.68rem;color:var(--muted);font-weight:500}
+.top-right{display:flex;align-items:center;gap:8px}
+.pill{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--muted);padding:5px 10px 5px 8px;background:var(--card);border:1px solid var(--border);border-radius:20px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--lime);flex-shrink:0}
+.dot.off{background:var(--danger)}
+.dot.wait{background:var(--faint)}
+.icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text-2)}
+.icon-btn:hover{background:var(--card-2)}
+
+/* ===== Layout ===== */
+.wrap{max-width:1080px;margin:0 auto;padding:22px 20px 80px}
+.head h1{font-size:1.45rem;font-weight:800;letter-spacing:-.025em}
+.head p{color:var(--muted);font-size:.88rem;margin-top:4px;max-width:640px;line-height:1.5}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
+.stat{text-align:left;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:13px 14px;box-shadow:var(--sh-sm);transition:border-color .15s,box-shadow .15s}
+.stat:hover{border-color:var(--border-2)}
+.stat.on{border-color:var(--text);box-shadow:0 0 0 1px var(--text)}
+.stat .n{font-size:1.45rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat .l{font-size:.74rem;color:var(--muted);font-weight:600;margin-top:1px;display:flex;align-items:center;gap:6px}
+.stat .l i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.meta{font-size:.74rem;color:var(--muted);margin-top:10px}
+
+/* Panel de análisis */
+.run{margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;box-shadow:var(--sh-sm);display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.run-info{flex:1;min-width:220px}
+.run-txt{font-size:.84rem;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.run-sub{font-size:.74rem;color:var(--muted);margin-top:3px}
+.bar{height:6px;background:var(--card-3);border-radius:6px;overflow:hidden;margin-top:9px}
+.bar span{display:block;height:100%;width:0;background:var(--lime);border-radius:6px;transition:width .5s var(--ease)}
+.run-ctl{display:flex;align-items:center;gap:8px}
+.sel{height:38px;padding:0 30px 0 11px;border:1px solid var(--border-2);border-radius:var(--r-xs);background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a8398' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;-webkit-appearance:none;appearance:none;font-size:.82rem;font-weight:600;color:var(--text-2);outline:none;cursor:pointer}
+.sel:focus{border-color:var(--primary)}
+.spin{width:13px;height:13px;border:2px solid var(--border-2);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.alert{margin-top:14px;padding:13px 15px;border-radius:var(--r-sm);font-size:.84rem;line-height:1.5;background:var(--amber-soft);color:#7c4a03;border:1px solid #f7dcb0}
+.alert b{font-weight:700}
+.alert code{font-family:var(--mono);font-size:.78rem;background:rgba(255,255,255,.6);padding:1px 5px;border-radius:5px}
+
+/* Barra de filtros */
+.tools{position:sticky;top:59px;z-index:40;margin:22px -20px 0;padding:10px 20px;background:rgba(246,247,251,.92);backdrop-filter:blur(10px);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;background:var(--card-3);border-radius:10px;padding:3px;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{height:32px;padding:0 12px;border-radius:8px;font-size:.78rem;font-weight:700;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:6px;transition:background .15s,color .15s}
+.tab:hover{color:var(--text-2)}
+.tab.on{background:var(--card);color:var(--text);box-shadow:var(--sh-sm)}
+.tab em{font-style:normal;font-family:var(--mono);font-size:.7rem;font-weight:600;color:var(--faint)}
+.tab.on em{color:var(--muted)}
+.search{flex:1;min-width:180px;position:relative}
+.search input{width:100%;height:38px;padding:0 12px 0 34px;border:1px solid var(--border-2);border-radius:var(--r-xs);background:var(--card);font-size:.84rem;outline:none}
+.search input:focus{border-color:var(--primary)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--faint)}
+
+/* Lista */
+.list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:62px minmax(0,1fr) auto auto;gap:14px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;box-shadow:var(--sh-sm);transition:opacity .2s ease,transform .2s var(--ease)}
+.row.leaving{opacity:0;transform:translateX(14px)}
+.row.busy{opacity:.6;pointer-events:none}
+.cod{font-family:var(--mono);font-size:.74rem;color:var(--muted);font-weight:500}
+.name{font-weight:700;font-size:.86rem;letter-spacing:-.01em;line-height:1.3;word-break:break-word}
+.why{font-size:.76rem;color:var(--muted);margin-top:3px;line-height:1.4}
+.cats{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.cat{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:7px;font-size:.76rem;font-weight:700;white-space:nowrap;background:var(--card-3);color:var(--text-2)}
+.cat.old{background:var(--card-3);color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(122,131,152,.6)}
+.cat.new{background:var(--lime-soft);color:var(--lime-600)}
+.cat.none{background:var(--danger-soft);color:var(--danger);font-style:italic}
+.cat.ok{background:var(--card-3);color:var(--text-2)}
+.cat.ok svg{color:var(--lime-600)}
+.arrow{color:var(--faint);flex-shrink:0}
+.conf{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:5px;margin-left:6px;vertical-align:1px}
+.conf.alta{background:var(--lime-soft);color:var(--lime-600)}
+.conf.media{background:var(--amber-soft);color:var(--amber)}
+.conf.baja{background:var(--card-3);color:var(--muted)}
+.state{font-size:.72rem;color:var(--muted);font-weight:600}
+.acts{display:flex;align-items:center;gap:6px}
+.sel-sm{height:32px;font-size:.76rem;max-width:150px}
+.empty{text-align:center;padding:56px 20px;color:var(--muted);font-size:.88rem}
+.empty b{display:block;color:var(--text);font-size:1rem;margin-bottom:4px}
+.more{margin:14px auto 0;display:flex}
+
+/* Toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:2000;background:var(--text);color:#fff;padding:10px 10px 10px 16px;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .25s var(--ease);max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast.err{background:var(--danger)}
+.toast button{color:#b9e27f;font-weight:700;font-size:.8rem;padding:5px 9px;border-radius:7px}
+.toast button:hover{background:rgba(255,255,255,.1)}
+.toast .t-msg{padding:4px 0}
+
+@media (max-width:760px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .row{grid-template-columns:minmax(0,1fr);gap:9px}
+  .row .cod{order:-1}
+  .cats{justify-content:flex-start}
+  .acts{flex-wrap:wrap}
+  .tools{top:59px;margin:18px -16px 0;padding:10px 16px}
+  .wrap{padding:18px 16px 80px}
+  .topbar{padding:10px 16px}
+  .pill .lbl{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+    <div class="tag">HomePoint · Admin</div>
+    <h1>Auditoría de categorías</h1>
+    <div class="sub">Iniciá sesión para revisar las categorías.</div>
+    <div class="field"><label for="loginEmail">Email</label><input type="email" class="inp" id="loginEmail" placeholder="correo@ejemplo.com" autocomplete="email"></div>
+    <div class="field"><label for="loginPass">Contraseña</label><input type="password" class="inp" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password"></div>
+    <button class="btn btn-dark btn-block" id="loginBtn">Ingresar</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <a class="mark" href="articulos.html" title="Ir a Artículos"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+    <div><b>Artículos</b><small>Auditoría de categorías</small></div>
+  </div>
+  <div class="top-right">
+    <span class="pill" title="Servidor local que usa Claude Code"><span class="dot wait" id="srvDot"></span><span class="lbl" id="srvTxt">Claude…</span></span>
+    <span class="pill" title="Conexión con Firebase"><span class="dot" id="connDot"></span><span class="lbl" id="connTxt">online</span></span>
+    <button class="icon-btn" id="logoutBtn" title="Cerrar sesión" aria-label="Cerrar sesión"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="head">
+    <h1>Auditoría de categorías</h1>
+    <p>Claude lee el nombre de cada artículo y, si la categoría no encaja, sugiere otra de las que ya existen. Aplicá o descartá cada sugerencia con un clic. Los artículos de Moda no se revisan.</p>
+  </section>
+
+  <section class="stats" id="stats">
+    <button class="stat" data-tab="revisar"><div class="n" id="nRevisar">–</div><div class="l"><i style="background:var(--amber)"></i>Para revisar</div></button>
+    <button class="stat" data-tab="correcta"><div class="n" id="nCorrecta">–</div><div class="l"><i style="background:var(--lime)"></i>Correctas</div></button>
+    <button class="stat" data-tab="pendiente"><div class="n" id="nPendiente">–</div><div class="l"><i style="background:var(--faint)"></i>Sin analizar</div></button>
+    <button class="stat" data-tab="revisado"><div class="n" id="nRevisado">–</div><div class="l"><i style="background:var(--blue)"></i>Revisadas</div></button>
+  </section>
+  <div class="meta" id="meta">Cargando artículos…</div>
+
+  <div class="alert" id="srvAlert" hidden></div>
+
+  <section class="run" id="run">
+    <div class="run-info">
+      <div class="run-txt" id="runTxt">Cargando…</div>
+      <div class="run-sub" id="runSub"></div>
+      <div class="bar"><span id="runBar"></span></div>
+    </div>
+    <div class="run-ctl">
+      <select class="sel" id="modelo" title="Modelo de Claude">
+        <option value="sonnet">Sonnet · recomendado</option>
+        <option value="haiku">Haiku · rápido, gasta menos</option>
+        <option value="opus">Opus · más preciso, gasta más</option>
+      </select>
+      <button class="btn btn-dark" id="runBtn" disabled>Analizar</button>
+    </div>
+  </section>
+
+  <section class="tools" id="tools">
+    <div class="tabs" role="tablist">
+      <button class="tab" data-tab="revisar">Para revisar <em id="tRevisar">0</em></button>
+      <button class="tab" data-tab="correcta">Correctas <em id="tCorrecta">0</em></button>
+      <button class="tab" data-tab="pendiente">Sin analizar <em id="tPendiente">0</em></button>
+      <button class="tab" data-tab="revisado">Revisadas <em id="tRevisado">0</em></button>
+      <button class="tab" data-tab="todas">Todas <em id="tTodas">0</em></button>
+    </div>
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="q" placeholder="Buscar por nombre o código" autocomplete="off">
+    </label>
+    <select class="sel" id="catFiltro" title="Filtrar por categoría actual"><option value="">Todas las categorías</option></select>
+  </section>
+
+  <section class="list" id="list"></section>
+  <button class="btn btn-ghost more" id="moreBtn" hidden>Mostrar más</button>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span class="t-msg" id="toastMsg"></span><button id="toastAct" hidden>Deshacer</button></div>
+
+<script>
+// ============================================================
+//  Firebase (config.js → pedidos-87064)
+// ============================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const articulosRef = db.ref('articulos');
+
+let firebaseConectado = false;
+db.ref('.info/connected').on('value', snap => {
+  firebaseConectado = snap.val() === true;
+  $('connDot').classList.toggle('off', !firebaseConectado);
+  $('connTxt').textContent = firebaseConectado ? 'online' : 'offline';
+});
+function verificarConexionFirebase(ms = 5000){
+  if (firebaseConectado) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const ref = db.ref('.info/connected');
+    const timer = setTimeout(() => { ref.off('value', cb); resolve(false); }, ms);
+    const cb = s => { if (s.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); } };
+    ref.on('value', cb);
+  });
+}
+function conTimeout(promise, ms, msg){
+  return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+}
+
+// ============================================================
+//  Config
+// ============================================================
+const CATEGORIAS_SHEET_ID = '1Fp80hQ2VkczeL_EdFSqDfn40a_yunOkHrY4wIt2eXTI';   // mismo que articulos.html
+const CATEGORIAS_URL = `https://sheets.googleapis.com/v4/spreadsheets/${CATEGORIAS_SHEET_ID}/values/${encodeURIComponent('Categorias!A:A')}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
+const EXCLUIDA = 'moda';          // categoría que no se audita (comparación sin mayúsculas)
+const LOTE = 60;                  // artículos por llamada a Claude
+const EN_PARALELO = 2;            // llamadas simultáneas
+const PAGINA = 100;               // filas por tanda en la lista
+const LS_MODELO = 'hpAuditModelo';
+const CONF_ORDEN = { alta: 0, media: 1, baja: 2 };
+
+// ============================================================
+//  Estado
+// ============================================================
+let categorias = [];              // lista oficial (Sheet)
+let articulos = {};               // key -> registro de Firebase
+let resultados = {};              // key -> resultado guardado por servidor.py
+let servidorOk = false;
+let tab = 'revisar';
+let limite = PAGINA;
+const run = { activo: false, detener: false, hechos: 0, total: 0, fallidos: 0 };
+
+// ============================================================
+//  Helpers
+// ============================================================
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => n.toLocaleString('es-AR');
+// Mismo recorte que hace servidor.py: así se reconoce si el artículo cambió desde que se analizó.
+const normNombre = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+const normCat = s => String(s || '').trim();
+const esExcluido = a => normCat(a.Categoria).toLowerCase() === EXCLUIDA;
+const enLista = c => categorias.includes(c);
+
+let toastTimer = null, toastUndo = null;
+function toast(msg, tipo, deshacer){
+  $('toastMsg').textContent = msg;
+  $('toast').className = 'toast show' + (tipo === 'err' ? ' err' : '');
+  toastUndo = deshacer || null;
+  $('toastAct').hidden = !deshacer;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').classList.remove('show'); toastUndo = null; }, deshacer ? 6500 : 3400);
+}
+$('toastAct').addEventListener('click', () => {
+  const fn = toastUndo; toastUndo = null;
+  $('toast').classList.remove('show');
+  if (fn) fn();
+});
+
+async function api(ruta, cuerpo){
+  const res = await fetch(ruta, cuerpo === undefined ? { cache: 'no-store' } : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
+  });
+  let datos = null;
+  try { datos = await res.json(); } catch (_){}
+  if (!res.ok){
+    const e = new Error((datos && datos.mensaje) || ('Error ' + res.status));
+    e.status = res.status;
+    throw e;
+  }
+  return datos;
+}
+
+// ============================================================
+//  Estado de cada artículo
+// ============================================================
+// pendiente: sin analizar (o cambió el nombre/categoría desde el análisis)
+// revisar:   Claude sugiere otra categoría y todavía no se decidió
+// correcta:  Claude la confirmó
+// revisado:  ya se aplicó, se mantuvo o se cambió a mano
+function resultadoDe(k){
+  const a = articulos[k], r = resultados[k];
+  if (!a || !r) return null;
+  if (r.nombre !== normNombre(a.Nombre) || r.categoria !== normCat(a.Categoria)) return null;
+  if (!r.decision && !enLista(r.sugerida)) return null;
+  return r;
+}
+function estadoDe(k){
+  const r = resultadoDe(k);
+  if (!r) return 'pendiente';
+  if (r.decision) return 'revisado';
+  return r.correcta ? 'correcta' : 'revisar';
+}
+function auditables(){
+  return Object.keys(articulos).filter(k => articulos[k] && normNombre(articulos[k].Nombre) && !esExcluido(articulos[k]));
+}
+
+// ============================================================
+//  Carga
+// ============================================================
+async function cargarCategorias(){
+  const limpiar = filas => {
+    filas = filas.map(f => normCat(f)).filter(Boolean);
+    if (filas.length && /^categor/i.test(filas[0])) filas = filas.slice(1);
+    return [...new Set(filas)];
+  };
+  try {
+    const res = await fetch(CATEGORIAS_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    categorias = limpiar((data.values || []).map(r => r[0] || ''));
+    if (categorias.length) return;
+  } catch (e){ console.warn('Categorías por la API de Sheets:', e); }
+  try {   // respaldo: el servidor local la lee como CSV
+    const d = await api('/api/categorias');
+    categorias = limpiar(d.categorias || []);
+    if (categorias.length) return;
+  } catch (e){ console.warn('Categorías por el servidor:', e); }
+  // último recurso: las que ya usan los artículos
+  categorias = [...new Set(Object.values(articulos).map(a => normCat(a && a.Categoria)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  toast('No se pudo leer la hoja de categorías: se usan las que ya tienen los artículos', 'err');
+}
+function cargarArticulos(){
+  return conTimeout(articulosRef.once('value'), 20000, 'Firebase tardó demasiado en responder.')
+    .then(s => { articulos = s.val() || {}; });
+}
+async function cargarServidor(){
+  try {
+    const est = await api('/api/estado');
+    resultados = await api('/api/resultados') || {};
+    servidorOk = !!est.claude;
+    $('srvDot').className = 'dot' + (servidorOk ? '' : ' off');
+    $('srvTxt').textContent = servidorOk ? 'Claude listo' : 'Sin Claude Code';
+    if (!servidorOk){
+      mostrarAlerta('<b>No encuentro Claude Code en esta PC.</b> Instalalo, abrí una terminal, ejecutá <code>claude</code> una vez para iniciar sesión con tu suscripción y volvé a abrir el .bat.');
+    }
+  } catch (e){
+    servidorOk = false;
+    $('srvDot').className = 'dot off';
+    $('srvTxt').textContent = 'Sin servidor';
+    mostrarAlerta('<b>Esta página necesita el servidor local para usar Claude.</b> Abrila con doble clic en <code>Articulos/auditoria/Auditar categorias.bat</code> en la PC donde está Claude Code, y dejá abierta la ventana negra mientras la uses.');
+  }
+}
+function mostrarAlerta(html){ $('srvAlert').innerHTML = html; $('srvAlert').hidden = false; }
+
+// ============================================================
+//  Render
+// ============================================================
+function contar(){
+  const c = { revisar: 0, correcta: 0, pendiente: 0, revisado: 0, todas: 0 };
+  const ks = auditables();
+  ks.forEach(k => { c[estadoDe(k)]++; c.todas++; });
+  return c;
+}
+
+function render(){
+  const c = contar();
+  const excl = Object.values(articulos).filter(a => a && esExcluido(a)).length;
+  $('nRevisar').textContent = fmt(c.revisar);
+  $('nCorrecta').textContent = fmt(c.correcta);
+  $('nPendiente').textContent = fmt(c.pendiente);
+  $('nRevisado').textContent = fmt(c.revisado);
+  ['Revisar','Correcta','Pendiente','Revisado','Todas'].forEach(t => $('t' + t).textContent = fmt(c[t.toLowerCase()]));
+  $('meta').textContent = `${fmt(c.todas)} artículos auditables · ${fmt(excl)} de Moda excluidos · ${fmt(categorias.length)} categorías`;
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  renderRun(c);
+  renderLista();
+}
+
+function renderRun(c){
+  c = c || contar();
+  const analizados = c.todas - c.pendiente;
+  const pct = c.todas ? Math.round(analizados / c.todas * 100) : 0;
+  const btn = $('runBtn');
+  if (run.activo){
+    $('runTxt').innerHTML = `<span class="spin"></span>${run.detener ? 'Deteniendo después del lote en curso…' : 'Claude está revisando las categorías…'}`;
+    $('runSub').textContent = `Lote ${Math.min(run.hechos + 1, run.total)} de ${run.total} · ${fmt(analizados)} de ${fmt(c.todas)} analizados. Podés ir revisando mientras tanto.`;
+    $('runBar').style.width = pct + '%';
+    btn.textContent = 'Detener'; btn.className = 'btn btn-ghost'; btn.disabled = run.detener;
+    $('modelo').disabled = true;
+    return;
+  }
+  $('modelo').disabled = false;
+  btn.className = 'btn btn-dark';
+  $('runBar').style.width = pct + '%';
+  if (!c.todas){
+    $('runTxt').textContent = 'No hay artículos para auditar.'; $('runSub').textContent = '';
+    btn.textContent = 'Analizar'; btn.disabled = true; return;
+  }
+  if (c.pendiente){
+    $('runTxt').textContent = analizados ? `${pct}% analizado` : 'Todavía no se analizó ningún artículo';
+    $('runSub').textContent = `Quedan ${fmt(c.pendiente)} sin analizar (~${Math.ceil(c.pendiente / LOTE)} consultas a Claude). Lo analizado queda guardado aunque cierres la página.`;
+    btn.textContent = `Analizar ${fmt(c.pendiente)}`;
+    btn.disabled = !servidorOk;
+  } else {
+    $('runTxt').textContent = 'Todo analizado';
+    $('runSub').textContent = 'Si cambiás el nombre o la categoría de un artículo, vuelve a quedar sin analizar.';
+    btn.textContent = 'Analizar'; btn.disabled = true;
+  }
+}
+
+const IC_ARROW = '<svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+const IC_CHECK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+function chipCat(cat, cls){
+  return cat ? `<span class="cat ${cls || ''}">${cls === 'ok' ? IC_CHECK : ''}${esc(cat)}</span>` : '<span class="cat none">Sin categoría</span>';
+}
+function selectOtra(k, actual, rotulo){
+  const opts = categorias.filter(c => c !== actual).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  return `<select class="sel sel-sm" data-act="otra" data-k="${esc(k)}" aria-label="Elegir otra categoría"><option value="">${rotulo}</option>${opts}</select>`;
+}
+
+function filaHTML(k){
+  const a = articulos[k], r = resultadoDe(k), est = estadoDe(k);
+  const actual = normCat(a.Categoria);
+  let cats = '', acts = '', why = '', conf = '';
+  if (est === 'revisar'){
+    conf = `<span class="conf ${r.confianza}">${r.confianza}</span>`;
+    why = r.motivo ? `<div class="why">${esc(r.motivo)}</div>` : '';
+    cats = `${chipCat(actual, 'old')}${IC_ARROW}${chipCat(r.sugerida, 'new')}`;
+    acts = `<button class="btn btn-ok btn-sm" data-act="aplicar" data-k="${esc(k)}">Aplicar</button>
+            <button class="btn btn-ghost btn-sm" data-act="mantener" data-k="${esc(k)}">Mantener</button>
+            ${selectOtra(k, actual, 'Otra…')}`;
+  } else if (est === 'correcta'){
+    cats = chipCat(actual, 'ok');
+    acts = selectOtra(k, actual, 'Cambiar…');
+  } else if (est === 'pendiente'){
+    cats = `${chipCat(actual)}<span class="state">Sin analizar</span>`;
+    acts = selectOtra(k, actual, 'Cambiar…');
+  } else {
+    const txt = r.decision === 'mantener' ? 'Mantenida' : r.decision === 'aplicada' ? 'Sugerencia aplicada' : 'Cambiada a mano';
+    why = `<div class="why">${txt}</div>`;
+    cats = r.decision === 'mantener' ? chipCat(actual, 'ok') : `${chipCat(r.anterior, 'old')}${IC_ARROW}${chipCat(actual, 'new')}`;
+    acts = `<button class="btn btn-ghost btn-sm" data-act="deshacer" data-k="${esc(k)}">Deshacer</button>`;
+  }
+  return `<div class="row" data-row="${esc(k)}">
+    <div class="cod">#${esc(a.Codigo || k)}</div>
+    <div><div class="name">${esc(a.Nombre)}${conf}</div>${why}</div>
+    <div class="cats">${cats}</div>
+    <div class="acts">${acts}</div>
+  </div>`;
+}
+
+function filtrados(){
+  const q = $('q').value.trim().toLowerCase();
+  const cf = $('catFiltro').value;
+  let ks = auditables().filter(k => tab === 'todas' || estadoDe(k) === tab);
+  if (cf) ks = ks.filter(k => normCat(articulos[k].Categoria) === (cf === '__sin__' ? '' : cf));
+  if (q) ks = ks.filter(k => {
+    const a = articulos[k];
+    return String(a.Nombre || '').toLowerCase().includes(q) || String(a.Codigo || k).includes(q);
+  });
+  const nom = k => String(articulos[k].Nombre || '');
+  if (tab === 'revisar'){
+    // primero las sugerencias más seguras: son las que se resuelven más rápido
+    ks.sort((x, y) => CONF_ORDEN[resultados[x].confianza] - CONF_ORDEN[resultados[y].confianza]
+      || normCat(articulos[x].Categoria).localeCompare(normCat(articulos[y].Categoria), 'es')
+      || nom(x).localeCompare(nom(y), 'es'));
+  } else if (tab === 'revisado'){
+    ks.sort((x, y) => (resultados[y].fechaDecision || 0) - (resultados[x].fechaDecision || 0));
+  } else {
+    ks.sort((x, y) => nom(x).localeCompare(nom(y), 'es'));
+  }
+  return ks;
+}
+
+const VACIOS = {
+  revisar: ['Nada para revisar', 'Cuando Claude sugiera un cambio de categoría, va a aparecer acá.'],
+  correcta: ['Todavía no hay categorías confirmadas', 'Analizá los artículos para ver cuáles están bien.'],
+  pendiente: ['Todo analizado', 'No quedan artículos sin revisar por Claude.'],
+  revisado: ['Todavía no revisaste ninguna', 'Lo que apliques o mantengas queda listado acá.'],
+  todas: ['Sin artículos', '']
+};
+function renderLista(){
+  const ks = filtrados();
+  const filtro = $('q').value.trim() || $('catFiltro').value;
+  if (!ks.length){
+    const [t, s] = filtro ? ['Sin resultados', 'Probá con otra búsqueda o categoría.'] : VACIOS[tab];
+    $('list').innerHTML = `<div class="empty"><b>${t}</b>${s}</div>`;
+    $('moreBtn').hidden = true;
+    return;
+  }
+  $('list').innerHTML = ks.slice(0, limite).map(filaHTML).join('');
+  const resto = ks.length - limite;
+  $('moreBtn').hidden = resto <= 0;
+  $('moreBtn').textContent = `Mostrar más (${fmt(resto)})`;
+}
+
+function renderFiltroCategorias(){
+  const sel = $('catFiltro'), prev = sel.value;
+  const usadas = new Set(auditables().map(k => normCat(articulos[k].Categoria)));
+  const lista = [...new Set([...categorias.filter(c => c.toLowerCase() !== EXCLUIDA), ...usadas])].filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'es'));
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    lista.map(c => `<option value="${esc(c)}">${esc(c)}${enLista(c) ? '' : ' (no está en la lista)'}</option>`).join('') +
+    (usadas.has('') ? '<option value="__sin__">Sin categoría</option>' : '');
+  sel.value = [...sel.options].some(o => o.value === prev) ? prev : '';
+}
+
+// ============================================================
+//  Acciones sobre un artículo
+// ============================================================
+async function escribirCategoria(k, nueva){
+  const ok = await verificarConexionFirebase(5000);
+  if (!ok) throw new Error('Sin conexión a Firebase. Verificá tu internet.');
+  // Solo el campo Categoria: el resto del artículo no se toca.
+  const ref = articulosRef.child(k);
+  await conTimeout(ref.update({ Categoria: nueva }), 15000, 'La escritura tardó demasiado.');
+  const chk = await conTimeout(ref.child('Categoria').once('value'), 10000, 'No se pudo verificar el guardado.');
+  if (chk.val() !== nueva) throw new Error('La verificación del guardado falló.');
+  articulos[k].Categoria = nueva;
+}
+async function guardarRegistro(k, reg){
+  await api('/api/registro', { codigo: k, registro: reg });
+  if (reg) resultados[k] = reg; else delete resultados[k];
+}
+
+function salirFila(k){
+  const el = document.querySelector(`[data-row="${CSS.escape(k)}"]`);
+  if (!el){ render(); return; }
+  el.classList.add('leaving');
+  setTimeout(render, 190);
+}
+function filaOcupada(k, si){
+  const el = document.querySelector(`[data-row="${CSS.escape(k)}"]`);
+  if (el) el.classList.toggle('busy', si);
+}
+
+// Cambia la categoría en Firebase y deja constancia en la auditoría.
+// decision: 'aplicada' (la sugerida) | 'manual' (otra elegida a mano)
+async function cambiar(k, nueva, decision){
+  const a = articulos[k];
+  const vieja = normCat(a.Categoria);
+  if (!nueva || nueva === vieja) return;
+  const previo = resultados[k] ? { ...resultados[k] } : null;
+  const base = resultadoDe(k);
+  filaOcupada(k, true);
+  try {
+    await escribirCategoria(k, nueva);
+  } catch (e){
+    render();     // re-dibuja la fila (y vuelve el selector "Otra…" a su lugar)
+    toast('No se pudo cambiar: ' + e.message, 'err');
+    return;
+  }
+  const reg = base
+    ? { ...base, categoria: nueva, decision, anterior: vieja, fechaDecision: Date.now() }
+    : { nombre: normNombre(a.Nombre), categoria: nueva, correcta: true, sugerida: nueva, confianza: 'alta', motivo: '',
+        modelo: 'manual', fecha: Date.now(), decision, anterior: vieja, fechaDecision: Date.now() };
+  try { await guardarRegistro(k, reg); }
+  catch (e){ console.warn(e); toast('Categoría cambiada, pero no se pudo guardar en la auditoría (¿servidor cerrado?)', 'err'); salirFila(k); return; }
+  salirFila(k);
+  toast(`#${a.Codigo || k} → ${nueva}`, 'ok', async () => {
+    try {
+      await escribirCategoria(k, vieja);
+      await guardarRegistro(k, previo);
+      render();
+      toast('Cambio deshecho');
+    } catch (e){ toast('No se pudo deshacer: ' + e.message, 'err'); }
+  });
+}
+
+async function mantener(k){
+  const r = resultadoDe(k);
+  if (!r) return;
+  const previo = { ...resultados[k] };
+  filaOcupada(k, true);
+  try { await guardarRegistro(k, { ...r, decision: 'mantener', fechaDecision: Date.now() }); }
+  catch (e){ filaOcupada(k, false); toast('No se pudo guardar: ' + e.message, 'err'); return; }
+  salirFila(k);
+  toast(`#${articulos[k].Codigo || k} mantiene ${r.categoria || 'sin categoría'}`, 'ok', async () => {
+    try { await guardarRegistro(k, previo); render(); toast('Cambio deshecho'); }
+    catch (e){ toast('No se pudo deshacer: ' + e.message, 'err'); }
+  });
+}
+
+// Desde "Revisadas": vuelve el artículo al estado previo a la decisión.
+async function deshacer(k){
+  const r = resultados[k];
+  if (!r || !r.decision) return;
+  filaOcupada(k, true);
+  try {
+    let reg;
+    if (r.decision === 'mantener'){
+      reg = { ...r };
+    } else {
+      await escribirCategoria(k, r.anterior || '');
+      reg = r.modelo === 'manual' ? null : { ...r, categoria: r.anterior || '' };
+    }
+    if (reg){ delete reg.decision; delete reg.anterior; delete reg.fechaDecision; }
+    await guardarRegistro(k, reg);
+    salirFila(k);
+    toast('Cambio deshecho');
+  } catch (e){ filaOcupada(k, false); toast('No se pudo deshacer: ' + e.message, 'err'); }
+}
+
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const k = b.dataset.k;
+  if (b.dataset.act === 'aplicar'){ const r = resultadoDe(k); if (r) cambiar(k, r.sugerida, 'aplicada'); }
+  else if (b.dataset.act === 'mantener') mantener(k);
+  else if (b.dataset.act === 'deshacer') deshacer(k);
+});
+$('list').addEventListener('change', e => {
+  const s = e.target.closest('select[data-act="otra"]');
+  if (!s || !s.value) return;
+  const k = s.dataset.k, nueva = s.value;
+  const r = resultadoDe(k);
+  cambiar(k, nueva, r && !r.correcta && r.sugerida === nueva ? 'aplicada' : 'manual');
+});
+
+// ============================================================
+//  Análisis con Claude (vía servidor.py)
+// ============================================================
+// Ejemplos reales de cada categoría para que Claude entienda cómo la usa la tienda.
+// Se prefieren los ya confirmados (por vos o por Claude con confianza alta).
+function armarEjemplos(){
+  const porCat = {};
+  Object.keys(articulos).forEach(k => {
+    const a = articulos[k];
+    const cat = normCat(a && a.Categoria);
+    if (!cat || !enLista(cat) || !normNombre(a.Nombre)) return;
+    const r = resultadoDe(k);
+    let p;
+    if (r && r.decision && r.decision !== 'mantener') p = 0;
+    else if (r && r.decision === 'mantener') p = 1;
+    else if (r && r.correcta && r.confianza === 'alta') p = 1;
+    else if (r && !r.correcta) return;          // sospechoso: no sirve de ejemplo
+    else p = 2;
+    (porCat[cat] = porCat[cat] || []).push({ n: normNombre(a.Nombre), p, h: hash(k) });
+  });
+  const out = {};
+  Object.entries(porCat).forEach(([c, l]) => {
+    l.sort((x, y) => x.p - y.p || x.h - y.h);
+    out[c] = [...new Set(l.map(x => x.n))].slice(0, 6);
+  });
+  return out;
+}
+function hash(s){ let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return h; }
+
+async function analizar(){
+  if (run.activo){ run.detener = true; renderRun(); return; }
+  const pend = auditables().filter(k => estadoDe(k) === 'pendiente').sort();
+  if (!pend.length) return;
+  const lotes = [];
+  for (let i = 0; i < pend.length; i += LOTE) lotes.push(pend.slice(i, i + LOTE));
+  const modelo = $('modelo').value;
+  try { localStorage.setItem(LS_MODELO, modelo); } catch (_){}
+  const ejemplos = armarEjemplos();
+  Object.assign(run, { activo: true, detener: false, hechos: 0, total: lotes.length, fallidos: 0 });
+  let siguiente = 0, errSeguidos = 0, limiteUso = false, ultimoError = '';
+  renderRun();
+
+  const trabajador = async () => {
+    while (!run.detener && siguiente < lotes.length){
+      const lote = lotes[siguiente++];
+      try {
+        const res = await api('/api/analizar', {
+          modelo, categorias, ejemplos,
+          articulos: lote.map(k => ({ codigo: k, nombre: normNombre(articulos[k].Nombre), categoria: normCat(articulos[k].Categoria) }))
+        });
+        Object.assign(resultados, res.resultados || {});
+        run.fallidos += (res.faltantes || []).length;
+        errSeguidos = 0;
+      } catch (e){
+        run.fallidos += lote.length;
+        ultimoError = e.message;
+        if (e.status === 429){ limiteUso = true; run.detener = true; }
+        else if (++errSeguidos >= 3 || !e.status){ run.detener = true; }   // !status: el servidor se cerró
+      }
+      run.hechos++;
+      render();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(EN_PARALELO, lotes.length) }, trabajador));
+  run.activo = false;
+  render();
+
+  if (limiteUso) toast('Se alcanzó el límite de uso de tu suscripción. Lo analizado quedó guardado: seguí más tarde.', 'err');
+  else if (ultimoError && run.hechos < run.total) toast('Se detuvo por un error: ' + ultimoError, 'err');
+  else if (run.fallidos) toast(`Listo. ${fmt(run.fallidos)} artículos no se pudieron analizar: volvé a tocar Analizar.`);
+  else toast('Análisis terminado');
+  if (tab === 'pendiente' && contar().revisar) setTab('revisar');
+}
+$('runBtn').addEventListener('click', analizar);
+
+// ============================================================
+//  Filtros
+// ============================================================
+function setTab(t){ tab = t; limite = PAGINA; render(); }
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+let qTimer = null;
+$('q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { limite = PAGINA; renderLista(); }, 150); });
+$('catFiltro').addEventListener('change', () => { limite = PAGINA; renderLista(); });
+$('moreBtn').addEventListener('click', () => { limite += PAGINA; renderLista(); });
+window.addEventListener('beforeunload', e => { if (run.activo){ e.preventDefault(); e.returnValue = ''; } });
+
+// ============================================================
+//  Sesión
+// ============================================================
+function handleLogin(){
+  const email = $('loginEmail').value.trim(), pass = $('loginPass').value;
+  const btn = $('loginBtn'), err = $('loginErr');
+  if (!email || !pass){ err.textContent = 'Completá ambos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
+  auth.signInWithEmailAndPassword(email, pass).catch(e => {
+    err.textContent = ['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code) ? 'Email o contraseña incorrectos'
+      : e.code === 'auth/too-many-requests' ? 'Demasiados intentos. Esperá un momento' : 'Error al iniciar sesión';
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+$('loginBtn').addEventListener('click', handleLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+$('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+$('logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) auth.signOut(); });
+
+let iniciada = false;
+auth.onAuthStateChanged(user => {
+  if (user){
+    $('login').classList.add('hidden');
+    if (!iniciada){ iniciada = true; init(); }
+  } else {
+    $('login').classList.remove('hidden');
+    $('loginBtn').disabled = false; $('loginBtn').textContent = 'Ingresar';
+  }
+});
+
+async function init(){
+  try { const m = localStorage.getItem(LS_MODELO); if (m && [...$('modelo').options].some(o => o.value === m)) $('modelo').value = m; } catch (_){}
+  try {
+    await Promise.all([cargarArticulos(), cargarServidor()]);
+  } catch (e){
+    $('meta').textContent = 'No se pudieron cargar los artículos: ' + e.message;
+    toast('No se pudieron cargar los artículos', 'err');
+    return;
+  }
+  await cargarCategorias();
+  renderFiltroCategorias();
+  const c = contar();
+  if (!c.revisar) tab = c.pendiente ? 'pendiente' : 'correcta';
+  render();
+}
+</script>
+</body>
+</html>
