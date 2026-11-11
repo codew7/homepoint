@@ -15,10 +15,11 @@
   y sugiere otra categoría de la lista solo si la actual no encaja. Los de "Moda"
   quedan afuera. Cada sugerencia se aplica o se descarta con un clic.
 
-  IMPORTANTE: se abre con Articulos/auditoria/"Auditar categorias.bat" en la PC.
-  Ese .bat levanta servidor.py en http://localhost:8787, que es quien llama a
-  Claude Code (una página web sola no puede usar la suscripción) y guarda los
-  resultados en auditoria/resultados.json. La categoría corregida se escribe en
+  IMPORTANTE: la página se usa desde el hosting, pero para analizar necesita
+  Articulos/auditoria/"Auditar categorias.bat" corriendo en la PC. Ese .bat
+  levanta servidor.py en http://localhost:8787 (que acepta pedidos del dominio
+  del hosting), llama a Claude Code (una página web sola no puede usar la
+  suscripción) y guarda los resultados en auditoria/resultados.json. La categoría corregida se escribe en
   Firebase (articulos/{codigo}/Categoria) directo desde esta página.
 -->
 
@@ -210,7 +211,7 @@ button{cursor:pointer;border:none;background:none}
 <!-- ===== TOPBAR ===== -->
 <header class="topbar">
   <div class="brand">
-    <a class="mark" href="articulos.html" title="Ir a Artículos"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+    <a class="mark" href="articulos.html" target="_blank" rel="noopener" title="Abrir Artículos (hosting) en otra pestaña"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
     <div><b>Artículos</b><small>Auditoría de categorías</small></div>
   </div>
   <div class="top-right">
@@ -311,6 +312,8 @@ const LOTE = 60;                  // artículos por llamada a Claude
 const EN_PARALELO = 2;            // llamadas simultáneas
 const PAGINA = 100;               // filas por tanda en la lista
 const LS_MODELO = 'hpAuditModelo';
+// Servidor local (servidor.py). Abierta desde el hosting, la página le habla a la PC.
+const SERVIDOR = ['localhost', '127.0.0.1'].includes(location.hostname) ? '' : 'http://localhost:8787';
 const CONF_ORDEN = { alta: 0, media: 1, baja: 2 };
 
 // ============================================================
@@ -352,7 +355,7 @@ $('toastAct').addEventListener('click', () => {
 });
 
 async function api(ruta, cuerpo){
-  const res = await fetch(ruta, cuerpo === undefined ? { cache: 'no-store' } : {
+  const res = await fetch(SERVIDOR + ruta, cuerpo === undefined ? { cache: 'no-store' } : {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
   });
   let datos = null;
@@ -432,7 +435,7 @@ async function cargarServidor(){
     servidorOk = false;
     $('srvDot').className = 'dot off';
     $('srvTxt').textContent = 'Sin servidor';
-    mostrarAlerta('<b>Esta página necesita el servidor local para usar Claude.</b> Abrila con doble clic en <code>Articulos/auditoria/Auditar categorias.bat</code> en la PC donde está Claude Code, y dejá abierta la ventana negra mientras la uses.');
+    mostrarAlerta('<b>Esta página necesita el servidor local para usar Claude.</b> Hacé doble clic en <code>Articulos/auditoria/Auditar categorias.bat</code> en la PC donde está Claude Code, dejá abierta la ventana negra y recargá esta página. Si el navegador pregunta si puede acceder a tu red local, tocá <b>Permitir</b>.');
   }
 }
 function mostrarAlerta(html){ $('srvAlert').innerHTML = html; $('srvAlert').hidden = false; }

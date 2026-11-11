@@ -96,7 +96,9 @@ Dos copias a la vez se pisan la conexión.
   Ícono verde: conectado. Con punto amarillo: esperando o reconectando. Gris con punto rojo: falta algo.
 - **Cerrar o minimizar la ventana no lo detiene.** Para salir de verdad: clic derecho en el
   ícono → **Salir...** y confirmar.
-- Arranca solo al prender la PC, sin mostrar la ventana (se puede desactivar en *Iniciar con Windows*).
+- Arranca solo al prender la PC (se puede desactivar en *Iniciar con Windows*). Siempre arranca
+  escondido en la bandeja, también si lo abrís a mano: la ventana solo aparece al hacer clic en el ícono,
+  o sola cuando hace falta algo (escanear el QR, cargar la clave, otra copia conectada).
 - Sus datos (clave, sesión de WhatsApp, registros) están en `%APPDATA%\WhatsAppSync`
   (botón **Carpeta de datos**). Desinstalar la app no los borra.
 - La URL de la base y los plazos (90 días, 30 días) están en `ajustes.js`.

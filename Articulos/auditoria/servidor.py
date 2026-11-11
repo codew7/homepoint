@@ -50,6 +50,8 @@ AQUI = Path(__file__).resolve().parent            # homepoint/Articulos/auditori
 RAIZ = AQUI.parent.parent                          # homepoint/
 RESULTADOS = AQUI / "resultados.json"
 PAGINA = "/Articulos/auditarCategorias.html"
+# La página se usa desde el hosting; este servidor solo hace de puente con Claude.
+HOSTING = "https://home-point-admin.dev.ar"
 
 # Carpeta vacía donde corre Claude: así no carga ningún CLAUDE.md del proyecto
 # (menos texto = menos consumo del límite).
@@ -64,7 +66,7 @@ DECISIONES = ("aplicada", "mantener", "manual")
 CATEGORIAS_CSV = ("https://docs.google.com/spreadsheets/d/1Fp80hQ2VkczeL_EdFSqDfn40a_yunOkHrY4wIt2eXTI"
                   "/gviz/tq?tqx=out:csv&sheet=Categorias&range=A:A")
 
-ORIGENES = {f"http://localhost:{PUERTO}", f"http://127.0.0.1:{PUERTO}"}
+ORIGENES = {f"http://localhost:{PUERTO}", f"http://127.0.0.1:{PUERTO}", HOSTING, "https://www.home-point-admin.dev.ar"}
 HOSTS = {f"localhost:{PUERTO}", f"127.0.0.1:{PUERTO}"}
 
 _bloqueo = threading.Lock()
@@ -332,7 +334,28 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        # Permiso para que la página del hosting lea las respuestas (CORS).
+        origen = self.headers.get("Origin")
+        if self.path.startswith("/api/") and origen in ORIGENES:
+            self.send_header("Access-Control-Allow-Origin", origen)
+            self.send_header("Vary", "Origin")
         super().end_headers()
+
+    def do_OPTIONS(self):
+        # Consulta previa del navegador antes de un POST desde el hosting.
+        # Allow-Private-Network: permiso de Chrome para que una web pública
+        # hable con esta PC (Private/Local Network Access).
+        origen = self.headers.get("Origin")
+        if not self.path.startswith("/api/") or origen not in ORIGENES or self.headers.get("Host") not in HOSTS:
+            self.send_response(403)
+            self.end_headers()
+            return
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.end_headers()
 
     def _json(self, codigo, datos):
         cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")
@@ -347,7 +370,10 @@ class Manejador(SimpleHTTPRequestHandler):
         # use este servidor, y con él tu suscripción).
         if self.headers.get("Host") not in HOSTS:
             return False
-        if escritura and self.headers.get("Origin") not in ORIGENES:
+        origen = self.headers.get("Origin")
+        if origen and origen not in ORIGENES:
+            return False
+        if escritura and not origen:
             return False
         return True
 
@@ -409,7 +435,7 @@ class Manejador(SimpleHTTPRequestHandler):
 
 
 def main():
-    url = f"http://localhost:{PUERTO}{PAGINA}"
+    url = HOSTING + PAGINA
     try:
         servidor = ThreadingHTTPServer(("127.0.0.1", PUERTO), Manejador)
     except OSError:
@@ -431,6 +457,7 @@ def main():
         print("AVISO: no encuentro Claude Code. Instalalo y ejecutá 'claude' una vez para iniciar sesión.")
     print("Auditoría de categorías · HomePoint")
     print(f"Página: {url}")
+    print("Si el navegador pregunta si la página puede acceder a tu red local, tocá Permitir.")
     print("Dejá esta ventana abierta mientras uses la página. Para terminar, cerrala.\n")
     threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:

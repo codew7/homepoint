@@ -3,9 +3,9 @@
 // WhatsAppSync - app de bandeja de Windows.
 //
 // Lanza el sincronizador (../index.js) en un proceso aparte, lo reinicia si
-// se cae, y vive en la bandeja del sistema (al lado del reloj). Cerrar o
-// minimizar la ventana solo la esconde: para detenerlo hay que elegir
-// "Salir" en el menu del icono y confirmar.
+// se cae, y vive en la bandeja del sistema (al lado del reloj). Arranca
+// siempre escondido ahi. Cerrar o minimizar la ventana solo la esconde: para
+// detenerlo hay que elegir "Salir" en el menu del icono y confirmar.
 //
 // Los datos (clave, sesion de WhatsApp, logs) van a %APPDATA%\WhatsAppSync,
 // porque la carpeta de instalacion no se puede escribir.
@@ -324,7 +324,17 @@ ipcMain.handle('desvincular', async () => {
 // ---------------------------------------------------------------------
 // Arranque
 // ---------------------------------------------------------------------
-app.on('second-instance', mostrarVentana);
+// Abrirlo de nuevo (ya estando abierto) no muestra la ventana: solo avisa
+// que ya esta funcionando en la bandeja.
+app.on('second-instance', () => {
+  if (bandeja && bandeja.displayBalloon) {
+    bandeja.displayBalloon({
+      iconType: 'info',
+      title: 'WhatsAppSync ya está funcionando',
+      content: 'Está en la bandeja, al lado del reloj. Para ver la ventana, hacé clic en su ícono.'
+    });
+  }
+});
 
 // Sin ventanas visibles la app sigue viva en la bandeja
 app.on('window-all-closed', (e) => { if (!saliendo) e.preventDefault(); });
@@ -345,8 +355,10 @@ app.whenReady().then(() => {
   bandeja.on('click', mostrarVentana);
 
   crearVentana();
-  // Al arrancar con Windows queda solo en la bandeja; abierto a mano, se muestra
-  if (!process.argv.includes('--oculto')) ventana.once('ready-to-show', () => ventana.show());
+  // Siempre arranca escondido en la bandeja (con Windows o abierto a mano):
+  // la ventana se abre solo con clic en el icono, o sola si hace falta algo
+  // (escanear el QR, cargar la clave, otra copia conectada).
+  avisoPrimeraVez();
 
   iniciarMotor();
 });
