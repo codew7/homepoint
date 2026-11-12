@@ -62,6 +62,15 @@ function avisar(evento) {
   if (padre) { try { padre.postMessage(evento); } catch (_) { /* ventana cerrandose */ } }
 }
 
+// Dentro de la app de bandeja este motor corre como "utilityProcess" de
+// Electron (process.type = 'utility'). pdfjs (lectura de PDF y pdf-to-img) ve
+// eso, cree que esta en un navegador y falla ("document is not defined",
+// "No GlobalWorkerOptions.workerSrc"), asi que ningun PDF se guardaba. Se le
+// oculta process.type para que funcione como en Node.
+if (process.type === 'utility') {
+  try { Object.defineProperty(process, 'type', { value: undefined, configurable: true, writable: true }); } catch (_) { /* nada */ }
+}
+
 // ---------------------------------------------------------------------
 // Log a consola y a archivo (uno por dia)
 // ---------------------------------------------------------------------
@@ -772,7 +781,10 @@ async function textoDePdf(buffer) {
     while (colaFotos.length) {
       const a = colaFotos.shift();
       let r;
-      try { r = await revisarAdjunto(a); } catch (e) { r = 'error'; }
+      try { r = await revisarAdjunto(a); } catch (e) {
+        r = 'error';
+        log('No se pudo procesar ' + (a.clase === 'pdf' ? 'un PDF' : 'una imagen') + ' de ' + a.tel + ':', e && e.message ? e.message : e);
+      }
       if (r === 'ya') continue;
       cuentaFotos[r]++;
       revisadas++;
