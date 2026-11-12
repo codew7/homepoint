@@ -267,7 +267,8 @@ function esRemito(textoCrudo) {
 
 // Si cambian las reglas de abajo, subir este numero: la limpieza vuelve a
 // revisar las imagenes guardadas con las reglas nuevas.
-const VERSION_REGLAS = 4;   // 4: ademas se guarda el importe (monto) de cada comprobante
+const VERSION_REGLAS = 5;   // 4: ademas se guarda el importe (monto) de cada comprobante
+                            // 5: OCR en modo automatico (leia mal el importe grande)
 
 // 'si' | 'duda' | 'no'. Ante la duda se guarda: mejor una imagen de mas que
 // perder un comprobante.
@@ -312,7 +313,12 @@ function obtenerLector() {
     lectorOcr = (async () => {
       const { createWorker } = require('tesseract.js');
       fs.mkdirSync(DIR_OCR, { recursive: true });
-      return createWorker('spa', 1, { cachePath: DIR_OCR, logger: () => {}, errorHandler: () => {} });
+      const lector = await createWorker('spa', 1, { cachePath: DIR_OCR, logger: () => {}, errorHandler: () => {} });
+      // Modo automatico (3): busca primero los bloques de texto. El modo que
+      // trae tesseract.js (6, un solo bloque parejo) a veces se salteaba la
+      // linea del importe, que en los comprobantes va en letra mucho mas grande.
+      await lector.setParameters({ tessedit_pageseg_mode: '3' });
+      return lector;
     })().catch(e => { lectorOcr = null; throw e; });
   }
   return lectorOcr;
@@ -756,9 +762,7 @@ async function textoDePdf(buffer) {
     await db.ref().update(upd);
     // "ultimo" solo avanza (puede haber una cotizacion mas nueva)
     await db.ref(base + '/meta/ultimo').transaction(v => ((v || 0) < a.t ? a.t : undefined));
-    if (cat === 'pago') {
-      try { await asignarComprobante(a.id); } catch (e) { log('No se pudo asignar el comprobante a un pedido:', e.message); }
-    }
+    try { await asignarComprobante(a.id); } catch (e) { log('No se pudo asignar el comprobante a un pedido:', e.message); }
     return cat === 'remito' ? 'remito' : comp;
   }
 
@@ -913,6 +917,8 @@ async function textoDePdf(buffer) {
   //      candidato -> ese (un pago puede venir en varias partes, por eso el
   //      importe es solo una ayuda y no una condicion).
   //   5. Si no, el pedido mas reciente, marcado para revisar.
+  // Los remitos que mando yo van al pedido mas reciente del cliente creado
+  // antes del remito (ver elegirPedidoRemito).
   // Resultado en imgsIdx/{id}: pedido, conf ('alta'|'media'|'revisar'|
   // 'sin-pedido'|'manual'), metodo, asigEn. Una correccion hecha a mano en
   // pedidosv2 (asigManual/{id} = { pedido, t, por }) siempre manda.
@@ -1008,7 +1014,9 @@ async function textoDePdf(buffer) {
     });
     const d = cot ? ((cot.cotTotal || cot.cotPedido) ? cot : datosCotizacion(cot.tx)) : {};
     if (d.cotPedido) {
-      const p = cand.find(c => c.id.endsWith(d.cotPedido));
+      // pedidosv2 manda el codigo en mayusculas; el id de Firebase las mezcla.
+      const cod = String(d.cotPedido).toUpperCase();
+      const p = cand.find(c => c.id.toUpperCase().endsWith(cod));
       if (p) return { pedido: p.id, conf: 'alta', metodo: 'codigo' };
     }
     // Importe igual al total de un solo pedido: es ese, aunque la ultima
@@ -1031,9 +1039,24 @@ async function textoDePdf(buffer) {
     return { pedido: cand[0].id, conf: 'revisar', metodo: 'reciente' };
   }
 
+  // Remitos mios: al pedido mas reciente del cliente creado antes de mandar
+  // el remito (varios remitos juntos van al mismo pedido).
+  async function elegirPedidoRemito(tel, t) {
+    const mapa = pedidosPorTel.get(tel);
+    let cand = mapa ? [...mapa.values()].filter(p => p.ts <= t && p.ts >= t - CFG.DIAS_ASIGNAR * DIA) : [];
+    cand = (await Promise.all(cand.map(refrescarPedido)))
+      .filter(p => p && p.tel === tel && p.ts <= t && p.status !== 'CANCELADO');
+    if (!cand.length) return { pedido: null, conf: 'sin-pedido', metodo: 'ninguno' };
+    cand.sort((a, b) => b.ts - a.ts);
+    return { pedido: cand[0].id, conf: cand.length === 1 ? 'alta' : 'media', metodo: cand.length === 1 ? 'unico' : 'reciente' };
+  }
+
+  // Comprobantes de pago del cliente y remitos mios
   async function asignarComprobante(id) {
     const v = (await db.ref('imgsIdx/' + id).once('value')).val();
-    if (!v || v.yo || v.cat === 'remito' || !v.tel || !v.t) return;
+    if (!v || !v.tel || !v.t) return;
+    const esRemitoMio = v.cat === 'remito';
+    if (v.yo && !esRemitoMio) return;
     const manual = (await db.ref('asigManual/' + id).once('value')).val();
     let r;
     if (manual) {
@@ -1041,7 +1064,7 @@ async function textoDePdf(buffer) {
     } else {
       await pedidosAlDia();
       if (!pedidosListos) return;   // sin la lista de pedidos no se decide nada
-      r = await elegirPedido(v.tel, v.t, v.monto || 0);
+      r = esRemitoMio ? await elegirPedidoRemito(v.tel, v.t) : await elegirPedido(v.tel, v.t, v.monto || 0);
     }
     if (v.asigEn && v.pedido === (r.pedido || undefined) && v.conf === r.conf) return;   // sin cambios
     await db.ref('imgsIdx/' + id).update({ pedido: r.pedido, conf: r.conf, metodo: r.metodo, asigEn: Date.now() });
@@ -1058,7 +1081,7 @@ async function textoDePdf(buffer) {
       const ids = [];
       snap.forEach(x => {
         const v = x.val() || {};
-        if (v.yo || v.cat === 'remito') return;
+        if (v.yo && v.cat !== 'remito') return;
         if (!v.asigEn || (v.conf === 'sin-pedido' && (v.t || 0) > Date.now() - 2 * DIA)) ids.push(x.key);
       });
       if (!ids.length) return;

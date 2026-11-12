@@ -534,17 +534,11 @@
     .progress-section {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
       flex: none;
     }
-    .progress-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-2);
-      white-space: nowrap;
-    }
     .progress-bar-track {
-      width: 132px;
+      width: 88px;
       height: 6px;
       border-radius: 99px;
       background: var(--surface-3);
@@ -564,10 +558,15 @@
       font-weight: 700;
       color: var(--ink-3);
       width: 34px;
-      text-align: right;
+      text-align: left;
       flex: none;
     }
     .progress-pct.complete { color: var(--prep); }
+
+    /* Forma de envio en la franja: mismo icono y color que en la lista */
+    .ctx-entrega { display: inline-flex; align-items: center; flex: none; }
+    .ctx-entrega[hidden] { display: none; }
+    .ctx-entrega .pp-entrega-ind svg { width: 18px; height: 18px; }
 
     /* =========================================
        BARRA DE SOLO LECTURA
@@ -696,7 +695,9 @@
       min-height: 100%;
     }
     /* Logo de la pantalla de bienvenida: una version por tema. */
-    .welcome-logo { margin-bottom: 70px; }
+    .welcome-logo { margin-bottom: 70px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .welcome-logo img { transition: transform .15s var(--ease-out), opacity .15s; }
+    .welcome-logo:active img { transform: scale(.97); opacity: .85; }
     .welcome-logo img { display: block; width: min(300px, 70vw); height: auto; }
     .welcome-logo-oscuro { display: none !important; }
     :root[data-tema="dark"] .welcome-logo-claro { display: none; }
@@ -1461,10 +1462,22 @@
     .pv-comp { margin-top: -10px; flex: none; border: 1px solid var(--line); border-radius: var(--r2); padding: 8px; }
     .pv-comp[hidden] { display: none; }
     .pv-comp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
-    .pv-comp-estado { padding: 2px 7px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .pv-comp-estado.is-completo { background: var(--pago); color: #fff; }
-    .pv-comp-estado.is-parcial { background: var(--warn-soft); color: var(--warn); }
-    .pv-comp-estado.is-sin-importe { background: var(--bad-soft); color: var(--bad); }
+    /* Mismo criterio que el indicador de la lista: siempre verde con texto
+       blanco y un punto amarillo o rojo en la esquina cuando hay algo que mirar. */
+    .pv-comp-estado { position: relative; padding: 2px 7px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; background: var(--pago); color: #fff; }
+    .pv-comp-img-wrap { position: relative; flex: none; display: flex; }
+    .pv-comp-estado.is-alerta-amarillo::after, .pv-comp-estado.is-alerta-rojo::after,
+    .pv-comp-img-wrap.is-alerta-amarillo::after, .pv-comp-img-wrap.is-alerta-rojo::after {
+      content: '';
+      position: absolute;
+      top: -3px; right: -3px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 1.5px var(--surface, #fff);
+      pointer-events: none;
+    }
+    .pv-comp-estado.is-alerta-amarillo::after, .pv-comp-img-wrap.is-alerta-amarillo::after { background: #f2b705; }
+    .pv-comp-estado.is-alerta-rojo::after, .pv-comp-img-wrap.is-alerta-rojo::after { background: var(--bad); }
     .pv-comp-vacio { font-size: 12px; color: var(--ink-3); padding: 2px 0 4px; }
     .pv-comp-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
     .pv-comp-head + .pv-comp-item { border-top: none; }
@@ -1476,7 +1489,7 @@
     .pv-comp-conf { align-self: flex-start; margin-top: 2px; padding: 0 5px; border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: #fff; background: var(--ink-3); }
     .pv-comp-conf.is-alta { background: var(--ok); }
     .pv-comp-conf.is-media { background: var(--warn); }
-    .pv-comp-conf.is-revisar { background: var(--bad); }
+    .pv-comp-conf.is-revisar { background: #c99400; }
     .pv-comp-conf.is-manual { background: var(--accent); }
     .pv-comp-accs { flex: none; display: flex; flex-direction: column; gap: 4px; }
     .pv-comp-acc { padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink-2); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
@@ -2529,6 +2542,43 @@
       color: var(--ink-3);
     }
     .pp-resumen b { color: var(--ok); font-weight: 700; }
+    /* "N para despachar" es un boton: el desglose por entrega se ve al tocarlo */
+    .pp-resumen-desp {
+      font: inherit;
+      font-weight: 700;
+      color: var(--ok);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pp-resumen-desp[disabled] { cursor: default; }
+    .pp-resumen-desp svg {
+      width: 12px; height: 12px;
+      stroke: currentColor; stroke-width: 2.4; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+      transition: transform .18s var(--ease-out);
+    }
+    .pp-resumen-desp[aria-expanded="true"] svg { transform: rotate(180deg); }
+    /* Pop-up del desglose (hereda caja y animacion de .pp-nota-menu) */
+    .pp-desglose-pop { min-width: 210px; padding-bottom: 4px; }
+    .pp-desglose-fila {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .pp-desglose-fila + .pp-desglose-fila { border-top: 1px solid var(--line-2); }
+    .pp-desglose-fila .pp-entrega-ind svg { width: 17px; height: 17px; }
+    .pp-desglose-txt { flex: 1; min-width: 0; }
+    .pp-desglose-n { font-family: var(--font-mono); font-weight: 800; color: var(--ink); }
+    .pp-entrega-ind--retiro { color: var(--ink-3); }
 
     .pedidos-panel-close, .faltantes-panel-close {
       width: 36px;
@@ -3011,6 +3061,7 @@
     }
     .pp-nota:hover { color: var(--ink); }
     .pp-nota:active { transform: scale(.96); }
+    .pp-nota--vacia { color: var(--ink-4); letter-spacing: 1px; }
     .pp-nota.is-open { color: var(--on-g); background: var(--graphite); padding: 0 5px; }
     .pp-nota[disabled] { opacity: .5; cursor: default; }
 
@@ -3264,20 +3315,98 @@
     }
     .pp-comprobante svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .pp-comprobante b { font-family: var(--font-mono); font-size: 10px; font-weight: 800; line-height: 1; }
+    /* Etiquetas que abren el visor (pendientes e historial) */
+    .wa-tag { cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; }
+    .wa-tag:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .wa-tag-pop {
+      position: fixed;
+      z-index: 220;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--graphite, #222);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      white-space: pre-line;
+      pointer-events: none;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .22);
+    }
+    .wa-tag-pop[hidden] { display: none; }
+    /* Historial: pago (verde, recibo) y remito (ambar, camion) */
+    .hist-tags { display: inline-flex; gap: 5px; margin-left: 6px; vertical-align: middle; }
+    .hist-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 1px 6px 1px 4px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+    }
+    .hist-tag svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .hist-tag.is-pago { background: var(--pago-soft); color: var(--pago); }
+    .hist-tag.is-remito { background: var(--warn-soft); color: var(--warn); }
+    /* Visor de comprobantes */
+    .comp-visor {
+      position: fixed;
+      inset: 0;
+      z-index: 205;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(0, 0, 0, .6);
+      animation: fadeIn .16s ease both;
+    }
+    .comp-visor[hidden] { display: none; }
+    .comp-visor-caja {
+      width: min(520px, 100%);
+      max-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--surface, #fff);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+    }
+    .comp-visor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .comp-visor-titulo { display: flex; flex-direction: column; min-width: 0; }
+    .comp-visor-titulo b { font-size: 15px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .comp-visor-titulo span { font-size: 12px; color: var(--ink-3); }
+    .comp-visor-x { flex: none; width: 32px; height: 32px; border: none; border-radius: 8px; background: transparent; color: var(--ink-3); font-size: 22px; line-height: 1; cursor: pointer; }
+    .comp-visor-x:hover { background: var(--surface-3); }
+    .comp-visor-modos { display: flex; gap: 6px; }
+    .comp-visor-modos button { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .comp-visor-modos button.is-activo { background: var(--ink); border-color: var(--ink); color: var(--surface, #fff); }
+    .comp-visor-img { flex: 1; min-height: 240px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-3); overflow: hidden; }
+    .comp-visor-img img { max-width: 100%; max-height: 62vh; object-fit: contain; cursor: zoom-in; background: #fff; }
+    .comp-visor-ph { font-size: 13px; color: var(--ink-3); padding: 20px; text-align: center; }
+    .comp-visor-pie { display: flex; align-items: center; gap: 8px; }
+    .comp-visor-nav { flex: none; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink-2); font-size: 22px; line-height: 1; cursor: pointer; }
+    .comp-visor-nav:disabled { opacity: .35; cursor: default; }
+    .comp-visor-info { flex: 1; min-width: 0; text-align: center; font-size: 12.5px; color: var(--ink-2); }
+    .comp-visor-cat { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #fff; }
+    .comp-visor-cat.is-pago { background: var(--pago); }
+    .comp-visor-cat.is-remito { background: var(--warn); }
     /* Segun lo pagado frente al total del pedido */
-    .pp-comprobante.is-completo { background: var(--pago); color: #fff; }
-    .pp-comprobante.is-parcial { background: var(--warn-soft); color: var(--warn); }
-    .pp-comprobante.is-sin-importe { background: var(--pago-soft); color: var(--pago); }
-    .pp-comprobante.is-revisar { position: relative; }
-    .pp-comprobante.is-revisar::after {
+    /* Siempre verde con icono blanco; el estado lo cuenta un punto en la esquina:
+       amarillo = sin monto leido o asignacion dudosa,
+       rojo = pago parcial o imagen no confirmada como comprobante. */
+    .pp-comprobante { background: var(--pago); color: #fff; position: relative; }
+    .pp-comprobante.is-alerta-amarillo::after,
+    .pp-comprobante.is-alerta-rojo::after {
       content: '';
       position: absolute;
       top: -2px; right: -2px;
       width: 7px; height: 7px;
       border-radius: 50%;
-      background: var(--bad);
       box-shadow: 0 0 0 1.5px var(--surface, #fff);
     }
+    .pp-comprobante.is-alerta-amarillo::after { background: #f2b705; }
+    .pp-comprobante.is-alerta-rojo::after { background: var(--bad); }
     .pp-rot-impreso svg, .pp-descuento svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
     .pp-rot-barra {
@@ -4478,7 +4607,11 @@
        lo recorta a un cuadrado centrado para que el resto del panel quede para
        los articulos/pedidos que van apareciendo. El recorte es solo visual: el
        decoder sigue leyendo el frame completo a resolucion nativa. */
-    .articulo-scanner-wrap #articuloScannerDiv:not(:empty) {
+    /* El visor ocupa lugar solo con la camara encendida (.activo). Antes se
+       usaba :not(:empty), pero html5-qrcode deja sus nodos en el div despues
+       de stop() y el cuadro negro seguia ocupando pantalla. */
+    .articulo-scanner-wrap #articuloScannerDiv:not(.activo) { display: none; }
+    .articulo-scanner-wrap #articuloScannerDiv.activo {
       position: relative;
       width: min(100%, 240px);
       aspect-ratio: 1 / 1;
@@ -4979,7 +5112,7 @@
       .item-delete { width: 30px; height: 30px; font-size: 18px; }
 
       .ctx-fecha, .ctx-link { display: none; }
-      .progress-bar-track { width: 84px; }
+      .progress-bar-track { width: 64px; }
 
       .modal-backdrop, .pedidos-panel, .faltantes-panel, .add-item-modal { padding: 14px; }
 
@@ -4993,7 +5126,7 @@
     }
 
     @media (max-width: 420px) {
-      .progress-bar-track { display: none; }
+      .progress-bar-track { width: 44px; }
       .cli-tel { display: none; }
     }
 
@@ -5715,13 +5848,13 @@
     <span class="ctx-id" id="ctxId"></span>
     <span class="status-badge" id="ctxEstado"></span>
     <span class="badge-int" id="ctxCatInt" role="img" title="Pedido con descuento" aria-label="Pedido con descuento" hidden></span>
+    <span class="ctx-entrega" id="ctxEntrega" hidden></span>
     <button type="button" class="ctl-chip" id="ctxControl" title="Abrir el control del pedido" hidden></button>
     <span class="ctx-dot"></span>
     <span class="ctx-fecha" id="ctxFecha"></span>
     <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
     <span class="ctx-spacer"></span>
-    <div class="progress-section">
-      <span class="progress-label" id="ctxProgresoTexto">0 de 0 empacados</span>
+    <div class="progress-section" id="ctxProgreso" title="0 de 0 empacados">
       <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
       <span class="progress-pct">0%</span>
     </div>
@@ -7570,6 +7703,7 @@
       // mira al abrir el pedido.
       const ctxCatInt = document.getElementById('ctxCatInt');
       if (ctxCatInt) ctxCatInt.hidden = !esCatInt(pedidoActual);
+      actualizarCtxEntrega();
       actualizarBtnCatInt();
       const fechaEntrega = fechaEntregaTexto(pedidoActual, true);
       document.getElementById('ctxFecha').textContent = [
@@ -7697,7 +7831,7 @@
       panel += '</div>';
       panel += '<button type="button" class="pv-opcional-btn pv-opcional-btn--pegado" onclick="abrirPedidosCliente()">' + IC_LISTA + '<span>Pedidos de este cliente</span></button>';
       if (waDb && waClaveTelefono(cliente.telefono)) {
-        panel += '<button type="button" class="pv-opcional-btn pv-opcional-btn--pegado" onclick="abrirChatWhatsapp()">' + IC_CHAT + '<span>Ver conversaci&oacute;n de WhatsApp</span></button>';
+        panel += '<button type="button" class="pv-opcional-btn pv-opcional-btn--pegado" onclick="abrirChatWhatsapp()">' + IC_CHAT + '<span>Archivos de WhatsApp</span></button>';
         // Comprobantes de pago asignados (lo llena pvCompCargar)
         panel += '<div class="pv-comp" id="pvComprobantes" hidden></div>';
       }
@@ -7881,7 +8015,7 @@
 
       const fill = document.querySelector('.progress-bar-fill');
       const label = document.querySelector('.progress-pct');
-      const texto = document.getElementById('ctxProgresoTexto');
+      const seccion = document.getElementById('ctxProgreso');
       if (fill) {
         fill.style.width = pct + '%';
         fill.classList.toggle('complete', isComplete);
@@ -7890,8 +8024,11 @@
         label.textContent = pct + '%';
         label.classList.toggle('complete', isComplete);
       }
-      if (texto) {
-        texto.textContent = checkedCount + ' de ' + items.length + ' empacados';
+      // El conteo exacto queda como tooltip; a la vista solo barra y porcentaje.
+      if (seccion) {
+        const detalle = checkedCount + ' de ' + items.length + ' empacados';
+        seccion.title = detalle;
+        seccion.setAttribute('aria-label', detalle);
       }
       const btnToggle = document.getElementById('btnToggleEstado');
       if (btnToggle) {
@@ -8073,15 +8210,15 @@
       pedidoActual.items.splice(deleteIdx, 1);
       deleteIdx = -1;
 
-      // Registrar en log de faltantes (localStorage)
-      guardarFaltante(itemEliminado);
-
       // Eliminar de Firebase inmediatamente
       try {
         await db.ref('pedidos/' + pedidoId).update({
           items: pedidoActual.items,
           lastUpdated: Date.now()
         });
+        // Registrar en log de faltantes (Firebase), despues de guardar items
+        // para que el listener no traiga de vuelta la lista vieja.
+        guardarFaltante(itemEliminado);
         renderUnificado();
         cargarLocalStorage();
         showToast('Articulo eliminado');
@@ -8091,31 +8228,81 @@
       }
     });
 
-    function guardarFaltante(item) {
+    // Log de faltantes del pedido: vive en Firebase (pedidos/{id}/faltantesLog)
+    // para verse desde cualquier dispositivo. Se escribe con transaction para
+    // no pisar lo que otro equipo haya agregado al mismo tiempo.
+    async function guardarFaltante(item) {
       if (!pedidoId || !item) return;
-      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      if (!existing.faltantes) existing.faltantes = [];
-      existing.faltantes.push({
+      const id = pedidoId;
+      const nuevo = {
         nombre: item.nombre || '',
         codigo: item.codigo || '',
-        cantidad: item.cantidad || 1
-      });
-      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+        cantidad: item.cantidad || 1,
+        fecha: Date.now()
+      };
+      try {
+        const res = await db.ref('pedidos/' + id + '/faltantesLog').transaction(actual => {
+          const lista = Array.isArray(actual) ? actual : (actual ? Object.values(actual) : []);
+          lista.push(nuevo);
+          return lista;
+        });
+        if (pedidoActual && pedidoId === id && res && res.snapshot) {
+          pedidoActual.faltantesLog = res.snapshot.val();
+        }
+      } catch (err) {
+        console.error('Error guardando faltante:', err);
+        showToast('No se pudo registrar el faltante en el log');
+      }
       actualizarBtnFaltantes();
     }
 
     function getFaltantes() {
-      if (!pedidoId) return [];
-      const data = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      return data.faltantes || [];
+      if (!pedidoId || !pedidoActual) return [];
+      const log = pedidoActual.faltantesLog;
+      if (!log) return [];
+      return Array.isArray(log) ? log.filter(Boolean) : Object.values(log);
     }
 
-    function limpiarFaltantes() {
+    async function limpiarFaltantes() {
       if (!pedidoId) return;
-      const existing = JSON.parse(localStorage.getItem(getLocalKey()) || '{}');
-      existing.faltantes = [];
-      localStorage.setItem(getLocalKey(), JSON.stringify(existing));
+      try {
+        await db.ref('pedidos/' + pedidoId + '/faltantesLog').remove();
+        if (pedidoActual) pedidoActual.faltantesLog = null;
+      } catch (err) {
+        console.error('Error limpiando faltantes:', err);
+        showToast('Error al limpiar faltantes');
+      }
       actualizarBtnFaltantes();
+    }
+
+    // Migracion: faltantes que quedaron guardados solo en este dispositivo
+    // (version anterior, localStorage) se suben una vez a Firebase y se borran
+    // del almacenamiento local.
+    async function migrarFaltantesLocales() {
+      if (!pedidoId) return;
+      const key = getLocalKey();
+      let data;
+      try { data = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { return; }
+      const locales = (data && data.faltantes) || [];
+      if (!locales.length) return;
+      const id = pedidoId;
+      try {
+        const res = await db.ref('pedidos/' + id + '/faltantesLog').transaction(actual => {
+          const lista = Array.isArray(actual) ? actual : (actual ? Object.values(actual) : []);
+          return lista.concat(locales);
+        });
+        delete data.faltantes;
+        try {
+          if (Object.keys(data).length) localStorage.setItem(key, JSON.stringify(data));
+          else localStorage.removeItem(key);
+        } catch (e) { /* sin storage */ }
+        if (pedidoActual && pedidoId === id && res && res.snapshot) {
+          pedidoActual.faltantesLog = res.snapshot.val();
+        }
+        actualizarBtnFaltantes();
+      } catch (err) {
+        console.error('Error migrando faltantes locales:', err);
+      }
     }
 
     function formatearFaltantes() {
@@ -8199,8 +8386,8 @@
       cerrarFaltantesPanel();
     });
 
-    document.getElementById('btnFaltantesLimpiar').addEventListener('click', () => {
-      limpiarFaltantes();
+    document.getElementById('btnFaltantesLimpiar').addEventListener('click', async () => {
+      await limpiarFaltantes();
       cerrarFaltantesPanel();
       showToast('Faltantes limpiados');
     });
@@ -8708,6 +8895,7 @@
 
       // Actualizar boton faltantes
       actualizarBtnFaltantes();
+      migrarFaltantesLocales();
     }
 
     // ==========================================
@@ -8839,6 +9027,39 @@
     const pedidosPanel = document.getElementById('pedidosPanel');
     const pedidosPanelList = document.getElementById('pedidosPanelList');
     const pedidosResumen = document.getElementById('pedidosResumen');
+    // Pop-up "por forma de entrega" de los listos para despachar. Usa el mismo
+    // nodo y cierre que el menu de notas (ppNotaMenuEl / ppNotaCerrar), asi
+    // que se cierra con un toque fuera y frena el repintado en vivo mientras
+    // esta abierto. Las filas las arma renderPedidosPendientes.
+    let ppDesgloseFilas = [];
+    const IC_RETIRO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l1.5-5h15L21 9"></path><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"></path><path d="M5 13v7h14v-7"></path><path d="M10 20v-4h4v4"></path></svg>';
+    pedidosResumen.addEventListener('click', (e) => {
+      const btn = e.target.closest('#ppResumenDesp');
+      if (!btn || btn.disabled) return;
+      if (ppNotaAbierta === btn) { ppNotaCerrar(); return; }
+      ppNotaCerrar();
+      if (!ppDesgloseFilas.length) return;
+      const menu = document.createElement('div');
+      menu.className = 'pp-nota-menu pp-desglose-pop';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = '<div class="pp-nota-menu-titulo">Listos por forma de entrega</div>' +
+        ppDesgloseFilas.map(([n, txt, ic, mod]) =>
+          '<div class="pp-desglose-fila">' +
+            '<span class="pp-entrega-ind pp-entrega-ind--' + mod + '">' + ic + '</span>' +
+            '<span class="pp-desglose-txt">' + escapeHtml(txt) + '</span>' +
+            '<b class="pp-desglose-n">' + n + '</b>' +
+          '</div>'
+        ).join('');
+      document.body.appendChild(menu);
+      const r = btn.getBoundingClientRect();
+      const mr = menu.getBoundingClientRect();
+      menu.style.top = (r.bottom + 6) + 'px';
+      menu.style.left = Math.max(6, Math.min(r.left, window.innerWidth - mr.width - 6)) + 'px';
+      btn.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      ppNotaMenuEl = menu;
+      ppNotaAbierta = btn;
+    });
     let pedidosCache = [];
     // Modo "Imprimir rotulos": ids marcados para imprimir en lote.
     let ppRotModo = false;
@@ -8847,6 +9068,13 @@
     document.getElementById('btnPedidos').addEventListener('click', () => {
       pedidosPanel.classList.add('active');
       cargarPedidosPendientes();
+    });
+
+    // Atajo: tocar el logo de la pantalla de inicio abre Pedidos pendientes,
+    // igual que el boton del header. Delegado porque la bienvenida se
+    // reconstruye por innerHTML al cerrar un pedido.
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.welcome-logo')) document.getElementById('btnPedidos').click();
     });
 
     // Todo cierre del panel pasa por aca: ademas de ocultarlo corta la
@@ -9170,6 +9398,16 @@
       return '<span class="pp-entrega-ind pp-entrega-ind--' + e[2] + '" role="img" title="' + titulo + '" aria-label="' + titulo + '">' + e[1] + '</span>';
     }
 
+    // El mismo indicador en la franja superior del pedido abierto, junto al
+    // estado y la marca de descuento. Retiro en local no muestra nada.
+    function actualizarCtxEntrega() {
+      const el = document.getElementById('ctxEntrega');
+      if (!el) return;
+      const html = pedidoActual ? ppEntregaHtml(pedidoActual) : '';
+      el.innerHTML = html;
+      el.hidden = !html;
+    }
+
     // Indicador de embalado junto al nombre. Solo aparece con el pedido ya
     // controlado: gris mientras espera el embalado, naranja cuando se marca
     // (desde el menu de la fila). No participa del riel ni del orden.
@@ -9193,7 +9431,8 @@
     let waAdjRef = null;
     let waAdjDesde = 0;
     let waAdjDatos = {};              // id -> entrada de imgsIdx
-    let waAdjPorPedido = new Map();   // pedidoId -> [{ id, t, doc, monto, conf }]
+    let waAdjPorPedido = new Map();   // pedidoId -> [{ id, tel, t, doc, monto, conf }] (pagos)
+    let waRemPorPedido = new Map();   // pedidoId -> [...] (remitos que mando el local)
 
     // Correcciones a mano: { id: { pedido?, t, por } }. Sin "pedido" = no es
     // de ningun pedido. Se escuchan una sola vez para la lista y el pedido.
@@ -9223,18 +9462,29 @@
       return !!(v && v.tel && v.t && v.cat !== 'remito' && !v.yo);
     }
 
+    function waEsRemito(v) {
+      return !!(v && v.tel && v.t && v.cat === 'remito');
+    }
+
+    // Agrupa por pedido los comprobantes de pago (waAdjPorPedido) y los
+    // remitos (waRemPorPedido) ya cargados en waAdjDatos.
     function waAdjReagrupar() {
-      const mapa = new Map();
+      const pagos = new Map();
+      const remitos = new Map();
       for (const [id, v] of Object.entries(waAdjDatos)) {
-        if (!waEsComprobantePago(v)) continue;
+        const mapa = waEsComprobantePago(v) ? pagos : waEsRemito(v) ? remitos : null;
+        if (!mapa) continue;
         const a = waPedidoDeComprobante(id, v);
         if (!a.pedido) continue;
         if (!mapa.has(a.pedido)) mapa.set(a.pedido, []);
-        mapa.get(a.pedido).push({ id, t: v.t, doc: !!v.doc, monto: Number(v.monto) || 0, conf: a.conf });
+        mapa.get(a.pedido).push({ id, tel: v.tel, t: v.t, doc: !!v.doc, monto: Number(v.monto) || 0, conf: a.conf, comp: v.comp || '' });
       }
-      mapa.forEach(l => l.sort((a, b) => a.t - b.t));
-      waAdjPorPedido = mapa;
+      pagos.forEach(l => l.sort((a, b) => a.t - b.t));
+      remitos.forEach(l => l.sort((a, b) => a.t - b.t));
+      waAdjPorPedido = pagos;
+      waRemPorPedido = remitos;
       if (ppVivo) ppProgramarPintado();
+      if (historialPanel.classList.contains('active') && historialCache.length) renderHistorial(historialSearch.value.trim().toLowerCase());
     }
 
     function waAdjSuscribir() {
@@ -9266,38 +9516,266 @@
       return 'parcial';
     }
 
+    // Punto de aviso sobre el indicador de comprobantes (siempre verde). Lo
+    // usan la lista de pendientes y la seccion de comprobantes del pedido.
+    //   rojo     -> pago parcial o imagen no confirmada como comprobante
+    //   amarillo -> algun comprobante sin monto leido o asignacion dudosa
+    function waAlertaComprobantes(estado, dudosos, sinMonto, revisar) {
+      if (estado === 'parcial' || dudosos) return 'rojo';
+      if (sinMonto || revisar) return 'amarillo';
+      return '';
+    }
+    // Lo mismo para un comprobante suelto (fila de la seccion del pedido).
+    function waAlertaComprobante(x) {
+      if (x.comp === 'duda') return 'rojo';
+      if (!x.monto || x.conf === 'revisar' || x.conf === 'media') return 'amarillo';
+      return '';
+    }
+
     // Comprobantes asignados a ESTE pedido
     function waComprobantesDe(p) {
       const lista = waAdjPorPedido.get(p.id);
       if (!lista || !lista.length) return null;
-      let docs = 0, fotos = 0, ultimo = 0, suma = 0, sinMonto = 0, revisar = 0;
+      let docs = 0, fotos = 0, ultimo = 0, suma = 0, sinMonto = 0, revisar = 0, dudosos = 0;
       for (const a of lista) {
         if (a.doc) docs++; else fotos++;
         if (a.monto) suma += a.monto; else sinMonto++;
         if (a.conf === 'revisar' || a.conf === 'media') revisar++;
+        // comp 'duda': el sincronizador no pudo confirmar que la imagen sea un comprobante
+        if (a.comp === 'duda') dudosos++;
         ultimo = Math.max(ultimo, a.t);
       }
-      return { docs, fotos, ultimo, suma, sinMonto, revisar, total: p.total || 0,
-        estado: waEstadoPagado(suma, p.total || 0, sinMonto) };
+      const estado = waEstadoPagado(suma, p.total || 0, sinMonto);
+      const alerta = waAlertaComprobantes(estado, dudosos, sinMonto, revisar);
+      return { docs, fotos, ultimo, suma, sinMonto, revisar, dudosos, total: p.total || 0,
+        estado, alerta };
     }
 
     function waComprobantesFirma(p) {
       const c = waComprobantesDe(p);
-      return c ? [c.docs, c.fotos, c.ultimo, c.suma, c.estado, c.revisar].join('/') : '';
+      return c ? [c.docs, c.fotos, c.ultimo, c.suma, c.estado, c.alerta].join('/') : '';
     }
 
     function waComprobantesHtml(p) {
       const c = waComprobantesDe(p);
       if (!c) return '';
       const n = c.docs + c.fotos;
-      const cuando = new Date(c.ultimo).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-      let titulo = n + (n === 1 ? ' comprobante de pago asignado' : ' comprobantes de pago asignados') + ' (último: ' + cuando + '). ';
-      if (c.estado === 'completo') titulo += 'Pagado completo: $ ' + c.suma.toLocaleString('es-AR') + ' de $ ' + c.total.toLocaleString('es-AR') + '.';
-      else if (c.estado === 'parcial') titulo += 'Pago parcial: $ ' + c.suma.toLocaleString('es-AR') + ' de $ ' + c.total.toLocaleString('es-AR') + '.';
-      else titulo += 'No se pudo leer el importe de algún comprobante: verificalo en el pedido.';
-      if (c.revisar) titulo += ' Hay ' + c.revisar + ' para revisar.';
-      return '<span class="pp-comprobante is-' + c.estado + (c.revisar ? ' is-revisar' : '') + '" role="img" title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">' +
+      return '<span class="pp-comprobante wa-tag' + (c.alerta ? ' is-alerta-' + c.alerta : '') + '"' +
+        waTagAtributos('pago', p.id, p.telefono, p.nombre, waAdjPorPedido.get(p.id)) + '>' +
         IC_COMPROBANTE + (n > 1 ? '<b>' + n + '</b>' : '') + '</span>';
+    }
+
+    // ---------- Etiquetas de comprobante (pendientes e historial) ----------
+    // Cursor encima: solo la fecha (title). Un toque o clic: la fecha en un
+    // globito. Doble clic o doble toque: abre el visor de comprobantes.
+    function waFechaComprobante(t) {
+      return new Date(t).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+
+    function waTagAtributos(cat, pedido, telefono, nombre, lista) {
+      const fechas = (lista || []).map(a => waFechaComprobante(a.t)).join('\n');
+      const etiqueta = (cat === 'remito' ? 'Remito' : 'Comprobante de pago') + ': ' + fechas.replace(/\n/g, ', ');
+      return ' role="button" tabindex="0" data-cat="' + cat + '" data-pedido="' + escapeHtml(pedido) + '"' +
+        ' data-tel="' + escapeHtml(waClaveTelefono(telefono)) + '" data-nombre="' + escapeHtml(nombre || '') + '"' +
+        ' data-fechas="' + escapeHtml(fechas) + '" title="' + escapeHtml(fechas) + '" aria-label="' + escapeHtml(etiqueta) + '"';
+    }
+
+    const waTagPop = document.createElement('div');
+    waTagPop.className = 'wa-tag-pop';
+    waTagPop.hidden = true;
+    document.body.appendChild(waTagPop);
+    let waTagPopTimer = null;
+    let waTagUltimo = { el: null, t: 0 };
+
+    function waTagPopMostrar(tag) {
+      waTagPop.textContent = tag.dataset.fechas || '';
+      waTagPop.hidden = false;
+      const r = tag.getBoundingClientRect();
+      const w = waTagPop.offsetWidth;
+      const h = waTagPop.offsetHeight;
+      let left = r.left + r.width / 2 - w / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      let top = r.top - h - 8;
+      if (top < 8) top = r.bottom + 8;
+      waTagPop.style.left = left + 'px';
+      waTagPop.style.top = top + 'px';
+      clearTimeout(waTagPopTimer);
+      waTagPopTimer = setTimeout(waTagPopCerrar, 2500);
+    }
+    function waTagPopCerrar() {
+      clearTimeout(waTagPopTimer);
+      waTagPop.hidden = true;
+    }
+
+    // En captura: la etiqueta vive dentro de una fila que, al tocarla, abre
+    // el pedido. Aca se corta el evento para que eso no pase.
+    document.addEventListener('click', e => {
+      const tag = e.target.closest && e.target.closest('.wa-tag');
+      if (!tag) { if (!waTagPop.hidden) waTagPopCerrar(); return; }
+      e.stopPropagation();
+      e.preventDefault();
+      const ahora = Date.now();
+      if (waTagUltimo.el === tag && ahora - waTagUltimo.t < 400) {
+        waTagUltimo = { el: null, t: 0 };
+        waTagPopCerrar();
+        compVisorAbrir(tag.dataset.cat, tag.dataset.pedido, tag.dataset.tel, tag.dataset.nombre);
+        return;
+      }
+      waTagUltimo = { el: tag, t: ahora };
+      waTagPopMostrar(tag);
+    }, true);
+    // El doble clic nativo tampoco debe llegar a la fila
+    document.addEventListener('dblclick', e => {
+      if (e.target.closest && e.target.closest('.wa-tag')) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+    document.addEventListener('keydown', e => {
+      const tag = e.target.closest && e.target.closest('.wa-tag');
+      if (!tag || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      compVisorAbrir(tag.dataset.cat, tag.dataset.pedido, tag.dataset.tel, tag.dataset.nombre);
+    }, true);
+    window.addEventListener('scroll', waTagPopCerrar, true);
+
+    // ---------- Visor de comprobantes ----------
+    // Muestra los comprobantes de un pedido (pagos o remitos) uno por uno, con
+    // la opcion de ver todos los del cliente (pagos y remitos, 120 dias).
+    const compVisor = document.createElement('div');
+    compVisor.className = 'comp-visor';
+    compVisor.hidden = true;
+    compVisor.innerHTML =
+      '<div class="comp-visor-caja" role="dialog" aria-modal="true" aria-label="Comprobantes">' +
+        '<div class="comp-visor-head">' +
+          '<div class="comp-visor-titulo"><b></b><span></span></div>' +
+          '<button type="button" class="comp-visor-x" aria-label="Cerrar">&times;</button>' +
+        '</div>' +
+        '<div class="comp-visor-modos">' +
+          '<button type="button" data-modo="pedido"></button>' +
+          '<button type="button" data-modo="cliente"></button>' +
+        '</div>' +
+        '<div class="comp-visor-img"><span class="comp-visor-ph">Cargando&hellip;</span></div>' +
+        '<div class="comp-visor-pie">' +
+          '<button type="button" class="comp-visor-nav" data-dir="-1" aria-label="Anterior">&lsaquo;</button>' +
+          '<div class="comp-visor-info"></div>' +
+          '<button type="button" class="comp-visor-nav" data-dir="1" aria-label="Siguiente">&rsaquo;</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(compVisor);
+    const compEstado = { cat: 'pago', pedido: '', tel: '', modo: 'pedido', lista: [], i: 0 };
+
+    function compListaPedido() {
+      const mapa = compEstado.cat === 'remito' ? waRemPorPedido : waAdjPorPedido;
+      return (mapa.get(compEstado.pedido) || []).map(a => Object.assign({ cat: compEstado.cat, pedido: compEstado.pedido }, a));
+    }
+    function compListaCliente() {
+      const out = [];
+      for (const [id, v] of Object.entries(waAdjDatos)) {
+        if (v.tel !== compEstado.tel) continue;
+        const cat = waEsComprobantePago(v) ? 'pago' : waEsRemito(v) ? 'remito' : '';
+        if (!cat) continue;
+        out.push({ id, tel: v.tel, t: v.t, monto: Number(v.monto) || 0, cat, pedido: waPedidoDeComprobante(id, v).pedido });
+      }
+      return out.sort((a, b) => b.t - a.t);
+    }
+
+    async function compVisorAbrir(cat, pedido, tel, nombre) {
+      if (!waDb || !tel) return;
+      Object.assign(compEstado, { cat: cat || 'pago', pedido: pedido || '', tel, modo: 'pedido', i: 0 });
+      compVisor.querySelector('.comp-visor-titulo b').textContent = nombre || 'Comprobantes';
+      compVisor.hidden = false;
+      await waIdxAsegurar();
+      compVisorModo('pedido');
+    }
+
+    function compVisorModo(modo) {
+      compEstado.modo = modo;
+      compEstado.lista = modo === 'cliente' ? compListaCliente() : compListaPedido();
+      compEstado.i = 0;
+      const nPed = compListaPedido().length;
+      const nCli = compListaCliente().length;
+      const [bPed, bCli] = compVisor.querySelectorAll('.comp-visor-modos button');
+      bPed.textContent = (compEstado.cat === 'remito' ? 'Remitos de este pedido' : 'Pagos de este pedido') + ' (' + nPed + ')';
+      bCli.textContent = 'Todos del cliente (' + nCli + ')';
+      bPed.classList.toggle('is-activo', modo === 'pedido');
+      bCli.classList.toggle('is-activo', modo === 'cliente');
+      compVisorPintar();
+    }
+
+    function compVisorPintar() {
+      const { lista, i } = compEstado;
+      const caja = compVisor.querySelector('.comp-visor-img');
+      const info = compVisor.querySelector('.comp-visor-info');
+      compVisor.querySelector('.comp-visor-titulo span').textContent = lista.length ? (i + 1) + ' de ' + lista.length : '';
+      compVisor.querySelectorAll('.comp-visor-nav').forEach(b => { b.disabled = lista.length < 2; });
+      if (!lista.length) {
+        caja.innerHTML = '<span class="comp-visor-ph">No hay comprobantes para mostrar.</span>';
+        info.textContent = '';
+        return;
+      }
+      const a = lista[i];
+      const partes = [waFechaComprobante(a.t)];
+      if (a.cat === 'pago' && a.monto) partes.push('$ ' + a.monto.toLocaleString('es-AR'));
+      if (compEstado.modo === 'cliente') partes.push(a.pedido ? 'Pedido ' + codigoPedidoCorto(a.pedido) : 'Sin pedido');
+      info.innerHTML = '<span class="comp-visor-cat is-' + a.cat + '">' + (a.cat === 'remito' ? 'Remito' : 'Pago') + '</span> ' + escapeHtml(partes.join(' · '));
+      const src = waFotos.get(a.id);
+      if (src) { caja.innerHTML = '<img src="' + src + '" alt="Comprobante">'; return; }
+      if (waFotos.has(a.id)) { caja.innerHTML = '<span class="comp-visor-ph">Imagen no disponible.</span>'; return; }
+      caja.innerHTML = '<span class="comp-visor-ph">Cargando&hellip;</span>';
+      const id = a.id;
+      waDb.ref('imgs/' + a.tel + '/' + id + '/d').once('value').then(snap => {
+        const d = snap.val();
+        waFotos.set(id, d ? 'data:image/jpeg;base64,' + d : '');
+      }).catch(() => waFotos.set(id, '')).then(() => {
+        const actual = compEstado.lista[compEstado.i];
+        if (!compVisor.hidden && actual && actual.id === id) compVisorPintar();
+      });
+    }
+
+    function compVisorMover(dir) {
+      const n = compEstado.lista.length;
+      if (n < 2) return;
+      compEstado.i = (compEstado.i + dir + n) % n;
+      compVisorPintar();
+    }
+    function compVisorCerrar() { compVisor.hidden = true; }
+
+    compVisor.addEventListener('click', e => {
+      if (e.target === compVisor || e.target.closest('.comp-visor-x')) { compVisorCerrar(); return; }
+      const modo = e.target.closest('.comp-visor-modos button');
+      if (modo) { compVisorModo(modo.dataset.modo); return; }
+      const nav = e.target.closest('.comp-visor-nav');
+      if (nav) { compVisorMover(Number(nav.dataset.dir)); return; }
+      // Tocar la imagen la abre en pantalla completa
+      const img = e.target.closest('.comp-visor-img img');
+      if (img) {
+        const visor = document.getElementById('waFotoGrande');
+        visor.querySelector('img').src = img.src;
+        visor.classList.add('active');
+      }
+    });
+    document.addEventListener('keydown', e => {
+      if (compVisor.hidden) return;
+      if (e.key === 'Escape') { e.stopPropagation(); compVisorCerrar(); }
+      else if (e.key === 'ArrowLeft') compVisorMover(-1);
+      else if (e.key === 'ArrowRight') compVisorMover(1);
+    }, true);
+
+    // Indice de comprobantes para quien no tiene abierta la lista de
+    // pendientes (historial): se lee una vez y queda en memoria.
+    let waIdxLeido = 0;
+    async function waIdxAsegurar() {
+      if (!waDb) return;
+      if (waAdjRef || Date.now() - waIdxLeido < 60000) return;   // en vivo, o leido recien
+      const user = await waEsperarAuth();
+      if (!user) return;
+      waAsigManualSuscribir();
+      try {
+        const snap = await waDb.ref('imgsIdx').orderByChild('t').startAt(Date.now() - 120 * 86400000).once('value');
+        waIdxLeido = Date.now();
+        if (!waAdjRef) { waAdjDatos = snap.val() || {}; waAdjReagrupar(); }
+      } catch (err) {
+        console.warn('WhatsApp: no se pudo leer el indice de comprobantes', err && err.code);
+      }
     }
 
     // Contacto por WhatsApp sin abrir el pedido. Mismo link y mismo estado
@@ -9318,8 +9796,15 @@
       return !!String(nota || '').trim();
     }
 
+    // Sin nota se muestra "---" como pastilla provisoria, para poder asignarle
+    // una nota desde la lista con el mismo doble toque.
     function ppNotaHtml(p) {
-      if (!notaVisibleEnPanel(p.nota)) return '';
+      if (!notaVisibleEnPanel(p.nota)) {
+        return '<button type="button" class="pp-nota pp-nota--vacia"' +
+          ' data-nota-id="' + escapeHtml(p.id) + '"' +
+          ' title="Sin nota. Doble toque para asignar una"' +
+          ' aria-label="Sin nota. Doble toque para asignar una">---</button>';
+      }
       return '<button type="button" class="pp-nota"' +
         ' data-nota-id="' + escapeHtml(p.id) + '"' +
         ' title="Doble toque para cambiar la nota"' +
@@ -9351,7 +9836,11 @@
 
     function ppNotaCerrar() {
       if (ppNotaMenuEl) { ppNotaMenuEl.remove(); ppNotaMenuEl = null; }
-      if (ppNotaAbierta) { ppNotaAbierta.classList.remove('is-open'); ppNotaAbierta = null; }
+      if (ppNotaAbierta) {
+        ppNotaAbierta.classList.remove('is-open');
+        if (ppNotaAbierta.hasAttribute('aria-expanded')) ppNotaAbierta.setAttribute('aria-expanded', 'false');
+        ppNotaAbierta = null;
+      }
       // Un cambio en vivo que llego con el menu abierto se pinta ahora.
       if (ppPintarPendiente) ppProgramarPintado();
     }
@@ -9371,7 +9860,7 @@
         html += '<div class="pp-nota-menu-item' + (n === p.nota ? ' is-actual' : '') + '"' +
           ' role="menuitem" data-nota="' + escapeHtml(n) + '">' + escapeHtml(n) + '</div>';
       });
-      html += '<div class="pp-nota-menu-item pp-nota-menu-item--vacia" role="menuitem" data-nota="">Sin nota</div>';
+      html += '<div class="pp-nota-menu-item pp-nota-menu-item--vacia' + (notaVisibleEnPanel(p.nota) ? '' : ' is-actual') + '" role="menuitem" data-nota="">Sin nota</div>';
       menu.innerHTML = html;
       menu.addEventListener('click', (e) => {
         const item = e.target.closest('.pp-nota-menu-item');
@@ -9410,7 +9899,7 @@
     }
 
     document.addEventListener('click', (e) => {
-      if (ppNotaAbierta && !e.target.closest('.pp-nota, .pp-nota-menu, .pp-btn-menu')) ppNotaCerrar();
+      if (ppNotaAbierta && !e.target.closest('.pp-nota, .pp-nota-menu, .pp-btn-menu, .pp-resumen-desp')) ppNotaCerrar();
     }, true);
     pedidosPanelList.addEventListener('scroll', ppNotaCerrar, { passive: true });
 
@@ -9463,7 +9952,7 @@
           '</span>' +
           '<span class="pp-meta">' +
             (ant.texto ? '<span class="pedidos-panel-fecha' + (ant.viejo ? ' is-viejo' : '') + '">' + escapeHtml(ant.texto) + '</span>' : '') +
-            (ant.texto && notaVisibleEnPanel(p.nota) ? '<span class="pp-meta-sep" aria-hidden="true">&middot;</span>' : '') +
+            (ant.texto ? '<span class="pp-meta-sep" aria-hidden="true">&middot;</span>' : '') +
             ppNotaHtml(p) +
           '</span>' +
         '</span>' +
@@ -9524,17 +10013,27 @@
         if (p.rank !== 3) return;
         porEntrega[p.tipoEntrega in porEntrega ? p.tipoEntrega : '']++;
       });
-      const desglose = [
-        [porEntrega['Via Cargo'], 'Vía Cargo'],
-        [porEntrega['Flecha Carga'], 'Flecha'],
-        [porEntrega['Correo Argentino'], 'Correo'],
-        [porEntrega['Motomensajeria'], 'Flete'],
-        [porEntrega[''], 'sin entrega']
-      ].filter(([n]) => n > 0).map(([n, txt]) => n + ' ' + txt).join(' · ');
+      // Filas del pop-up: [cantidad, texto, icono, modificador de color].
+      // Mismos iconos y colores que el indicador de entrega de cada fila.
+      ppDesgloseFilas = [
+        ['Via Cargo', 'Vía Cargo'],
+        ['Flecha Carga', 'Flecha Carga'],
+        ['Correo Argentino', 'Correo Argentino'],
+        ['Motomensajeria', 'Flete'],
+        ['', 'Retiro / sin envío']
+      ].map(([k, txt]) => {
+        const e = PP_ENTREGAS[k];
+        return [porEntrega[k], txt, e ? e[1] : IC_RETIRO, e ? e[2] : 'retiro'];
+      }).filter(([n]) => n > 0);
 
+      // El desglose se ve en un pop-up al tocar "N listos para despachar".
+      const hayDesglose = ppDesgloseFilas.length > 0;
       pedidosResumen.innerHTML = pedidosCache.length + ' pedidos · ' +
-        '<b>' + conteo[3] + ' para despachar</b>' +
-        (desglose ? ' (' + desglose + ')' : '');
+        '<button type="button" class="pp-resumen-desp" id="ppResumenDesp" aria-haspopup="menu" aria-expanded="false"' +
+          (hayDesglose ? ' title="Ver por forma de entrega"' : ' disabled') + '>' +
+          conteo[3] + ' listos para despachar' +
+          (hayDesglose ? '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>' : '') +
+        '</button>';
 
       // Arriba los listos para despachar; el resto se agrupa por nota. Las
       // notas de pago se unifican por estado (el Sheet escribe variantes) y las
@@ -9613,45 +10112,20 @@
     });
 
 
-    // Igual que ppEscribirNota: sin toast de exito y, con la lista en vivo,
-    // el repintado llega solo. Lo dispara la opcion "Embalado" del menu de la fila.
-    let ppEmbaladoEnCurso = false;
-    async function ppToggleEmbalado(p) {
-      if (ppEmbaladoEnCurso) return;
-      const nuevo = !p.embalado;
-      ppEmbaladoEnCurso = true;
-      try {
-        const ahora = Date.now();
-        await db.ref('pedidos/' + p.id).update({
-          embalado: nuevo,
-          embaladoFecha: ahora,
-          lastUpdated: ahora
-        });
-        p.embalado = nuevo;
-        const fila = !ppVivo && pedidosPanelList.querySelector('.pedidos-panel-item[data-id="' + CSS.escape(p.id) + '"]');
-        if (fila) fila.outerHTML = ppFilaHtml(p);
-      } catch (err) {
-        console.error('Error actualizando embalado:', err);
-        showToast('No se pudo marcar el embalado');
-      } finally {
-        ppEmbaladoEnCurso = false;
-      }
-    }
-
     // ==========================================
     // MENU DE ACCIONES DE LA FILA (hamburguesa)
     // ==========================================
     // Atajos a las mismas funciones de la vista del pedido. Rotulo, ticket y
     // entregado necesitan el pedido cargado (leen sus datos y los controles
     // de pago/entrega), asi que primero lo abren y despues disparan la accion.
-    // Embalado se resuelve en la misma fila, sin salir del panel. Usa el mismo
-    // nodo y cierre que el menu de notas (ppNotaMenuEl / ppNotaCerrar).
+    // El embalado ya no figura aca: lo marca solo el cierre del control.
+    // Usa el mismo nodo y cierre que el menu de notas (ppNotaMenuEl / ppNotaCerrar).
     const IC_MENU_ROTULO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>';
     const IC_MENU_TICKET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h14v20l-2.5-1.5L14 22l-2-1.5L10 22l-2.5-1.5L5 22z"></path><line x1="9" y1="8" x2="15" y2="8"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>';
     const IC_MENU_ENTREGADO = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>';
 
     const IC_MENU_PAGO_SOLICITADO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
-    // Peso y tamano: una regla (la caja ya es el icono de Embalado).
+    // Peso y tamano: una regla.
     const IC_MENU_MEDIDAS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0z"></path><path d="m14.5 12.5 2-2"></path><path d="m11.5 9.5 2-2"></path><path d="m8.5 6.5 2-2"></path><path d="m17.5 15.5 2-2"></path></svg>';
     const IC_MENU_PAGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>';
 
@@ -9661,8 +10135,6 @@
       const p = pedidosCache.find(x => x.id === btn.dataset.menuId);
       if (!p) return;
 
-      // Embalado es un toggle: con el pedido ya embalado lleva el punto naranja
-      // de "actual" (.is-actual), como la nota vigente en el menu de notas.
       // Pago: una sola opcion que se alterna. Sin pedir todavia ofrece "Pago
       // solicitado"; ya solicitado ofrece "Pago"; ya pagado vuelve a ofrecer
       // "Pago solicitado". Para borrar la nota esta la pastilla de notas.
@@ -9670,7 +10142,6 @@
       const acciones = [
         ['rotulo', 'Imprimir rótulo', IC_MENU_ROTULO],
         ['ticket', 'Imprimir ticket', IC_MENU_TICKET],
-        ['embalado', 'Embalado', IC_PAQUETE, p.embalado],
         ['paquete', 'Peso y tamaño', IC_MENU_MEDIDAS, false, p.paquete ? paqueteTextoCorto(p.paquete) : ''],
         ofrecePago ? ['pago', 'Pago', IC_MENU_PAGO]
                    : ['pago-solicitado', 'Pago solicitado', IC_MENU_PAGO_SOLICITADO]
@@ -9711,7 +10182,6 @@
     }
 
     async function ppAccionEjecutar(p, accion, btn) {
-      if (accion === 'embalado') { ppToggleEmbalado(p); return; }
       if (accion === 'paquete') { abrirPaquete(p.id, p.nombre); return; }
       if (accion === 'pago' || accion === 'pago-solicitado') {
         // Se pasa el boton del menu: ppEscribirNota repinta la fila que lo contiene.
@@ -9770,11 +10240,12 @@
     // Pedido con descuento (cat = "int"): mismo trazo discreto que el de impreso.
     const IC_DESCUENTO = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>';
 
+    // El icono de impresora avisa lo que FALTA: se ve solo mientras el rotulo
+    // no se imprimio, y desaparece al imprimirlo (la fila queda mas limpia).
     function ppRotImpresoHtml(p) {
-      if (!p.rotuloImpreso) return '';
-      const cuando = new Date(p.rotuloImpreso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-      const titulo = 'Rótulo impreso el ' + cuando;
-      return '<span class="pp-rot-impreso" role="img" title="' + escapeHtml(titulo) + '" aria-label="' + escapeHtml(titulo) + '">' + IC_ROTULO_IMPRESO + '</span>';
+      if (p.rotuloImpreso) return '';
+      const titulo = 'Rótulo sin imprimir';
+      return '<span class="pp-rot-impreso" role="img" title="' + titulo + '" aria-label="' + titulo + '">' + IC_ROTULO_IMPRESO + '</span>';
     }
 
     function ppRotActualizarBarra() {
@@ -9929,6 +10400,7 @@
           historialCache.push({
             id: child.key,
             nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre',
+            telefono: (p.cliente && p.cliente.telefono) || '',
             timestamp: ts,
             entregaMs: entrega ? entrega.getTime() : 0,
             entregaTxt: fechaEntregaTexto(p, true)
@@ -9939,6 +10411,8 @@
         historialCache.sort((a, b) => (b.entregaMs || b.timestamp) - (a.entregaMs || a.timestamp));
 
         renderHistorial('');
+        // Comprobantes de pago y remitos de cada pedido (se repinta al llegar)
+        waIdxAsegurar();
       } catch (err) {
         console.error('Error cargando historial:', err);
         historialPanelList.innerHTML = htmlErrorReintento(err, 'cargarHistorial()');
@@ -9964,11 +10438,29 @@
 
       historialPanelList.innerHTML = lista.map(p =>
         '<div class="pedidos-panel-item" data-id="' + escapeHtml(p.id) + '">' +
-        '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + '</span>' +
+        '<span class="pedidos-panel-nombre">' + escapeHtml(p.nombre) + histTagsHtml(p) + '</span>' +
         '<span class="pedidos-panel-fecha" title="Ingresado el ' + escapeHtml(new Date(p.timestamp).toLocaleDateString('es-AR')) + '">' +
           escapeHtml(p.entregaTxt ? 'Entregado ' + p.entregaTxt : new Date(p.timestamp).toLocaleDateString('es-AR')) + '</span>' +
         '</div>'
       ).join('');
+    }
+
+    // Etiquetas del pedido despachado: comprobante de pago (verde, recibo) y
+    // remito (ambar, camion). Doble clic o doble toque: abre el visor.
+    function histTagsHtml(p) {
+      const pagos = waAdjPorPedido.get(p.id);
+      const remitos = waRemPorPedido.get(p.id);
+      if (!(pagos && pagos.length) && !(remitos && remitos.length)) return '';
+      let html = '<span class="hist-tags">';
+      if (pagos && pagos.length) {
+        html += '<span class="hist-tag is-pago wa-tag"' + waTagAtributos('pago', p.id, p.telefono, p.nombre, pagos) + '>' +
+          IC_COMPROBANTE + (pagos.length > 1 ? pagos.length : '') + '</span>';
+      }
+      if (remitos && remitos.length) {
+        html += '<span class="hist-tag is-remito wa-tag"' + waTagAtributos('remito', p.id, p.telefono, p.nombre, remitos) + '>' +
+          IC_CAMION + (remitos.length > 1 ? remitos.length : '') + '</span>';
+      }
+      return html + '</span>';
     }
 
     historialSearch.addEventListener('input', (e) => {
@@ -10124,6 +10616,7 @@
       btnArticuloEscanear.innerHTML = '&#9209;';
       btnArticuloEscanear.title = 'Detener camara';
       btnArticuloEscanear.classList.add('scanning');
+      document.getElementById('articuloScannerDiv').classList.add('activo');
       articuloScanLast = ''; articuloScanCount = 0;
       articuloUltimoScan = { texto: '', ts: 0 };
 
@@ -10186,7 +10679,8 @@
         articuloHtml5Qr.stop().catch(() => {});
       }
       articuloScanLast = ''; articuloScanCount = 0;
-      // El wrap queda visible con el placeholder oscuro: evita el salto de layout
+      // Con la camara apagada el visor se colapsa y solo queda el boton.
+      document.getElementById('articuloScannerDiv').classList.remove('activo');
       btnArticuloEscanear.innerHTML = '&#128247; Encender c&aacute;mara';
       btnArticuloEscanear.title = 'Encender camara';
       btnArticuloEscanear.classList.remove('scanning');
@@ -13781,7 +14275,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       texto += '\n- Medio de Pago: ' + medioPago;
       if (medioPago === 'Transferencia' && aliasValue) {
         texto += '\n- ALIAS: ' + aliasValue;
-        if (pvAliasEsHP(aliasValue)) texto += '\nTitular: ' + ALIAS_HP_TITULAR;
+        if (pvAliasEsHP(aliasValue)) texto += '\n- Titular: ' + ALIAS_HP_TITULAR;
       }
       // Codigo del pedido: WhatsAppSync lo lee de esta cotizacion para asignar
       // al pedido los comprobantes que el cliente mande despues.
@@ -13791,8 +14285,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     // Ultimos 6 caracteres del id del pedido (unico en la practica entre los
     // pedidos de un mismo cliente). WhatsAppSync busca el pedido que termina asi.
+    // Siempre en mayusculas para que se lea y dicte sin ambiguedad. El id real
+    // en Firebase distingue mayusculas: WhatsAppSync compara sin distinguirlas.
     function codigoPedidoCorto(id) {
-      return String(id || '').slice(-6);
+      return String(id || '').slice(-6).toUpperCase();
     }
 
     // Al copiar el TOTAL FINAL o enviar la cotizacion: fija en Firebase los precios de items
@@ -14021,6 +14517,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           let entrega = r.value !== 'Retiro en local' ? 'Envios' : '';
           programarActualizacion('pedidos/' + pedidoId, { tipoEntrega: r.value, entrega });
           pedidoActual.tipoEntrega = r.value;
+          actualizarCtxEntrega();
 
           const envioRow = document.getElementById('pvEnvioRow');
           const envioInput = document.getElementById('pvEnvioInput');
@@ -15090,6 +15587,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let lista;
       try {
         lista = await buscarPedidosCliente(cliente);
+        // Solo el historial de compras concretadas: cancelados, abiertos y
+        // cerrados sin entregar no se muestran.
+        if (lista) lista = lista.filter(p => p.status === 'DESPACHADO/ENTREGADO');
       } catch (err) {
         console.error('Error buscando pedidos del cliente:', err);
         pedidosClienteList.innerHTML = htmlErrorReintento(err, 'abrirPedidosCliente()');
@@ -15100,7 +15600,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         return;
       }
       if (lista.length === 0) {
-        pedidosClienteList.innerHTML = '<div class="pedidos-panel-empty">Sin pedidos</div>';
+        pedidosClienteList.innerHTML = '<div class="pedidos-panel-empty">Sin pedidos entregados</div>';
         return;
       }
 
@@ -15398,8 +15898,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (waAsigManual[x.id]) acciones += '<button type="button" class="pv-comp-acc" data-acc="auto" data-id="' + escapeHtml(x.id) + '" title="Deshacer la corrección y volver a la asignación automática">Automático</button>';
       let donde = '';
       if (!propio) donde = x.pedido ? 'En el pedido ' + codigoPedidoCorto(x.pedido) : 'Sin pedido';
+      // Punto de aviso solo en los asignados a este pedido (mismo criterio que la lista).
+      const alerta = propio ? waAlertaComprobante(x) : '';
+      const motivo = alerta === 'rojo' ? 'No se pudo confirmar que la imagen sea un comprobante'
+        : alerta === 'amarillo' ? (!x.monto ? 'Importe no leído' : 'Asignación dudosa: conviene revisarlo') : '';
       return '<div class="pv-comp-item">' +
-        '<button type="button" class="pv-comp-img" data-k="' + escapeHtml(x.id) + '" title="Ver grande">' + pvCompMiniatura(x.id) + '</button>' +
+        '<span class="pv-comp-img-wrap' + (alerta ? ' is-alerta-' + alerta : '') + '"' + (motivo ? ' title="' + escapeHtml(motivo) + '"' : '') + '>' +
+        '<button type="button" class="pv-comp-img" data-k="' + escapeHtml(x.id) + '" title="Ver grande">' + pvCompMiniatura(x.id) + '</button></span>' +
         '<div class="pv-comp-info"><b>' + escapeHtml(monto) + '</b>' +
           '<span>' + escapeHtml(f) + (donde ? ' · ' + escapeHtml(donde) : '') + '</span>' +
           (propio && conf ? '<span class="pv-comp-conf is-' + x.conf + '" title="' + escapeHtml(conf[1]) + '">' + conf[0] + '</span>' : '') +
@@ -15423,15 +15928,22 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!propios.length && !otros.length) { cont.hidden = true; cont.innerHTML = ''; return; }
 
       const total = Math.round(Number(pedidoActual.pagos && pedidoActual.pagos.totalFinal) || 0);
-      let suma = 0, sinMonto = 0;
-      propios.forEach(x => { if (x.monto) suma += Number(x.monto); else sinMonto++; });
+      let suma = 0, sinMonto = 0, dudosos = 0, revisar = 0;
+      propios.forEach(x => {
+        if (x.monto) suma += Number(x.monto); else sinMonto++;
+        if (x.comp === 'duda') dudosos++;
+        if (x.conf === 'revisar' || x.conf === 'media') revisar++;
+      });
       let html = '<div class="pv-comp-head"><span>Comprobantes de pago</span>';
       if (propios.length) {
         const estado = waEstadoPagado(suma, total, sinMonto);
-        const txt = estado === 'completo' ? 'Pagado completo'
-          : estado === 'parcial' ? 'Pagado $ ' + suma.toLocaleString('es-AR') + ' de $ ' + total.toLocaleString('es-AR')
-          : 'Revisar importes';
-        html += '<span class="pv-comp-estado is-' + estado + '">' + escapeHtml(txt) + '</span>';
+        const alerta = waAlertaComprobantes(estado, dudosos, sinMonto, revisar);
+        const txt = estado === 'parcial' ? 'Pagado $ ' + suma.toLocaleString('es-AR') + ' de $ ' + total.toLocaleString('es-AR')
+          : estado === 'sin-importe' ? 'Revisar importes'
+          : dudosos ? 'Revisar comprobantes'
+          : revisar ? 'Pagado · revisar asignación'
+          : 'Pagado completo';
+        html += '<span class="pv-comp-estado' + (alerta ? ' is-alerta-' + alerta : '') + '">' + escapeHtml(txt) + '</span>';
       }
       html += '</div>';
       if (propios.length) html += propios.map(x => pvCompFila(x, true)).join('');
@@ -15576,10 +16088,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     function waPedirContrasena() {
       const user = firebase.auth().currentUser;
       const email = user ? (user.email || '') : '';
-      waVacio('Para ver las conversaciones confirm&aacute; tu contrase&ntilde;a (se pide una sola vez).' +
+      waVacio('Para ver los archivos de WhatsApp confirm&aacute; tu contrase&ntilde;a (se pide una sola vez).' +
         '<div class="wa-login">' +
           '<input type="password" id="waPass" placeholder="Contrase&ntilde;a de ' + escapeHtml(email) + '" autocomplete="current-password">' +
-          '<button type="button" id="waPassOk">Ver conversaci&oacute;n</button>' +
+          '<button type="button" id="waPassOk">Ver archivos</button>' +
           '<div class="wa-login-error" id="waPassError"></div>' +
         '</div>');
       const input = document.getElementById('waPass');
@@ -15927,9 +16439,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     document.getElementById('editClientCancel').addEventListener('click', () => {
       document.getElementById('editClientModal').classList.remove('active');
     });
-    document.getElementById('editClientModal').addEventListener('click', (e) => {
-      if (e.target.id === 'editClientModal') document.getElementById('editClientModal').classList.remove('active');
-    });
+    // Sin cierre al tocar fuera: un click errado no debe perder lo que se
+    // estaba cargando. Se cierra solo con Cancelar o al guardar.
 
     document.getElementById('editClientSave').addEventListener('click', async () => {
       const nombre = document.getElementById('editNombre').value.trim();
@@ -15997,7 +16508,15 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const pagosChanged = JSON.stringify(nuevoPedido.pagos) !== JSON.stringify(pedidoActual.pagos);
         const controlChanged = controlHuella(nuevoPedido.control) !== controlHuella(pedidoActual.control);
         const faltantesChanged = JSON.stringify(nuevoPedido.faltantesAbonados || null) !== JSON.stringify(pedidoActual.faltantesAbonados || null);
-        if (!itemsChanged && !statusChanged && !notaChanged && !clienteChanged && !enPreparacionChanged && !pagosChanged && !controlChanged && !faltantesChanged) return;
+        const faltantesLogChanged = JSON.stringify(nuevoPedido.faltantesLog || null) !== JSON.stringify(pedidoActual.faltantesLog || null);
+        if (!itemsChanged && !statusChanged && !notaChanged && !clienteChanged && !enPreparacionChanged && !pagosChanged && !controlChanged && !faltantesChanged) {
+          // Solo cambio el log de faltantes (p. ej. desde otro dispositivo).
+          if (faltantesLogChanged) {
+            pedidoActual.faltantesLog = nuevoPedido.faltantesLog || null;
+            actualizarBtnFaltantes();
+          }
+          return;
+        }
 
         pedidoActual = nuevoPedido;
         pedidoActual.id = id;
@@ -16027,6 +16546,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           if (ns) ns.value = nuevoPedido.nota || '';
         }
         if (enPreparacionChanged) actualizarBtnTerminar();
+        if (faltantesLogChanged) actualizarBtnFaltantes();
         // Lecturas de otro equipo o items editados con el control abierto.
         if (controlChanged || itemsChanged || statusChanged) {
           controlActualizarUI();
