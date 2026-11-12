@@ -39,6 +39,17 @@ Dentro del pedido se puede **Quitar** o **Asignar** un comprobante a mano; esa c
 **Reglas de la base:** para las correcciones a mano hay que publicar de nuevo `database.rules.json`
 (Firebase → Realtime Database → Reglas → pegar y **Publicar**).
 
+### Bajar los comprobantes a la PC y verificarlos
+`descargar-comprobantes.bat` baja los comprobantes de pago a la carpeta `comprobantes\`
+(`cliente - PEDIDO - fecha.jpg`) y revisa si hay nuevos cada 5 minutos. No hace falta abrirlo a mano si se usa el
+**Verificador de comprobantes** (`compVerif`) con el interruptor **Comprobantes de WhatsApp** prendido: el verificador
+lo corre oculto y analiza solo cada comprobante nuevo. No se pueden abrir los dos a la vez; el segundo avisa y se cierra.
+
+Según el resultado, el nombre del archivo termina en **[ALTERADO]**, **[REVISAR]** o **[RECHAZADO]**, y en
+pedidosv2 el comprobante y el pedido muestran el aviso ("Comprobante posiblemente alterado"). Si en el verificador
+se marca **Aprobado**, la marca se quita. El verificador deja su resultado en `comprobantes\verificacion.json` y el
+script de descarga es el único que renombra y sube el aviso a Firebase (`imgsIdx/{id}/verif`).
+
 - No envía mensajes nunca.
 - Comprobantes y cotizaciones se borran solos a los 90 días.
 - La primera vez que lee una imagen baja el idioma español del lector de texto (necesita internet).

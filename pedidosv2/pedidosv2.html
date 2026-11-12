@@ -3391,6 +3391,8 @@
     .comp-visor-cat { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #fff; }
     .comp-visor-cat.is-pago { background: var(--pago); }
     .comp-visor-cat.is-remito { background: var(--warn); }
+    .comp-visor-cat.is-alterado { background: var(--bad); }
+    .comp-visor-cat.is-revisar { background: #f2b705; color: #1a1a1a; }
     /* Segun lo pagado frente al total del pedido */
     /* Siempre verde con icono blanco; el estado lo cuenta un punto en la esquina:
        amarillo = sin monto leido o asignacion dudosa,
@@ -9477,7 +9479,7 @@
         const a = waPedidoDeComprobante(id, v);
         if (!a.pedido) continue;
         if (!mapa.has(a.pedido)) mapa.set(a.pedido, []);
-        mapa.get(a.pedido).push({ id, tel: v.tel, t: v.t, doc: !!v.doc, monto: Number(v.monto) || 0, conf: a.conf, comp: v.comp || '' });
+        mapa.get(a.pedido).push({ id, tel: v.tel, t: v.t, doc: !!v.doc, monto: Number(v.monto) || 0, conf: a.conf, comp: v.comp || '', verif: v.verif || null });
       }
       pagos.forEach(l => l.sort((a, b) => a.t - b.t));
       remitos.forEach(l => l.sort((a, b) => a.t - b.t));
@@ -9520,13 +9522,29 @@
     // usan la lista de pendientes y la seccion de comprobantes del pedido.
     //   rojo     -> pago parcial o imagen no confirmada como comprobante
     //   amarillo -> algun comprobante sin monto leido o asignacion dudosa
-    function waAlertaComprobantes(estado, dudosos, sinMonto, revisar) {
-      if (estado === 'parcial' || dudosos) return 'rojo';
-      if (sinMonto || revisar) return 'amarillo';
+    function waAlertaComprobantes(estado, dudosos, sinMonto, revisar, alterados, aRevisar) {
+      if (estado === 'parcial' || dudosos || alterados) return 'rojo';
+      if (sinMonto || revisar || aRevisar) return 'amarillo';
       return '';
+    }
+    // Resultado del Verificador de comprobantes (imgsIdx/{id}/verif = { s, n, m, t },
+    // lo sube descargar-comprobantes.js): 'rojo' si puede estar alterado o se
+    // rechazo, 'amarillo' si conviene mirarlo, '' si esta bien o se aprobo.
+    function waVerif(x) {
+      const s = x && x.verif && x.verif.s;
+      return s === 'rojo' || s === 'rechazado' ? 'rojo' : s === 'amarillo' ? 'amarillo' : '';
+    }
+    function waVerifMotivo(x) {
+      const v = waVerif(x);
+      if (!v) return '';
+      const m = x.verif.m ? ': ' + x.verif.m : '';
+      return v === 'rojo' ? (x.verif.s === 'rechazado' ? 'Rechazado en el verificador' : 'El verificador lo marcó como posiblemente alterado' + m)
+        : 'El verificador sugiere revisarlo' + m;
     }
     // Lo mismo para un comprobante suelto (fila de la seccion del pedido).
     function waAlertaComprobante(x) {
+      const v = waVerif(x);
+      if (v) return v;
       if (x.comp === 'duda') return 'rojo';
       if (!x.monto || x.conf === 'revisar' || x.conf === 'media') return 'amarillo';
       return '';
@@ -9536,8 +9554,10 @@
     function waComprobantesDe(p) {
       const lista = waAdjPorPedido.get(p.id);
       if (!lista || !lista.length) return null;
-      let docs = 0, fotos = 0, ultimo = 0, suma = 0, sinMonto = 0, revisar = 0, dudosos = 0;
+      let docs = 0, fotos = 0, ultimo = 0, suma = 0, sinMonto = 0, revisar = 0, dudosos = 0, alterados = 0, aRevisar = 0;
       for (const a of lista) {
+        const v = waVerif(a);
+        if (v === 'rojo') alterados++; else if (v === 'amarillo') aRevisar++;
         if (a.doc) docs++; else fotos++;
         if (a.monto) suma += a.monto; else sinMonto++;
         if (a.conf === 'revisar' || a.conf === 'media') revisar++;
@@ -9546,8 +9566,8 @@
         ultimo = Math.max(ultimo, a.t);
       }
       const estado = waEstadoPagado(suma, p.total || 0, sinMonto);
-      const alerta = waAlertaComprobantes(estado, dudosos, sinMonto, revisar);
-      return { docs, fotos, ultimo, suma, sinMonto, revisar, dudosos, total: p.total || 0,
+      const alerta = waAlertaComprobantes(estado, dudosos, sinMonto, revisar, alterados, aRevisar);
+      return { docs, fotos, ultimo, suma, sinMonto, revisar, dudosos, alterados, total: p.total || 0,
         estado, alerta };
     }
 
@@ -9673,7 +9693,7 @@
         if (v.tel !== compEstado.tel) continue;
         const cat = waEsComprobantePago(v) ? 'pago' : waEsRemito(v) ? 'remito' : '';
         if (!cat) continue;
-        out.push({ id, tel: v.tel, t: v.t, monto: Number(v.monto) || 0, cat, pedido: waPedidoDeComprobante(id, v).pedido });
+        out.push({ id, tel: v.tel, t: v.t, monto: Number(v.monto) || 0, cat, pedido: waPedidoDeComprobante(id, v).pedido, verif: v.verif || null });
       }
       return out.sort((a, b) => b.t - a.t);
     }
@@ -9716,7 +9736,10 @@
       const partes = [waFechaComprobante(a.t)];
       if (a.cat === 'pago' && a.monto) partes.push('$ ' + a.monto.toLocaleString('es-AR'));
       if (compEstado.modo === 'cliente') partes.push(a.pedido ? 'Pedido ' + codigoPedidoCorto(a.pedido) : 'Sin pedido');
-      info.innerHTML = '<span class="comp-visor-cat is-' + a.cat + '">' + (a.cat === 'remito' ? 'Remito' : 'Pago') + '</span> ' + escapeHtml(partes.join(' · '));
+      const v = a.cat === 'pago' ? waVerif(a) : '';
+      const marca = v ? ' <span class="comp-visor-cat is-' + (v === 'rojo' ? 'alterado' : 'revisar') + '" title="' + escapeHtml(waVerifMotivo(a)) + '">' +
+        (v === 'rojo' ? (a.verif.s === 'rechazado' ? 'Rechazado' : 'Alterado') : 'Revisar') + '</span>' : '';
+      info.innerHTML = '<span class="comp-visor-cat is-' + a.cat + '">' + (a.cat === 'remito' ? 'Remito' : 'Pago') + '</span>' + marca + ' ' + escapeHtml(partes.join(' · '));
       const src = waFotos.get(a.id);
       if (src) { caja.innerHTML = '<img src="' + src + '" alt="Comprobante">'; return; }
       if (waFotos.has(a.id)) { caja.innerHTML = '<span class="comp-visor-ph">Imagen no disponible.</span>'; return; }
@@ -15900,8 +15923,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!propio) donde = x.pedido ? 'En el pedido ' + codigoPedidoCorto(x.pedido) : 'Sin pedido';
       // Punto de aviso solo en los asignados a este pedido (mismo criterio que la lista).
       const alerta = propio ? waAlertaComprobante(x) : '';
-      const motivo = alerta === 'rojo' ? 'No se pudo confirmar que la imagen sea un comprobante'
-        : alerta === 'amarillo' ? (!x.monto ? 'Importe no leído' : 'Asignación dudosa: conviene revisarlo') : '';
+      const motivo = !alerta ? '' : (propio && waVerifMotivo(x)) || (alerta === 'rojo' ? 'No se pudo confirmar que la imagen sea un comprobante'
+        : !x.monto ? 'Importe no leído' : 'Asignación dudosa: conviene revisarlo');
       return '<div class="pv-comp-item">' +
         '<span class="pv-comp-img-wrap' + (alerta ? ' is-alerta-' + alerta : '') + '"' + (motivo ? ' title="' + escapeHtml(motivo) + '"' : '') + '>' +
         '<button type="button" class="pv-comp-img" data-k="' + escapeHtml(x.id) + '" title="Ver grande">' + pvCompMiniatura(x.id) + '</button></span>' +
@@ -15928,8 +15951,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!propios.length && !otros.length) { cont.hidden = true; cont.innerHTML = ''; return; }
 
       const total = Math.round(Number(pedidoActual.pagos && pedidoActual.pagos.totalFinal) || 0);
-      let suma = 0, sinMonto = 0, dudosos = 0, revisar = 0;
+      let suma = 0, sinMonto = 0, dudosos = 0, revisar = 0, alterados = 0, aRevisar = 0;
       propios.forEach(x => {
+        const v = waVerif(x);
+        if (v === 'rojo') alterados++; else if (v === 'amarillo') aRevisar++;
         if (x.monto) suma += Number(x.monto); else sinMonto++;
         if (x.comp === 'duda') dudosos++;
         if (x.conf === 'revisar' || x.conf === 'media') revisar++;
@@ -15937,10 +15962,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let html = '<div class="pv-comp-head"><span>Comprobantes de pago</span>';
       if (propios.length) {
         const estado = waEstadoPagado(suma, total, sinMonto);
-        const alerta = waAlertaComprobantes(estado, dudosos, sinMonto, revisar);
-        const txt = estado === 'parcial' ? 'Pagado $ ' + suma.toLocaleString('es-AR') + ' de $ ' + total.toLocaleString('es-AR')
+        const alerta = waAlertaComprobantes(estado, dudosos, sinMonto, revisar, alterados, aRevisar);
+        const txt = alterados ? (alterados > 1 ? alterados + ' comprobantes posiblemente alterados' : 'Comprobante posiblemente alterado')
+          : estado === 'parcial' ? 'Pagado $ ' + suma.toLocaleString('es-AR') + ' de $ ' + total.toLocaleString('es-AR')
           : estado === 'sin-importe' ? 'Revisar importes'
-          : dudosos ? 'Revisar comprobantes'
+          : dudosos || aRevisar ? 'Revisar comprobantes'
           : revisar ? 'Pagado · revisar asignación'
           : 'Pagado completo';
         html += '<span class="pv-comp-estado' + (alerta ? ' is-alerta-' + alerta : '') + '">' + escapeHtml(txt) + '</span>';

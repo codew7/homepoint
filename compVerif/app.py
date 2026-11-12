@@ -70,10 +70,32 @@ def main():
     http = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Handler)
     threading.Thread(target=http.serve_forever, daemon=True).start()
 
-    webview.create_window(NOMBRE, f"http://127.0.0.1:{http.server_address[1]}/", width=ANCHO, height=ALTO,
-                          min_size=(380, 560), background_color="#F4F4F6", text_select=True)
-    webview.start(private_mode=False, storage_path=str(Path(os.environ["VERIFICADOR_DATOS"]) / "ventana"),
-                  icon=str(RECURSOS / "icono.ico"))
+    ventana = webview.create_window(NOMBRE, f"http://127.0.0.1:{http.server_address[1]}/", width=ANCHO, height=ALTO,
+                                    min_size=(380, 560), background_color="#F4F4F6", text_select=True)
+
+    def elegir_carpeta():
+        elegida = ventana.create_file_dialog(webview.FileDialog.FOLDER)
+        return elegida[0] if elegida else None
+
+    servidor.ELEGIR_CARPETA = elegir_carpeta
+    servidor.WA.iniciar()
+
+    def titulo():
+        """La barra de tareas avisa cuando hay comprobantes de WhatsApp alterados sin decidir."""
+        anterior = None
+        while True:
+            try:
+                n = servidor.WA.estado(limite=0)["alertas"]
+                nuevo = f"{NOMBRE} ({n} {'alterado' if n == 1 else 'alterados'})" if n else NOMBRE
+                if nuevo != anterior:
+                    ventana.set_title(nuevo)
+                    anterior = nuevo
+            except Exception:
+                pass
+            threading.Event().wait(5)
+
+    webview.start(titulo, private_mode=False,
+                  storage_path=str(Path(os.environ["VERIFICADOR_DATOS"]) / "ventana"), icon=str(RECURSOS / "icono.ico"))
     http.shutdown()
 
 

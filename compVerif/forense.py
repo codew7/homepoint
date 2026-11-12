@@ -37,6 +37,11 @@ MAX_LADO_ELA = 1400
 # color exacto; los PNG de ChatGPT dieron 37-44 %. La compresion de WhatsApp aplana
 # ese ruido (los mismos PNG pasan a 69-85 %), asi que solo sirve con el archivo
 # original o con una captura de la imagen hecha con IA.
+# Copias de WhatsAppSync (JPEG 70-80 % recomprimido con sharp): 78 comprobantes
+# reales medidos en 11/2026 dieron 69-91 % (mediana 78 %), todos con fondo 255 o
+# un gris de diseno; ninguno cae bajo LISURA_MIN, asi que los umbrales sirven
+# tambien ahi. Pero una imagen de IA recomprimida tambien sube, de modo que en
+# esas copias un fondo liso no prueba nada (se muestra como "info", no "ok").
 LISURA_ROJO = 0.50
 LISURA_MIN = 0.65
 
@@ -226,10 +231,11 @@ CONSEJO_GEMINI = (" Para salir de dudas: subí la imagen a la app de Gemini y pr
                   "editada con IA de Google?». Detecta su marca invisible (SynthID), que resiste WhatsApp.")
 
 
-def controles_ia(forense, datos, fondos_reales=()):
+def controles_ia(forense, datos, fondos_reales=(), copia=False):
     """Huellas de imagen redibujada por IA. Solo pesan si Claude la vio como captura
     de pantalla: una foto de un ticket o de otra pantalla nunca tiene fondo liso.
-    fondos_reales: colores de fondo de comprobantes aprobados del mismo banco."""
+    fondos_reales: colores de fondo de comprobantes aprobados del mismo banco.
+    copia: la imagen es una copia recomprimida (WhatsAppSync), no el archivo recibido."""
     meta = forense.get("meta") or {}
     if forense.get("tipo") != "imagen" or "lisura" not in meta:
         return []
@@ -241,6 +247,10 @@ def controles_ia(forense, datos, fondos_reales=()):
             avisos.append(aviso("rojo" if valor < LISURA_ROJO else "amarillo", "El fondo no es liso como en una captura real",
                                 f"Sólo el {valor:.0%} de los píxeles son idénticos a su vecino (en capturas reales suele ser más del 75 %). "
                                 "Es lo que pasa cuando una IA vuelve a dibujar la imagen." + CONSEJO_GEMINI, ORIGEN))
+        elif copia:
+            avisos.append(aviso("info", f"Fondo liso ({valor:.0%})",
+                                "En una copia recomprimida por WhatsAppSync este control detecta poco: "
+                                "una imagen hecha con IA también puede dar liso después de comprimirse.", ORIGEN))
         else:
             avisos.append(aviso("ok", f"Fondo liso como en una captura real ({valor:.0%})", origen=ORIGEN))
     color = meta.get("fondo")

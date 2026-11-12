@@ -17,6 +17,27 @@ El ícono del reloj abre el **historial**. Para usar el `.exe`, la PC necesita C
 
 Para desarrollo también sigue andando **`Verificador.bat`**, que abre la misma pantalla en el navegador y usa la carpeta `datos\`.
 
+## Comprobantes de WhatsApp (opcional)
+
+En la pantalla principal, la tarjeta **Comprobantes de WhatsApp** tiene un interruptor. Prendido, el verificador:
+
+1. Baja solo los comprobantes de pago que mandan los clientes (corre `WhatsAppSync\descargar-comprobantes.js` oculto, cada 5 minutos; se cierra junto con la app).
+2. Analiza cada comprobante nuevo con los mismos controles de siempre, de a uno y del más viejo al más nuevo. Si soltás o pegás uno a mano, ese va primero.
+3. Marca los sospechosos en tres lugares:
+   - **El archivo** en `WhatsAppSync\comprobantes\`: termina en **[ALTERADO]** (rojo), **[REVISAR]** (amarillo) o **[RECHAZADO]**.
+   - **El verificador**: el ícono de mensajes muestra cuántos alterados faltan decidir, y la ventana lo dice en la barra de tareas.
+   - **pedidosv2**: el comprobante y el pedido muestran el aviso ("Comprobante posiblemente alterado").
+
+Marcar **Aprobado** quita la marca y **Rechazado** la deja como [RECHAZADO], en los tres lugares.
+
+La primera vez que se prende se analizan los comprobantes de los últimos 3 días; los más viejos quedan **Sin analizar**, con un botón para analizarlos. Si Claude falla, el comprobante no se marca y se reintenta solo (hasta 3 veces).
+
+**Límite importante:** WhatsAppSync no guarda el archivo original, sino una copia achicada y recomprimida, sin datos internos; de los PDF guarda solo una foto de la primera página. Por eso, en estos comprobantes no se pueden buscar sellos de IA o de Photoshop, ni comparar el texto interno de un PDF, y el control de fondo liso detecta poco. El resultado lo aclara en Hallazgos. Ante la duda, descargá el original desde WhatsApp y soltalo en el verificador.
+
+**Comprobantes repetidos:** el mismo comprobante desde **otro teléfono** o para **otro pedido** sale en rojo, porque es la señal típica de un comprobante reutilizado. Si el cliente lo reenvía en el mismo chat, o lo pegás a mano después de que llegó por WhatsApp, se anota como dato y no da alarma. Pero si ese comprobante ya había salido alterado, el reenvío también sale en rojo.
+
+Requisitos: Node.js instalado y la carpeta `WhatsAppSync` con `clave-firebase.json`. Si el verificador no la encuentra solo, pide elegirla. Mientras el interruptor esté prendido, no hace falta abrir `descargar-comprobantes.bat`; si se abre igual, avisa que ya hay una descarga corriendo y se cierra.
+
 ## Qué revisa
 
 - **Alteraciones visuales (el control principal):** Claude revisa el comprobante como un perito. Busca tipografías, tamaños o nitidez distintos alrededor del monto, la fecha, el destinatario y los números; parches o manchas en el fondo; textos desalineados; diseño que no corresponde a la app del banco; incoherencias como el día de la semana o la hora del celular; y errores típicos de una IA al redibujar (letras chicas deformes, íconos inventados, logos distintos). Además de la imagen completa, recibe franjas ampliadas para mirar de cerca.

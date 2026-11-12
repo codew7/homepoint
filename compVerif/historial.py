@@ -1,6 +1,9 @@
 r"""
 Historial de comprobantes analizados (SQLite, datos/historial.sqlite).
 
+Tabla "whatsapp": estado de cada comprobante bajado por descargar-comprobantes.js
+(pendiente, en cola, listo, error) y el analisis que le corresponde.
+
 Permite detectar reenvios (mismo archivo, imagen casi igual, numero de operacion
 repetido) y aprender de los comprobantes aprobados (formato de numero de
 operacion por banco).
@@ -43,10 +46,23 @@ CREATE TABLE IF NOT EXISTS analisis (
 );
 CREATE INDEX IF NOT EXISTS ix_sha ON analisis(sha256);
 CREATE INDEX IF NOT EXISTS ix_op ON analisis(operacion);
+CREATE TABLE IF NOT EXISTS whatsapp (
+    wa_id TEXT PRIMARY KEY,
+    archivo TEXT,
+    t INTEGER,
+    estado TEXT NOT NULL,
+    analisis_id INTEGER,
+    intentos INTEGER DEFAULT 0,
+    error TEXT,
+    actualizado TEXT
+);
 """
 
+# Estados de la tabla whatsapp
+PENDIENTE, EN_COLA, LISTO, ERROR = "pendiente", "en_cola", "listo", "error"
+
 COLUMNAS_LISTA = ("id", "creado", "archivo", "extension", "tipo", "banco", "titular", "operacion", "coelsa", "fecha_op",
-                  "monto", "semaforo", "veredicto", "sha256", "dhash", "texto_hash")
+                  "monto", "semaforo", "veredicto", "sha256", "dhash", "texto_hash", "origen", "wa_id", "cliente")
 
 
 def _conexion():
@@ -57,9 +73,10 @@ def _conexion():
     con.executescript(ESQUEMA)
     # Bases creadas por versiones anteriores: se agregan las columnas que falten
     existentes = {f["name"] for f in con.execute("PRAGMA table_info(analisis)")}
-    for col in ("titular",):
+    for col in ("titular", "origen", "wa_id", "cliente"):
         if col not in existentes:
             con.execute(f"ALTER TABLE analisis ADD COLUMN {col} TEXT")
+    con.execute("CREATE INDEX IF NOT EXISTS ix_wa ON analisis(wa_id)")
     return con
 
 
@@ -71,6 +88,7 @@ def _columnas(reg):
     """Campos indexables de un registro completo (lo demas va en 'detalle' como JSON)."""
     datos = reg.get("datos") or {}
     forense = reg.get("forense") or {}
+    origen = reg.get("origen") or {}
     return {
         "archivo": reg.get("archivo"), "extension": reg.get("extension"), "tipo": forense.get("tipo"),
         "sha256": forense.get("sha256"), "dhash": forense.get("dhash"), "texto_hash": forense.get("texto_hash"),
@@ -79,6 +97,7 @@ def _columnas(reg):
         "coelsa": (str(datos.get("id_coelsa") or "").strip() or None), "fecha_op": reg.get("fecha_op"),
         "monto": reg.get("monto"), "semaforo": reg.get("semaforo"), "veredicto": reg.get("veredicto"),
         "veredicto_fecha": reg.get("veredicto_fecha"),
+        "origen": origen.get("tipo"), "wa_id": origen.get("wa_id"), "cliente": origen.get("cliente"),
     }
 
 
@@ -110,12 +129,19 @@ def obtener(id_):
     return reg
 
 
-def listar(texto="", limite=300, excluir=None):
+def listar(texto="", limite=300, excluir=None, origen=None):
+    """origen: None (todos), "whatsapp" o "manual"."""
     sql = f"SELECT {', '.join(COLUMNAS_LISTA)} FROM analisis"
-    params = []
+    condiciones, params = [], []
     if texto:
-        sql += " WHERE operacion LIKE ? OR coelsa LIKE ? OR archivo LIKE ? OR banco LIKE ? OR titular LIKE ?"
-        params = [f"%{texto}%"] * 5
+        condiciones.append("(operacion LIKE ? OR coelsa LIKE ? OR archivo LIKE ? OR banco LIKE ? OR titular LIKE ? OR cliente LIKE ?)")
+        params += [f"%{texto}%"] * 6
+    if origen == "whatsapp":
+        condiciones.append("origen = 'whatsapp'")
+    elif origen == "manual":
+        condiciones.append("origen IS NULL")
+    if condiciones:
+        sql += " WHERE " + " AND ".join(condiciones)
     sql += " ORDER BY id DESC LIMIT ?"
     params.append(limite)
     with _lock, _conexion() as con:
@@ -134,8 +160,55 @@ def veredicto(id_, valor):
                     (valor or None, ahora() if valor else None, id_))
 
 
+def borrar_incompletos():
+    """Analisis que quedaron a medias (se cerro la app mientras analizaba): se borran
+    al arrancar. Si venian de WhatsApp, vuelven a la cola."""
+    with _lock, _conexion() as con:
+        filas = con.execute("SELECT id, wa_id FROM analisis WHERE semaforo IS NULL").fetchall()
+    for f in filas:
+        borrar(f["id"])
+        if f["wa_id"]:
+            with _lock, _conexion() as con:
+                con.execute("UPDATE whatsapp SET estado=? WHERE wa_id=? AND analisis_id IS NULL", (EN_COLA, f["wa_id"]))
+    return len(filas)
+
+
 def borrar(id_):
     with _lock, _conexion() as con:
         con.execute("DELETE FROM analisis WHERE id=?", (id_,))
+        # Si venia de WhatsApp, el comprobante vuelve a quedar sin analizar
+        con.execute("UPDATE whatsapp SET estado=?, analisis_id=NULL, actualizado=? WHERE analisis_id=?", (PENDIENTE, ahora(), id_))
     for f in [*ARCHIVOS_DIR.glob(f"{id_}.*"), *ARCHIVOS_DIR.glob(f"{id_}_*")]:
         f.unlink(missing_ok=True)
+
+
+# ------------------------------------------------------------------ whatsapp --
+
+def wa_todos():
+    """{wa_id: fila} de la tabla whatsapp."""
+    with _lock, _conexion() as con:
+        return {f["wa_id"]: dict(f) for f in con.execute("SELECT * FROM whatsapp")}
+
+
+def wa_poner(wa_id, **campos):
+    """Crea o actualiza la fila de un comprobante de WhatsApp."""
+    campos["actualizado"] = ahora()
+    with _lock, _conexion() as con:
+        con.execute("INSERT OR IGNORE INTO whatsapp (wa_id, estado) VALUES (?, ?)", (wa_id, campos.get("estado") or PENDIENTE))
+        con.execute(f"UPDATE whatsapp SET {', '.join(k + '=?' for k in campos)} WHERE wa_id=?", (*campos.values(), wa_id))
+
+
+def wa_de_analisis(id_):
+    """wa_id del comprobante de WhatsApp al que corresponde un analisis (o None)."""
+    with _lock, _conexion() as con:
+        fila = con.execute("SELECT wa_id FROM whatsapp WHERE analisis_id=?", (id_,)).fetchone()
+    return fila["wa_id"] if fila else None
+
+
+def wa_resultados():
+    """Ultimo analisis de cada comprobante de WhatsApp: [{wa_id, analisis_id, semaforo, veredicto, detalle}]."""
+    with _lock, _conexion() as con:
+        filas = con.execute("""SELECT w.wa_id, w.analisis_id, a.semaforo, a.veredicto, a.detalle
+                               FROM whatsapp w JOIN analisis a ON a.id = w.analisis_id
+                               WHERE w.estado = ?""", (LISTO,)).fetchall()
+    return [dict(f) for f in filas]
