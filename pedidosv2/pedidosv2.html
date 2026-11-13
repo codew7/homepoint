@@ -9033,19 +9033,27 @@
     // nodo y cierre que el menu de notas (ppNotaMenuEl / ppNotaCerrar), asi
     // que se cierra con un toque fuera y frena el repintado en vivo mientras
     // esta abierto. Las filas las arma renderPedidosPendientes.
-    let ppDesgloseFilas = [];
+    // Un desglose por boton del resumen: 'desp' (para despachar) y 'prep'
+    // (para preparar).
+    let ppDesgloseFilas = { desp: [], prep: [] };
+    const PP_DESGLOSE_TITULOS = {
+      desp: 'Para despachar por forma de entrega',
+      prep: 'Para preparar por forma de entrega'
+    };
     const IC_RETIRO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l1.5-5h15L21 9"></path><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"></path><path d="M5 13v7h14v-7"></path><path d="M10 20v-4h4v4"></path></svg>';
     pedidosResumen.addEventListener('click', (e) => {
-      const btn = e.target.closest('#ppResumenDesp');
+      const btn = e.target.closest('.pp-resumen-desp');
       if (!btn || btn.disabled) return;
       if (ppNotaAbierta === btn) { ppNotaCerrar(); return; }
       ppNotaCerrar();
-      if (!ppDesgloseFilas.length) return;
+      const tipo = btn.dataset.desglose;
+      const filas = ppDesgloseFilas[tipo] || [];
+      if (!filas.length) return;
       const menu = document.createElement('div');
       menu.className = 'pp-nota-menu pp-desglose-pop';
       menu.setAttribute('role', 'menu');
-      menu.innerHTML = '<div class="pp-nota-menu-titulo">Listos por forma de entrega</div>' +
-        ppDesgloseFilas.map(([n, txt, ic, mod]) =>
+      menu.innerHTML = '<div class="pp-nota-menu-titulo">' + PP_DESGLOSE_TITULOS[tipo] + '</div>' +
+        filas.map(([n, txt, ic, mod]) =>
           '<div class="pp-desglose-fila">' +
             '<span class="pp-entrega-ind pp-entrega-ind--' + mod + '">' + ic + '</span>' +
             '<span class="pp-desglose-txt">' + escapeHtml(txt) + '</span>' +
@@ -9411,12 +9419,13 @@
     }
 
     // Indicador de embalado junto al nombre. Solo aparece con el pedido ya
-    // controlado: gris mientras espera el embalado, naranja cuando se marca
-    // (desde el menu de la fila). No participa del riel ni del orden.
+    // controlado, y siempre en verde (controlado = embalado). No participa
+    // del riel ni del orden.
     function ppEmbaladoHtml(p) {
+      // Controlado implica embalado: siempre se muestra como embalado.
       if (!p.controlado) return '';
-      const titulo = p.embalado ? 'Controlado y embalado' : 'Controlado, sin embalar';
-      return '<span class="pp-embalado-ind' + (p.embalado ? ' is-embalado' : '') + '" role="img"' +
+      const titulo = 'Controlado y embalado';
+      return '<span class="pp-embalado-ind is-embalado" role="img"' +
         ' title="' + titulo + '" aria-label="' + titulo + '">' + IC_PAQUETE + '</span>';
     }
 
@@ -10006,6 +10015,12 @@
       [normalizarNota('Pedido Confirmado'), 2]
     ]);
 
+    // Listo (armado y pagado) que ademas ya paso por el control. Controlado
+    // implica embalado, asi que no se mira la marca de embalado.
+    function ppEsParaDespachar(p) {
+      return p.controlado === true;
+    }
+
     function renderPedidosPendientes() {
       ppNotaCerrar();
       // Contador sobre el boton de la barra: se llena en cuanto el panel se
@@ -10022,41 +10037,49 @@
         return;
       }
 
-      const conteo = { 0: 0, 1: 0, 2: 0, 3: 0 };
-      pedidosCache.forEach(p => {
-        conteo[p.rank]++;
-      });
-
-      // El conteo sale de los mismos rank que agrupan la lista, asi que el
-      // resumen y los encabezados de grupo no pueden discrepar.
-      // Desglose por entrega de los listos para despachar. Mismos value que los
-      // radios de Entrega del panel; solo se muestran los que tienen pedidos.
-      const porEntrega = { 'Via Cargo': 0, 'Flecha Carga': 0, 'Correo Argentino': 0, 'Motomensajeria': 0, '': 0 };
+      // Los listos (rank 3: armados y pagados) se parten en dos: "Para
+      // despachar" si ya estan controlados (controlado = embalado), "Para
+      // preparar" si todavia no. El resumen y los grupos de la lista
+      // salen de esta misma funcion, asi que no pueden discrepar.
+      const desp = [];
+      const prep = [];
       pedidosCache.forEach(p => {
         if (p.rank !== 3) return;
-        porEntrega[p.tipoEntrega in porEntrega ? p.tipoEntrega : '']++;
+        (ppEsParaDespachar(p) ? desp : prep).push(p);
       });
+
+      // Desglose por entrega. Mismos value que los radios de Entrega del
+      // panel; solo se muestran los que tienen pedidos.
       // Filas del pop-up: [cantidad, texto, icono, modificador de color].
       // Mismos iconos y colores que el indicador de entrega de cada fila.
-      ppDesgloseFilas = [
-        ['Via Cargo', 'Vía Cargo'],
-        ['Flecha Carga', 'Flecha Carga'],
-        ['Correo Argentino', 'Correo Argentino'],
-        ['Motomensajeria', 'Flete'],
-        ['', 'Retiro / sin envío']
-      ].map(([k, txt]) => {
-        const e = PP_ENTREGAS[k];
-        return [porEntrega[k], txt, e ? e[1] : IC_RETIRO, e ? e[2] : 'retiro'];
-      }).filter(([n]) => n > 0);
+      const desglose = (lista) => {
+        const porEntrega = { 'Via Cargo': 0, 'Flecha Carga': 0, 'Correo Argentino': 0, 'Motomensajeria': 0, '': 0 };
+        lista.forEach(p => { porEntrega[p.tipoEntrega in porEntrega ? p.tipoEntrega : '']++; });
+        return [
+          ['Via Cargo', 'Vía Cargo'],
+          ['Flecha Carga', 'Flecha Carga'],
+          ['Correo Argentino', 'Correo Argentino'],
+          ['Motomensajeria', 'Flete'],
+          ['', 'Retiro / sin envío']
+        ].map(([k, txt]) => {
+          const e = PP_ENTREGAS[k];
+          return [porEntrega[k], txt, e ? e[1] : IC_RETIRO, e ? e[2] : 'retiro'];
+        }).filter(([n]) => n > 0);
+      };
+      ppDesgloseFilas = { desp: desglose(desp), prep: desglose(prep) };
 
-      // El desglose se ve en un pop-up al tocar "N listos para despachar".
-      const hayDesglose = ppDesgloseFilas.length > 0;
-      pedidosResumen.innerHTML = pedidosCache.length + ' pedidos · ' +
-        '<button type="button" class="pp-resumen-desp" id="ppResumenDesp" aria-haspopup="menu" aria-expanded="false"' +
-          (hayDesglose ? ' title="Ver por forma de entrega"' : ' disabled') + '>' +
-          conteo[3] + ' listos para despachar' +
-          (hayDesglose ? '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>' : '') +
-        '</button>';
+      // Cada desglose se ve en un pop-up al tocar su boton del resumen.
+      const botonResumen = (tipo, cantidad, texto) => {
+        const hay = ppDesgloseFilas[tipo].length > 0;
+        return '<button type="button" class="pp-resumen-desp" data-desglose="' + tipo + '" aria-haspopup="menu" aria-expanded="false"' +
+            (hay ? ' title="Ver por forma de entrega"' : ' disabled') + '>' +
+            cantidad + ' ' + texto +
+            (hay ? '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>' : '') +
+          '</button>';
+      };
+      pedidosResumen.innerHTML = pedidosCache.length + ' pendientes · ' +
+        botonResumen('desp', desp.length, 'para despachar') + ' · ' +
+        botonResumen('prep', prep.length, 'para preparar');
 
       // Arriba los listos para despachar; el resto se agrupa por nota. Las
       // notas de pago se unifican por estado (el Sheet escribe variantes) y las
@@ -10069,10 +10092,11 @@
       // siempre, elegibles para reimprimir.
       const sinImprimir = [];
       const listos = [];
+      const aPreparar = [];
       const porNota = new Map();
       pedidosCache.forEach(p => {
         if (ppRotModo && !p.rotuloImpreso) { sinImprimir.push(p); return; }
-        if (p.rank === 3) { listos.push(p); return; }
+        if (p.rank === 3) { (ppEsParaDespachar(p) ? listos : aPreparar).push(p); return; }
         const g = ppGrupoNota(p.nota);
         if (!porNota.has(g.clave)) {
           porNota.set(g.clave, {
@@ -10088,16 +10112,21 @@
       const gruposNota = Array.from(porNota.values())
         .sort((a, b) => (a.pos - b.pos) || a.titulo.localeCompare(b.titulo, 'es'));
 
+      // Dentro de cada grupo, alfabetico por titular (sin distinguir
+      // mayusculas ni acentos); a igual nombre, el mas viejo arriba.
+      const porNombre = (a, b) =>
+        a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }) || (a.timestamp - b.timestamp);
       const grupoHtml = (titulo, pedidos, claseExtra) =>
         '<div class="pp-grupo' + (claseExtra || '') + '">' +
           '<span>' + escapeHtml(titulo) + '</span>' +
           '<span class="pp-grupo-count">' + pedidos.length + '</span>' +
         '</div>' +
-        pedidos.map(ppFilaHtml).join('');
+        pedidos.slice().sort(porNombre).map(ppFilaHtml).join('');
 
       let html = '';
       if (sinImprimir.length) html += grupoHtml('Sin imprimir', sinImprimir, ' pp-grupo--sinimp');
       if (listos.length) html += grupoHtml(PP_GRUPOS[3], listos, ' pp-grupo--listo');
+      if (aPreparar.length) html += grupoHtml('Para preparar', aPreparar, ' pp-grupo--listo');
       gruposNota.forEach(g => { html += grupoHtml(g.titulo, g.pedidos); });
 
       pedidosPanelList.innerHTML = html;
@@ -14300,9 +14329,20 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         texto += '\n- ALIAS: ' + aliasValue;
         if (pvAliasEsHP(aliasValue)) texto += '\n- Titular: ' + ALIAS_HP_TITULAR;
       }
+      // Entrega elegida en el panel (o la guardada); sin ninguna, retira en el
+      // local. Mismos textos que el indicador de la lista de pendientes.
+      const entregaRadio = document.querySelector('input[name="pvTipoEntrega"]:checked');
+      const entregaValor = entregaRadio ? entregaRadio.value : (pedidoActual?.tipoEntrega || '');
+      const entrega = PP_ENTREGAS[entregaValor];
+      texto += '\n- Entrega: ' + (entrega ? entrega[0] : 'Retiro en local');
       // Codigo del pedido: WhatsAppSync lo lee de esta cotizacion para asignar
-      // al pedido los comprobantes que el cliente mande despues.
-      if (pedidoId) texto += '\n- Pedido: ' + codigoPedidoCorto(pedidoId);
+      // al pedido los comprobantes que el cliente mande despues. Va antes del
+      // link: WhatsAppSync toma la primera coincidencia de "pedido:".
+      if (pedidoId) {
+        texto += '\n- Pedido: ' + codigoPedidoCorto(pedidoId);
+        texto += '\n\nPodés revisar el detalle de tu pedido en este link:\n' +
+          'https://www.home-point.com.ar/pedidos.html?id=' + pedidoId;
+      }
       return texto;
     }
 
