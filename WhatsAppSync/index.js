@@ -25,7 +25,9 @@
 // misma clave desde el telefono del cliente, asi que da igual si en el pedido
 // se cargo con 0, con +54 o con 549.
 //
-// Solo lee: nunca envia mensajes ni marca como leido. Grupos, estados y
+// Lo unico que envia es el aviso de despacho de Flecha Carga (envios/, ver
+// "Avisos de despacho" mas abajo), con un texto fijo. Nunca marca como
+// leido ni manda otra cosa. Grupos, estados y
 // canales se ignoran. Los demas textos, audios, stickers, etc. no se guardan.
 // =====================================================================
 
@@ -378,6 +380,7 @@ async function textoDePdf(buffer) {
   const TIPO_EDITAR = proto.Message.ProtocolMessage.Type.MESSAGE_EDIT;
 
   let sock = null;
+  let conectado = false;
 
   function esChatIndividual(jid) {
     return !!(isPnUser(jid) || isLidUser(jid));
@@ -600,9 +603,12 @@ async function textoDePdf(buffer) {
         }
         log('Conectado como', propio + '. Guardando mensajes...');
         avisar({ tipo: 'conectado', numero: propio });
+        conectado = true;
+        revisarEnvios();
       }
 
       if (connection === 'close') {
+        conectado = false;
         avisar({ tipo: 'desconectado' });
         const codigo = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output
           ? lastDisconnect.error.output.statusCode : 0;
@@ -1259,6 +1265,106 @@ async function textoDePdf(buffer) {
     }
   }
   setTimeout(limpiezaUnica, 90000);
+
+  // -------------------------------------------------------------------
+  // Avisos de despacho: lo UNICO que este programa envia.
+  // pedidosv2 escribe envios/{pedidoId} { tel, nombre, link, t, por } cuando
+  // se pega el link de despacho de un pedido de Flecha Carga. Aca se arma
+  // siempre el mismo texto (desde pedidosv2 no se puede mandar otra cosa),
+  // se envia y se anota en el mismo nodo:
+  //   estado: 'enviado' (+ enviadoEn) | 'error' (+ error) | 'vencido'
+  // Si pedidosv2 vuelve a guardar, reescribe el nodo sin estado y sale de
+  // nuevo. Con la PC apagada quedan esperando; pasados AVISO_DIAS_MAX dias
+  // ya no se mandan (llegaria tarde y fuera de contexto).
+  // -------------------------------------------------------------------
+  const AVISO_DIAS_MAX = 3;
+  const AVISO_PAUSA_MS = 4000;      // entre un envio y otro, para no parecer masivo
+  const AVISO_DIAS_GUARDAR = 90;
+  const envios = {};                // copia local de envios/
+  const colaEnvios = [];
+  const encolados = new Set();      // id + t ya en cola o enviados en esta corrida
+  let enviandoAvisos = false;
+
+  function primerNombre(nombre) {
+    const n = String(nombre || '').trim().split(/\s+/)[0] || '';
+    return n ? n.charAt(0).toLocaleUpperCase('es') + n.slice(1).toLocaleLowerCase('es') : '';
+  }
+
+  // Mismo texto que muestra pedidosv2 en la vista previa (despTexto).
+  function textoDespacho(v) {
+    const n = primerNombre(v.nombre);
+    return (n ? n + ', t' : 'T') + 'u pedido ya fue despachado. Te adjunto el link con el que podrás verificar toda la información:\n\n' +
+      v.link + '\n\n¡Muchas gracias nuevamente! 😊';
+  }
+
+  function revisarEnvios() {
+    for (const [id, v] of Object.entries(envios)) {
+      if (!v || v.estado || !v.tel || !v.link) continue;
+      const clave = id + ':' + v.t;
+      if (encolados.has(clave)) continue;
+      encolados.add(clave);
+      colaEnvios.push(id);
+    }
+    if (!enviandoAvisos) mandarAvisos();
+  }
+
+  async function mandarAvisos() {
+    enviandoAvisos = true;
+    try {
+      while (colaEnvios.length && conectado && sock) {
+        const id = colaEnvios.shift();
+        const v = envios[id];
+        if (!v || v.estado) continue;
+        const ref = db.ref('envios/' + id);
+        if (Date.now() - (Number(v.t) || 0) > AVISO_DIAS_MAX * 86400000) {
+          await ref.update({ estado: 'vencido', error: 'pasaron más de ' + AVISO_DIAS_MAX + ' días con la PC apagada' });
+          log('Aviso de despacho vencido, no se envía:', id);
+          continue;
+        }
+        try {
+          const [r] = await sock.onWhatsApp('549' + v.tel + '@s.whatsapp.net');
+          if (!r || !r.exists) {
+            await ref.update({ estado: 'error', error: 'el número ' + v.tel + ' no tiene WhatsApp' });
+            log('Aviso de despacho: el número', v.tel, 'no tiene WhatsApp. Pedido', id);
+            continue;
+          }
+          // Si mientras tanto se guardo otro link, sale el ultimo (ya esta en cola).
+          const actual = envios[id];
+          if (!actual || actual.estado || actual.t !== v.t) continue;
+          await sock.sendMessage(r.jid, { text: textoDespacho(actual) });
+          await ref.update({ estado: 'enviado', enviadoEn: Date.now(), error: null });
+          log('Aviso de despacho enviado a', v.tel + '. Pedido', id);
+        } catch (e) {
+          if (!conectado) { encolados.delete(id + ':' + v.t); break; }   // se corto: sale al reconectar
+          await ref.update({ estado: 'error', error: 'falló el envío (' + (e && e.message ? e.message : e) + ')' }).catch(() => {});
+          log('Aviso de despacho: error enviando a', v.tel + ':', e && e.message ? e.message : e);
+        }
+        await new Promise(r => setTimeout(r, AVISO_PAUSA_MS));
+      }
+    } finally {
+      enviandoAvisos = false;
+    }
+    if (colaEnvios.length && conectado) mandarAvisos();
+  }
+
+  for (const evento of ['child_added', 'child_changed']) {
+    db.ref('envios').on(evento, s => {
+      envios[s.key] = s.val();
+      if (conectado) revisarEnvios();
+    }, e => log('No se pueden leer los avisos de despacho:', e.message));
+  }
+  db.ref('envios').on('child_removed', s => { delete envios[s.key]; });
+
+  async function borrarEnviosViejos() {
+    try {
+      const corte = Date.now() - AVISO_DIAS_GUARDAR * 86400000;
+      const upd = {};
+      for (const [id, v] of Object.entries(envios)) if (v && (Number(v.t) || 0) < corte) upd['envios/' + id] = null;
+      if (Object.keys(upd).length) await db.ref().update(upd);
+    } catch (e) { log('No se pudieron borrar avisos viejos:', e.message); }
+  }
+  setTimeout(borrarEnviosViejos, 120000);
+  setInterval(borrarEnviosViejos, 86400000);
 
   log('Iniciando WhatsApp...');
   await conectar();

@@ -50,12 +50,27 @@ pedidosv2 el comprobante y el pedido muestran el aviso ("Comprobante posiblement
 se marca **Aprobado**, la marca se quita. El verificador deja su resultado en `comprobantes\verificacion.json` y el
 script de descarga es el único que renombra y sube el aviso a Firebase (`imgsIdx/{id}/verif`).
 
-- No envía mensajes nunca.
+- Lo único que envía es el **aviso de despacho** de Flecha Carga (ver abajo). Ningún otro mensaje.
 - Comprobantes y cotizaciones se borran solos a los 90 días.
 - La primera vez que lee una imagen baja el idioma español del lector de texto (necesita internet).
 - Si a algún banco no lo reconoce, se agrega a la lista `BANCOS` al principio de `index.js`.
 - La PC tiene que estar prendida para que se guarden los mensajes. Al prenderla,
   recupera lo que entró mientras estuvo apagada.
+
+### Aviso de despacho (Flecha Carga)
+En pedidosv2, en la lista de pendientes, los pedidos con entrega **Flecha Carga** tienen un botón con un
+eslabón a la derecha. Ahí se pega el link del envío: queda guardado en el pedido y este programa le manda
+al cliente, desde el 11 7646-0030:
+
+> Juan, tu pedido ya fue despachado. Te adjunto el link con el que podrás verificar toda la información:
+> https://...
+> ¡Muchas gracias nuevamente! 😊
+
+- El botón se pone **ámbar** mientras espera, **verde** cuando se envió y **rojo** si no se pudo
+  (número sin WhatsApp, por ejemplo). Al tocarlo de nuevo se ve el detalle y se puede reenviar.
+- La PC del local tiene que estar prendida con WhatsAppSync abierto. Si estaba apagada, sale al prenderla,
+  salvo que hayan pasado más de 3 días.
+- Se guarda en la base de WhatsApp en `envios/{pedido}`; hay que publicar de nuevo `database.rules.json`.
 
 ---
 

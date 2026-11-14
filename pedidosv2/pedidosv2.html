@@ -428,32 +428,35 @@
       align-items: center;
       gap: 12px;
       padding: 0 18px;
+      min-width: 0;
       background: var(--surface);
       border-bottom: 1px solid var(--line);
       z-index: 20;
     }
     body.con-pedido .ctx-bar { display: flex; }
 
+    /* Nombre del cliente: vive en el header oscuro, al lado del logo, y
+       reemplaza al rotulo "Despacho" mientras hay un pedido abierto. Se
+       achica con puntos suspensivos antes que empujar los botones. */
     .ctx-id {
-      font-size: 19px;
+      display: none;
+      flex: 0 1 auto;
+      min-width: 0;
+      margin-right: 8px;
+      font-size: 16px;
       font-weight: 700;
       letter-spacing: -.3px;
-      color: var(--ink);
-      flex: none;
-      min-width: 0;
-      max-width: 32ch;
+      color: var(--on-g);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .ctx-dot {
-      width: 3px;
-      height: 3px;
-      border-radius: 99px;
-      background: var(--ink-4);
-      flex: none;
-    }
+    body.con-pedido .ctx-id { display: block; }
+    body.con-pedido .brand-name { display: none; }
+    /* Fecha y link siempre visibles: si falta lugar la fecha se recorta con
+       puntos suspensivos en vez de desaparecer. */
     .ctx-fecha {
+      min-width: 0;
       font-size: 12.5px;
       font-weight: 500;
       color: var(--ink-3);
@@ -477,10 +480,55 @@
     .ctx-link:hover { background: var(--surface-3); color: var(--ink-2); }
     .ctx-spacer { flex: 1; min-width: 8px; }
 
+    /* Identidad del pedido: una fila de discos de 30px con el mismo alto y
+       radio, separados por un aire chico y parejo. Despues, una linea fina
+       separa la fecha, que es texto y no icono. */
+    .ctx-grupo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+    }
+    .ctx-bar .ctx-grupo > * { width: 30px; height: 30px; border-radius: 99px; flex: none; }
+    .ctx-bar .ctx-entrega {
+      justify-content: center;
+      background: var(--surface-2);
+      border: 1px solid var(--line-2);
+    }
+    .ctx-bar .ctx-entrega .pp-entrega-ind svg { width: 16px; height: 16px; }
+    .ctx-bar .badge-int::before { width: 14px; height: 14px; }
+    .ctx-bar .ctx-link {
+      border-radius: 99px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-2);
+      color: var(--ink-3);
+    }
+    .ctx-bar .ctx-link:hover { background: var(--surface-3); color: var(--ink); }
+    .ctx-bar .ctx-link:active { transform: scale(.94); }
+    .ctx-bar .ctx-link .ic-sm { width: 15px; height: 15px; }
+
+    .ctx-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 1 auto;
+      min-width: 0;
+      height: 22px;
+      padding-left: 14px;
+      border-left: 1px solid var(--line);
+    }
+    .ctx-bar .ctx-fecha {
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: -.1px;
+      color: var(--ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+
     .status-badge {
       height: 23px;
-      display: inline-flex;
-      align-items: center;
+      display: inline-block;
+      line-height: 21px;
       padding: 0 10px;
       border-radius: 99px;
       font-size: 10px;
@@ -493,6 +541,8 @@
       border: 1px solid transparent;
       flex: none;
     }
+    /* En la franja un estado largo se recorta antes que empujar los botones. */
+    .ctx-bar .status-badge { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .status-badge--open      { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-ring); }
     .status-badge--closed    { background: var(--warn-soft);   color: var(--warn);   border-color: var(--warn-soft); }
     .status-badge--dispatched{ background: var(--ok-soft);     color: var(--ok);     border-color: var(--ok-ring); }
@@ -530,38 +580,81 @@
     .badge-int--sm { width: 18px; height: 18px; }
     .badge-int--sm::before { width: 11px; height: 11px; }
 
-    /* Progreso — vive en la franja superior para no perderse al scrollear */
+    /* Progreso — vive en la franja superior para no perderse al scrollear.
+       Anillo de 32px con el porcentaje adentro: ocupa un tercio de lo que
+       ocupaba la barra y se lee de un vistazo. Al completar, el numero cede
+       su lugar a un tilde y el anillo toma el color de "listo". */
     .progress-section {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      flex: none;
       display: flex;
       align-items: center;
-      gap: 6px;
-      flex: none;
+      justify-content: center;
     }
-    .progress-bar-track {
-      width: 88px;
-      height: 6px;
-      border-radius: 99px;
-      background: var(--surface-3);
-      overflow: hidden;
-      flex: none;
-    }
-    .progress-bar-fill {
+    .progress-ring {
+      position: absolute;
+      inset: 0;
+      width: 100%;
       height: 100%;
-      border-radius: 99px;
-      background: var(--ink-3);
-      transition: width .4s var(--ease-out), background-color .3s;
+      transform: rotate(-90deg);
+      fill: none;
+      stroke-width: 3.2;
     }
-    .progress-bar-fill.complete { background: var(--prep); }
+    .progress-ring-track { stroke: var(--surface-3); }
+    .progress-ring-fill {
+      stroke: var(--ink-3);
+      stroke-linecap: round;
+      transition: stroke-dasharray .45s var(--ease-out), stroke .3s;
+    }
+    .progress-ring-fill.is-cero { stroke-linecap: butt; }
+    .progress-ring-fill.complete { stroke: var(--prep); }
     .progress-pct {
+      position: relative;
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 9.5px;
       font-weight: 700;
-      color: var(--ink-3);
-      width: 34px;
-      text-align: left;
-      flex: none;
+      letter-spacing: -.3px;
+      color: var(--ink-2);
+      line-height: 1;
     }
     .progress-pct.complete { color: var(--prep); }
+    .progress-pct svg {
+      display: block;
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    @media (prefers-reduced-motion: reduce) { .progress-ring-fill { transition: none; } }
+
+    /* Estado del pedido en la franja: un disco con icono (mismo icono que el
+       boton que lleva a ese estado) en el color del estado. El texto queda en
+       title y aria-label. */
+    .ctx-bar .status-badge.ctx-estado {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      border-radius: 99px;
+      font-size: 0;
+    }
+    .ctx-estado svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
 
     /* Forma de envio en la franja: mismo icono y color que en la lista */
     .ctx-entrega { display: inline-flex; align-items: center; flex: none; }
@@ -790,36 +883,8 @@
     /* =========================================
        CABECERA DE LA LISTA
        ========================================= */
-    .items-header {
-      height: 52px;
-      flex: none;
-      display: none;
-      align-items: center;
-      gap: 10px;
-      padding: 0 18px;
-      background: var(--bg);
-    }
-    body.con-pedido .items-header { display: flex; }
-    .items-header h2 {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .9px;
-      text-transform: uppercase;
-      color: var(--ink-2);
-    }
-    .items-counter {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--ink-3);
-      background: var(--surface);
-      border: 1px solid var(--line);
-      padding: 3px 9px;
-      border-radius: 99px;
-      transition: border-color .14s, color .14s;
-    }
-    .items-counter:hover { border-color: var(--ink-4); color: var(--ink-2); }
-    .items-header-spacer { flex: 1; }
+    /* La vieja cabecera "Articulos" se fundio con la franja de contexto:
+       Controlar y Agregar viven ahora en .ctx-bar. */
 
     .btn-add-item {
       height: 34px;
@@ -887,6 +952,37 @@
     }
     .item-card:hover { box-shadow: var(--sh2); }
 
+    /* Borrar manteniendo apretado: mientras el dedo sigue apoyado, un tinte
+       rojo cruza la tarjeta de izquierda a derecha en 2 s. Si se suelta o se
+       mueve antes, se retira; al completarse se abre la confirmacion. */
+    @media (pointer: coarse) {
+      .item-card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+    }
+    .item-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: var(--bad-soft);
+      box-shadow: inset 0 0 0 1px var(--bad);
+      transform: scaleX(0);
+      transform-origin: left center;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform .2s var(--ease-out), opacity .2s var(--ease-out);
+    }
+    .item-card > * { position: relative; z-index: 1; }
+    .item-card.is-borrando::after {
+      transform: scaleX(1);
+      opacity: 1;
+      transition: transform var(--borrar-ms, 2000ms) linear, opacity .25s var(--ease-out);
+    }
+    .item-card.is-borrando { transform: scale(.985); }
+    @media (prefers-reduced-motion: reduce) {
+      .item-card.is-borrando { transform: none; }
+      .item-card.is-borrando::after { transform: scaleX(1); transition: opacity var(--borrar-ms, 2000ms) linear; }
+    }
+
     .item-card.checked {
       background: var(--surface-2);
       border-color: var(--line-2);
@@ -896,7 +992,9 @@
     .item-card.checked .item-img,
     .item-card.checked .item-img-placeholder { opacity: .7; }
     .item-card.checked .pv-total-item { color: var(--ink-2); }
-    .item-card.checked .item-stock { color: var(--ink-4); }
+    /* Ya empacado: las insignias se apagan, el stock deja de importar. */
+    .item-card.checked .item-stock,
+    .item-card.checked .item-stock-cas { background: var(--surface-2); color: var(--ink-4); }
     .item-card.checked .item-delete { opacity: .45; }
 
     .item-card.sin-stock { box-shadow: var(--sh1), inset 3px 0 0 var(--bad); }
@@ -955,37 +1053,34 @@
       font-weight: 500;
       color: var(--ink-4);
     }
-    .item-stock {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      white-space: nowrap;
-      position: relative;
-      padding-left: 11px;
-    }
-    .item-stock::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 3px;
-      height: 3px;
+    /* Stock por sucursal: dos insignias cortas (M = Munro, C = Caseros).
+       Munro lleva el color del nivel (es el que se despacha); Caseros queda
+       neutra, solo informativa. Si no entran al lado del codigo, el grupo
+       entero baja a una segunda linea en vez de apretarse. */
+    .item-code { flex-wrap: wrap; row-gap: 5px; }
+    .item-code-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-stocks { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+    .item-stock, .item-stock-cas {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 19px;
+      padding: 0 7px;
       border-radius: 99px;
-      background: var(--ink-4);
-      opacity: .6;
-    }
-    .item-stock.stock-ok   { color: var(--ok); }
-    .item-stock.stock-low  { color: var(--warn); }
-    .item-stock.stock-zero { color: var(--bad); font-weight: 700; }
-    .item-stock-cas {
       font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 400;
-      color: var(--ink-4);
-      opacity: .75;
+      font-size: 10.5px;
+      font-weight: 700;
+      line-height: 1;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      background: var(--surface-2);
+      color: var(--ink-3);
     }
+    .item-stock b, .item-stock-cas b { font-weight: 600; opacity: .6; }
+    .item-stock.stock-ok   { background: var(--ok-soft);   color: var(--ok); }
+    .item-stock.stock-low  { background: var(--warn-soft); color: var(--warn); }
+    .item-stock.stock-zero { background: var(--bad-soft);  color: var(--bad); }
+    .item-stock-cas { font-weight: 600; }
 
     /* Precio unitario y subtotal: columna propia, alineada a la derecha */
     .pv-item-fin {
@@ -1745,84 +1840,69 @@
       background: var(--surface-2);
     }
 
-    /* Barra de resumen de la hoja inferior: solo existe por debajo de 1024px.
-       Con la tarjeta minimizada es lo unico que queda de ella, asi que carga la
-       accion que mas se usa (escribirle al cliente), el estado de cobro y el
-       agarre para arrastrar la hoja.
-       touch-action:none porque el arrastre vertical lo maneja el JS: sin esto
-       el navegador se queda con el gesto y los pointermove dejan de llegar. */
+    /* Pestana de la hoja lateral: solo existe por debajo de 1024px. Con la
+       hoja cerrada es lo unico que queda de ella: carga el estado de cobro
+       (como un punto de color) y sirve para abrirla con un toque.
+       touch-action:none porque el arrastre horizontal lo maneja el JS: sin
+       esto el navegador se queda con el gesto y los pointermove dejan de
+       llegar. */
     .dock-peek {
       display: none;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
-      width: 100%;
-      height: 50px;
-      flex: none;
-      padding: 6px 14px 0;
-      border: none;
-      background: transparent;
-      text-align: left;
-      cursor: grab;
-      position: relative;
+      justify-content: center;
+      gap: 7px;
+      position: fixed;
+      right: 0;
+      top: 50%;
+      width: 15px;
+      height: 72px;
+      margin-top: -36px;
+      z-index: 24;
+      padding: 0 0 0 1px;
+      border: 1px solid var(--line);
+      border-right: none;
+      border-radius: 10px 0 0 10px;
+      background: var(--surface);
+      box-shadow: -4px 0 14px rgba(20,20,18,.10);
+      cursor: pointer;
       touch-action: none;
       -webkit-user-select: none;
       user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity .2s var(--ease-out), transform .2s var(--ease-out);
     }
-    .dock-peek:active { cursor: grabbing; }
-    .dock-peek::before {
-      content: '';
-      position: absolute;
-      top: 7px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 44px;
-      height: 4px;
-      border-radius: 99px;
-      background: var(--line);
-      transition: background .14s, width .18s var(--ease-out);
-    }
-    .dock-peek:hover::before { background: var(--ink-4); width: 56px; }
+    .dock-peek:active { background: var(--surface-2); }
 
-    /* Rotulo de la barra plegada: ocupa el lugar que tenia el boton de
-       WhatsApp, que se mudo a la fila de utilidades del pie. */
-    .dock-peek-label {
-      flex: none;
-      font-size: 12.5px;
-      font-weight: 700;
-      letter-spacing: -.1px;
-      color: var(--ink-2);
-    }
-    .dock-peek-spacer { flex: 1; min-width: 0; }
-
-    /* Solo aparece con el pedido en un estado de cobro: sin nota util no hay
-       texto y la barra queda con el boton y el chevron. */
+    /* Solo aparece con el pedido en un estado de cobro: el texto se pinta
+       igual (lo escribe dockPeekActualizar) pero en la pestana se lee como un
+       punto, que entra en 15px de ancho. */
     .dock-peek-nota {
       flex: none;
-      max-width: 46vw;
+      width: 6px;
+      height: 6px;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: -.1px;
-      padding: 4px 10px;
+      font-size: 0;
       border-radius: 99px;
     }
     .dock-peek-nota:empty { display: none; }
-    .dock-peek-nota--espera { color: var(--pago); background: var(--pago-soft); }
-    .dock-peek-nota--pagado { color: #fff; background: var(--pago); }
+    .dock-peek-nota--espera { background: var(--pago); box-shadow: 0 0 0 3px var(--pago-soft); }
+    .dock-peek-nota--pagado { background: var(--pago); }
     .dock-peek-chevron {
       flex: none;
-      width: 16px;
-      height: 16px;
+      width: 12px;
+      height: 12px;
       fill: none;
       stroke: var(--ink-3);
-      stroke-width: 2.2;
+      stroke-width: 2.4;
       stroke-linecap: round;
       stroke-linejoin: round;
-      transition: transform .28s var(--ease-out);
     }
-    .side-dock.abierto .dock-peek-chevron { transform: rotate(180deg); }
+
+    /* Fondo y cabecera de la hoja lateral: solo existen por debajo de 1024px
+       (ver el @media de pantallas angostas). */
+    .dock-scrim { display: none; }
+    .dock-hoja-cab { display: none; }
 
     /* El drawer dejo de ser un cajon: Faltantes vive en la fila de utilidades.
        Los contenedores siguen en el DOM porque toggleDrawer() y el swipe del
@@ -1919,9 +1999,21 @@
     .int-toggle[aria-checked="true"] .int-toggle-pista { background: var(--int); box-shadow: none; }
     .int-toggle[aria-checked="true"] .int-toggle-pista::after { background: #fff; transform: translateX(11px); }
 
-    /* Sin iconos a proposito: el JS reescribe el textContent de #btnFaltantes y
-       #btnToggleEstado, asi que cualquier SVG adentro se perderia al primer
-       cambio de estado. La jerarquia la llevan el color y el peso tipografico. */
+    /* Iconos de trazo, monocromaticos: toman el color del boton (currentColor).
+       #btnToggleEstado se repinta entero con pintarBotonIcono() y #btnFaltantes
+       solo cambia su globito, asi que los SVG no se pierden al cambiar de estado. */
+    .fb-ic {
+      flex: none;
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+    .footer-btn-base > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .footer-btn-base {
       height: 44px;
       display: flex;
@@ -1946,60 +2038,94 @@
     .footer-btn-base:disabled { opacity: .45; }
     .footer-btn-base:disabled:hover { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
 
-    /* Utilidades: tres columnas iguales */
-    /* #btnFaltantes cuelga de .footer-drawer, que es display:contents: participa
-       del flex de .dock-utils pero sigue sin ser hijo directo en el DOM, asi que
-       se lo selecciona por descendencia y no con ">". */
-    .dock-utils { display: flex; gap: 7px; margin-bottom: 10px; }
-    .dock-utils > .footer-btn-base,
-    .dock-utils > .print-menu-wrap,
-    .dock-utils > .msg-menu-wrap,
-    .dock-utils .btn-faltantes { flex: 1; min-width: 0; }
-    .print-menu-wrap > .footer-btn-base,
-    .msg-menu-wrap > .footer-btn-base { width: 100%; }
+    /* Las dos filas del pie son la misma grilla de 3 columnas iguales, con el
+       mismo espacio entre columnas y entre filas, el mismo alto y el mismo
+       radio: los 6 botones quedan alineados en columnas exactas.
+       #btnFaltantes cuelga de .footer-drawer, que es display:contents: entra
+       como celda de la grilla aunque no sea hijo directo en el DOM. */
+    .footer-controls { --dock-gap: 8px; --dock-btn-h: 48px; }
+    .dock-utils,
+    .dock-main {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--dock-gap);
+    }
+    .dock-utils { margin-bottom: var(--dock-gap); }
+    .dock-utils .footer-btn-base,
+    .dock-main .footer-btn-base {
+      width: 100%;
+      min-width: 0;
+      height: var(--dock-btn-h);
+      border-radius: var(--r2);
+    }
+    .print-menu-wrap, .msg-menu-wrap { min-width: 0; }
 
-    /* Cierra la fila con el ancho justo del icono: los tres botones con texto
-       se reparten el resto. touch-action:manipulation propio porque es un <a>
-       dentro de un pie que por lo demas se lleva los gestos. */
-    .dock-wa {
-      width: 46px;
-      height: 44px;
-      flex: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid var(--line);
-      background: var(--surface);
-      border-radius: var(--r1);
-      color: var(--ok);
+    /* Botones de solo icono (fila de utilidades): todos en el mismo tono de
+       tinta para que la fila se lea como una sola barra de herramientas. El
+       nombre esta en aria-label/title y aparece al mantener apretado. */
+    .btn-icono {
+      position: relative;
+      padding: 0;
+      color: var(--ink-2);
       touch-action: manipulation;
-      transition: background .14s, border-color .14s, color .14s, transform .12s, opacity .14s;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
-    .dock-wa:hover { background: var(--ok-soft); border-color: var(--ok-ring); }
-    .dock-wa:active { transform: scale(.97); }
-    .dock-wa.disabled { color: var(--ink-4); pointer-events: none; opacity: .45; }
+    .btn-icono .fb-ic { width: 21px; height: 21px; stroke-width: 1.8; }
 
-    .btn-faltantes {
-      border-color: transparent;
-      background: var(--bad-soft);
-      color: var(--bad);
+    /* Globito con la cantidad de faltantes: el unico color de la fila, porque
+       es un aviso y no un adorno. */
+    .btn-badge {
+      position: absolute;
+      top: 5px;
+      left: calc(50% + 5px);
+      min-width: 17px;
+      height: 17px;
+      padding: 0 5px;
+      border-radius: 99px;
+      background: var(--bad);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 17px;
+      text-align: center;
+      box-shadow: 0 0 0 2px var(--surface);
+      pointer-events: none;
     }
-    .btn-faltantes:hover { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
-    .btn-faltantes:disabled { background: var(--surface); border-color: var(--line); color: var(--ink-3); }
+    .btn-badge[hidden] { display: none; }
+
+    /* Etiqueta que aparece al mantener apretado un boton de solo icono. */
+    .btn-tip {
+      position: fixed;
+      z-index: 520;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--inverso-bg);
+      color: var(--inverso-fg);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: var(--sh3);
+      transform: translate(-50%, -100%);
+      animation: btnTipIn .16s var(--ease-out) both;
+    }
+    @keyframes btnTipIn {
+      from { opacity: 0; transform: translate(-50%, calc(-100% + 4px)) scale(.96); }
+      to   { opacity: 1; transform: translate(-50%, -100%); }
+    }
+    @media (prefers-reduced-motion: reduce) { .btn-tip { animation: none; } }
 
     /* Acciones finales: las tres son terminales y se leen como un mismo
        control de tres posiciones, asi que comparten ancho, alto, radio y peso.
        Lo unico que cambia es el color -- rojo, ambar, verde -- que es tambien
        lo unico que hay que mirar para acertarle al boton sin leerlo. */
-    .dock-main { display: flex; gap: 9px; }
-    .dock-main > * { flex: 1; }
-
     .btn-cancelar-pedido,
     .btn-toggle-estado,
     .btn-despachar {
-      flex: 1;
-      height: 50px;
-      border-radius: var(--r2);
       border-color: transparent;
       font-size: 13.5px;
       font-weight: 700;
@@ -2040,15 +2166,34 @@
       z-index: 60;
     }
     .print-menu.active, .msg-dropdown.active { display: block; }
+    /* El menu de WhatsApp sale del ultimo boton de la fila: se alinea a la
+       derecha para no salirse de la pantalla. */
+    .msg-dropdown { left: auto; right: 0; }
     .print-menu-item, .msg-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 11px;
       padding: 12px 14px;
       font-size: 13px;
       font-weight: 600;
       color: var(--ink-2);
+      text-decoration: none;
       cursor: pointer;
       transition: background .12s, color .12s;
       white-space: nowrap;
     }
+    .mi-ic {
+      flex: none;
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke: var(--ink-3);
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .print-menu-item:hover .mi-ic, .msg-dropdown-item:hover .mi-ic { stroke: var(--ink); }
+    .msg-dropdown-item.disabled { opacity: .45; pointer-events: none; }
     .print-menu-item + .print-menu-item,
     .msg-dropdown-item + .msg-dropdown-item { border-top: 1px solid var(--line-2); }
     .print-menu-item:hover, .msg-dropdown-item:hover { background: var(--surface-2); color: var(--ink); }
@@ -2618,6 +2763,20 @@
       color: var(--ink-4);
     }
     .pp-leyenda-fila .pp-seg { flex: none; width: 5px; height: 15px; }
+    /* Interruptor "Ocultar listos": mismo control que "Pedido int", en tono
+       neutro y a la derecha de la leyenda. */
+    .pp-leyenda .pp-ocultar { margin: 0 0 0 auto; align-self: center; font-size: 10.5px; }
+    .pp-ocultar[aria-checked="true"] { color: var(--ink-2); }
+    .pp-ocultar[aria-checked="true"] .int-toggle-pista { background: var(--ink-2); }
+    /* Va despues de la linea divisoria de la cabecera (order 3). */
+    .pp-grupo-oculto {
+      order: 4;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .3px;
+      text-transform: none;
+      color: var(--ink-4);
+    }
 
     /* Riel de dos tramos: pago arriba, armado abajo */
     .pp-rail {
@@ -3130,7 +3289,7 @@
     }
 
     /* WhatsApp en la fila: boton de 38px, mismo verde y
-       mismo estado apagado que .dock-wa del pie del pedido. */
+       mismo estado apagado que los botones del pie del pedido. */
     .pp-btn-wa {
       width: 38px;
       height: 38px;
@@ -3149,6 +3308,65 @@
     .pp-btn-wa:hover { background: var(--ok-soft); border-color: var(--ok-ring); }
     .pp-btn-wa:active { transform: scale(.92); }
     .pp-btn-wa.disabled { color: var(--ink-4); pointer-events: none; opacity: .45; }
+
+    /* Link de despacho (solo Flecha Carga): mismo boton de 38px que el de
+       WhatsApp. Gris sin link; con link toma el color del aviso al cliente:
+       ambar en camino, verde enviado, rojo si no se pudo mandar. */
+    .pp-btn-desp {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ink-3);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background .14s, border-color .14s, transform .12s, color .14s;
+    }
+    .pp-btn-desp svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .pp-btn-desp:hover { border-color: var(--accent); color: var(--accent); }
+    .pp-btn-desp:active { transform: scale(.92); }
+    .pp-btn-desp.is-espera { color: var(--warn); background: var(--warn-soft); }
+    .pp-btn-desp.is-enviado { color: var(--ok); background: var(--ok-soft); }
+    .pp-btn-desp.is-error { color: var(--bad); background: var(--bad-soft); }
+
+    /* Modal del link de despacho: reusa la caja y el encabezado de Peso y tamano */
+    #despModal { z-index: 225; }
+    .desp-input input { font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: 0; padding-right: 12px; }
+    .desp-estado {
+      margin-top: 12px;
+      padding: 9px 12px;
+      border-radius: var(--r2);
+      background: var(--surface-2);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      line-height: 1.4;
+    }
+    .desp-estado:empty { display: none; }
+    .desp-estado.is-espera { background: var(--warn-soft); color: var(--warn); }
+    .desp-estado.is-enviado { background: var(--ok-soft); color: var(--ok); }
+    .desp-estado.is-error { background: var(--bad-soft); color: var(--bad); }
+    .desp-vista {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: var(--r2);
+      border: 1px dashed var(--line);
+      font-size: 12.5px;
+      color: var(--ink-2);
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .desp-login { display: flex; gap: 8px; margin-top: 12px; }
+    .desp-login[hidden] { display: none; }
+    .desp-login input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border-radius: var(--r1); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; }
 
     /* Embalado: indicador junto al nombre, solo con el pedido controlado.
        Gris sutil hasta que se marca embalado; ahi pasa a verde manzana. */
@@ -3266,6 +3484,7 @@
     .pp-modo-rotulos .pedidos-panel-item.is-sel { background: var(--accent-soft); }
     /* En el modo rotulos la fila solo selecciona: se esconden sus acciones */
     .pp-modo-rotulos .pp-btn-wa,
+    .pp-modo-rotulos .pp-btn-desp,
     .pp-modo-rotulos .pp-btn-menu { display: none; }
 
     /* Menu hamburguesa de la fila: mas angosto que los otros botones, sin
@@ -3645,7 +3864,6 @@
     .nec-ibtn:disabled { opacity: .45; pointer-events: none; }
     .nec-ibtn--peligro:hover { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
     .nec-ibtn--cerrar { font-size: 20px; line-height: 1; margin-left: 6px; }
-    .nec-ibtn.is-girando .ic { animation: spin .7s linear infinite; }
 
     .nec-progreso {
       flex: none;
@@ -3825,6 +4043,13 @@
     .nec-chk-env:has(input:checked) { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 
     /* Lista */
+    .nec-list-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
     .nec-list {
       flex: 1;
       min-height: 0;
@@ -3832,6 +4057,33 @@
       overscroll-behavior: contain;
       padding: 0 12px 20px;
       position: relative;
+      scrollbar-width: none;
+    }
+    .nec-list::-webkit-scrollbar { display: none; }
+    /* Indicador de scroll: riel apenas visible y una barra naranja que marca
+       en que altura de la lista se esta. Solo aparece si la lista scrollea. */
+    .nec-scroll-ind {
+      position: absolute;
+      top: 6px;
+      right: 3px;
+      bottom: 6px;
+      width: 4px;
+      border-radius: 99px;
+      background: var(--accent-soft);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .2s var(--ease-out);
+    }
+    .nec-scroll-ind.is-visible { opacity: 1; }
+    .nec-scroll-ind i {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      min-height: 28px;
+      border-radius: 99px;
+      background: var(--accent);
+      will-change: transform;
     }
 
     /* Cabecera de columnas: pegada arriba mientras se scrollea. Los anchos de
@@ -3872,21 +4124,6 @@
       color: var(--accent);
     }
     .nec-cat::after { content: ''; flex: 1; height: 1px; background: var(--line); order: 3; }
-    /* Grupo del deposito (FL, FR, BL, BR, OT): encima de sus columnas. */
-    .nec-sector {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      margin: 22px 0 2px;
-      padding: 9px 12px;
-      border-radius: var(--r2);
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 13.5px;
-      font-weight: 800;
-      letter-spacing: -.1px;
-    }
-    .nec-sector-n { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; opacity: .8; }
     .nec-cat-n {
       order: 2;
       font-family: var(--font-mono);
@@ -4003,24 +4240,6 @@
     .nec-remoto.is-separado { background: var(--ok-soft); color: var(--ok); }
     /* Hay unidades que ese traspaso no atiende: "Enviado · 3 sin pedir" */
     .nec-remoto.is-incompleto { background: var(--warn-soft); color: var(--warn); }
-
-    /* Zona del depósito (Locator). Solo agrupando por zona, en las filas de
-       ubicación incierta ("¿FL C3?"). */
-    .nec-zona {
-      flex: none;
-      display: inline-flex;
-      align-items: center;
-      height: 18px;
-      padding: 0 7px;
-      border-radius: 99px;
-      font-family: var(--font-ui);
-      font-size: 10.5px;
-      font-weight: 700;
-      letter-spacing: 0;
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .nec-zona.is-incierta { background: var(--warn-soft); color: var(--warn); }
 
     .nec-stock, .nec-nec {
       width: 52px;
@@ -4202,6 +4421,8 @@
       transition: background .14s, color .14s;
     }
     .nec-sub-acciones button:hover { background: var(--surface-3); color: var(--ink); }
+    /* Filtro rapido en uso (se apaga al tocar un pedido a mano). */
+    .nec-sub-acciones button.is-on { background: var(--accent-soft); border-color: var(--accent-ring); color: var(--accent); }
     .nec-sub-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px 12px 12px; }
     .nec-ped {
       display: flex;
@@ -4438,7 +4659,6 @@
       .nec-search { flex-basis: 100%; }
       .nec-seg { flex: 1; }
       .nec-seg button { flex: 1; justify-content: center; padding: 0 8px; }
-      #necSegAgrupar { order: 5; flex-basis: 100%; }
       .nec-list { padding: 0 10px 20px; }
       .nec-cols { padding-left: 66px; gap: 9px; }
       .nec-cols .nc-stock, .nec-cols .nc-nec { width: 46px; }
@@ -4890,7 +5110,7 @@
       flex-direction: column;
       gap: 2px;
       min-width: 200px;
-      max-width: 260px;
+      max-width: min(300px, calc(100vw - 24px));
       padding: 12px 14px;
       background: var(--graphite);
       border-radius: var(--r2);
@@ -4903,6 +5123,15 @@
       letter-spacing: .8px;
       text-transform: uppercase;
       color: var(--on-g-3);
+    }
+    .tt-nombre {
+      font-size: 13.5px;
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: -.15px;
+      color: var(--on-g);
+      margin-bottom: 8px;
+      overflow-wrap: anywhere;
     }
     .tt-value {
       font-family: var(--font-mono);
@@ -5037,45 +5266,119 @@
 
     /* =========================================
        ADAPTACION A PANTALLAS ANGOSTAS
-       Por debajo de 1024px el panel derecho colapsa en una hoja inferior
-       anclada: mismo contenido, no una pantalla aparte.
+       Por debajo de 1024px el panel derecho pasa a ser una hoja lateral que
+       entra desde la derecha (swipe hacia la izquierda sobre la lista, o la
+       pestana del borde). Las acciones quedan fijas abajo.
        ========================================= */
     @media (max-width: 1023px) {
       .workspace { flex-direction: column; }
 
+      /* z-index:auto para que la hoja (position:fixed adentro) no quede
+         encerrada en el contexto de apilado del dock, debajo del header. */
       .side-dock {
         width: auto;
         flex: none;
+        z-index: auto;
         border-left: none;
         border-top: 1px solid var(--line);
-        border-radius: var(--r4) var(--r4) 0 0;
-        box-shadow: 0 -14px 40px rgba(20,20,18,.10);
+        box-shadow: 0 -10px 30px rgba(20,20,18,.08);
       }
 
-      /* La tarjeta arranca minimizada por completo. En tablet el trabajo es
-         empacar articulos: el cliente, los totales y las formas de pago se
-         consultan a demanda y no tienen por que robarle media pantalla a la
-         lista. .dock-peek queda como unico rastro y como forma de volver. */
+      /* pan-y: el scroll vertical lo sigue haciendo el navegador y los
+         deslizamientos horizontales le llegan al JS que mueve la hoja.
+         El aire extra a la derecha deja libre el lugar de la pestana. */
+      .main-content { touch-action: pan-y pinch-zoom; padding-right: 17px; }
+
+      /* La hoja arranca cerrada: en tablet el trabajo es empacar articulos, y
+         el cliente, los totales y las formas de pago se consultan a demanda.
+         visibility se apaga al final de la transicion para que el contenido
+         fuera de pantalla no reciba foco. */
       #sidePanel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(88vw, 420px);
+        height: 100dvh;
+        z-index: 190;   /* sobre header (30) y pestana; debajo de los modales (200+) */
         flex: none;
-        max-height: 0;
-        padding: 0 14px;
+        padding: calc(0px + env(safe-area-inset-top, 0px)) 14px calc(16px + env(safe-area-inset-bottom, 0px));
         gap: 14px;
-        overflow: hidden;
-        transition: max-height .3s var(--ease-out), padding .3s var(--ease-out);
-      }
-
-      /* El degradado del borde inferior avisa que el panel sigue: sin el, un
-         segmentado cortado al medio se lee como un error de maquetado. */
-      .side-dock.abierto #sidePanel {
-        max-height: 62vh;
-        padding: 2px 14px 10px;
+        background: var(--surface);
+        border-left: 1px solid var(--line);
         overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y pinch-zoom;
+        transform: translateX(100%);
+        visibility: hidden;
+        transition: transform .34s cubic-bezier(.32, .72, 0, 1), visibility 0s linear .34s, box-shadow .34s;
       }
+      .side-dock.abierto #sidePanel {
+        transform: none;
+        visibility: visible;
+        box-shadow: -18px 0 44px rgba(20,20,18,.16);
+        transition: transform .34s cubic-bezier(.32, .72, 0, 1), visibility 0s, box-shadow .34s;
+      }
+      #sidePanel:focus { outline: none; }
+
+      .dock-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 185;
+        background: var(--scrim);
+        opacity: 0;
+        pointer-events: none;
+        touch-action: none;
+        transition: opacity .34s var(--ease-out);
+      }
+      .side-dock.abierto .dock-scrim { opacity: 1; pointer-events: auto; }
+
+      /* Cabecera fija de la hoja: titulo y X para quien no use el gesto. */
+      .dock-hoja-cab {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        flex: none;
+        height: 54px;
+        margin: 0 -14px;
+        padding: 0 8px 0 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .dock-hoja-titulo {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: -.2px;
+        color: var(--ink);
+      }
+      .dock-hoja-cerrar {
+        flex: none;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: var(--r1);
+        background: transparent;
+        color: var(--ink-3);
+      }
+      .dock-hoja-cerrar:active { background: var(--surface-2); }
+      .dock-hoja-cerrar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 
       .dock-peek { display: flex; }
-      .footer-controls { border-top: 1px solid var(--line); background: transparent; padding: 12px 14px 14px; }
+      .side-dock.abierto .dock-peek { opacity: 0; transform: translateX(100%); pointer-events: none; }
+      .footer-controls { border-top: none; background: transparent; padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
       .entregado-actions { border-top: none; background: transparent; }
+    }
+    @media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
+      #sidePanel, .side-dock.abierto #sidePanel, .dock-scrim, .dock-peek { transition: none; }
     }
 
     @media (max-width: 720px) {
@@ -5086,11 +5389,11 @@
       .header-btn--accent { padding: 0; width: 44px; }
       .header-btn--accent .header-btn-label { display: none; }
 
-      .main-content { padding: 0 12px 16px; }
-      .items-header { height: 48px; }
+      /* 17px a la derecha: lugar de la pestana de la hoja lateral (15px). */
+      .main-content { padding: 0 17px 16px 12px; }
 
       .item-card { gap: 9px; padding: 9px 10px; }
-      .item-img, .item-img-placeholder { width: 46px; height: 46px; }
+      .item-img, .item-img-placeholder { width: 40px; height: 40px; }
       .pv-item-fin { width: auto; }
       .pv-valor-static { display: none; }
 
@@ -5111,24 +5414,30 @@
       .item-check { margin: 9px 4px; }
       /* Mas chica que en escritorio pero con el area de toque completa de la
          card: la guarda de toques accidentales ya la cubre por selector. */
-      .item-delete { width: 30px; height: 30px; font-size: 18px; }
+      /* Sin X en celulares: se borra manteniendo apretada la tarjeta 2 s
+         (ver "Borrar manteniendo apretado" en el JS). */
+      .item-delete { display: none; }
 
-      .ctx-fecha, .ctx-link { display: none; }
-      .progress-bar-track { width: 64px; }
+      .ctx-bar { gap: 8px; padding: 0 12px; }
+      .ctx-grupo { gap: 5px; }
+      .ctx-meta { padding-left: 10px; }
+      .ctx-id { font-size: 15px; }
 
       .modal-backdrop, .pedidos-panel, .faltantes-panel, .add-item-modal { padding: 14px; }
 
-      /* El pie pasa de 3+2 botones a 4+3: se ajusta la tipografia y el aire
-         interno para que ninguna etiqueta se recorte con puntos suspensivos. */
-      .dock-utils { gap: 6px; }
-      .dock-utils .footer-btn-base { padding: 0 7px; font-size: 12px; }
-      .dock-wa { width: 42px; }
-      .dock-main { gap: 7px; }
+      /* Se ajusta la tipografia y el aire interno para que ninguna etiqueta se
+         recorte con puntos suspensivos. El espacio entre botones baja igual en
+         las dos filas para que las columnas sigan alineadas. */
+      .footer-controls { --dock-gap: 7px; --dock-btn-h: 46px; }
       .btn-cancelar-pedido, .btn-toggle-estado, .btn-despachar { padding: 0 7px; font-size: 12.5px; }
     }
 
     @media (max-width: 420px) {
-      .progress-bar-track { width: 44px; }
+      /* "Cerrar Pedido" / "Reabrir Pedido" pasan a "Cerrar" / "Reabrir" para
+         que entren al lado de su icono sin puntos suspensivos. */
+      .lbl-extra { display: none; }
+      .btn-cancelar-pedido, .btn-toggle-estado, .btn-despachar { gap: 6px; }
+      .dock-main .fb-ic { width: 16px; height: 16px; }
       .cli-tel { display: none; }
     }
 
@@ -5815,6 +6124,9 @@
       <div class="brand-mark"><img src="faviconblanco.png" alt="Logo"></div>
       <span class="brand-name">Despacho</span>
     </div>
+    <!-- Nombre del cliente del pedido abierto (lo escribe renderUnificado()).
+         Fuera de .header-brand para que tocarlo no vuelva al inicio. -->
+    <span class="ctx-id" id="ctxId"></span>
 
     <div class="header-actions">
       <button class="header-btn header-btn--icon" id="btnBuscarArticulo" title="Buscar art&iacute;culo"><svg class="ic" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></button>
@@ -5847,19 +6159,32 @@
        identidad del pedido (id, estado, antiguedad) y el progreso, que asi
        queda siempre visible aunque la lista de articulos scrollee. -->
   <div class="ctx-bar" id="contextBar">
-    <span class="ctx-id" id="ctxId"></span>
-    <span class="status-badge" id="ctxEstado"></span>
-    <span class="badge-int" id="ctxCatInt" role="img" title="Pedido con descuento" aria-label="Pedido con descuento" hidden></span>
-    <span class="ctx-entrega" id="ctxEntrega" hidden></span>
-    <button type="button" class="ctl-chip" id="ctxControl" title="Abrir el control del pedido" hidden></button>
-    <span class="ctx-dot"></span>
-    <span class="ctx-fecha" id="ctxFecha"></span>
-    <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
-    <span class="ctx-spacer"></span>
-    <div class="progress-section" id="ctxProgreso" title="0 de 0 empacados">
-      <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
-      <span class="progress-pct">0%</span>
+    <!-- Identidad del pedido: discos de 30px, en este orden: entrega,
+         descuento, estado y link. Los que no aplican quedan hidden y el gap
+         del grupo se reacomoda solo. -->
+    <div class="ctx-grupo">
+      <span class="ctx-entrega" id="ctxEntrega" hidden></span>
+      <span class="badge-int" id="ctxCatInt" role="img" title="Pedido con descuento" aria-label="Pedido con descuento" hidden></span>
+      <span class="status-badge ctx-estado" id="ctxEstado" role="img"></span>
+      <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" aria-label="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
     </div>
+    <div class="ctx-meta">
+      <span class="ctx-fecha" id="ctxFecha"></span>
+      <button type="button" class="ctl-chip" id="ctxControl" title="Abrir el control del pedido" hidden></button>
+    </div>
+    <span class="ctx-spacer"></span>
+    <div class="progress-section" id="ctxProgreso" role="img" title="0 de 0 empacados" aria-label="0 de 0 empacados">
+      <svg class="progress-ring" viewBox="0 0 36 36" aria-hidden="true">
+        <circle class="progress-ring-track" cx="18" cy="18" r="15.5"></circle>
+        <circle class="progress-ring-fill is-cero" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="0 100"></circle>
+      </svg>
+      <span class="progress-pct" aria-hidden="true">0</span>
+    </div>
+    <!-- Acciones de la lista: antes vivian en una cabecera propia sobre los
+         articulos; #btnAddItem conserva su listener entre renders. -->
+    <!-- Modo control: lo muestra/oculta controlActualizarUI() -->
+    <button class="btn-control" id="btnControlar" type="button" title="Controlar el pedido con la pistola lectora"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5V5.5a2 2 0 0 1 2-2h2.5"></path><path d="M16.5 3.5H19a2 2 0 0 1 2 2v2"></path><path d="M21 16.5v2a2 2 0 0 1-2 2h-2.5"></path><path d="M7.5 20.5H5a2 2 0 0 1-2-2v-2"></path><line x1="7.5" y1="8" x2="7.5" y2="16"></line><line x1="10.5" y1="8" x2="10.5" y2="16"></line><line x1="13.5" y1="8" x2="13.5" y2="16"></line><line x1="16.5" y1="8" x2="16.5" y2="16"></line></svg><span>Controlar</span></button>
+    <button class="btn-add-item" id="btnAddItem" type="button" title="Agregar art&iacute;culo"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg><span>Agregar</span></button>
   </div>
 
   <!-- STATUS BAR -->
@@ -5872,15 +6197,6 @@
   <div class="workspace">
 
     <main class="col-items">
-      <!-- Cabecera estatica: #btnAddItem conserva su listener entre renders -->
-      <div class="items-header">
-        <h2>Art&iacute;culos</h2>
-        <span class="items-counter" style="cursor:pointer" onclick="copiarLinkPedido()">0 items</span>
-        <span class="items-header-spacer"></span>
-        <!-- Modo control: lo muestra/oculta controlActualizarUI() -->
-        <button class="btn-control" id="btnControlar" type="button" title="Controlar el pedido con la pistola lectora"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5V5.5a2 2 0 0 1 2-2h2.5"></path><path d="M16.5 3.5H19a2 2 0 0 1 2 2v2"></path><path d="M21 16.5v2a2 2 0 0 1-2 2h-2.5"></path><path d="M7.5 20.5H5a2 2 0 0 1-2-2v-2"></path><line x1="7.5" y1="8" x2="7.5" y2="16"></line><line x1="10.5" y1="8" x2="10.5" y2="16"></line><line x1="13.5" y1="8" x2="13.5" y2="16"></line><line x1="16.5" y1="8" x2="16.5" y2="16"></line></svg><span>Controlar</span></button>
-        <button class="btn-add-item" id="btnAddItem" type="button"><svg class="ic-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Agregar art&iacute;culo</button>
-      </div>
 
       <div class="main-content" id="mainContent">
         <div class="welcome-screen" id="welcomeScreen">
@@ -5895,19 +6211,25 @@
     <!-- PANEL DE TRABAJO -->
     <aside class="side-dock" id="sideDock">
 
-      <!-- Barra de resumen de la hoja inferior (solo visible por debajo de
-           1024px). Reusa el toggle y el swipe que ya existian, y agrega la
-           clase .abierto sobre #sideDock, que es la que lee el CSS. -->
+      <!-- Pestana del borde derecho de la hoja lateral (solo visible por
+           debajo de 1024px). Abre/cierra con un toque o arrastrandola; la
+           clase .abierto sobre #sideDock es la que lee el CSS. -->
       <!-- Sigue siendo un <div role="button"> y no un <button>: el rol y el
            manejo de teclado se replican a mano. -->
-      <div class="dock-peek" id="footerHandle" role="button" tabindex="0" aria-expanded="false" aria-controls="sidePanel" title="Desliz&aacute; para mostrar u ocultar los datos del pedido">
-        <span class="dock-peek-label">Datos de Pedido</span>
-        <span class="dock-peek-spacer"></span>
+      <div class="dock-peek" id="footerHandle" role="button" tabindex="0" aria-expanded="false" aria-controls="sidePanel" aria-label="Datos de Pedido" title="Desliz&aacute; hacia la izquierda para ver los datos del pedido">
         <span class="dock-peek-nota" id="dockPeekNota"></span>
-        <svg class="dock-peek-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg>
+        <svg class="dock-peek-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 6 9 12 15 18"></polyline></svg>
       </div>
 
-      <div id="sidePanel">
+      <!-- Fondo oscuro detras de la hoja lateral: tocarlo la cierra. -->
+      <div class="dock-scrim" id="dockScrim" aria-hidden="true"></div>
+
+      <div id="sidePanel" tabindex="-1">
+        <!-- Cabecera de la hoja lateral: solo se ve por debajo de 1024px. -->
+        <div class="dock-hoja-cab">
+          <span class="dock-hoja-titulo">Datos de Pedido</span>
+          <button type="button" class="dock-hoja-cerrar" id="dockCerrar" aria-label="Cerrar datos del pedido"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg></button>
+        </div>
         <!-- Lo pinta renderUnificado(): cliente, totales, pago y entrega -->
         <div id="sidePanelCards"></div>
 
@@ -5932,53 +6254,56 @@
            queda oculto cuando el pedido esta bloqueado, y esta es la unica
            accion habilitada en ese estado. -->
       <div class="entregado-actions" id="entregadoActions">
-        <button class="footer-btn-base btn-cancelar-entregado" id="btnCancelarEntregado">Cancelar Entregado</button>
+        <button class="footer-btn-base btn-cancelar-entregado" id="btnCancelarEntregado"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Cancelar Entregado</span></button>
       </div>
 
       <!-- ACCIONES -->
       <div class="footer-controls" id="footerControls" style="display:none">
         <div class="dock-utils">
-          <!-- El cajon dejo de serlo: Faltantes vive en esta misma fila y abre
-               primero. Los contenedores siguen porque toggleDrawer() y el swipe
-               del footer los referencian; el CSS los vuelve transparentes. -->
+          <!-- Fila de utilidades: solo iconos. El nombre de cada uno esta en
+               aria-label/title y se muestra al mantener apretado (ver
+               "Etiqueta al mantener apretado" en el JS).
+               El cajon dejo de serlo: Faltantes vive en esta misma fila y abre
+               primero. Los contenedores siguen porque toggleDrawer() los
+               referencia; el CSS los vuelve transparentes. -->
           <div class="footer-drawer" id="footerDrawer">
             <div class="footer-drawer-inner">
-              <button class="footer-btn-base btn-faltantes" id="btnFaltantes" disabled>Sin faltantes</button>
+              <button class="footer-btn-base btn-icono btn-faltantes" id="btnFaltantes" disabled aria-label="Sin faltantes" title="Sin faltantes"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="m15 11-6 6"></path><path d="m9 11 6 6"></path></svg><span class="btn-badge" id="btnFaltantesN" hidden></span></button>
             </div>
           </div>
 
           <div class="print-menu-wrap">
-            <button class="footer-btn-base btn-impresion" id="btnImpresion">Imprimir</button>
+            <button class="footer-btn-base btn-icono btn-impresion" id="btnImpresion" aria-label="Imprimir" title="Imprimir" aria-haspopup="menu"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg></button>
             <div class="print-menu" id="printMenu">
-              <div class="print-menu-item" id="printRotuloPOS">R&oacute;tulo</div>
-              <div class="print-menu-item" id="printTicket">Ticket</div>
+              <div class="print-menu-item" id="printRotuloPOS"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"></path><circle cx="7.5" cy="7.5" r="1.2"></circle></svg><span>R&oacute;tulo</span></div>
+              <div class="print-menu-item" id="printTicket"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><line x1="8" y1="8" x2="16" y2="8"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="8" y1="16" x2="13" y2="16"></line></svg><span>Ticket</span></div>
               <!-- Solo aplica dentro de la app Android (impresion Bluetooth directa);
                    se muestra u oculta desde JS, ver btnImpresion click. -->
-              <div class="print-menu-item" id="printConfigBT" style="display:none">Impresora Bluetooth</div>
-              <div class="print-menu-item" id="printRotulo">Generar R&oacute;tulo PDF</div>
-              <div class="print-menu-item" id="printFactura">Generar Pedido PDF</div>
-              <div class="print-menu-item" id="printRotuloManual">R&oacute;tulo manual</div>
+              <div class="print-menu-item" id="printConfigBT" style="display:none"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10-5 5V2l5 5L7 17"></path></svg><span>Impresora Bluetooth</span></div>
+              <div class="print-menu-item" id="printRotulo"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><rect x="8" y="12" width="8" height="5" rx="1"></rect></svg><span>Generar R&oacute;tulo PDF</span></div>
+              <div class="print-menu-item" id="printFactura"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><line x1="8" y1="9" x2="10" y2="9"></line></svg><span>Generar Pedido PDF</span></div>
+              <div class="print-menu-item" id="printRotuloManual"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.2 6.8a1 1 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z"></path></svg><span>R&oacute;tulo manual</span></div>
             </div>
           </div>
 
           <div class="msg-menu-wrap">
-            <button class="footer-btn-base btn-mensaje" id="btnMensajePV">Mensaje</button>
+            <!-- WhatsApp y plantillas en un solo boton: el menu abre el chat
+                 del cliente (dockPeekActualizar() le pone el href) o arma uno
+                 de los mensajes. -->
+            <button class="footer-btn-base btn-icono btn-mensaje" id="btnMensajePV" aria-label="WhatsApp" title="WhatsApp" aria-haspopup="menu"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg></button>
             <div class="msg-dropdown" id="msgDropdown">
-              <div class="msg-dropdown-item" data-msg="1">Saludo inicial</div>
-              <div class="msg-dropdown-item" data-msg="2">Cotizaci&oacute;n</div>
-              <div class="msg-dropdown-item" data-msg="3">Convertir a retiro</div>
+              <a class="msg-dropdown-item disabled" id="dockPeekWa" target="_blank" rel="noopener" title="Sin tel&eacute;fono"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg><span>Abrir chat</span></a>
+              <div class="msg-dropdown-item" data-msg="1"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg><span>Saludo inicial</span></div>
+              <div class="msg-dropdown-item" data-msg="2"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span>Cotizaci&oacute;n</span></div>
+              <div class="msg-dropdown-item" data-msg="3"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 5 3h14l2 6"></path><path d="M3 9h18v1a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"></path><path d="M5 13v8h14v-8"></path><path d="M10 21v-5h4v5"></path></svg><span>Convertir a retiro</span></div>
             </div>
           </div>
-
-          <!-- Solo icono: cierra la fila de utilidades sin robarle ancho a los
-               tres botones con texto. dockPeekActualizar() le pone el href. -->
-          <a class="dock-wa disabled" id="dockPeekWa" target="_blank" rel="noopener" title="Sin tel&eacute;fono" aria-label="Enviar WhatsApp al cliente"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg></a>
         </div>
 
         <div class="dock-main">
-          <button class="footer-btn-base btn-cancelar-pedido" id="btnCancelarPV">Cancelar</button>
-          <button class="footer-btn-base btn-toggle-estado" id="btnToggleEstado">Cerrar Pedido</button>
-          <button class="footer-btn-base btn-despachar" id="btnDespachar">Entregado</button>
+          <button class="footer-btn-base btn-cancelar-pedido" id="btnCancelarPV"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><line x1="5.3" y1="5.3" x2="18.7" y2="18.7"></line></svg><span>Cancelar</span></button>
+          <button class="footer-btn-base btn-toggle-estado" id="btnToggleEstado"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><span>Cerrar<span class="lbl-extra"> Pedido</span></span></button>
+          <button class="footer-btn-base btn-despachar" id="btnDespachar"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 2 2 4-4"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg><span>Entregado</span></button>
         </div>
       </div>
 
@@ -6092,7 +6417,7 @@
           <h3>Pedidos pendientes</h3>
           <span class="pp-resumen" id="pedidosResumen"></span>
         </div>
-        <button type="button" class="pp-btn-rotulos" id="ppBtnRotulos" aria-pressed="false" title="Elegir pedidos e imprimir sus r&oacute;tulos juntos"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Imprimir r&oacute;tulos</span></button>
+        <button type="button" class="pp-btn-rotulos" id="ppBtnRotulos" aria-pressed="false" title="Elegir pedidos e imprimir sus r&oacute;tulos juntos"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Imprimir</span></button>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
       </div>
       <!-- Leyenda del riel: una fila por hito con sus dos estados (lleno y
@@ -6106,6 +6431,12 @@
           <span><i class="pp-seg pp-seg--armado is-on" aria-hidden="true"></i>Completo</span>
           <span><i class="pp-seg pp-seg--armado is-wait" aria-hidden="true"></i>En preparación</span>
         </span>
+        <!-- Oculta el grupo "listos para despachar" para ganar lugar. Arranca
+             apagado cada vez que se carga la pagina (no se recuerda). -->
+        <button type="button" class="int-toggle pp-ocultar" id="ppOcultarListos" role="switch" aria-checked="false" title="Ocultar los pedidos listos para despachar">
+          <span class="int-toggle-pista" aria-hidden="true"></span>
+          <span>Ocultar listos</span>
+        </button>
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
         <div class="pedidos-panel-empty">Presiona "Pedidos" para cargar</div>
@@ -6163,7 +6494,6 @@
         <div class="nec-head-actions">
           <button type="button" class="nec-ibtn" id="necBtnSol" title="Pedir a Caseros"><svg class="ic" viewBox="0 0 24 24"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4 20-7z"></path></svg></button>
           <button type="button" class="nec-ibtn" id="necBtnPrint" title="Imprimir listado"><svg class="ic" viewBox="0 0 24 24"><polyline points="6 9 6 3 18 3 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="7"></rect></svg></button>
-          <button type="button" class="nec-ibtn" id="necBtnReload" title="Volver a cargar los pedidos"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"></path><polyline points="20 3.4 20 7.4 16 7.4"></polyline></svg></button>
           <button type="button" class="nec-ibtn nec-ibtn--peligro" id="necBtnClear" title="Limpiar todos los tildes"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 14h10l1-14"></path><path d="M10 11v5M14 11v5"></path></svg></button>
           <button type="button" class="nec-ibtn nec-ibtn--cerrar" id="necBtnClose" title="Cerrar">&times;</button>
         </div>
@@ -6184,16 +6514,18 @@
           <button type="button" class="is-on" id="necSegFaltan" role="tab">Faltan <span class="nec-seg-n" id="necNFaltan">0</span></button>
           <button type="button" id="necSegTodos" role="tab">Todos <span class="nec-seg-n" id="necNTodos">0</span></button>
         </div>
-        <div class="nec-seg" role="tablist" aria-label="Agrupar por" id="necSegAgrupar">
-          <button type="button" id="necAgrZona" role="tab" title="Por grupo y columna, en el orden del recorrido del depósito">Ubicación</button>
-          <button type="button" id="necAgrCat" role="tab" title="Por categoría de la planilla">Categoría</button>
-        </div>
         <label class="nec-chk-env" title="Ocultar los artículos ya pedidos a Caseros: los enviados y los pendientes"><input type="checkbox" id="necChkEnviados"><span>Ocultar solicitados <span class="nec-seg-n" id="necNEnviados">0</span></span></label>
         <button type="button" class="nec-btn-pedidos" id="necBtnPedidos" title="Elegir qué pedidos entran en el cálculo"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg><span id="necBtnPedidosTxt">Pedidos</span></button>
       </div>
 
-      <div class="nec-list" id="necList">
-        <div class="pedidos-panel-loading"><div class="spinner"></div>Cargando artículos de pedidos...</div>
+      <div class="nec-list-wrap">
+        <div class="nec-list" id="necList">
+          <div class="pedidos-panel-loading"><div class="spinner"></div>Cargando artículos de pedidos...</div>
+        </div>
+        <!-- Indicador de scroll propio, naranja y siempre visible: el de los
+             navegadores tactiles es gris y se esconde solo. Lo mueve
+             necScrollInd(). -->
+        <div class="nec-scroll-ind" id="necScrollInd" aria-hidden="true"><i></i></div>
       </div>
     </div>
   </div>
@@ -6208,6 +6540,9 @@
         <button type="button" class="nec-ibtn nec-ibtn--cerrar" id="necSubClose" title="Cerrar">&times;</button>
       </div>
       <div class="nec-sub-acciones">
+        <!-- "Aptos" es el filtro por defecto: se aplica solo al cargar o
+             recargar la lista. Marca los pedidos con nota, salvo "No responde". -->
+        <button type="button" id="necSubConNota" title="Aptos: pedidos con nota, salvo los que dicen &quot;No responde&quot;">Aptos</button>
         <button type="button" id="necSubTodos">Todos</button>
         <button type="button" id="necSubNinguno">Ninguno</button>
       </div>
@@ -6409,6 +6744,37 @@
     </div>
   </div>
 
+  <!-- MODAL LINK DE DESPACHO (Flecha Carga): se pega el link del envio, se
+       guarda en pedidos/<id>/despacho y WhatsAppSync se lo manda al cliente. -->
+  <div class="modal-backdrop" id="despModal" role="dialog" aria-modal="true" aria-labelledby="despTitulo">
+    <div class="modal-box modal-box--form paq-box">
+      <div class="paq-head">
+        <span class="paq-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"></path></svg></span>
+        <div class="paq-head-tx">
+          <p class="paq-titulo" id="despTitulo">Link de despacho</p>
+          <div class="paq-ref" id="despRef"></div>
+        </div>
+      </div>
+
+      <div class="paq-seccion">Link del env&iacute;o</div>
+      <label class="paq-campo">
+        <span class="paq-input desp-input"><input id="despLink" type="url" inputmode="url" autocomplete="off" placeholder="Peg&aacute; el link ac&aacute;" aria-label="Link del envío"></span>
+      </label>
+
+      <div class="desp-vista" id="despVista"></div>
+      <div class="desp-estado" id="despEstado" aria-live="polite"></div>
+      <div class="desp-login" id="despLogin" hidden>
+        <input type="password" id="despPass" autocomplete="current-password" placeholder="Contrase&ntilde;a">
+      </div>
+      <div class="paq-error" id="despError" role="alert"></div>
+
+      <div class="modal-btns">
+        <button type="button" class="btn-cancel" id="despCancel">Cancelar</button>
+        <button type="button" class="btn-primary" id="despGuardar">Guardar y enviar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL PDF LISTO -->
   <div class="modal-backdrop" id="pdfModal">
     <div class="modal-box">
@@ -6533,8 +6899,6 @@
   <script src="config.js"></script>
   <!-- Conversaciones de WhatsApp: proyecto Firebase aparte (carpeta WhatsAppSync) -->
   <script src="config-whatsapp.js"></script>
-  <!-- Zonas del depósito (relevamiento semanal de fotos, carpeta Locator) -->
-  <script src="../Locator/ubicaciones-api.js"></script>
 
   <script>
     // ==========================================
@@ -7202,7 +7566,10 @@
       document.body.classList.remove('con-pedido', 'pedido-bloqueado');
       document.getElementById('sidePanelCards').innerHTML = '';
       dockPeekActualizar(null);
+      // Equivale a closeDrawer(), sin depender de que ese bloque ya haya corrido.
+      document.getElementById('footerDrawer').classList.remove('open');
       document.getElementById('sideDock').classList.remove('abierto');
+      document.getElementById('footerHandle').setAttribute('aria-expanded', 'false');
       document.getElementById('mainContent').innerHTML = HTML_BIENVENIDA;
       pintarSesion();
     }
@@ -7493,6 +7860,25 @@
       return '';
     }
 
+    // Icono del estado para la franja superior: el mismo que lleva el boton
+    // que produce ese estado (candado = cerrado, caja con tilde = entregado...).
+    function pintarIconoEstado(el, status) {
+      const v = String(status || '').toUpperCase();
+      const ic = (v.includes('DESPACHADO') || v.includes('ENTREGADO'))
+        ? '<path d="m16 16 2 2 4-4"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line>'
+        : v.includes('CANCELADO')
+        ? '<circle cx="12" cy="12" r="9.5"></circle><line x1="5.3" y1="5.3" x2="18.7" y2="18.7"></line>'
+        : v.includes('CERRADO')
+        ? '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path>'
+        : v.includes('ABIERTO')
+        ? '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.4"></path>'
+        : '<circle cx="12" cy="12" r="9.5"></circle><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line>';
+      el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ic + '</svg>';
+      const nombre = status ? 'Estado: ' + status : 'Estado desconocido';
+      el.title = nombre;
+      el.setAttribute('aria-label', nombre);
+    }
+
     function getStatusClass(valor) {
       if (!valor) return '';
       const v = valor.toUpperCase();
@@ -7699,8 +8085,8 @@
       ctxIdEl.textContent = cliente.nombre || ('#' + (pedidoId || ''));
       ctxIdEl.title = '#' + (pedidoId || '');
       const ctxEstado = document.getElementById('ctxEstado');
-      ctxEstado.className = 'status-badge ' + getStatusClass(pedidoActual.status);
-      ctxEstado.textContent = pedidoActual.status || 'N/A';
+      ctxEstado.className = 'status-badge ctx-estado ' + getStatusClass(pedidoActual.status);
+      pintarIconoEstado(ctxEstado, pedidoActual.status);
       // La marca de cat = "int" viaja al lado del estado: es lo primero que se
       // mira al abrir el pedido.
       const ctxCatInt = document.getElementById('ctxCatInt');
@@ -7709,7 +8095,7 @@
       actualizarBtnCatInt();
       const fechaEntrega = fechaEntregaTexto(pedidoActual, true);
       document.getElementById('ctxFecha').textContent = [
-        fechaIngreso ? 'Ingresado ' + fechaIngreso : '',
+        fechaIngreso || '',
         fechaEntrega ? 'Entregado ' + fechaEntrega : ''
       ].filter(Boolean).join(' · ');
 
@@ -7760,11 +8146,15 @@
             ? (stockVal <= 0 ? ' stock-zero' : stockVal <= 10 ? ' stock-low' : ' stock-ok') : '';
           const stockCas = sheetInfo.stockCaseros;
           // Munro (columna R) resaltado con color; Caseros (columna S) discreto, solo informativo.
-          const stockDisplay = (Number.isFinite(stockVal)
-            ? '<span class="item-stock' + stockClass + '" title="Stock Munro">Munro ' + stockVal + '</span>' : '') +
+          // Insignias cortas (M = Munro, C = Caseros); el nombre completo va en
+          // title/aria-label. Juntas en un grupo que, si no entra al lado del
+          // codigo, baja entero a su propia linea.
+          const stockPills = (Number.isFinite(stockVal)
+            ? '<span class="item-stock' + stockClass + '" title="Stock Munro: ' + stockVal + '" aria-label="Stock Munro: ' + stockVal + '"><b>M</b>' + stockVal + '</span>' : '') +
             (Number.isFinite(stockCas)
-            ? '<span class="item-stock-cas" title="Stock Caseros">Caseros ' + stockCas + '</span>' : '');
-          groupHtml += '<div class="item-code">' + escapeHtml(it.codigo || '') + stockDisplay + '</div>';
+            ? '<span class="item-stock-cas" title="Stock Caseros: ' + stockCas + '" aria-label="Stock Caseros: ' + stockCas + '"><b>C</b>' + stockCas + '</span>' : '');
+          const stockDisplay = stockPills ? '<span class="item-stocks">' + stockPills + '</span>' : '';
+          groupHtml += '<div class="item-code"><span class="item-code-txt">' + escapeHtml(it.codigo || '') + '</span>' + stockDisplay + '</div>';
           groupHtml += '</div>';
 
           // Precio unitario y subtotal, en columna propia alineada a la derecha.
@@ -7970,6 +8360,85 @@
       e.stopPropagation();
     }, true);
 
+    // --- Borrar manteniendo apretado -------------------------------------
+    // Reemplaza a la X en celulares (en escritorio conviven). Mantener la
+    // tarjeta apretada 2 s abre la misma confirmacion que la X; mientras tanto
+    // un tinte rojo la cruza para que se vea cuanto falta. Moverse (scroll,
+    // swipe de la hoja) o soltar antes lo cancela.
+    const BORRAR_MS = 2000;
+    const BORRAR_SLOP = 10;              // px que el dedo se puede mover sin cancelar
+    const BORRAR_EXCLUIR = '.item-check, .qty-control, .item-delete, .item-img, button, input, a';
+    let borrarGesto = null;
+    let borrarSuprimirClick = false;
+
+    function borrarCancelar() {
+      if (!borrarGesto) return;
+      clearTimeout(borrarGesto.timer);
+      clearTimeout(borrarGesto.pintar);
+      borrarGesto.card.classList.remove('is-borrando');
+      borrarGesto = null;
+    }
+
+    listaItemsEl.addEventListener('pointerdown', (e) => {
+      borrarCancelar();
+      borrarSuprimirClick = false;
+      if (e.button !== undefined && e.button !== 0) return;
+      const card = e.target.closest('.item-card');
+      if (!card || e.target.closest(BORRAR_EXCLUIR)) return;
+      const idx = parseInt(card.dataset.idx, 10);
+      if (!Number.isFinite(idx) || !pedidoActual || !pedidoActual.items[idx]) return;
+      // Pedido entregado: no se borra, pero se puede registrar el faltante
+      // abonado, igual que con la X.
+      if (isBlocked && !faHabilitado()) return;
+      card.style.setProperty('--borrar-ms', BORRAR_MS + 'ms');
+      borrarGesto = {
+        id: e.pointerId, card, idx, x0: e.clientX, y0: e.clientY,
+        // Un toque corto no llega a pintar nada: el tinte arranca a los 150 ms.
+        pintar: setTimeout(() => { if (borrarGesto && borrarGesto.card === card) card.classList.add('is-borrando'); }, 150),
+        timer: setTimeout(() => {
+          const g = borrarGesto;
+          if (!g) return;
+          clearTimeout(g.pintar);
+          borrarGesto = null;
+          g.card.classList.remove('is-borrando');
+          borrarSuprimirClick = true;   // el soltar posterior no marca la tarjeta
+          if (navigator.vibrate) { try { navigator.vibrate(18); } catch (_) {} }
+          if (isBlocked) faAbrir(g.idx);
+          else confirmDelete(g.idx);
+        }, BORRAR_MS)
+      };
+    }, { passive: true });
+
+    listaItemsEl.addEventListener('pointermove', (e) => {
+      const g = borrarGesto;
+      if (!g || e.pointerId !== g.id) return;
+      if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > BORRAR_SLOP) {
+        clearTimeout(g.pintar);
+        borrarCancelar();
+      }
+    }, { passive: true });
+
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => listaItemsEl.addEventListener(t, (e) => {
+      const g = borrarGesto;
+      if (!g || e.pointerId !== g.id) return;
+      clearTimeout(g.pintar);
+      borrarCancelar();
+    }, { passive: true }));
+    listaItemsEl.addEventListener('scroll', () => {
+      if (borrarGesto) { clearTimeout(borrarGesto.pintar); borrarCancelar(); }
+    }, { passive: true });
+
+    listaItemsEl.addEventListener('click', (e) => {
+      if (!borrarSuprimirClick) return;
+      borrarSuprimirClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+    // Sin menu contextual ni seleccion de texto del sistema mientras se aprieta.
+    listaItemsEl.addEventListener('contextmenu', (e) => {
+      if (e.target.closest && e.target.closest('.item-card')) e.preventDefault();
+    });
+
     // --- Stepper de cantidad bajo demanda --------------------------------
     // Colapsado por defecto; un tap sobre el numero lo despliega para esa card.
     let qtyActivoIdx = -1, qtyActivoTimer = null;
@@ -8015,18 +8484,21 @@
       const pct = items.length > 0 ? Math.round((checkedCount / items.length) * 100) : 0;
       const isComplete = pct === 100 && items.length > 0;
 
-      const fill = document.querySelector('.progress-bar-fill');
+      const fill = document.querySelector('.progress-ring-fill');
       const label = document.querySelector('.progress-pct');
       const seccion = document.getElementById('ctxProgreso');
       if (fill) {
-        fill.style.width = pct + '%';
+        // pathLength=100: el porcentaje es directamente el largo del trazo.
+        fill.setAttribute('stroke-dasharray', pct + ' 100');
+        fill.classList.toggle('is-cero', pct === 0);
         fill.classList.toggle('complete', isComplete);
       }
       if (label) {
-        label.textContent = pct + '%';
+        if (isComplete) label.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        else label.textContent = String(pct);
         label.classList.toggle('complete', isComplete);
       }
-      // El conteo exacto queda como tooltip; a la vista solo barra y porcentaje.
+      // El conteo exacto queda como tooltip; a la vista solo el anillo.
       if (seccion) {
         const detalle = checkedCount + ' de ' + items.length + ' empacados';
         seccion.title = detalle;
@@ -8344,7 +8816,15 @@
       const btn = document.getElementById('btnFaltantes');
       if (!btn) return;
       const count = getFaltantes().length;
-      btn.textContent = count > 0 ? 'Faltantes (' + count + ')' : 'Sin faltantes';
+      // Solo icono: el numero va en el globito y el nombre en aria-label/title.
+      const nombre = count > 0 ? 'Faltantes (' + count + ')' : 'Sin faltantes';
+      btn.setAttribute('aria-label', nombre);
+      btn.title = nombre;
+      const badge = document.getElementById('btnFaltantesN');
+      if (badge) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.hidden = count === 0;
+      }
       btn.disabled = count === 0;
       btn.style.opacity = count === 0 ? '.5' : '1';
     }
@@ -8725,20 +9205,25 @@
 
     function showTooltip(event, codigo) {
       const info = sheetsData[codigo] || {};
+      // El nombre se lee del propio rotulo tocado: en la tarjeta suele estar
+      // cortado con puntos suspensivos y aca se ve entero.
+      const nombreEl = event.target.closest ? event.target.closest('.item-name') : null;
+      const nombre = nombreEl ? nombreEl.textContent.trim() : (info.nombre || '');
       tooltipBox.innerHTML =
+        (nombre ? '<span class="tt-label">Art&iacute;culo</span><span class="tt-nombre">' + escapeHtml(nombre) + '</span>' : '') +
         '<span class="tt-label">Codigo de Barras</span><span class="tt-value">' + escapeHtml((info.codigoBarras && info.codigoBarras.length ? info.codigoBarras.join(', ') : 'N/A')) + '</span>';
 
       // Posicionar cerca del click
       const rect = event.target.getBoundingClientRect();
       tooltipBox.style.top = (rect.bottom + 8) + 'px';
-      tooltipBox.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
+      tooltipBox.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 312)) + 'px';
 
       tooltipOverlay.classList.add('active');
 
       clearTimeout(tooltipTimer);
       tooltipTimer = setTimeout(() => {
         tooltipOverlay.classList.remove('active');
-      }, 3500);
+      }, 5000);
     }
 
     tooltipOverlay.addEventListener('click', () => {
@@ -8901,107 +9386,173 @@
     }
 
     // ==========================================
-    // DRAWER DEL FOOTER (swipe + tap)
+    // HOJA LATERAL DE DATOS DEL PEDIDO (swipe + tap)
     // ==========================================
+    // Por debajo de 1024px #sidePanel es una hoja que entra desde la derecha.
+    // Se abre deslizando hacia la izquierda sobre la lista o con la pestana del
+    // borde (#footerHandle), y se cierra deslizando hacia la derecha sobre la
+    // hoja, tocando el fondo oscuro, con la X o con Escape.
     const footerDrawer = document.getElementById('footerDrawer');
     const footerHandle = document.getElementById('footerHandle');
-
-    // .open sobre #footerDrawer se conserva por compatibilidad; el alto de la
-    // hoja lo gobierna .abierto sobre #sideDock, que evita depender de :has().
     const sideDock = document.getElementById('sideDock');
+    const sidePanelEl = document.getElementById('sidePanel');
+    const dockScrim = document.getElementById('dockScrim');
+    const mainContentEl = document.getElementById('mainContent');
+    const mqAngosta = window.matchMedia('(max-width: 1023px)');
+
+    // .open sobre #footerDrawer se conserva por compatibilidad; la hoja la
+    // gobierna .abierto sobre #sideDock, que evita depender de :has().
     function sincronizarHoja() {
       const abierta = footerDrawer.classList.contains('open');
       sideDock.classList.toggle('abierto', abierta);
       footerHandle.setAttribute('aria-expanded', String(abierta));
+      // Que el foco no quede adentro de una hoja que se fue de pantalla.
+      if (!abierta && sidePanelEl.contains(document.activeElement)) document.activeElement.blur();
     }
     function toggleDrawer() { footerDrawer.classList.toggle('open'); sincronizarHoja(); }
     function openDrawer() { footerDrawer.classList.add('open'); sincronizarHoja(); }
     function closeDrawer() { footerDrawer.classList.remove('open'); sincronizarHoja(); }
 
     // --- Arrastre de la hoja -------------------------------------------
-    // La hoja la abre y la cierra el max-height del CSS. Mientras el dedo esta
-    // apoyado ese max-height se fija en px para que la hoja siga al dedo en vez
-    // de saltar de un estado al otro; al soltar se devuelve el control al CSS y
-    // su transicion remata el movimiento hacia el estado que gano.
-    const sidePanelEl = document.getElementById('sidePanel');
-    const DOCK_UMBRAL = 46;     // px de recorrido que valen como intencion
-    const DOCK_TAP = 8;         // por debajo de esto el gesto todavia es un tap
-    const DOCK_FLICK = 0.5;     // px/ms: un tiron corto pero rapido tambien cuenta
-    const DOCK_ALTO_MAX = .62;  // debe coincidir con el max-height del @media
+    // La hoja la abre y la cierra el transform del CSS. Mientras el dedo esta
+    // apoyado el transform se fija en px para que la hoja siga al dedo; al
+    // soltar se devuelve el control al CSS y su transicion remata el
+    // movimiento hacia el estado que gano.
+    const DOCK_DIR = 10;        // px de recorrido antes de decidir la direccion
+    const DOCK_TAP = 8;         // en la pestana, por debajo de esto es un tap
+    const DOCK_FLICK = 0.45;    // px/ms: un tiron corto pero rapido tambien cuenta
+    const DOCK_UMBRAL = .35;    // fraccion del ancho de la hoja que vale como intencion
+    const DOCK_HORIZONTAL = 1.4; // |dx| tiene que ganarle a |dy| por este factor
     let dockDrag = null;
     let dockHuboArrastre = false;  // corta el click sintetico que sigue al gesto
+    let dockHuboArrastreTimer = null;
 
-    // El alto real de la hoja abierta: el contenido si entra, el tope del CSS si
-    // no. Se mide con el max-height suspendido y se restaura en la misma vuelta,
-    // antes de que el navegador pinte.
-    function dockAlturaMax() {
-      const previo = sidePanelEl.style.maxHeight;
-      sidePanelEl.style.maxHeight = 'none';
-      const alto = sidePanelEl.scrollHeight;
-      sidePanelEl.style.maxHeight = previo;
-      return Math.min(alto, window.innerHeight * DOCK_ALTO_MAX);
+    function dockPintar(d, dx) {
+      // offset: 0 = abierta del todo, ancho = cerrada del todo
+      const offset = Math.max(0, Math.min(d.ancho, (d.abierta ? 0 : d.ancho) + dx));
+      sidePanelEl.style.transform = 'translateX(' + offset + 'px)';
+      dockScrim.style.opacity = String(1 - offset / d.ancho);
+    }
+
+    function dockEmpezarArrastre(d) {
+      d.activo = true;
+      sidePanelEl.style.transition = 'none';
+      sidePanelEl.style.visibility = 'visible';
+      dockScrim.style.transition = 'none';
     }
 
     function dockTerminarArrastre(abrir) {
-      // Se limpian transicion y padding y recien despues el max-height: el
-      // reflow del medio fija el punto de partida de la animacion en el alto
-      // que quedo bajo el dedo, si no la hoja saltaria.
+      // Se restauran las transiciones y recien despues se suelta el transform:
+      // el reflow del medio fija el punto de partida de la animacion en la
+      // posicion que quedo bajo el dedo, si no la hoja saltaria.
       sidePanelEl.style.transition = '';
-      sidePanelEl.style.padding = '';
-      void sidePanelEl.offsetHeight;
-      sidePanelEl.style.maxHeight = '';
+      dockScrim.style.transition = '';
+      void sidePanelEl.offsetWidth;
+      sidePanelEl.style.transform = '';
+      sidePanelEl.style.visibility = '';
+      dockScrim.style.opacity = '';
       if (abrir) openDrawer(); else closeDrawer();
     }
 
-    footerHandle.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse') return;                 // con mouse alcanza el click
-      if (window.innerWidth >= 1024) return;                 // en desktop la hoja no se pliega
-      dockHuboArrastre = false;                              // por si el click del gesto previo nunca llego
+    // origen: 'lista' abre y 'hoja' cierra, las dos con bloqueo de direccion
+    // (un gesto mas vertical que horizontal queda para el scroll); 'directo'
+    // (pestana y fondo) sigue al dedo desde el primer movimiento.
+    function dockPointerDown(e, origen) {
+      if (e.pointerType === 'mouse') return;                 // con mouse alcanzan los clicks
+      if (!mqAngosta.matches) return;                        // en desktop el panel es fijo
+      if (!document.body.classList.contains('con-pedido')) return;
+      if (dockDrag || !e.isPrimary) return;
+      const abierta = sideDock.classList.contains('abierto');
+      if (origen === 'lista' && abierta) return;
+      if (origen === 'hoja' && !abierta) return;
+      if (origen !== 'directo'
+          && e.target.closest('input, select, textarea, [contenteditable], .qty-control')) return;
       dockDrag = {
         id: e.pointerId,
+        el: e.currentTarget,
+        origen,
+        x0: e.clientX,
         y0: e.clientY,
-        ts: Date.now(),
-        abierta: sideDock.classList.contains('abierto'),
-        max: dockAlturaMax(),
-        movido: false
+        lx: e.clientX,
+        lt: e.timeStamp,
+        v: 0,
+        abierta,
+        ancho: sidePanelEl.offsetWidth || window.innerWidth * .88,
+        activo: false
       };
-      footerHandle.setPointerCapture(e.pointerId);
-    });
-
-    footerHandle.addEventListener('pointermove', (e) => {
-      if (!dockDrag || e.pointerId !== dockDrag.id) return;
-      const dy = dockDrag.y0 - e.clientY;                    // hacia arriba = abrir
-      if (!dockDrag.movido) {
-        if (Math.abs(dy) < DOCK_TAP) return;                 // todavia puede ser un tap
-        dockDrag.movido = true;
-        sidePanelEl.style.transition = 'none';
-        sidePanelEl.style.padding = '2px 14px 10px';
+      if (origen === 'directo') {
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
       }
-      const base = dockDrag.abierta ? dockDrag.max : 0;
-      sidePanelEl.style.maxHeight = Math.max(0, Math.min(dockDrag.max, base + dy)) + 'px';
-    });
-
-    function dockSoltar(e) {
-      if (!dockDrag || e.pointerId !== dockDrag.id) return;
-      const gesto = dockDrag;
-      dockDrag = null;
-      if (!gesto.movido) return;                             // fue un tap: lo resuelve el click
-
-      dockHuboArrastre = true;
-      const dy = gesto.y0 - e.clientY;
-      const rapido = Math.abs(dy) / Math.max(1, Date.now() - gesto.ts) > DOCK_FLICK;
-      // Sin recorrido ni velocidad suficientes la hoja vuelve a donde estaba.
-      const decide = Math.abs(dy) > DOCK_UMBRAL || rapido;
-      dockTerminarArrastre(decide ? dy > 0 : gesto.abierta);
     }
 
-    footerHandle.addEventListener('pointerup', dockSoltar);
-    footerHandle.addEventListener('pointercancel', dockSoltar);
+    function dockPointerMove(e) {
+      const d = dockDrag;
+      if (!d || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.x0;
+      const dy = e.clientY - d.y0;
+      if (!d.activo) {
+        if (d.origen === 'directo') {
+          if (Math.abs(dx) < DOCK_TAP) return;               // todavia puede ser un tap
+        } else {
+          if (Math.hypot(dx, dy) < DOCK_DIR) return;
+          const horizontal = Math.abs(dx) > Math.abs(dy) * DOCK_HORIZONTAL;
+          const sentido = d.origen === 'lista' ? dx < 0 : dx > 0;
+          if (!horizontal || !sentido) { dockDrag = null; return; }   // es scroll
+          try { d.el.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+        dockEmpezarArrastre(d);
+      }
+      // Velocidad del ultimo tramo, suavizada: decide los tirones cortos.
+      const dt = e.timeStamp - d.lt;
+      if (dt > 0) d.v = d.v * .4 + ((e.clientX - d.lx) / dt) * .6;
+      d.lx = e.clientX;
+      d.lt = e.timeStamp;
+      dockPintar(d, dx);
+    }
+
+    function dockPointerUp(e) {
+      const d = dockDrag;
+      if (!d || e.pointerId !== d.id) return;
+      dockDrag = null;
+      if (!d.activo) return;                                 // fue un tap: lo resuelve el click
+
+      dockHuboArrastre = true;
+      clearTimeout(dockHuboArrastreTimer);
+      dockHuboArrastreTimer = setTimeout(() => { dockHuboArrastre = false; }, 400);
+      if (e.type === 'pointercancel') { dockTerminarArrastre(d.abierta); return; }
+
+      const dx = e.clientX - d.x0;
+      let abrir = d.abierta;                                 // sin intencion clara vuelve a donde estaba
+      if (Math.abs(d.v) > DOCK_FLICK) abrir = d.v < 0;
+      else if (Math.abs(dx) > d.ancho * DOCK_UMBRAL) abrir = dx < 0;
+      dockTerminarArrastre(abrir);
+    }
+
+    mainContentEl.addEventListener('pointerdown', (e) => dockPointerDown(e, 'lista'));
+    sidePanelEl.addEventListener('pointerdown', (e) => dockPointerDown(e, 'hoja'));
+    footerHandle.addEventListener('pointerdown', (e) => dockPointerDown(e, 'directo'));
+    dockScrim.addEventListener('pointerdown', (e) => dockPointerDown(e, 'directo'));
+    window.addEventListener('pointermove', dockPointerMove, { passive: true });
+    window.addEventListener('pointerup', dockPointerUp);
+    window.addEventListener('pointercancel', dockPointerUp);
+
+    // El click que sigue a un arrastre no tiene que marcar un articulo ni
+    // apretar un boton de la hoja. Un toque nuevo limpia la marca, por si ese
+    // click nunca llego.
+    window.addEventListener('pointerdown', () => { dockHuboArrastre = false; }, true);
+    window.addEventListener('click', (e) => {
+      if (!dockHuboArrastre) return;
+      dockHuboArrastre = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
 
     footerHandle.addEventListener('click', () => {
-      if (dockHuboArrastre) { dockHuboArrastre = false; return; }
       toggleDrawer();
+      if (sideDock.classList.contains('abierto')) sidePanelEl.focus({ preventScroll: true });
     });
+    dockScrim.addEventListener('click', closeDrawer);
+    document.getElementById('dockCerrar').addEventListener('click', closeDrawer);
 
     // #footerHandle no es un <button> sino un <div role="button">: el teclado
     // necesita el atajo a mano.
@@ -9009,19 +9560,29 @@
       if (e.key !== 'Enter' && e.key !== ' ') return;
       e.preventDefault();
       toggleDrawer();
+      if (sideDock.classList.contains('abierto')) sidePanelEl.focus({ preventScroll: true });
     });
 
-    // Swipe sobre la fila de utilidades: se conserva como atajo secundario.
-    let touchStartY = 0;
-    document.getElementById('footerControls').addEventListener('touchstart', (e) => {
-      touchStartY = e.changedTouches[0].screenY;
-    }, { passive: true });
+    // Escape cierra la hoja, salvo que el foco este en otro lado (un modal).
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !mqAngosta.matches) return;
+      if (!sideDock.classList.contains('abierto')) return;
+      const foco = document.activeElement;
+      if (foco && foco !== document.body && foco !== footerHandle && !sidePanelEl.contains(foco)) return;
+      closeDrawer();
+      footerHandle.focus({ preventScroll: true });
+    });
 
-    document.getElementById('footerControls').addEventListener('touchend', (e) => {
-      const diff = touchStartY - e.changedTouches[0].screenY;
-      if (diff > 40) openDrawer();
-      if (diff < -40) closeDrawer();
-    }, { passive: true });
+    // Al pasar a escritorio no queda nada a medio arrastrar ni la hoja marcada
+    // como abierta para cuando se vuelva a achicar.
+    function dockAlCambiarAncho() {
+      if (mqAngosta.matches) return;
+      if (dockDrag && dockDrag.activo) dockTerminarArrastre(false);
+      dockDrag = null;
+      closeDrawer();
+    }
+    if (mqAngosta.addEventListener) mqAngosta.addEventListener('change', dockAlCambiarAncho);
+    else if (mqAngosta.addListener) mqAngosta.addListener(dockAlCambiarAncho);
 
     // ==========================================
     // PANEL DE PEDIDOS (ABIERTO / CERRADO)
@@ -9161,6 +9722,7 @@
         tipoEntrega: p.tipoEntrega || '',
         cat: p.cat || '',
         paquete: paqueteValido(p.paquete),
+        despachoLink: (p.despacho && typeof p.despacho.link === 'string') ? p.despacho.link : '',
         timestamp: p.timestamp || 0,
         total: Math.round(Number(p.pagos && p.pagos.totalFinal) || 0)
       };
@@ -9173,7 +9735,8 @@
     function ppFirmaFila(p) {
       return [p.nombre, p.telefono, p.nota, p.rank, p.pago, p.armado, p.enPreparacion,
         p.embalado, p.controlado, p.rotuloImpreso, p.tipoEntrega, p.cat, p.timestamp,
-        p.paquete ? paqueteTexto(p.paquete) : '', waComprobantesFirma(p)].join('\u0001');
+        p.paquete ? paqueteTexto(p.paquete) : '', waComprobantesFirma(p),
+        p.despachoLink, despEstadoClase(p)].join('\u0001');
     }
 
     function ppReconstruirCache(vivo) {
@@ -9206,6 +9769,7 @@
     function ppSuscribir() {
       if (ppVivo) return;
       waAdjSuscribir();
+      despEnviosSuscribir();
       const vivo = { snaps: {}, subs: [], plazo: null };
       ppVivo = vivo;
       ppHuellaPintada = null;
@@ -9254,6 +9818,7 @@
 
     function ppDesuscribir() {
       waAdjDesuscribir();
+      despEnviosDesuscribir();
       clearTimeout(ppPintarTimer);
       ppPintarTimer = null;
       ppPintarPendiente = false;
@@ -9988,6 +10553,7 @@
             ppNotaHtml(p) +
           '</span>' +
         '</span>' +
+        ppBotonDespHtml(p) +
         ppBotonWaHtml(p) +
         '<button type="button" class="pp-btn-menu" data-menu-id="' + escapeHtml(p.id) + '"' +
           ' title="M&aacute;s acciones" aria-label="M&aacute;s acciones" aria-haspopup="menu">' +
@@ -10020,6 +10586,14 @@
     function ppEsParaDespachar(p) {
       return p.controlado === true;
     }
+
+    // "Ocultar listos" del panel de pendientes: apagado por defecto.
+    let ppOcultarListos = false;
+    document.getElementById('ppOcultarListos').addEventListener('click', (e) => {
+      ppOcultarListos = !ppOcultarListos;
+      e.currentTarget.setAttribute('aria-checked', String(ppOcultarListos));
+      renderPedidosPendientes();
+    });
 
     function renderPedidosPendientes() {
       ppNotaCerrar();
@@ -10125,7 +10699,20 @@
 
       let html = '';
       if (sinImprimir.length) html += grupoHtml('Sin imprimir', sinImprimir, ' pp-grupo--sinimp');
-      if (listos.length) html += grupoHtml(PP_GRUPOS[3], listos, ' pp-grupo--listo');
+      // Con "Ocultar listos" queda solo la cabecera del grupo, con su numero,
+      // para no perder de vista cuantos hay. En el modo rotulos se muestran
+      // siempre: son justamente los que se rotulan.
+      if (listos.length) {
+        if (ppOcultarListos && !ppRotModo) {
+          html += '<div class="pp-grupo pp-grupo--listo pp-grupo--oculto">' +
+            '<span>' + escapeHtml(PP_GRUPOS[3]) + '</span>' +
+            '<span class="pp-grupo-count">' + listos.length + '</span>' +
+            '<span class="pp-grupo-oculto">ocultos</span>' +
+          '</div>';
+        } else {
+          html += grupoHtml(PP_GRUPOS[3], listos, ' pp-grupo--listo');
+        }
+      }
       if (aPreparar.length) html += grupoHtml('Para preparar', aPreparar, ' pp-grupo--listo');
       gruposNota.forEach(g => { html += grupoHtml(g.titulo, g.pedidos); });
 
@@ -10156,6 +10743,12 @@
       // El link de WhatsApp se abre solo (target=_blank); aca solo se evita
       // que el mismo click cargue el pedido.
       if (e.target.closest('.pp-btn-wa')) return;
+      const btnDesp = e.target.closest('.pp-btn-desp');
+      if (btnDesp) {
+        const p = pedidosCache.find(x => x.id === btnDesp.dataset.despId);
+        if (p) abrirDespacho(p);
+        return;
+      }
       const item = e.target.closest('.pedidos-panel-item');
       if (!item) return;
       const id = item.dataset.id;
@@ -12197,23 +12790,47 @@
     // ==========================================
     // BOTON TERMINAR (integrado en btnToggleEstado)
     // ==========================================
+    // Iconos de los botones cuyo texto cambia con el estado: se reescribe el
+    // boton entero (icono + rotulo) para que el SVG no se pierda.
+    // El mapa vive dentro de la funcion para no depender del orden de carga.
+    function pintarBotonIcono(btn, icono, texto, extra = '') {
+      const ICONOS_BOTON = {
+        lock: '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path>',
+        lockOpen: '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.4"></path>',
+        check: '<polyline points="20 6 9 17 4 12"></polyline>'
+      };
+      // extra: la parte del rotulo que se esconde en pantallas muy angostas.
+      if (btn.dataset.icono === icono && btn.textContent === texto + extra) return;
+      btn.dataset.icono = icono;
+      btn.innerHTML = '<svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true">' + ICONOS_BOTON[icono] + '</svg>'
+        + '<span></span>';
+      const lbl = btn.lastChild;
+      lbl.textContent = texto;
+      if (extra) {
+        const ex = document.createElement('span');
+        ex.className = 'lbl-extra';
+        ex.textContent = extra;
+        lbl.appendChild(ex);
+      }
+    }
+
     function actualizarBtnTerminar() {
       const btn = document.getElementById('btnToggleEstado');
       if (!btn || !pedidoActual) return;
       const bloqueado = pedidoActual.locked || pedidoActual.status === 'CANCELADO' || pedidoActual.status === 'DESPACHADO/ENTREGADO';
       const listo = pedidoActual.enPreparacion === 'listo';
       if (bloqueado) {
-        btn.textContent = 'Reabrir Pedido';
+        pintarBotonIcono(btn, 'lockOpen', 'Reabrir', ' Pedido');
         btn.classList.remove('completo');
         btn.disabled = false;
         btn.style.opacity = '1';
       } else if (listo) {
-        btn.textContent = 'Listo';
+        pintarBotonIcono(btn, 'check', 'Listo');
         btn.classList.add('completo');
         btn.disabled = false;
         btn.style.opacity = '1';
       } else {
-        btn.textContent = 'Cerrar Pedido';
+        pintarBotonIcono(btn, 'lock', 'Cerrar', ' Pedido');
         btn.classList.remove('completo');
         // Sin restriccion de empaquetado: el cierre queda siempre habilitado
         btn.disabled = false;
@@ -12632,6 +13249,246 @@
     paqBorrarBtn.addEventListener('click', borrarPaquete);
     document.getElementById('paqCancel').addEventListener('click', cerrarPaquete);
     paqModal.addEventListener('click', (e) => { if (e.target === paqModal) cerrarPaquete(); });
+
+
+    // ==========================================
+    // LINK DE DESPACHO (Flecha Carga)
+    // ==========================================
+    // En la fila de pendientes con entrega Flecha Carga hay un boton para
+    // pegar el link del envio. Se guarda en dos lados:
+    //   pedidos/<id>/despacho       { link, ts, por }   (base de pedidos)
+    //   envios/<id>                 { tel, nombre, link, t, por }
+    //                               (base de WhatsApp, proyecto aparte)
+    // WhatsAppSync, en la PC del local, ve cada envios/<id> nuevo, arma el
+    // mensaje y se lo manda al cliente desde el 11 7646-0030. Despues anota
+    // ahi mismo estado: 'enviado' | 'error' | 'vencido' (+ enviadoEn, error).
+    // Volver a guardar reescribe el envio sin estado: sale de nuevo.
+    const IC_LINK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"></path></svg>';
+    const despModal = document.getElementById('despModal');
+    const despLinkInput = document.getElementById('despLink');
+    const despGuardarBtn = document.getElementById('despGuardar');
+    const despEstadoEl = document.getElementById('despEstado');
+    const despErrorEl = document.getElementById('despError');
+    const despLoginEl = document.getElementById('despLogin');
+    const despPassInput = document.getElementById('despPass');
+    let despEnviosRef = null;
+    let despEnvios = {};          // pedidoId -> envios/<id>
+    let despPedido = null;        // fila de pedidosCache abierta en el modal
+    let despGuardando = false;
+
+    function despEnviosSuscribir() {
+      if (!waDb || despEnviosRef) return;
+      // currentUser primero: waEsperarAuth recuerda solo el primer aviso y no
+      // se entera de un inicio de sesion hecho desde el modal.
+      Promise.resolve(waApp.auth().currentUser || waEsperarAuth()).then(user => {
+        if (!user || despEnviosRef || !ppVivo) return;
+        despEnviosRef = waDb.ref('envios');
+        despEnviosRef.on('value', snap => {
+          despEnvios = snap.val() || {};
+          if (ppVivo) ppProgramarPintado();
+          if (despPedido && despModal.classList.contains('active')) despPintarEstado();
+        }, err => {
+          console.warn('WhatsApp: no se pudieron leer los avisos de despacho', err && err.code);
+          despEnviosRef = null;
+        });
+      });
+    }
+
+    function despEnviosDesuscribir() {
+      if (despEnviosRef) { despEnviosRef.off(); despEnviosRef = null; }
+    }
+
+    // Estado del aviso para el color del boton. Solo cuenta el envio si es
+    // del mismo link que tiene el pedido.
+    function despEstadoClase(p) {
+      if (!p.despachoLink) return '';
+      const e = despEnvios[p.id];
+      if (!e || e.link !== p.despachoLink) return 'is-espera';
+      if (e.estado === 'enviado') return 'is-enviado';
+      if (e.estado === 'error' || e.estado === 'vencido') return 'is-error';
+      return 'is-espera';
+    }
+
+    function ppBotonDespHtml(p) {
+      if (p.tipoEntrega !== 'Flecha Carga') return '';
+      const clase = despEstadoClase(p);
+      const titulo = !p.despachoLink ? 'Pegar link de despacho'
+                   : clase === 'is-enviado' ? 'Link enviado al cliente'
+                   : clase === 'is-error' ? 'No se pudo enviar el link'
+                   : 'Link guardado, enviando...';
+      return '<button type="button" class="pp-btn-desp ' + clase + '" data-desp-id="' + escapeHtml(p.id) + '"' +
+        ' title="' + titulo + '" aria-label="' + titulo + '">' + IC_LINK + '</button>';
+    }
+
+    // Mismo texto que arma WhatsAppSync (textoDespacho en index.js).
+    function despPrimerNombre(nombre) {
+      const n = String(nombre || '').trim().split(/\s+/)[0] || '';
+      return n ? n.charAt(0).toLocaleUpperCase('es') + n.slice(1).toLocaleLowerCase('es') : '';
+    }
+    function despTexto(nombre, link) {
+      const n = despPrimerNombre(nombre);
+      return (n ? n + ', t' : 'T') + 'u pedido ya fue despachado. Te adjunto el link con el que podrás verificar toda la información:\n\n' +
+        link + '\n\n¡Muchas gracias nuevamente! 😊';
+    }
+
+    // Link pegado -> link limpio, o '' si no sirve. Si viene sin http se le
+    // agrega; si se pego un texto con el link adentro, se toma el link.
+    function despNormalizarLink(v) {
+      let t = String(v || '').trim();
+      const dentro = t.match(/https?:\/\/\S+/i);
+      if (dentro) t = dentro[0];
+      else if (/^www\.|^[a-z0-9-]+\.[a-z]{2,}\//i.test(t)) t = 'https://' + t;
+      if (!/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(t) || t.length > 500) return '';
+      return t;
+    }
+
+    function despPintarEstado() {
+      const p = despPedido;
+      if (!p) return;
+      const e = despEnvios[p.id];
+      despEstadoEl.className = 'desp-estado';
+      despEstadoEl.textContent = '';
+      if (!p.despachoLink || !e || e.link !== p.despachoLink) {
+        if (p.despachoLink) { despEstadoEl.classList.add('is-espera'); despEstadoEl.textContent = 'Link guardado. Esperando que la PC del local lo envíe.'; }
+        return;
+      }
+      if (e.estado === 'enviado') {
+        despEstadoEl.classList.add('is-enviado');
+        despEstadoEl.textContent = '✓ Enviado al cliente' + (e.enviadoEn ? ' el ' + new Date(e.enviadoEn).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '') + '.';
+      } else if (e.estado === 'error' || e.estado === 'vencido') {
+        despEstadoEl.classList.add('is-error');
+        despEstadoEl.textContent = 'No se pudo enviar: ' + (e.error || 'error desconocido') + '. Podés guardar de nuevo para reintentar.';
+      } else {
+        despEstadoEl.classList.add('is-espera');
+        despEstadoEl.textContent = 'Enviando... (la PC del local tiene que estar prendida con WhatsAppSync abierto)';
+      }
+    }
+
+    function despPintarVista() {
+      const link = despNormalizarLink(despLinkInput.value);
+      document.getElementById('despVista').textContent =
+        despTexto(despPedido ? despPedido.nombre : '', link || '(link)');
+    }
+
+    function abrirDespacho(p) {
+      despPedido = p;
+      despGuardando = false;
+      const ref = document.getElementById('despRef');
+      ref.textContent = 'Pedido ';
+      const num = document.createElement('b');
+      num.textContent = String(p.id).slice(-8).toUpperCase();
+      ref.appendChild(num);
+      ref.appendChild(document.createTextNode(' · ' + p.nombre));
+      despLinkInput.value = p.despachoLink || '';
+      despErrorEl.textContent = '';
+      despLinkInput.closest('.paq-input').classList.remove('is-error');
+      despPassInput.value = '';
+      despLoginEl.hidden = !waApp || !!waApp.auth().currentUser;
+      despGuardarBtn.disabled = false;
+      despGuardarBtn.textContent = p.despachoLink ? 'Guardar y reenviar' : 'Guardar y enviar';
+      despPintarVista();
+      despPintarEstado();
+      despModal.classList.add('active');
+      setTimeout(() => { despLinkInput.focus(); despLinkInput.select(); }, 60);
+    }
+
+    function cerrarDespacho() {
+      if (despGuardando) return;
+      despModal.classList.remove('active');
+      despPedido = null;
+    }
+
+    function despFallo(msg) {
+      despErrorEl.textContent = msg;
+      if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+    }
+
+    async function guardarDespacho() {
+      const p = despPedido;
+      if (despGuardando || !p) return;
+      despErrorEl.textContent = '';
+      const link = despNormalizarLink(despLinkInput.value);
+      if (!link) {
+        despLinkInput.closest('.paq-input').classList.add('is-error');
+        despFallo(despLinkInput.value.trim() ? 'Eso no parece un link. Copialo entero (empieza con https://).' : 'Pegá el link del envío.');
+        despLinkInput.focus();
+        return;
+      }
+      const tel = waClaveTelefono(p.telefono);
+      if (!tel) { despFallo('El pedido no tiene un teléfono válido para mandar el WhatsApp.'); return; }
+      if (!waDb) { despFallo('WhatsApp no está configurado en esta página.'); return; }
+
+      const e = despEnvios[p.id];
+      if (e && e.estado === 'enviado' && e.link === link) {
+        const ok = await confirmarAccion({
+          titulo: '¿Enviarlo otra vez?',
+          texto: 'Este mismo link ya se le mandó al cliente. Si seguís, le llega de nuevo.',
+          confirmar: 'Reenviar',
+          volver: 'Volver'
+        });
+        if (!ok || despPedido !== p) return;
+      }
+
+      despGuardando = true;
+      despGuardarBtn.disabled = true;
+      despGuardarBtn.textContent = 'Guardando...';
+      try {
+        // Sesion en el proyecto de WhatsApp: si falta, con la contrasena del modal.
+        if (!waApp.auth().currentUser) {
+          await waEsperarAuth();
+          if (!waApp.auth().currentUser) {
+            const user = firebase.auth().currentUser;
+            const pass = despPassInput.value;
+            if (!pass || !user || !user.email) {
+              despLoginEl.hidden = false;
+              despPassInput.focus();
+              throw Object.assign(new Error('falta-pass'), { aviso: 'Escribí tu contraseña para poder mandar el WhatsApp.' });
+            }
+            try { await waIniciarSesion(user.email, pass); }
+            catch (err) { throw Object.assign(err, { aviso: 'Contraseña incorrecta, o tu usuario no está creado en el proyecto de WhatsApp.' }); }
+            despLoginEl.hidden = true;
+            despEnviosSuscribir();
+          }
+        }
+
+        const ahora = Date.now();
+        const user = firebase.auth().currentUser;
+        const por = (user && user.email) || '';
+        await conPlazo(db.ref('pedidos/' + p.id).update({
+          despacho: { link, ts: ahora, por },
+          lastUpdated: ahora
+        }), PAQ_PLAZO_MS).catch(err => { if (!(err && err.esTimeout)) throw err; });
+        p.despachoLink = link;
+        await conPlazo(waDb.ref('envios/' + p.id).set({
+          tel, nombre: String(p.nombre || '').slice(0, 80), link, t: ahora, por
+        }), PAQ_PLAZO_MS).catch(err => { if (!(err && err.esTimeout)) throw err; });
+        despGuardando = false;
+        cerrarDespacho();
+        showToast('✅ Link guardado. El WhatsApp sale desde la PC del local');
+        if (ppVivo) ppProgramarPintado();
+      } catch (err) {
+        console.error('Error guardando link de despacho:', err);
+        despGuardando = false;
+        despGuardarBtn.disabled = false;
+        despGuardarBtn.textContent = 'Reintentar';
+        despFallo(err && err.aviso ? err.aviso
+          : err && err.code === 'PERMISSION_DENIED' ? 'Sin permiso para guardar (¿el pedido está bloqueado o faltan publicar las reglas de WhatsApp?).'
+          : 'No se pudo guardar. Probá de nuevo.');
+      }
+    }
+
+    despLinkInput.addEventListener('input', () => {
+      despLinkInput.closest('.paq-input').classList.remove('is-error');
+      despErrorEl.textContent = '';
+      despPintarVista();
+    });
+    despModal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cerrarDespacho(); return; }
+      if (e.key === 'Enter' && (e.target === despLinkInput || e.target === despPassInput)) { e.preventDefault(); guardarDespacho(); }
+    });
+    despGuardarBtn.addEventListener('click', guardarDespacho);
+    document.getElementById('despCancel').addEventListener('click', cerrarDespacho);
+    despModal.addEventListener('click', (e) => { if (e.target === despModal) cerrarDespacho(); });
 
 
     // ==========================================
@@ -15484,8 +16341,57 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const item = e.target.closest('.msg-dropdown-item');
       if (!item) return;
       msgDropdown.classList.remove('active');
+      // "Abrir chat" es un <a> con su propio href: el navegador lo abre solo.
+      if (!item.dataset.msg) return;
       pvEnviarMensaje(item.dataset.msg);
     });
+
+    // --- Etiqueta al mantener apretado -----------------------------------
+    // Los botones de solo icono (.btn-icono) muestran su nombre si se los
+    // mantiene apretados con el dedo; en ese caso soltar no ejecuta la accion.
+    // Con mouse alcanza el title nativo.
+    (function () {
+      const BTN_TIP_MS = 450;
+      let timer = null, tip = null, tipTimer = null, mostrado = false;
+      function quitarTip() {
+        clearTimeout(tipTimer);
+        if (tip) { tip.remove(); tip = null; }
+      }
+      document.addEventListener('pointerdown', (e) => {
+        clearTimeout(timer);
+        mostrado = false;
+        const btn = e.target.closest('.btn-icono');
+        if (!btn || e.pointerType === 'mouse') return;
+        timer = setTimeout(() => {
+          quitarTip();
+          const r = btn.getBoundingClientRect();
+          tip = document.createElement('div');
+          tip.className = 'btn-tip';
+          tip.textContent = btn.getAttribute('aria-label') || btn.title || '';
+          tip.style.left = Math.min(window.innerWidth - 70, Math.max(70, r.left + r.width / 2)) + 'px';
+          tip.style.top = (r.top - 8) + 'px';
+          document.body.appendChild(tip);
+          mostrado = true;
+          if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
+        }, BTN_TIP_MS);
+      }, { passive: true, capture: true });
+      const soltar = () => {
+        clearTimeout(timer);
+        if (tip) { clearTimeout(tipTimer); tipTimer = setTimeout(quitarTip, 900); }
+      };
+      ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, soltar, { passive: true, capture: true }));
+      document.addEventListener('scroll', soltar, { passive: true, capture: true });
+      document.addEventListener('click', (e) => {
+        if (!mostrado || !e.target.closest('.btn-icono')) return;
+        mostrado = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }, true);
+      // Sin el menu contextual del sistema encima de la etiqueta.
+      document.addEventListener('contextmenu', (e) => {
+        if (e.target.closest && e.target.closest('.btn-icono')) e.preventDefault();
+      });
+    })();
 
     // El pedido de retiro va SIEMPRE a la linea comercial, no al cliente: el
     // operador arma el mismo mensaje que nos manda un cliente desde el catalogo
@@ -16830,6 +17736,38 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         escribirIncluidos(new Set(Object.keys(todos)), () => refIncl.set(todos));
       }
 
+      // ---------- Filtro rapido de la sub-hoja ----------
+      // 'nota' (por defecto), 'todos', 'ninguno' o null si se toco un pedido a
+      // mano. Con 'nota' activo, los pedidos que llegan o cambian de nota en
+      // vivo entran o salen solos.
+      let filtroRapido = 'nota';
+      const normNota = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/\s+/g, ' ').trim();
+      const entraPorNota = (p) => {
+        const n = normNota(p.nota);
+        return n !== '' && !n.includes('no responde');
+      };
+      function incluirConNota() {
+        const sel = {};
+        pedidos.forEach(p => { if (entraPorNota(p)) sel[p.id] = true; });
+        const nuevos = new Set(Object.keys(sel));
+        // Sin cambios no se escribe: evita ecos con cada aviso en vivo.
+        const igual = nuevos.size === nIncluidos() && [...nuevos].every(k => incluidos.has(k))
+          && [...incluidos].every(k => nuevos.has(k));
+        if (igual) return false;
+        escribirIncluidos(nuevos, () => nuevos.size ? refIncl.set(sel) : refIncl.remove());
+        return true;
+      }
+      function pintarFiltroRapido() {
+        [['necSubConNota', 'nota'], ['necSubTodos', 'todos'], ['necSubNinguno', 'ninguno']].forEach(([id, v]) => {
+          const b = document.getElementById(id);
+          if (b) {
+            b.classList.toggle('is-on', filtroRapido === v);
+            b.setAttribute('aria-pressed', filtroRapido === v ? 'true' : 'false');
+          }
+        });
+      }
+
       function escucharIncluidos() {
         if (escuchandoIncl) return;
         escuchandoIncl = true;
@@ -16922,6 +17860,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       function aplicarPedidos(nuevos) {
         const cambio = firmaPedidos(nuevos) !== firmaPedidos(pedidos);
         pedidos = nuevos;
+        // La nota no entra en la firma: con "Aptos" activo se revisa aparte.
+        if (filtroRapido === 'nota' && incluirConNota()) { refrescar(); return; }
         if (cambio) refrescar();
         else if (sub.classList.contains('active')) pedidos.forEach(pintarConfirmado);
       }
@@ -16945,7 +17885,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       async function cargar() {
         if (cargando) return;
         cargando = true;
-        document.getElementById('necBtnReload').classList.add('is-girando');
         if (!cargado) {
           lista.innerHTML = '<div class="pedidos-panel-loading"><div class="spinner"></div>Cargando artículos de pedidos...</div>';
         }
@@ -16961,6 +17900,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
           pedidos = pedidosDesde(snapAbierto, snapCerrado);
           cargado = true;
+          // Cada carga (al abrir la app o al reintentar tras un error) vuelve a "Aptos".
+          filtroRapido = 'nota';
+          incluirConNota();
+          pintarFiltroRapido();
           construir();
           migrarVerificados();
           render();
@@ -16975,7 +17918,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           }
         } finally {
           cargando = false;
-          document.getElementById('necBtnReload').classList.remove('is-girando');
         }
       }
 
@@ -16996,70 +17938,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         });
       }
 
-      // ---------- Zonas del deposito (Locator) ----------
-      // El relevamiento semanal de fotos guarda en ubicaciones/mapa el lugar de
-      // cada articulo: grupo del deposito (FL, FR, BL, BR, OT) y columna dentro
-      // del grupo (1, 2, 3...). ubicaciones-api.js escucha ese nodo y
-      // responde desde memoria (UBICACIONES). Si el script no esta o todavia
-      // no hay relevamiento guardado, la lista sigue agrupando por categoria.
-      const hayLocator = typeof escucharUbicaciones === 'function';
-      let agrupar = 'categoria';
-      try { agrupar = localStorage.getItem('nec_agrupar_v2') || 'categoria'; } catch (e) { /* sin storage */ }
-      let escuchandoUbic = false;
-      const porZona = () => agrupar === 'zona' && hayLocator && UBICACIONES.size > 0;
-
-      function escucharUbic() {
-        if (!hayLocator || escuchandoUbic) return;
-        escuchandoUbic = true;
-        escucharUbicaciones(db, () => {
-          if (cargado && panel.classList.contains('active')) render();
-        });
-      }
-
-      function ubicacionDe(codigo) {
-        if (!hayLocator) return null;
-        const u = UBICACIONES.get(claveUbicacion(codigo));
-        return u ? { ...u, incierta: esUbicacionIncierta(u), texto: textoUbicacion(u) } : null;
-      }
-
-      // "FL C3": corto para que entre en la linea del codigo.
-      function zonaHtml(a) {
-        const u = a.ubicacion;
-        if (!tieneUbicacion(u)) return '';
-        // Por categoria no se muestra; por zona ya lo dice el titulo del grupo,
-        // salvo que la ubicacion sea incierta.
-        if (!porZona() || !u.incierta) return '';
-        const corto = textoCortoUbicacion(u);
-        return '<span class="nec-zona' + (u.incierta ? ' is-incierta' : '') + '" title="' +
-          escapeHtml(u.texto + (u.incierta ? ' (sin confirmar en el último relevamiento)' : '')) + '">' +
-          escapeHtml(u.incierta ? '¿' + corto + '?' : corto) + '</span>';
-      }
-
-      // Cada articulo sale con a.grupo (el titulo de su seccion: "Columna 3"),
-      // a.sector (grupo del deposito: "FL · Adelante izquierda") y a.ubicacion.
-      // Por zona: primero el grupo (FL, FR, BL, BR, OT), despues la columna,
-      // y lo incierto al final, con el ultimo lugar donde se vio.
+      // Cada articulo sale con a.grupo: su categoria de la planilla, que es
+      // la unica forma de agrupar la lista.
       function listaOrdenada() {
         const arr = Object.values(articulos);
         arr.forEach(a => {
           const si = sheetsData[a.codigo];
           a.categoria = (si && si.categoria) ? si.categoria : 'Sin categoría';
-        });
-        if (porZona()) {
-          const res = [];
-          ordenarPorZona(arr).forEach(g => g.items.forEach(it => {
-            const a = articulos[it.codigo];
-            a.ubicacion = it.ubicacion;
-            a.grupo = g.zona == null ? 'Sin ubicación segura' : g.titulo;
-            a.sector = g.sector || null;
-            res.push(a);
-          }));
-          return res;
-        }
-        arr.forEach(a => {
           a.grupo = a.categoria;
-          a.sector = null;
-          a.ubicacion = ubicacionDe(a.codigo);
         });
         arr.sort((a, b) => a.categoria.localeCompare(b.categoria, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
         return arr;
@@ -17107,15 +17993,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         let html = '<div class="nec-cols"><span class="nc-art">Artículo</span><span class="nc-stock" title="Stock total (columna R)">Munro</span><span class="nc-stock" title="Stock de la otra sucursal (columna S)">Caseros</span><span class="nc-nec">Neces.</span><span class="nc-ok">OK</span></div>';
 
         let cat = null;
-        let sector = null;
         let i = 0;
         visibles.forEach(a => {
-          if (a.sector && a.sector !== sector) {
-            sector = a.sector;
-            const n = visibles.filter(x => x.sector === sector).length;
-            html += '<div class="nec-sector">' + escapeHtml(sector) +
-              '<span class="nec-sector-n">' + n + ' art.</span></div>';
-          }
           if (a.grupo !== cat) {
             cat = a.grupo;
             const n = visibles.filter(x => x.grupo === cat).length;
@@ -17126,6 +18005,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         });
         lista.innerHTML = html;
         actualizarStats(todos);
+        necScrollInd();
       }
 
       function filaHtml(a, delay) {
@@ -17173,7 +18053,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             '<div class="nec-info">' +
               '<div class="nec-name" title="' + escapeHtml(a.nombre) + '">' + escapeHtml(a.nombre) + '</div>' +
               '<div class="nec-code"><span>' + codAttr + (barras ? ' · ' + escapeHtml(barras) : '') + '</span>' +
-                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + zonaHtml(a) + remotoHtml(a.codigo) + '</div>' +
+                '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + remotoHtml(a.codigo) + '</div>' +
               (parcial !== null ? '<div class="nec-parcial">OK por ' + parcial + ' · faltan ' + (a.cantidad - parcial) + ' más</div>' : '') +
             '</div>' +
             stockCelda(stock) + stockCelda(si.stockCaseros) +
@@ -17218,7 +18098,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // ---------- Abrir / cerrar ----------
       function abrir() {
         panel.classList.add('active');
-        escucharUbic();
         escucharVerificados();
         escucharIncluidos();
         escucharSolicitudes();
@@ -17243,10 +18122,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       btnHeader.addEventListener('click', abrir);
       document.getElementById('necBtnClose').addEventListener('click', cerrar);
       panel.addEventListener('click', (e) => { if (e.target === panel) cerrar(); });
-      document.getElementById('necBtnReload').addEventListener('click', () => {
-        cargar();
-        if (typeof actualizarStock === 'function') actualizarStock();
-      });
 
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
@@ -17288,29 +18163,25 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       });
       segTodos.addEventListener('click', () => setSoloFaltan(false));
 
-      // Agrupar por zona del deposito o por categoria (se recuerda en el equipo).
-      const agrZona = document.getElementById('necAgrZona');
-      const agrCat = document.getElementById('necAgrCat');
-      function pintarAgrupar() {
-        agrZona.classList.toggle('is-on', agrupar === 'zona');
-        agrCat.classList.toggle('is-on', agrupar !== 'zona');
-        agrZona.setAttribute('aria-selected', agrupar === 'zona' ? 'true' : 'false');
-        agrCat.setAttribute('aria-selected', agrupar !== 'zona' ? 'true' : 'false');
+      // ---------- Indicador de scroll ----------
+      const scrollInd = document.getElementById('necScrollInd');
+      const scrollThumb = scrollInd.firstElementChild;
+      function necScrollInd() {
+        const vis = lista.clientHeight;
+        const total = lista.scrollHeight;
+        const sobra = total - vis;
+        scrollInd.classList.toggle('is-visible', sobra > 4);
+        if (sobra <= 4) return;
+        const riel = scrollInd.clientHeight;
+        const alto = Math.max(28, Math.round(riel * vis / total));
+        scrollThumb.style.height = alto + 'px';
+        scrollThumb.style.transform = 'translateY(' + Math.round((riel - alto) * (lista.scrollTop / sobra)) + 'px)';
       }
-      function setAgrupar(v) {
-        agrupar = v;
-        try { localStorage.setItem('nec_agrupar_v2', v); } catch (e) { /* sin storage */ }
-        pintarAgrupar();
-        if (v === 'zona' && !UBICACIONES.size) showToast('Todavía no hay zonas cargadas: se agrupa por categoría');
-        render();
-      }
-      if (hayLocator) {
-        pintarAgrupar();
-        agrZona.addEventListener('click', () => setAgrupar('zona'));
-        agrCat.addEventListener('click', () => setAgrupar('categoria'));
-      } else {
-        document.getElementById('necSegAgrupar').style.display = 'none';
-      }
+      lista.addEventListener('scroll', necScrollInd, { passive: true });
+      window.addEventListener('resize', necScrollInd, { passive: true });
+      // Abrir el detalle de una fila cambia el alto de la lista sin scrollear.
+      lista.addEventListener('click', () => requestAnimationFrame(necScrollInd));
+      lista.addEventListener('transitionend', necScrollInd);
 
       // ---------- Interaccion sobre las filas ----------
       lista.addEventListener('click', (e) => {
@@ -17395,6 +18266,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
       function abrirSub() {
         if (!cargado || !pedidos.length) { showToast('Todavía no hay pedidos cargados'); return; }
+        pintarFiltroRapido();
         renderSub();
         sub.classList.add('active');
       }
@@ -17408,12 +18280,22 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       btnPedidos.addEventListener('click', abrirSub);
       document.getElementById('necSubClose').addEventListener('click', cerrarSub);
       sub.addEventListener('click', (e) => { if (e.target === sub) cerrarSub(); });
+      document.getElementById('necSubConNota').addEventListener('click', () => {
+        filtroRapido = 'nota';
+        pintarFiltroRapido();
+        incluirConNota();
+        aplicarFiltro();
+      });
       document.getElementById('necSubTodos').addEventListener('click', () => {
+        filtroRapido = 'todos';
+        pintarFiltroRapido();
         incluirTodos();
         aplicarFiltro();
       });
       // "Ninguno" borra el nodo entero, asi tampoco quedan ids huerfanos.
       document.getElementById('necSubNinguno').addEventListener('click', () => {
+        filtroRapido = 'ninguno';
+        pintarFiltroRapido();
         escribirIncluidos(new Set(), () => refIncl.remove());
         aplicarFiltro();
       });
@@ -17425,6 +18307,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const nuevos = new Set(incluidos);
         if (cb.checked) nuevos.add(id);
         else nuevos.delete(id);
+        // Un cambio a mano apaga el filtro rapido.
+        filtroRapido = null;
+        pintarFiltroRapido();
         escribirIncluidos(nuevos, () => cb.checked ? refIncl.child(id).set(true) : refIncl.child(id).remove());
         fila.classList.toggle('is-on', cb.checked);
         construir();
@@ -18076,26 +18961,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         if (!arr.length) { showToast('No hay artículos para imprimir'); return; }
 
         const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        // Con relevamiento cargado se agrega la columna Zona (en el mismo
-        // orden y agrupado que la pantalla).
-        const conZona = hayLocator && UBICACIONES.size > 0;
-        const zonaCelda = (a) => {
-          const u = a.ubicacion;
-          if (!tieneUbicacion(u)) return '—';
-          const t = textoCortoUbicacion(u);
-          return u.incierta ? '¿' + t + '?' : t;
-        };
         let filas = '';
         let cat = null;
-        let sector = null;
         arr.forEach((a, i) => {
-          if (a.sector && a.sector !== sector) {
-            sector = a.sector;
-            filas += '<tr class="sec"><td colspan="' + (conZona ? 8 : 7) + '">' + escapeHtml(sector) + '</td></tr>';
-          }
           if (a.grupo !== cat) {
             cat = a.grupo;
-            filas += '<tr class="cat"><td colspan="' + (conZona ? 8 : 7) + '">' + escapeHtml(cat) + '</td></tr>';
+            filas += '<tr class="cat"><td colspan="7">' + escapeHtml(cat) + '</td></tr>';
           }
           const si = sheetsData[a.codigo] || {};
           const fmt = (v) => (v !== null && v !== undefined && Number.isFinite(v)) ? v : '—';
@@ -18106,7 +18977,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             '<td class="n">' + (i + 1) + '</td>' +
             '<td class="nombre">' + escapeHtml(a.nombre) + '</td>' +
             '<td class="cod">' + escapeHtml(a.codigo) + '</td>' +
-            (conZona ? '<td class="c z">' + escapeHtml(zonaCelda(a)) + '</td>' : '') +
             '<td class="c">' + stock + '</td>' +
             '<td class="c">' + stockCas + '</td>' +
             '<td class="c b">' + a.cantidad + '</td>' +
@@ -18123,14 +18993,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           'td{padding:5px 8px;border-bottom:1px solid #e2e2dc;vertical-align:middle}' +
           '.n{width:26px;text-align:center;color:#999;font-size:10px}.cod{font-family:"Courier New",monospace;font-size:10px;color:#666;width:96px}' +
           '.c{text-align:center;width:52px;font-family:"Courier New",monospace}.b{font-weight:700}.chk{width:30px;font-size:13px;color:#2e7d5b}' +
-          '.z{width:64px;font-weight:700;white-space:nowrap}' +
           'tr.cat td{background:#f5f5f2;color:#c2620f;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:7px 8px 4px;border-bottom:1px solid #c2620f}' +
           'tr.ok td{background:#eaf3ee}tr.ok td.nombre{color:#2e7d5b}' +
-          'tr.sec td{background:#17181a;color:#fff;font-size:11px;font-weight:800;padding:7px 8px;letter-spacing:.2px}' +
           '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
           '</style></head><body>' +
           '<div class="h"><h1>Artículos necesarios</h1><div class="m">' + fecha + '<br>' + pedidosEnCalculo + ' pedidos &middot; ' + arr.length + ' artículos</div></div>' +
-          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th>' + (conZona ? '<th class="c z">Ubic.</th>' : '') + '<th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
+          '<table><thead><tr><th class="n">#</th><th>Artículo</th><th>Código</th><th class="c">Munro</th><th class="c">Caseros</th><th class="c">Neces.</th><th class="chk">OK</th></tr></thead>' +
           '<tbody>' + filas + '</tbody></table>' +
           '<script>window.onload=function(){window.print()}<\/script></body></html>';
 
