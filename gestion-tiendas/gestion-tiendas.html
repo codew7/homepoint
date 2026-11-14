@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Gestión de tiendas</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111827'/%3E%3Cpath d='M32 14l18 9-18 9-18-9zm-18 18l18 9 18-9v6l-18 9-18-9z' fill='%23fff'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('admin-theme'); } catch (e) {}
+            var oscuro = t ? t === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (oscuro) document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+    </script>
+
+    <script src="config.js"></script>
+    <script src="tienda-core.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+    <script src="admin-auth.js" defer></script>
+    <script src="gestion-tiendas.js" defer></script>
+
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="topbar-marca">
+        <div class="topbar-logo"><i class="fas fa-layer-group"></i></div>
+        <div class="topbar-titulo">
+            <strong>Gestión de tiendas</strong>
+            <span>Tiendas y usuarios del sistema</span>
+        </div>
+    </div>
+    <div class="topbar-espacio"></div>
+    <button type="button" class="btn btn-icono btn-texto" id="btnRecargar" title="Actualizar datos" aria-label="Actualizar datos"><i class="fas fa-rotate"></i></button>
+    <button type="button" class="btn btn-icono btn-texto" id="btnTemaPanel" title="Modo claro / oscuro" aria-label="Modo claro / oscuro"><i class="fas fa-moon"></i></button>
+</header>
+
+<div class="banda" id="bandaError" hidden><i class="fas fa-triangle-exclamation"></i><div id="bandaErrorTexto"></div></div>
+
+<div class="layout sin-preview">
+    <nav class="nav" aria-label="Secciones">
+        <div class="nav-grupo">General</div>
+        <button type="button" class="nav-item" data-ir="resumen"><i class="fas fa-gauge-high"></i>Resumen</button>
+        <div class="nav-grupo">Administración</div>
+        <button type="button" class="nav-item" data-ir="tiendas"><i class="fas fa-store"></i>Tiendas</button>
+        <button type="button" class="nav-item" data-ir="usuarios"><i class="fas fa-users"></i>Usuarios</button>
+        <button type="button" class="nav-item" data-ir="solicitudes"><i class="fas fa-inbox"></i>Solicitudes<span class="nav-cuenta" id="navSolicitudes" hidden>0</span></button>
+    </nav>
+
+    <main class="contenido">
+        <!-- ============ RESUMEN ============ -->
+        <section class="seccion" id="sec-resumen">
+            <div class="seccion-cabecera">
+                <h1>Resumen</h1>
+                <p>El estado de todas las tiendas y de las personas que las administran.</p>
+            </div>
+            <div class="stats" id="stats"></div>
+            <div class="tarjeta" id="primerosPasos" hidden>
+                <h2 class="tarjeta-titulo"><span><i class="fas fa-flag-checkered ic"></i>Primeros pasos</span></h2>
+                <p class="tarjeta-sub">Para sumar un vendedor nuevo:</p>
+                <ol class="ayuda" style="font-size:.88rem; line-height:1.9; margin:0; padding-left:20px; color:var(--tinta-700)">
+                    <li><strong>Nueva tienda</strong>: elegí su nombre y creale el usuario en el mismo paso.</li>
+                    <li>Copiá las credenciales y mandáselas (WhatsApp o email).</li>
+                    <li>Su catálogo queda publicado al instante en su enlace (por ejemplo <code>…/bazar-lucia</code>). No hay que subir nada.</li>
+                    <li>El vendedor entra a su panel (<code>…/su-tienda/admin</code>), cambia su contraseña y arma su tienda.</li>
+                </ol>
+                <div style="margin-top:16px"><button type="button" class="btn btn-primario" data-accion="nueva-tienda"><i class="fas fa-plus"></i>Nueva tienda</button></div>
+            </div>
+            <div class="tarjeta">
+                <h2 class="tarjeta-titulo"><span><i class="fas fa-clock-rotate-left ic"></i>Actividad reciente</span></h2>
+                <ul class="actividad" id="actividad"></ul>
+            </div>
+        </section>
+
+        <!-- ============ TIENDAS ============ -->
+        <section class="seccion" id="sec-tiendas">
+            <div class="seccion-cabecera">
+                <h1>Tiendas</h1>
+                <p>Todas las tiendas comparten este sitio: cada una tiene su enlace (<code>…/nombre-de-la-tienda</code>) y, si querés, un dominio propio. Desde acá asignás responsables, pausás o eliminás tiendas.</p>
+            </div>
+            <div class="barra-herramientas">
+                <div class="buscador"><i class="fas fa-magnifying-glass"></i><input type="search" class="control" id="buscarTiendas" placeholder="Buscar por nombre, ID o dominio"></div>
+                <button type="button" class="btn btn-primario" data-accion="nueva-tienda"><i class="fas fa-plus"></i>Nueva tienda</button>
+            </div>
+            <div class="lista-filas" id="listaTiendas"><div class="cargando-linea"><span class="spinner"></span>Cargando tiendas…</div></div>
+        </section>
+
+        <!-- ============ USUARIOS ============ -->
+        <section class="seccion" id="sec-usuarios">
+            <div class="seccion-cabecera">
+                <h1>Usuarios</h1>
+                <p>Las personas que pueden entrar al panel de una o más tiendas. Vos les creás el usuario con una contraseña temporal y ellos la cambian en su primer ingreso.</p>
+            </div>
+            <div class="barra-herramientas">
+                <div class="buscador"><i class="fas fa-magnifying-glass"></i><input type="search" class="control" id="buscarUsuarios" placeholder="Buscar por nombre, email o tienda"></div>
+                <button type="button" class="btn btn-primario" data-accion="nuevo-usuario"><i class="fas fa-user-plus"></i>Nuevo usuario</button>
+            </div>
+            <div class="lista-filas" id="listaUsuarios"><div class="cargando-linea"><span class="spinner"></span>Cargando usuarios…</div></div>
+        </section>
+
+        <!-- ============ SOLICITUDES ============ -->
+        <section class="seccion" id="sec-solicitudes">
+            <div class="seccion-cabecera">
+                <h1>Solicitudes de acceso</h1>
+                <p>Cuando alguien ingresa a un panel sin tener permiso (por ejemplo, con su cuenta de Google), puede pedir acceso. Lo aprobás acá, sin copiar identificadores a mano.</p>
+            </div>
+            <div class="lista-filas" id="listaSolicitudes"></div>
+        </section>
+    </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+</body>
+</html>

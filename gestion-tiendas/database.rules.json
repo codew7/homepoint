@@ -1,0 +1,85 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "admins": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "usuarios": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "nombre": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "activo": { ".validate": "newData.isBoolean()" },
+        "debeCambiarClave": {
+          ".write": "auth != null && auth.uid === $uid && newData.val() === false",
+          ".validate": "newData.isBoolean()"
+        },
+        "ultimoIngreso": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber() && newData.val() <= now"
+        },
+        "tiendas": { "$tienda": { ".validate": "newData.val() === true" } }
+      }
+    },
+
+    "solicitudes": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['email', 'tienda', 'fecha']) && newData.child('email').isString() && newData.child('email').val().length <= 200 && newData.child('tienda').isString() && newData.child('tienda').val().length <= 40 && newData.child('fecha').val() === now"
+      }
+    },
+
+    "tiendas": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$tienda": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        "config": {
+          ".read": true,
+          ".write": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true && root.child('usuarios').child(auth.uid).child('activo').val() !== false",
+          ".validate": "newData.hasChildren(['identidad', 'precios'])",
+          "precios": {
+            "escalas": {
+              "$i": {
+                "hasta": { ".validate": "newData.isNumber() && newData.val() > 0" },
+                "pct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" }
+              }
+            },
+            "pctExcedente": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" }
+          }
+        },
+        "assets": {
+          ".read": true,
+          "$asset": {
+            ".write": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true && root.child('usuarios').child(auth.uid).child('activo').val() !== false",
+            ".validate": "newData.hasChildren(['dataUrl']) && newData.child('dataUrl').isString() && newData.child('dataUrl').val().beginsWith('data:image/') && newData.child('dataUrl').val().length < 1500000"
+          }
+        },
+        "estado": {
+          ".read": true,
+          "activa": { ".validate": "newData.isBoolean()" },
+          "mensaje": { ".validate": "newData.isString() && newData.val().length <= 400" }
+        },
+        "admins": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    }
+  }
+}
