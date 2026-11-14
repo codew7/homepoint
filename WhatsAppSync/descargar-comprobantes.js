@@ -64,9 +64,12 @@ function evento(ev, datos) {
 }
 
 // La clave esta junto a este archivo, o en la carpeta de datos de la app
-// instalada (%APPDATA%\WhatsAppSync).
+// instalada: la de la linea principal (%APPDATA%\WhatsAppSync\lineas\principal)
+// o, en versiones viejas de una sola linea, %APPDATA%\WhatsAppSync.
+// Este script trabaja solo con la linea principal (DATABASE_URL de ajustes.js).
 const CLAVES = [
   path.join(__dirname, 'clave-firebase.json'),
+  path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas', 'principal', 'clave-firebase.json'),
   path.join(process.env.APPDATA || '', 'WhatsAppSync', 'clave-firebase.json')
 ];
 const archivoClave = CLAVES.find(c => fs.existsSync(c));

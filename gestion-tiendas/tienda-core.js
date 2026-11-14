@@ -85,10 +85,9 @@
         pedido: {
             montoMinimo: 0,
             descuento: { activo: false, montoDesde: 100000, unidadesDesde: 5, pct: 10, nota: '' },
-            formasEntrega: ['Envío a domicilio', 'Retiro en el local'],
-            pedirTelefono: true,
-            pedirDireccion: 'opcional', // 'no' | 'opcional' | 'requerido'
-            pedirNotas: true,
+            formasEntrega: [],          // opcional: si queda vacío, no se pregunta
+            pedirDireccion: 'no',       // 'no' | 'opcional' | 'requerido'
+            pedirNotas: false,
             textoConfirmacion: 'Te vamos a responder por WhatsApp para coordinar el pago y la entrega.'
         },
         catalogo: {
@@ -600,6 +599,26 @@
         o[partes[partes.length - 1]] = valor;
     }
 
+    // ---------------------------------------------------------------------
+    // Pedidos guardados en tiendas/<id>/pedidos
+    // ---------------------------------------------------------------------
+    const DIAS_PEDIDOS = 90;                      // los más viejos se borran solos
+    const ESTADOS_PEDIDO = { ABIERTO: 'ABIERTO', ENTREGADO: 'ENTREGADO' };
+    const ALFABETO_PEDIDO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I
+
+    function generarNumeroPedido() {
+        const n = new Uint8Array(5);
+        (global.crypto || global.msCrypto).getRandomValues(n);
+        return Array.from(n, b => ALFABETO_PEDIDO[b % ALFABETO_PEDIDO.length]).join('');
+    }
+
+    function validarEmail(valor) {
+        const v = String(valor || '').trim();
+        return v.length <= 120 && /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(v);
+    }
+
+    function limitePedidos(ahora) { return (ahora || Date.now()) - DIAS_PEDIDOS * 864e5; }
+
     // Favicon de respaldo: la inicial de la tienda sobre su color principal
     function faviconInicial(nombre, apariencia) {
         const { primario } = coloresDeTema(apariencia);
@@ -616,6 +635,7 @@
         normalizarWhatsApp, formatearTelefono, urlWhatsApp,
         tiendaId, idValido, urlTienda, urlPanelTienda, BASE_SITIO, IDS_RESERVADOS, baseDatosUrl, urlNodo, pedirConfigRemota, pedirEstadoRemoto, leerCache, guardarCache,
         assetsDeConfig, leerAssetCache, pedirAsset, limpiarAssetsHuerfanos,
-        escaparHtml, textoEnriquecido, leerRuta, escribirRuta, faviconInicial
+        escaparHtml, textoEnriquecido, leerRuta, escribirRuta, faviconInicial,
+        DIAS_PEDIDOS, ESTADOS_PEDIDO, generarNumeroPedido, validarEmail, limitePedidos
     };
 })(window);

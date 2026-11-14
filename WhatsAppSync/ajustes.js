@@ -1,13 +1,21 @@
 // Configuracion del sincronizador de WhatsApp.
 // Este archivo NO tiene datos secretos. La clave privada va aparte, en
 // clave-firebase.json (no se sube a git).
+//
+// VARIAS LINEAS: la app instalada puede manejar hasta 3 numeros. Lo propio de
+// cada linea (numero, base de WhatsApp, base de pedidos) se carga desde la
+// ventana de la app y queda en %APPDATA%\WhatsAppSync\lineas\<id>\linea.json.
+// Los tres valores de abajo marcados (LINEA PRINCIPAL) solo se usan para la
+// linea principal: al pasar una instalacion vieja a lineas, con
+// "node index.js" suelto y en descargar-comprobantes.js. El resto vale para
+// todas las lineas.
 
 module.exports = {
-  // Numero de WhatsApp que se vincula (solo digitos, con 549).
+  // (LINEA PRINCIPAL) Numero de WhatsApp que se vincula (solo digitos, con 549).
   // Si se escanea el QR con otro telefono, el programa lo rechaza.
   NUMERO_ESPERADO: '5491176460030',
 
-  // URL de la Realtime Database del proyecto Firebase APARTE para WhatsApp.
+  // (LINEA PRINCIPAL) URL de la Realtime Database del proyecto Firebase APARTE para WhatsApp.
   // Se copia de Firebase > Realtime Database (arriba de los datos).
   DATABASE_URL: 'https://whatsappsync-e3245-default-rtdb.firebaseio.com',
 
@@ -34,7 +42,7 @@ module.exports = {
   // pedidos creados como mucho estos dias antes de recibirlo.
   DIAS_ASIGNAR: 30,
 
-  // Base de pedidosv2, de donde se sacan los telefonos de los clientes y los
+  // (LINEA PRINCIPAL) Base de pedidosv2, de donde se sacan los telefonos de los clientes y los
   // pedidos para asignar comprobantes (solo lectura).
   PEDIDOS_DATABASE_URL: 'https://pedidos-87064-default-rtdb.firebaseio.com'
 };

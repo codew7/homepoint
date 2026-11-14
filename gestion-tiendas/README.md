@@ -15,7 +15,7 @@ https://catalog.dev.ar/lucia/admin    → panel de "lucia" (para el vendedor)
 gestion-tiendas.html                  → gestión de tiendas (sólo vos, desde este repositorio)
 ```
 
-Los dos repositorios usan el **mismo proyecto de Firebase**. Los clientes **no escriben en ninguna base**: el pedido se arma como mensaje y se manda por WhatsApp al número del vendedor.
+Los dos repositorios usan el **mismo proyecto de Firebase**. Lo único que escriben los clientes son sus **pedidos** (`tiendas/<id>/pedidos`): al confirmar, el pedido queda registrado con `status: "ABIERTO"` y el cliente le avisa al vendedor por WhatsApp con un mensaje corto que trae el número de pedido. Las reglas sólo les permiten **crear** pedidos, nunca leerlos ni modificarlos.
 
 ### Archivos de esta carpeta
 
@@ -26,6 +26,8 @@ Los dos repositorios usan el **mismo proyecto de Firebase**. Los clientes **no e
 | `config.js` | `SITIO_PUBLICO` (dirección del catálogo público) y `firebaseConfig`. |
 | `database.rules.json` | Reglas de la Realtime Database. Hay que publicarlas en la consola de Firebase. |
 | `tienda-core.js`, `admin-auth.js`, `panel.css` | **Copias** de los mismos archivos del catálogo público. |
+
+> ⚠️ **Reglas:** cada vez que cambia `database.rules.json` hay que volver a publicarlo en *Realtime Database → Reglas*. Sin la versión con el nodo `pedidos`, los clientes no pueden confirmar pedidos.
 
 > ⚠️ **Archivos compartidos:** `tienda-core.js`, `admin-auth.js` y `panel.css` existen en los dos repositorios y tienen que ser idénticos. Si cambiás uno, copialo al otro.
 
@@ -78,6 +80,11 @@ tiendas/<id>/
   admins/<uid>: true ← responsables de la tienda
   meta/              { nombre, url, notas, creada } ← sólo admin global (url = dominio propio, si tiene)
   estado/            { activa, mensaje }            ← público: pausada = el catálogo muestra "no disponible"
+  pedidos/<clave>/   { numero, fecha, status, entregado?, total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, entrega?, direccion?, notas?},
+                       items[{nombre, cantidad, precio, costo?, codigo?}] }
+                     ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.
+                       Unidades, subtotal, descuento y costo total NO se guardan: el panel los calcula de los artículos.
+  ultimoPedido       ← hora del último pedido: las reglas piden 3 segundos entre pedidos de una tienda (freno contra pedidos falsos en masa)
 usuarios/<uid>/      { email, nombre, activo, debeCambiarClave, creado, ultimoIngreso, tiendas{} }
 solicitudes/<uid>/   { email, nombre, tienda, fecha } ← pedidos de acceso desde el login
 admins/<uid>: true   ← admin global (vos)
@@ -85,6 +92,8 @@ admins/<uid>: true   ← admin global (vos)
 
 - Si un enlace apunta a una tienda que no existe, el catálogo muestra "Catálogo no encontrado".
 - **Imágenes**: el panel las comprime al subirlas (WEBP; logos de hasta ~320 KB y banners de hasta ~480 KB). Cada subida genera un id nuevo, así que el navegador del cliente las puede guardar en caché sin límite de tiempo. Al guardar se borran las que quedaron sin uso.
+- **Pedidos**: el panel de cada tienda tiene **Ventas → Pedidos** (en vivo; marcar entregado, volver a abierto, *cancelar y eliminar* en un solo paso) y **Ventas → Facturación** (facturado, costo y ganancia de los pedidos entregados, por período). El costo de cada artículo se copia de la columna H al momento de la compra. Los pedidos de **más de 90 días se borran solos**: lo hace el panel de la tienda al abrirse y también esta gestión al cargar (no hay Cloud Functions en el plan gratuito).
+- **Provincias y localidades**: el checkout usa `localidades-ar.json` del catálogo público (24 provincias y ~4.200 localidades, generado desde los datos de Georef de `Cotizadores/Disponibilidad/datos.json`).
 - **Caché del catálogo**: la última config de cada tienda queda guardada en el navegador del cliente. Así colores, logo y textos aparecen al instante y sin destello, y después se comparan con la base.
 
 ## Usuarios y permisos

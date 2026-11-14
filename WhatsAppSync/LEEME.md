@@ -101,15 +101,18 @@ al cliente, desde el 11 7646-0030:
 4. Subí `pedidosv2.html` y `config-whatsapp.js` al hosting.
 
 ### 5. Instalar en la PC servidor
-1. Copiá el instalador **`WhatsAppSync Setup 1.0.0.exe`** (carpeta `dist`) a la PC servidor y abrilo.
+1. Copiá el instalador **`WhatsAppSync Setup 1.5.0.exe`** (carpeta `dist`) a la PC servidor y abrilo.
    Windows puede mostrar *"Windows protegió su PC"* porque el instalador no está firmado:
    tocá **Más información → Ejecutar de todas formas**.
-2. Se instala solo, sin preguntas, y abre la ventana de WhatsAppSync.
-3. Tocá **Elegir archivo de clave…** y elegí la clave privada de Firebase
+2. Se instala solo, sin preguntas, y abre la ventana de WhatsAppSync. Si la PC ya tenía una versión
+   anterior, la pasa sola a la línea **Principal** (no hace falta volver a escanear) y termina acá.
+3. En una PC nueva aparece **Agregar línea de WhatsApp**: poné el nombre (ej. *Principal*), el número
+   (**11 7646-0030**) y elegí la clave privada de Firebase
    (**Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada**,
-   el archivo `.json` que se descarga). La app se queda con una copia.
+   el archivo `.json` que se descarga). La dirección de la base se completa sola.
+   En **Base de pedidos** va `https://pedidos-87064-default-rtdb.firebaseio.com`. La app se queda con una copia de la clave.
    ⚠️ Esa clave da acceso total a la base: no la compartas ni la subas a ningún lado.
-4. Aparece el QR en la misma ventana. En el celular del **11 7646-0030**: WhatsApp → ⋮ →
+4. Aparece el QR en la misma ventana. En el celular de esa línea: WhatsApp → ⋮ →
    **Dispositivos vinculados → Vincular un dispositivo** → escaneá el QR.
 5. Cuando dice **"Conectado y guardando mensajes"**, ya está. Cerrá la ventana.
 
@@ -117,17 +120,43 @@ al cliente, desde el 11 7646-0030:
 de `whatsAppSync.bat`) y en el celular, en Dispositivos vinculados, cerrá esa sesión vieja.
 Dos copias a la vez se pisan la conexión.
 
+### Varias líneas de WhatsApp
+El mismo instalador sirve para todas las líneas (hasta **3 por PC**). Cada línea es un número de WhatsApp
+con **su propio proyecto de Firebase** y, si tiene, **su propia base de pedidos**. Lo normal es una línea por PC,
+pero una PC puede tener dos o tres: cada una funciona por separado y, si una falla, las demás siguen.
+
+**Antes de agregar una línea nueva** (una sola vez por línea):
+1. Crear su proyecto de Firebase y su Realtime Database (pasos 1 y 2 de arriba), publicando
+   `database.rules.json` en las reglas. Si después se va a ver en un sistema de pedidos, también el paso 3.
+2. Descargar su clave privada (Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada).
+3. Si tiene base de pedidos: tiene que tener el mismo formato que pedidosv2, dejar **leer sin clave** y tener
+   índice en `timestamp` para `pedidos`. La app lo prueba al guardar y avisa si algo falta.
+
+**Agregar la línea:** en la ventana, botón **+** (o clic derecho en el ícono → **Agregar línea...**):
+nombre, número, clave y, si tiene, base de pedidos → **Guardar y vincular** → escanear el QR con el celular de esa línea.
+
+- Arriba de la ventana hay una pestaña por línea, con un punto verde (conectada), amarillo (esperando) o rojo (falta algo).
+- En **Datos de la línea** se ven y se cambian sus datos, y está **Quitar línea de esta PC**.
+- En el celular, el dispositivo vinculado aparece como *WhatsAppSync · nombre de la línea*.
+- El **aviso de despacho** de Flecha Carga sale solo desde la línea **Principal**.
+- **Descargar comprobantes** y el **Verificador** trabajan solo con la línea Principal.
+- pedidosv2 sigue mostrando solo las conversaciones de la línea Principal.
+
+**Pasar una línea a otra PC:** en la PC vieja, **Quitar línea de esta PC**. En la nueva, **+** con los mismos datos
+y escanear el QR. ⚠️ Una línea no puede estar en dos PCs a la vez: se pisan la conexión y aparece "Hay otra copia conectada".
+
 ### Cómo se usa
 - Vive en la **bandeja**, al lado del reloj (si no lo ves, tocá la flechita **^**).
-  Ícono verde: conectado. Con punto amarillo: esperando o reconectando. Gris con punto rojo: falta algo.
+  Ícono verde: todas las líneas conectadas. Con punto amarillo: alguna esperando o reconectando.
+  Gris con punto rojo: a alguna le falta algo. Al pasar el mouse se ve el estado de cada una.
 - **Cerrar o minimizar la ventana no lo detiene.** Para salir de verdad: clic derecho en el
   ícono → **Salir...** y confirmar.
 - Arranca solo al prender la PC (se puede desactivar en *Iniciar con Windows*). Siempre arranca
   escondido en la bandeja, también si lo abrís a mano: la ventana solo aparece al hacer clic en el ícono,
   o sola cuando hace falta algo (escanear el QR, cargar la clave, otra copia conectada).
-- Sus datos (clave, sesión de WhatsApp, registros) están en `%APPDATA%\WhatsAppSync`
+- Los datos de cada línea (clave, sesión de WhatsApp, registros) están en `%APPDATA%\WhatsAppSync\lineas\<línea>`
   (botón **Carpeta de datos**). Desinstalar la app no los borra.
-- La URL de la base y los plazos (90 días, 30 días) están en `ajustes.js`.
+- Los plazos (90 días, 30 días) están en `ajustes.js` y valen para todas las líneas.
 - La primera vez que arranca esta versión hace una **limpieza única**: borra de Firebase los textos
   que se guardaban antes y revisa las fotos ya guardadas, dejando solo cotizaciones y comprobantes.
   Puede tardar un rato; el avance queda en `limpieza-cotizaciones.json` y, si se corta, sigue
@@ -145,11 +174,12 @@ sin bandeja: no usarlo al mismo tiempo que la app.
 | Problema | Qué hacer |
 |---|---|
 | Vuelve a pedir el QR | Se desvinculó desde el celular o pasó mucho tiempo sin conexión. Escaneá de nuevo. |
-| "se vinculó el número X y se esperaba..." | Escaneaste con otro celular. Usá el del 11 7646-0030. |
+| "se vinculó el número X y se esperaba..." | Escaneaste con otro celular. Usá el de esa línea (el que dice el QR). |
+| "La clave o la base de Firebase no sirven" | La clave no es de ese proyecto o la dirección de la base está mal. Elegí otra clave o corregí **Datos de la línea**. |
+| "Esa clave es del proyecto X, que ya usa otra línea" | Cada línea va en su propio proyecto de Firebase. |
 | En pedidosv2 pide la contraseña | Pasa una sola vez por usuario. Si dice "usuario no creado", falta el paso 3 para ese email. |
 | "Todavía no hay mensajes guardados" | Ese número no tiene chat con el local, o el teléfono del pedido está mal cargado. |
-| "Hay otra copia conectada" | Quedó abierto el programa viejo u otra PC con la misma sesión. Cerralo y tocá **Reiniciar conexión**. |
+| "Hay otra copia conectada" | Esa línea está abierta en otra PC (o quedó el programa viejo). Quitala allá y tocá **Reiniciar conexión**. |
 | Registro de lo que pasó | Sección **Actividad** de la ventana, o carpeta `logs` dentro de la carpeta de datos. |
 
-Para desvincular: botón **Desvincular WhatsApp** de la ventana, y en el celular,
-Dispositivos vinculados → cerrar la sesión de "WhatsAppSync".
+Para desvincular: en la pestaña de la línea, botón **Desvincular WhatsApp**. También cierra la sesión en el celular.

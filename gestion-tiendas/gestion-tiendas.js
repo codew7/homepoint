@@ -207,6 +207,22 @@
         datos.cargadas = true;
         renderTodo();
         cargarLogos();
+        limpiarPedidosViejos(ids);
+    }
+
+    // Los pedidos de más de 90 días se borran solos (no hay Cloud Functions).
+    // El panel de cada tienda ya lo hace al abrirse; acá se cubren las
+    // tiendas cuyo dueño no entra seguido. No bloquea ni muestra nada.
+    function limpiarPedidosViejos(ids) {
+        const limite = T.limitePedidos();
+        ids.forEach(id => {
+            const ref = db.ref('tiendas/' + id + '/pedidos');
+            ref.orderByChild('fecha').endAt(limite).once('value').then(s => {
+                const borrar = {};
+                s.forEach(c => { borrar[c.key] = null; });
+                if (Object.keys(borrar).length) return ref.update(borrar);
+            }).catch(e => console.warn('No se pudieron limpiar pedidos viejos de', id, e));
+        });
     }
 
     function cargarLogos() {

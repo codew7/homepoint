@@ -40,13 +40,26 @@ const pino = require('pino');
 const sharp = require('sharp');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
-const CFG = require('./ajustes');
 
-// Instalado, la app de bandeja (app/main.js) lo lanza con WAS_DATOS apuntando
-// a %APPDATA%\WhatsAppSync, porque la carpeta de instalacion no se puede
-// escribir. Suelto (node index.js), todo queda junto a este archivo.
+// Instalado, la app de bandeja (app/main.js) lanza un motor por cada linea de
+// WhatsApp, con WAS_DATOS apuntando a la carpeta de esa linea
+// (%APPDATA%\WhatsAppSync\lineas\<id>), porque la carpeta de instalacion no
+// se puede escribir. Suelto (node index.js), todo queda junto a este archivo.
 const DIR = process.env.WAS_DATOS || __dirname;
 fs.mkdirSync(DIR, { recursive: true });
+
+// Valores comunes en ajustes.js. Los de la linea (numero, base de WhatsApp,
+// base de pedidos) salen de linea.json de su carpeta, si existe; si no, se
+// usan los de ajustes.js (la linea principal).
+const CFG = Object.assign({ NOMBRE_LINEA: '', AVISOS_DESPACHO: true }, require('./ajustes'));
+try {
+  const linea = JSON.parse(fs.readFileSync(path.join(DIR, 'linea.json'), 'utf8'));
+  if (linea.nombre) CFG.NOMBRE_LINEA = String(linea.nombre);
+  if (linea.numero) CFG.NUMERO_ESPERADO = String(linea.numero);
+  if (linea.databaseUrl) CFG.DATABASE_URL = String(linea.databaseUrl);
+  if ('pedidosUrl' in linea) CFG.PEDIDOS_DATABASE_URL = String(linea.pedidosUrl || '').replace(/\/+$/, '');
+  if ('avisosDespacho' in linea) CFG.AVISOS_DESPACHO = linea.avisosDespacho !== false;
+} catch (_) { /* sin linea.json: valores de ajustes.js */ }
 const ARCHIVO_CLAVE = path.join(DIR, 'clave-firebase.json');
 const DIR_SESION = path.join(DIR, 'sesion');
 const ARCHIVO_LIDS = path.join(DIR, 'lids.json');
@@ -54,7 +67,8 @@ const ARCHIVO_CLIENTES = path.join(DIR, 'clientes-tel.json');
 const ARCHIVO_QR = path.join(DIR, 'qr.html');
 const ARCHIVO_DESCARTADOS = path.join(DIR, 'descartados.json');
 const ARCHIVO_LIMPIEZA = path.join(DIR, 'limpieza-cotizaciones.json');
-const DIR_OCR = path.join(DIR, 'ocr');
+// El idioma del lector de texto se baja una sola vez para todas las lineas
+const DIR_OCR = process.env.WAS_OCR || path.join(DIR, 'ocr');
 let qrAbierto = false;
 const DIR_LOGS = path.join(DIR, 'logs');
 
@@ -102,10 +116,19 @@ if (!CFG.DATABASE_URL || CFG.DATABASE_URL.includes('PEGAR-ACA')) {
   log('FALTA la URL de la base: completá DATABASE_URL en ajustes.js (LEEME.md, paso 6).');
   process.exit(2);
 }
-const db = getDatabase(initializeApp({
-  credential: cert(require(ARCHIVO_CLAVE)),
-  databaseURL: CFG.DATABASE_URL
-}));
+let db;
+try {
+  db = getDatabase(initializeApp({
+    credential: cert(JSON.parse(fs.readFileSync(ARCHIVO_CLAVE, 'utf8'))),
+    databaseURL: CFG.DATABASE_URL
+  }));
+} catch (e) {
+  const motivo = e && e.message ? e.message : String(e);
+  log('La clave de Firebase o la dirección de la base no sirven (' + motivo + '). Revisá los datos de la línea.');
+  avisar({ tipo: 'clave-mala', motivo });
+  setTimeout(() => process.exit(2), 300);
+  return;
+}
 
 // RTDB acepta updates con muchas rutas, pero conviene no mandar miles juntas
 async function escribir(rutas) {
@@ -382,6 +405,22 @@ async function textoDePdf(buffer) {
   let sock = null;
   let conectado = false;
 
+  // Pedido de la app de bandeja: desvincular este WhatsApp (boton
+  // "Desvincular" o "Quitar linea"). Se cierra la sesion tambien del lado del
+  // celular, asi no queda un dispositivo vinculado muerto.
+  if (padre) {
+    padre.on('message', async (e) => {
+      const m = e && e.data;
+      if (!m || m.tipo !== 'desvincular') return;
+      log('Desvinculando este WhatsApp...');
+      try {
+        if (sock) await Promise.race([sock.logout(), new Promise(r => setTimeout(r, 5000))]);
+      } catch (_) { /* igual se borra la sesion */ }
+      try { fs.rmSync(DIR_SESION, { recursive: true, force: true }); } catch (_) { /* la borra la app */ }
+      process.exit(0);
+    });
+  }
+
   function esChatIndividual(jid) {
     return !!(isPnUser(jid) || isLidUser(jid));
   }
@@ -565,7 +604,7 @@ async function textoDePdf(buffer) {
     sock = makeWASocket({
       version,
       auth: state,
-      browser: Browsers.windows('WhatsAppSync'),
+      browser: Browsers.windows(CFG.NOMBRE_LINEA ? 'WhatsAppSync · ' + CFG.NOMBRE_LINEA : 'WhatsAppSync'),
       logger: pino({ level: 'silent' }),
       markOnlineOnConnect: false,   // no aparecer "en linea" ni cortar las notificaciones del celular
       syncFullHistory: false,
@@ -880,6 +919,7 @@ async function textoDePdf(buffer) {
   }
 
   async function borrarCuriosos() {
+    if (!CFG.PEDIDOS_DATABASE_URL) return;   // linea sin base de pedidos: no se borra nada
     let clientes;
     try {
       clientes = await telefonosDeClientes();
@@ -991,6 +1031,7 @@ async function textoDePdf(buffer) {
 
   // Una sola lectura a la vez; si falla, se sigue con lo que habia
   function pedidosAlDia() {
+    if (!CFG.PEDIDOS_DATABASE_URL) return Promise.resolve();   // linea sin base de pedidos
     if (!pedidosActualizando) {
       pedidosActualizando = actualizarPedidos()
         .catch(e => log('Asignación: no se pudieron leer los pedidos (' + e.message + ').'))
@@ -1092,7 +1133,7 @@ async function textoDePdf(buffer) {
   // llegaron sin pedido en los ultimos 2 dias, por si el pedido aparece tarde)
   let asignandoPendientes = false;
   async function asignarPendientes() {
-    if (asignandoPendientes) return;
+    if (asignandoPendientes || !CFG.PEDIDOS_DATABASE_URL) return;
     asignandoPendientes = true;
     try {
       const snap = await db.ref('imgsIdx').once('value');
@@ -1298,6 +1339,7 @@ async function textoDePdf(buffer) {
   }
 
   function revisarEnvios() {
+    if (!CFG.AVISOS_DESPACHO) return;
     for (const [id, v] of Object.entries(envios)) {
       if (!v || v.estado || !v.tel || !v.link) continue;
       const clave = id + ':' + v.t;
@@ -1347,13 +1389,19 @@ async function textoDePdf(buffer) {
     if (colaEnvios.length && conectado) mandarAvisos();
   }
 
-  for (const evento of ['child_added', 'child_changed']) {
-    db.ref('envios').on(evento, s => {
-      envios[s.key] = s.val();
-      if (conectado) revisarEnvios();
-    }, e => log('No se pueden leer los avisos de despacho:', e.message));
+  // Los avisos salen solo desde la linea que los tiene prendidos (la
+  // principal); las demas ni siquiera escuchan envios/.
+  if (CFG.AVISOS_DESPACHO) {
+    for (const evento of ['child_added', 'child_changed']) {
+      db.ref('envios').on(evento, s => {
+        envios[s.key] = s.val();
+        if (conectado) revisarEnvios();
+      }, e => log('No se pueden leer los avisos de despacho:', e.message));
+    }
+    db.ref('envios').on('child_removed', s => { delete envios[s.key]; });
+    setTimeout(borrarEnviosViejos, 120000);
+    setInterval(borrarEnviosViejos, 86400000);
   }
-  db.ref('envios').on('child_removed', s => { delete envios[s.key]; });
 
   async function borrarEnviosViejos() {
     try {
@@ -1363,10 +1411,8 @@ async function textoDePdf(buffer) {
       if (Object.keys(upd).length) await db.ref().update(upd);
     } catch (e) { log('No se pudieron borrar avisos viejos:', e.message); }
   }
-  setTimeout(borrarEnviosViejos, 120000);
-  setInterval(borrarEnviosViejos, 86400000);
-
-  log('Iniciando WhatsApp...');
+  if (!CFG.PEDIDOS_DATABASE_URL) log('Esta línea no tiene base de pedidos: no se asignan comprobantes a pedidos ni se borran chats de curiosos.');
+  log('Iniciando WhatsApp' + (CFG.NOMBRE_LINEA ? ' (línea ' + CFG.NOMBRE_LINEA + ', ' + CFG.NUMERO_ESPERADO + ')' : '') + '...');
   await conectar();
 })().catch(e => {
   log('Error al iniciar:', e && e.message ? e.message : e);
