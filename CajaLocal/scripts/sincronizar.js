@@ -47,6 +47,8 @@ const ARCHIVOS = [
   // Modo de emergencia "Offline" (solo actúa en la PC habilitada).
   'modoOffline.js',
   'modoOffline.css',
+  // Registro diario de lo que se hace en la caja (en la web no hace nada).
+  'registroCaja.js',
   'config.js',
   'config2.js',
   'logo.png',

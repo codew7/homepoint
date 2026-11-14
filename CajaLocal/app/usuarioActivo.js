@@ -150,6 +150,9 @@
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
   function lsDel(k) { try { localStorage.removeItem(k); } catch (_) {} }
 
+  // Registro diario de la caja de escritorio (registroCaja.js). En la web no hace nada.
+  function reg(texto) { if (window.Registro) window.Registro.anotar('USUARIO', texto); }
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -297,6 +300,24 @@
         ? 'Caja local' + (app.version ? ' · v' + app.version : '')
         : 'Versión web';
 
+    // Función oculta: 5 clics seguidos en la versión abren el visor del
+    // registro diario (sólo en la caja de escritorio, sólo para mirar).
+    // "Seguidos": entre un clic y el siguiente no puede pasar más de 0,6 s.
+    if (app && app.registro && app.registro.abrirVisor) {
+      const versionEl = overlay.querySelector('.usr-version');
+      versionEl.classList.add('usr-version-clic');
+      let clics = 0, ultimoClic = 0;
+      versionEl.addEventListener('click', () => {
+        const ahora = Date.now();
+        clics = ahora - ultimoClic <= 600 ? clics + 1 : 1;
+        ultimoClic = ahora;
+        if (clics < 5) return;
+        clics = 0;
+        reg('Abrió el visor del registro');
+        app.registro.abrirVisor();
+      });
+    }
+
     grilla = overlay.querySelector('#usrGrilla');
     estadoEl = overlay.querySelector('#usrEstado');
     construirClave();
@@ -354,6 +375,7 @@
       e.preventDefault();
       if (claveValida(claveInput.value)) { resolverClave(true); return; }
       claveError.textContent = 'Contraseña incorrecta';
+      reg('Contraseña de WhatsApp incorrecta');
       claveInput.value = '';
       claveInput.focus();
       // Sacudida corta: el error se siente sin tener que leerlo.
@@ -858,8 +880,12 @@
         if (ok) {
           ssDel(SS_MODO_WHATSAPP);
           m.entrar();
+          reg('Entró al modo Offline');
           confirmarEleccion(m.NOMBRE, tile);
-        } else if (tile) tile.focus({ preventScroll: true });
+        } else {
+          reg('Canceló la entrada al modo Offline');
+          if (tile) tile.focus({ preventScroll: true });
+        }
       });
       return;
     }
@@ -875,6 +901,7 @@
       esperandoClave = true;
       pedirClave(ok => {
         esperandoClave = false;
+        reg(ok ? 'Contraseña de WhatsApp correcta' : 'Canceló la contraseña de WhatsApp');
         if (ok) ssSet(SS_MODO_WHATSAPP, '1');
         // Pudo conectarse en otro equipo mientras se escribía la contraseña.
         if (ok && estaOcupado(WHATSAPP) && !forzar) {
@@ -891,6 +918,7 @@
   }
 
   function ofrecerEntrarIgual(nombre, tile) {
+    reg(`Quiso entrar como ${nombre}, pero figura conectado en otro equipo`);
     estadoEl.innerHTML = `${esc(nombre)} figura conectado en otro equipo. Si esa caja ya está cerrada, podés entrar igual.
       <button type="button" class="usr-reintentar">Entrar igual</button>`;
     const btn = estadoEl.querySelector('.usr-reintentar');
@@ -907,6 +935,8 @@
     tiles().forEach(t => t.setAttribute('aria-selected', t === tile ? 'true' : 'false'));
     if (tile) tile.classList.add('es-elegido');
     establecer(nombre);
+    // Después de establecer: así la línea ya sale con el usuario nuevo.
+    reg(`Eligió el usuario ${nombre}${forzar ? ' (entró igual: se desconectó del otro equipo)' : ''}`);
     // Un instante para que se vea la confirmación sobre el botón tocado.
     setTimeout(() => cerrar(), reduceMovimiento() ? 0 : 260);
   }
@@ -921,6 +951,7 @@
   function soltar() {
     if (!actual) return;
     const anterior = actual;
+    reg(`${anterior} dejó la caja (se abrió el selector de usuario)`);
     soltado = anterior;
     actual = '';
     ssDel(SS_ACTUAL);
@@ -1033,6 +1064,7 @@
     const g = ganchoInactividad;
     try {
       if (g && g.puede && !g.puede()) return;
+      reg(`Sin uso por ${Math.round(INACTIVIDAD_MS / 60000)} minutos: vuelve al selector`);
       if (g && g.limpiar) g.limpiar();
     } catch (e) {
       console.error('Inactividad:', e);
@@ -1055,6 +1087,7 @@
     expulsado(nombre) {
       cuandoListo(() => {
         aviso = (nombre || 'Tu usuario') + ' se abrió en otro equipo. Elegí con qué usuario seguir en esta caja.';
+        reg(`${nombre || 'El usuario'} se abrió en otro equipo: esta caja lo soltó`);
         if (abierto) limpiarEstado(); else abrir();
       });
     },

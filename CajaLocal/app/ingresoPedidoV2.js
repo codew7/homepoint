@@ -184,6 +184,45 @@ document.addEventListener('DOMContentLoaded', function() {
   // Variable para bloquear la interfaz durante procesos críticos de Firebase
   let procesoCriticoEnEjecucion = false;
   let enviandoPedido = false; // Guard contra doble clic en submit
+
+  // === REGISTRO DIARIO (registroCaja.js, solo en la caja de escritorio) ===
+  // Lo que hace el operador queda en el .txt del día. En la web no hace nada.
+  // `pedidoCerrado`: los artículos a la vista ya se guardaron (o su descarte
+  // ya se anotó), así que limpiar la pantalla después no es otro descarte.
+  let pedidoCerrado = false;
+  function reg(categoria, texto, detalle) {
+    if (window.Registro) window.Registro.anotar(categoria, texto, detalle);
+  }
+  function regLinea(it) { return window.Registro ? window.Registro.linea(it) : ''; }
+  function regPlata(n) { return window.Registro ? window.Registro.plata(n) : String(n); }
+  function regResumen(lineas) { return window.Registro ? window.Registro.resumen(lineas) : ''; }
+  function regEdicion() { return new URLSearchParams(window.location.search).get('id') || ''; }
+
+  // Pedido con artículos que se pierde sin haberse guardado.
+  function regDescarte(motivo) {
+    if (!items.length || pedidoCerrado) return;
+    pedidoCerrado = true;
+    const edicion = regEdicion();
+    reg('PEDIDO', `✖ DESCARTADO (${motivo})${edicion ? ' · salió sin guardar la edición del pedido ' + idCortoPedido(edicion) : ''} · ${regResumen(items)}`,
+      items.map(regLinea));
+  }
+  window.addEventListener('pagehide', () => regDescarte('se cerró, recargó o cambió de pantalla'));
+
+  function regPedidoGuardado(id, obj, lineas, offline) {
+    pedidoCerrado = true;
+    const p = obj.pagos || {};
+    const medio = esParcial() ? 'Parcial: ' + textoDesglose(leerDesgloseParcial().partes) : (p.medioPago || '—');
+    const extras = [];
+    if (parseImporte(p.recargo)) extras.push('Recargo ' + regPlata(parseImporte(p.recargo)));
+    if (parseImporte(p.descuento)) extras.push('Descuento ' + regPlata(parseImporte(p.descuento)));
+    const estado = offline ? 'GUARDADO EN LA PC (modo Offline)' : (regEdicion() ? 'MODIFICADO' : 'INGRESADO');
+    const detalle = lineas.map(regLinea);
+    if (obj.nota) detalle.push('Nota: ' + obj.nota);
+    if (p.alias) detalle.push('Alias: ' + p.alias);
+    reg('PEDIDO', `✔ ${estado} ticket ${idCortoPedido(id)} · Cliente ${(obj.cliente && obj.cliente.nombre) || '—'} · ` +
+      `${regResumen(lineas)}${extras.length ? ' · ' + extras.join(' · ') : ''} · Total ${regPlata(parseImporte(p.totalFinal))} · ` +
+      `${medio} · Vendedor ${obj.vendedor || '—'}`, detalle);
+  }
   
   // Prevenir cierre de ventana durante procesos críticos
   window.addEventListener('beforeunload', function(e) {
@@ -899,6 +938,7 @@ function getTipoCliente() {
       return;
     }
     
+    reg('ARTÍCULO', '− Eliminó ' + regLinea(items[idx]));
     // Remover del array de items
     items.splice(idx, 1);
     
@@ -1390,6 +1430,9 @@ function getTipoCliente() {
   function procesarEscaneo(texto) {
     const matches = resolverCodigoEscaneado(texto);
     if (matches.length === 0) return false;
+    reg('ESCANEO', matches.length === 1
+      ? `${texto} → ${matches[0][3] || '(sin nombre)'}`
+      : `${texto} → ${matches.length} artículos con ese código, hay que elegir`);
 
     ocultarNoEncontrado();
 
@@ -1436,6 +1479,7 @@ function getTipoCliente() {
 
     // 4) Nada coincide: avisar sin cortar el ritmo y dejar el texto seleccionado
     // para que el próximo escaneo lo reemplace de una.
+    reg('ESCANEO', `${texto} → SIN COINCIDENCIAS`);
     mostrarNoEncontrado(texto);
     showScanError(texto);
     flashEstadoScanner('error', 'Código no encontrado');
@@ -1880,6 +1924,8 @@ function getTipoCliente() {
     if (existingItemIndex !== -1) {
       // Incrementar cantidad del artículo existente
       items[existingItemIndex].cantidad += cantidadEspecificada;
+      pedidoCerrado = false;
+      reg('ARTÍCULO', `+ Sumó ${cantidadEspecificada} a una línea existente${busquedaManualHabilitada ? ' (búsqueda manual)' : ''} · queda ${regLinea(items[existingItemIndex])}`);
       
       // Actualizar la fila visualmente
       const existingRow = itemsBody.querySelector(`tr[data-idx="${existingItemIndex}"]`);
@@ -1935,6 +1981,8 @@ function getTipoCliente() {
       newItem.valorG = (newItem.valorU - newItem.valorC) * newItem.cantidad;
       
       items.push(newItem);
+      pedidoCerrado = false;
+      reg('ARTÍCULO', '+ Agregó ' + regLinea(newItem) + (busquedaManualHabilitada ? ' (búsqueda manual)' : ''));
       const newIdx = items.length - 1;
       const row = createRowElement(newItem, newIdx);
       // Arriba de todo: lo recien escaneado es lo que el operador necesita ver.
@@ -1998,6 +2046,8 @@ function getTipoCliente() {
       const topeLinea = parseInt(items[idxExistente].cupoMaximo, 10) || 0;
       const sumada = items[idxExistente].cantidad + cant;
       items[idxExistente].cantidad = topeLinea > 0 ? Math.min(topeLinea, sumada) : sumada;
+      pedidoCerrado = false;
+      reg('CAMBIOS', `+ Sumó a la línea de cambio · queda ${regLinea(items[idxExistente])} · pedido original ${pedidoOrigenId ? idCortoPedido(pedidoOrigenId) : '—'}`);
       items[idxExistente].valorG = signoLinea(items[idxExistente]) *
         (items[idxExistente].valorU - items[idxExistente].valorC) * items[idxExistente].cantidad;
 
@@ -2036,6 +2086,8 @@ function getTipoCliente() {
       nuevo.valorG = signoLinea(nuevo) * (nuevo.valorU - nuevo.valorC) * nuevo.cantidad;
 
       items.push(nuevo);
+      pedidoCerrado = false;
+      reg('CAMBIOS', `+ Agregó ${regLinea(nuevo)} · motivo ${nuevo.motivo} · pedido original ${pedidoOrigenId ? idCortoPedido(pedidoOrigenId) : '—'}`);
       const idx = items.length - 1;
       const fila = createRowElement(nuevo, idx);
       itemsBody.insertBefore(fila, itemsBody.firstChild);
@@ -2263,6 +2315,27 @@ function getTipoCliente() {
     `;
     pushToast(toast);
   }
+
+  // Registro: la cantidad o el precio editados a mano en la tabla se anotan al
+  // terminar de escribir (change), con el valor que tenían al entrar al campo.
+  itemsBody.addEventListener('focusin', function(e) {
+    const t = e.target;
+    if (t.classList && (t.classList.contains('cantidad') || t.classList.contains('valorU'))) t.dataset.regAntes = t.value;
+  });
+  itemsBody.addEventListener('change', function(e) {
+    const t = e.target;
+    if (!t.classList || !(t.classList.contains('cantidad') || t.classList.contains('valorU'))) return;
+    const row = t.closest('tr');
+    const it = row ? items[parseInt(row.getAttribute('data-idx'), 10)] : null;
+    const antes = t.dataset.regAntes;
+    t.dataset.regAntes = t.value;
+    if (!it || antes === undefined || antes === t.value) return;
+    if (t.classList.contains('cantidad')) {
+      reg('ARTÍCULO', `~ Cantidad de ${it.nombre}: ${antes} → ${t.value} · queda ${regLinea(it)}`);
+    } else {
+      reg('ARTÍCULO', `~ Precio de ${it.nombre}: ${regPlata(parseInt(antes, 10) || 0)} → ${regPlata(parseInt(t.value, 10) || 0)} · queda ${regLinea(it)}`);
+    }
+  });
 
   // === EVENT DELEGATION PARA BOTONES DE ELIMINAR ===
   itemsBody.addEventListener('click', function(e) {
@@ -2501,11 +2574,13 @@ function getTipoCliente() {
       document.removeEventListener('keydown', keyHandler);
     }
     box.querySelector('#btnImprimirSi').onclick = () => {
+      reg('IMPRESIÓN', 'Eligió imprimir el ticket');
       overlay.remove();
       cleanup();
       onSi();
     };
     box.querySelector('#btnImprimirNo').onclick = () => {
+      reg('IMPRESIÓN', 'Eligió no imprimir el ticket');
       overlay.remove();
       cleanup();
       onNo();
@@ -2516,6 +2591,7 @@ function getTipoCliente() {
   form.addEventListener('submit', function(e) {
     if (pedidoId) return; // Si es edición, no ejecutar alta
     e.preventDefault();
+    reg('PEDIDO', `Presionó Ingresar Orden · ${regResumen(items)} · Total ${totalFinalInput.value || '—'} · ${form.medioPago.value || 'sin medio de pago'}`);
     // Un cambio mueve inventario en dos sentidos y puede anular importes: se confirma
     // el detalle antes de escribir en Firebase. Una venta normal entra directo, como siempre.
     if (items.some(esLineaCambio)) {
@@ -2908,6 +2984,7 @@ function getTipoCliente() {
       }
     })
       .then(() => {
+        regPedidoGuardado(pedidoKey, pedidoObj, items, true);
         if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
           guardarAliasEnLocalStorage(pedidoObj.pagos.alias.trim().toUpperCase());
         }
@@ -2927,6 +3004,7 @@ function getTipoCliente() {
       })
       .catch(err => {
         console.error('Modo Offline: no se pudo guardar el pedido en la PC:', err);
+        reg('PEDIDO', `✖ NO SE GUARDÓ en la PC (modo Offline): ${(err && err.message) || err}`, items.map(regLinea));
         desbloquearInterfaz();
         enviandoPedido = false;
         showPopup('No se pudo guardar el pedido en esta PC. No quedó registrado: volvé a intentar.', '❌', false);
@@ -2935,6 +3013,7 @@ function getTipoCliente() {
 
   // --- POPUP MODAL ---
   function showPopup(message, emoji, autoClose, imageUrl = null) {
+    reg('AVISO', String(message || '').replace(/<[^>]*>/g, ' '));
     // Remove existing popup if any
     const old = document.getElementById('popupPedidoMsg');
     if (old) old.remove();
@@ -3580,6 +3659,7 @@ if (cargarClienteBtn) {
   cargarClienteBtn.addEventListener('click', function() {
     cargarClienteBtn.disabled = true;
     cargarClienteBtn.textContent = 'Cargando...';
+    if (window.Registro) Registro.anotar('CLIENTE', 'Cargó la lista de clientes');
     if (form.nombre.value.trim() === 'n/a') form.nombre.value = '';
     db.ref('clientes').once('value').then(snap => {
       clientesRegistrados = [];
@@ -3890,11 +3970,13 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
         // Si el nombre no corresponde a ningún cliente registrado, la edición
         // sólo afecta a los datos del pedido en curso.
         if (!clienteId) {
+          reg('CLIENTE', `Editó los datos del cliente del pedido (${datos.nombre || ''}, no registrado)`);
           volcarEnFormulario();
           cerrarModal();
           return;
         }
         return db.ref('clientes/' + clienteId).update(datos).then(() => {
+          reg('CLIENTE', `Editó la ficha del cliente ${datos.nombre || ''}`);
           cargarClientes();
           volcarEnFormulario();
           cerrarModal();
@@ -4326,6 +4408,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   // await (los llamadores hacen form.reset() / items=[] justo después), y
   // dispara la impresión asíncrona con ese snapshot.
   function generarReciboYImprimir(pedidoId) {
+    reg('IMPRESIÓN', 'Se imprime el ticket ' + idCortoPedido(pedidoId));
     const d = {
       nombre: form.nombre.value.trim(),
       telefono: form.telefono.value.trim(),
@@ -4595,7 +4678,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     // 4. Commit atómico: pedido + movimientos juntos (todo o nada).
     console.log(`📝 Commit atómico: pedido + ${exitosos} movimientos...`);
-    await db.ref().update(rootUpdates);
+    try {
+      await db.ref().update(rootUpdates);
+    } catch (err) {
+      reg('PEDIDO', `✖ NO SE GUARDÓ el pedido ${idCortoPedido(pedidoId)}: ${(err && err.message) || err}`, items.map(regLinea));
+      throw err;
+    }
+    regPedidoGuardado(pedidoId, pedidoObj, items, false);
 
     // 5. Verificación defensiva: confirmar que los movimientos quedaron registrados.
     const verif = await db.ref('movimientos').orderByChild('pedidoId').equalTo(pedidoId).once('value');
@@ -4714,8 +4803,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     if (hayDatos && !sinPreguntar) {
       const confirmar = confirm('¿Está seguro de que desea crear un nuevo pedido? Se perderán los datos actuales.');
-      if (!confirmar) return;
+      if (!confirmar) { reg('PEDIDO', 'Presionó Nuevo y canceló: el pedido sigue en pantalla'); return; }
     }
+    if (!sinPreguntar) reg('PEDIDO', 'Presionó Nuevo');
+    regDescarte(sinPreguntar ? 'vuelta al selector por inactividad' : 'botón Nuevo');
     
     // Limpiar campos del formulario
     form.nombre.value = '';
@@ -4789,12 +4880,38 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // se arma una sola vez al cargar con ?id= y restablecerFormulario() no lo
       // deshace. Sin recargar, el "pedido nuevo" pisaba al pedido editado.
       if (pedidoId) {
+        reg('PEDIDO', 'Presionó Nuevo (salió de la edición del pedido ' + idCortoPedido(pedidoId) + ')');
+        regDescarte('botón Nuevo');
         window.location.href = 'ingresoPedidoV2.html';
         return;
       }
       restablecerFormulario();
     });
   }
+
+  // === REGISTRO: CAMPOS DEL CLIENTE Y DEL COBRO ===
+  // Se anota el valor final de cada campo al salir de él (change), no cada tecla.
+  // Las líneas de la tabla no tienen id: las anota su propio listener.
+  const CAMPOS_REGISTRO = {
+    nombre: ['CLIENTE', 'Nombre del cliente'],
+    direccion: ['CLIENTE', 'Info / dirección'],
+    recargoPorcentaje: ['COBRO', 'Recargo %'],
+    recargo: ['COBRO', 'Recargo $'],
+    descuentoPorcentaje: ['COBRO', 'Descuento %'],
+    descuento: ['COBRO', 'Descuento $'],
+    medioPago: ['COBRO', 'Medio de pago'],
+    parcialMedio1: ['COBRO', 'Parcial, primer medio'],
+    parcialMonto1: ['COBRO', 'Parcial, monto del primer medio'],
+    parcialMedio2: ['COBRO', 'Parcial, segundo medio'],
+    alias: ['COBRO', 'Alias'],
+    nota: ['PEDIDO', 'Nota']
+  };
+  form.addEventListener('change', function(e) {
+    const campo = CAMPOS_REGISTRO[e.target && e.target.id];
+    if (!campo) return;
+    const valor = String(e.target.value || '').trim();
+    reg(campo[0], `${campo[1]}: ${valor || '(vacío)'}`);
+  });
 
   // === VUELTA AL SELECTOR POR INACTIVIDAD (usuarioActivo.js) ===
   // Tras 4 minutos sin uso, con el pedido sin artículos, la caja vuelve a
@@ -4865,9 +4982,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     function confirmar() {
       if (input.value === ADMIN_PASS) {
+        reg('MODO', 'Entró al modo Admin');
         activarModoAdmin();
         cerrarModal();
       } else {
+        reg('MODO', 'Contraseña de Admin incorrecta');
         errDiv.style.display = 'block';
         input.value = '';
         input.focus();
@@ -4877,6 +4996,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     window.desactivarModoAdmin = function() {
       if (!mostrarClientesAdmin) return;
       mostrarClientesAdmin = false;
+      reg('MODO', 'Salió del modo Admin');
       cargarClientes();
       adminBtn.style.background = '';
       adminBtn.style.color = '';
@@ -4943,6 +5063,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     function activarModoManual() {
+      if (!busquedaManualHabilitada) reg('MODO', 'Búsqueda manual habilitada' + (busquedaManualPersistente ? ' (modo WhatsApp)' : ''));
       busquedaManualHabilitada = true;
       manualBtn.style.background = '#28a745';
       manualBtn.style.color = '#fff';
@@ -4955,6 +5076,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     function desactivarModoManual() {
+      if (busquedaManualHabilitada) reg('MODO', 'Búsqueda manual deshabilitada');
       busquedaManualHabilitada = false;
       manualBtn.style.background = '#fff';
       manualBtn.style.color = '#6c4eb6';
@@ -4976,6 +5098,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         activarModoManual();
         cerrarModal();
       } else {
+        reg('MODO', 'Contraseña de búsqueda manual incorrecta');
         errDiv.style.display = 'block';
         input.value = '';
         input.focus();
@@ -5263,6 +5386,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     refrescarCuposCambio = refrescarCupos;
 
     function seleccionarPedido(id, pedido) {
+      reg('CAMBIOS', `Eligió el pedido original ${idCortoPedido(id)} · Cliente ${(pedido && pedido.cliente && pedido.cliente.nombre) || '—'} · ${(pedido && pedido.fecha) || ''}`);
       pedidoOrigenSeleccionado = { id, ...pedido };
       ocultarResultados();
       input.value = idCortoPedido(id);
@@ -5389,6 +5513,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // --- Apertura / cierre ---------------------------------------------------
 
     function abrir() {
+      if (panel.hidden) reg('CAMBIOS', 'Abrió el panel de cambios y devoluciones');
       panel.hidden = false;
       btnModo.style.background = '#d97706';
       btnModo.style.color = '#fff';
@@ -5397,6 +5522,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     function cerrar() {
       if (panel.hidden) return;
+      reg('CAMBIOS', 'Cerró el panel de cambios y devoluciones');
       panel.hidden = true;
       btnModo.style.background = '';
       btnModo.style.color = '';

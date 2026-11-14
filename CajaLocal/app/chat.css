@@ -145,6 +145,15 @@
   white-space: nowrap;
 }
 .chat-equipo.offline { color: var(--pos-ink-5); }
+/* los conectados son botones: un clic agrega "@Nombre" al mensaje */
+button.chat-equipo {
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+button.chat-equipo:hover { background: var(--pos-3); border-color: rgba(143, 116, 217, .55); color: var(--pos-ink); }
+button.chat-equipo:focus-visible { outline: 2px solid rgba(143, 116, 217, .7); outline-offset: 1px; }
 .chat-equipo .chat-hace { color: var(--pos-ink-6); font-weight: 400; }
 
 .chat-punto {
@@ -410,6 +419,191 @@
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ---------------------------------------------------------- menciones -- */
+/* @Nombre dentro de los mensajes */
+.chat-mencion {
+  padding: 0 3px;
+  border-radius: 5px;
+  background: var(--violeta-soft);
+  color: var(--violeta-2);
+  font-weight: 600;
+}
+.chat-mencion.yo { background: var(--violeta); color: #fff; }
+.chat-msg.mio .chat-mencion { background: rgba(255, 255, 255, .2); color: #fff; }
+.chat-msg.para-mi .chat-burbuja { border-color: var(--violeta-ring); box-shadow: 0 0 0 3px var(--violeta-soft); }
+
+/* debajo de un mensaje propio: quién ya vio la mención */
+.chat-vistos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 10px;
+  margin: 3px 6px 0;
+  font-size: 11px;
+  color: var(--ink-4);
+}
+.chat-vistos .visto { color: #15803d; font-weight: 600; }
+
+/* lista que aparece al escribir @ (usa la base del menú del timbre) */
+.chat-mencion-menu { left: calc(var(--s4) + 44px + var(--s2)); }
+.chat-mencion-menu .chat-timbre-item.activo,
+.chat-mencion-menu .chat-timbre-item:hover { background: var(--violeta-soft); }
+.chat-mencion-menu .chat-timbre-item.activo .chat-timbre-estado,
+.chat-mencion-menu .chat-timbre-item:hover .chat-timbre-estado { color: var(--violeta-2); font-weight: 600; }
+.chat-mencion-todos {
+  width: 16px; height: 16px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--violeta); color: #fff;
+  font-size: 10px; font-weight: 700;
+}
+
+/* tarjetas flotantes: abajo a la derecha, no toman el foco, se van al tocarlas */
+.chat-menciones {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s2);
+}
+.chat-menciones:empty { display: none; }
+
+.chat-mencion-card {
+  pointer-events: auto;
+  position: relative;
+  width: 340px;
+  display: flex;
+  gap: var(--s3);
+  align-items: flex-start;
+  padding: var(--s3) var(--s4) var(--s3) calc(var(--s4) + 2px);
+  background: var(--pos);
+  color: var(--pos-ink-2);
+  border: 1px solid rgba(143, 116, 217, .45);
+  border-radius: var(--r3);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+  cursor: pointer;
+  font-family: var(--font);
+  user-select: none;
+  transform-origin: bottom right;
+  animation: chatMencionIn 440ms cubic-bezier(.22, 1.25, .36, 1) both;
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+.chat-mencion-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--violeta);
+}
+.chat-mencion-card:hover { transform: translateY(-2px); border-color: rgba(143, 116, 217, .8); }
+.chat-mencion-card:active { transform: scale(.985); }
+/* recién llegada: tres latidos suaves alrededor y después queda quieta */
+.chat-mencion-card.nueva {
+  animation: chatMencionIn 440ms cubic-bezier(.22, 1.25, .36, 1) both,
+             chatMencionPulso 1.6s ease-out 440ms 3;
+}
+.chat-mencion-card.cerrando {
+  pointer-events: none;
+  animation: chatMencionOut 160ms ease-in forwards;
+}
+.chat-mencion-card.colapsando {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  transition: height 200ms cubic-bezier(.2, 0, .2, 1), margin 200ms cubic-bezier(.2, 0, .2, 1),
+              padding 200ms cubic-bezier(.2, 0, .2, 1);
+}
+
+.chat-mencion-cuerpo { min-width: 0; flex: 1 1 auto; }
+.chat-mencion-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--pos-ink-3);
+}
+.chat-mencion-cabeza b { color: var(--pos-ink); font-weight: 600; }
+.chat-mencion-arroba {
+  width: 18px; height: 18px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--violeta);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  /* respira despacio mientras está sin ver: se nota sin molestar */
+  animation: chatMencionRespira 2.8s ease-in-out infinite;
+}
+.chat-mencion-de { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-mencion-hace {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--pos-ink-5);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.chat-mencion-texto {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--pos-ink);
+  overflow-wrap: anywhere;
+}
+.chat-mencion-texto .chat-mencion { background: rgba(143, 116, 217, .2); color: #d4c8f5; }
+.chat-mencion-texto .chat-mencion.yo { background: var(--violeta); color: #fff; }
+.chat-mencion-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--s2);
+  font-size: 11px;
+  color: var(--pos-ink-5);
+}
+.chat-mencion-responder {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: var(--r1);
+  background: var(--violeta);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.chat-mencion-responder:hover { background: #7a5cc6; }
+.chat-mencion-responder:active { transform: scale(.96); }
+
+.chat-mencion-mas {
+  pointer-events: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--pos-line);
+  border-radius: 999px;
+  background: var(--pos);
+  color: var(--pos-ink-3);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow-modal);
+}
+.chat-mencion-mas:hover { color: var(--pos-ink); }
+
+@keyframes chatMencionIn {
+  from { opacity: 0; transform: translateX(28px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes chatMencionOut {
+  to { opacity: 0; transform: translateX(24px) scale(.97); }
+}
+@keyframes chatMencionPulso {
+  0%   { box-shadow: var(--shadow-modal), 0 0 0 0 rgba(143, 116, 217, .55); }
+  100% { box-shadow: var(--shadow-modal), 0 0 0 12px rgba(143, 116, 217, 0); }
+}
+@keyframes chatMencionRespira {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(143, 116, 217, .0); }
+  50%      { box-shadow: 0 0 0 4px rgba(143, 116, 217, .28); }
+}
+
 /* ------------------------------------------------------------------ toast -- */
 .chat-toasts {
   position: fixed;
@@ -598,13 +792,16 @@
 @media (max-width: 520px) {
   .chat-drawer { width: 100vw; }
   .chat-toasts { left: var(--s4); right: var(--s4); }
-  .chat-toast { width: auto; }
+  .chat-toast, .chat-mencion-card { width: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-drawer, .chat-abierto .chat-drawer, .chat-velo { transition: none; }
   .chat-msg, .chat-toast, .chat-toast.saliendo, .chat-badge.visible,
-  .chat-alarma-icono, .chat-alarma-card, .chat-timbre-menu { animation: none; }
+  .chat-alarma-icono, .chat-alarma-card, .chat-timbre-menu,
+  .chat-mencion-card, .chat-mencion-card.nueva, .chat-mencion-arroba { animation: none; }
+  .chat-mencion-card.cerrando { animation: none; opacity: 0; }
+  .chat-mencion-card.colapsando { transition: none; }
   .chat-alarma::before { animation: none; opacity: 1; }
 }
 

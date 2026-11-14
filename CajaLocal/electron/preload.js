@@ -26,6 +26,13 @@ contextBridge.exposeInMainWorld('cajaApp', {
   // Versión instalada (la del package.json), p. ej. "2.1.2".
   version: (() => { try { return ipcRenderer.sendSync('caja:version'); } catch (_) { return ''; } })(),
   reintentarConexion: () => ipcRenderer.send('conexion:reintentar'),
+  // Registro diario (registro.js): registroCaja.js manda acá cada evento.
+  // send y no invoke: anotar nunca hace esperar a la caja.
+  registro: {
+    anotar: (entrada) => { try { ipcRenderer.send('registro:anotar', entrada); } catch (_) {} },
+    // Visor sólo de lectura (5 clics en la versión del selector de usuario).
+    abrirVisor: () => { try { ipcRenderer.send('registro:visor'); } catch (_) {} }
+  },
   offline: {
     obtener: () => ipcRenderer.invoke('offline:obtener'),
     alCambiar: (fn) => { ipcRenderer.on('offline:estado', (_evento, estado) => fn(estado)); },

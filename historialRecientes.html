@@ -34,6 +34,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <!-- Mismo usuario de la caja: la pestaña lo recuerda al venir desde Nuevo
        pedido. Va antes del chequeo de sesión, que le delega el selector. -->
+  <!-- Registro diario de la caja de escritorio (en la web no hace nada).
+       Va antes de usuarioActivo.js, que ya anota al elegir usuario. -->
+  <script src="registroCaja.js"></script>
   <script src="usuarioActivo.js"></script>
   <script>
     if (!firebase.apps.length) {
@@ -61,6 +64,11 @@
 
     // Convertir un alias a una clave válida para Firebase RTDB.
     // Las claves no admiten . # $ / [ ] ; el alias original se guarda como valor.
+    // Registro diario de la caja de escritorio (registroCaja.js).
+    function regHistorial(texto) {
+      if (window.Registro) window.Registro.anotar('HISTORIAL', texto);
+    }
+
     function aliasAClave(alias) {
       return alias.replace(/[.#$/\[\]]/g, c => '~' + c.charCodeAt(0) + '~');
     }
@@ -291,6 +299,7 @@
 
       try {
         await db.ref().update(updates);
+        regHistorial(`Pedido ${idCortoPedido(whatsappPedidoId)}: guardó alias ${alias || '(vacío)'} y teléfono ${telefono || '(vacío)'}`);
         if (!pedidosCache[whatsappPedidoId].pagos) pedidosCache[whatsappPedidoId].pagos = {};
         if (!pedidosCache[whatsappPedidoId].cliente) pedidosCache[whatsappPedidoId].cliente = {};
         if (alias) {
@@ -347,6 +356,7 @@
       let tel = telefonoDigits;
       if (!tel.startsWith('54')) tel = '54' + tel;
 
+      regHistorial(`Pedido ${idCortoPedido(whatsappPedidoId)}: envió el alias ${aliasInput} por WhatsApp a ${tel}`);
       const url = `https://api.whatsapp.com/send/?phone=${tel}&text=${encodeURIComponent(aliasInput)}`;
       window.open(url, '_blank');
       cerrarModalWhatsapp();
@@ -463,6 +473,8 @@
       btn.disabled = true;
       try {
         await db.ref('pedidos/' + parcialPedidoId + '/pagos/desglose').set(d.partes);
+        regHistorial(`Pedido ${idCortoPedido(parcialPedidoId)}: corrigió el pago parcial · ` +
+          d.partes.map(p => `${p.medio} $ ${Number(p.monto || 0).toLocaleString('es-AR')}`).join(' + '));
         if (!pedido.pagos) pedido.pagos = {};
         pedido.pagos.desglose = d.partes;
         const txtOriginal = btn.innerHTML;
@@ -780,6 +792,7 @@
       renderPedidos();
     }
     function verPedido(id) {
+      regHistorial(`Abrió el pedido ${idCortoPedido(id)} para ver o editar`);
       // Misma ventana: la caja es una app de una sola ventana, no se abren
       // ventanas sueltas. La marca en sessionStorage (que sobrevive a la
       // navegación dentro de la misma pestaña) le avisa a ingresoPedidoV2 que,
@@ -1092,6 +1105,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     async function imprimirPedido(id) {
+      regHistorial(`Reimprimió el ticket ${idCortoPedido(id)}`);
       // Usar caché local: el pedido ya fue descargado, no se hace otro fetch a Firebase
       const pedido = pedidosCache[id];
       if (!pedido) {
@@ -1371,7 +1385,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // el botón "no respondía"): la contraseña se pide con un modal propio.
       const clave = await pedirClaveCancelacion();
       if (clave === null) return;
-      if (clave !== '2574') { alert('Contraseña incorrecta'); return; }
+      if (clave !== '2574') { regHistorial(`Quiso cancelar el pedido ${idCortoPedido(id)}: contraseña incorrecta`); alert('Contraseña incorrecta'); return; }
       if (!confirm('¿Seguro que desea cancelar este pedido? Esta acción es IRREVERSIBLE y el pedido no podrá ser modificado ni reactivado.')) return;
 
       try {
@@ -1406,10 +1420,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         updates[`pedidos/${id}/locked`] = true;
         updates[`pedidos/${id}/movimientosRegistrados`] = false;
         await db.ref().update(updates);
+        const datosCancelado = pedidosCache[id] || pedido || {};
+        regHistorial(`✖ CANCELÓ el pedido ${idCortoPedido(id)} · Cliente ${(datosCancelado.cliente && datosCancelado.cliente.nombre) || '—'} · ` +
+          `Total ${(datosCancelado.pagos && datosCancelado.pagos.totalFinal) || '—'} · stock restaurado`);
 
         alert('Pedido cancelado. Ya no podrá ser modificado. Los movimientos asociados han sido eliminados y el stock ha sido restaurado.');
       } catch (e) {
         console.error('Error al cancelar pedido:', e);
+        regHistorial(`Error al cancelar el pedido ${idCortoPedido(id)}: ${(e && e.message) || e}`);
         alert('Error al cancelar o eliminar movimientos');
       }
     }

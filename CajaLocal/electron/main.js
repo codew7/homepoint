@@ -9,7 +9,9 @@
 //    - se actualiza sola desde GitHub (ver actualizador.js);
 //    - permite vender sin internet con el usuario Offline (ver offline.js).
 //
-//  Registro: %APPDATA%\Caja HomePoint\logs\main.log
+//  Registro técnico: %APPDATA%\Caja HomePoint\logs\main.log
+//  Registro diario de lo que se hace en la caja: %APPDATA%\Caja HomePoint\registro\
+//  (ver registro.js; Ctrl+Shift+L abre la carpeta).
 // =============================================================================
 
 const { app, BrowserWindow, Menu, shell, ipcMain, net, dialog, session } = require('electron');
@@ -20,6 +22,7 @@ const log = require('electron-log/main');
 const { iniciarServidor, PAGINA_INICIAL } = require('./servidor');
 const { iniciarActualizador } = require('./actualizador');
 const { iniciarOffline } = require('./offline');
+const { iniciarRegistro, anotarSistema, ventanaDe, carpetaRegistro } = require('./registro');
 const LIBRERIAS = require('./librerias');
 
 log.initialize();
@@ -107,6 +110,7 @@ function esperarConexion(ventana) {
     if (hay && !terminado && !ventana.isDestroyed()) {
       terminar();
       log.info('Volvió la conexión: se abre la caja');
+      anotarSistema('Volvió la conexión: se abre la caja');
       ventana.loadURL(urlCaja);
     }
     reintentando = false;
@@ -118,6 +122,7 @@ function esperarConexion(ventana) {
     if (evento.sender !== ventana.webContents || terminado) return;
     terminar();
     log.info('Sin conexión: se abre la caja en modo Offline');
+    anotarSistema('Sin conexión: se entró a la caja en modo Offline');
     ventana.loadURL(urlCaja);
   };
   const temporizador = setInterval(intentar, 5000);
@@ -223,20 +228,26 @@ function prepararContenido(ventana) {
     if (eleccion === 1) evento.preventDefault();
   });
 
-  // Atajos de soporte: F5 recarga, Ctrl+Shift+I abre las herramientas.
+  // Atajos de soporte: F5 recarga, Ctrl+Shift+I abre las herramientas,
+  // Ctrl+Shift+L abre la carpeta del registro diario.
   contenido.on('before-input-event', (evento, tecla) => {
     if (tecla.type !== 'keyDown') return;
     if (tecla.key === 'F5' || (tecla.control && tecla.key.toLowerCase() === 'r')) {
+      anotarSistema(`${ventanaDe(contenido)}: se recargó la pantalla (${tecla.key === 'F5' ? 'F5' : 'Ctrl+R'})`);
       contenido.reload();
       evento.preventDefault();
     } else if (tecla.control && tecla.shift && tecla.key.toLowerCase() === 'i') {
       contenido.toggleDevTools();
+      evento.preventDefault();
+    } else if (tecla.control && tecla.shift && tecla.key.toLowerCase() === 'l') {
+      try { shell.openPath(carpetaRegistro()); } catch (error) { log.warn('No se pudo abrir el registro:', error.message); }
       evento.preventDefault();
     }
   });
 
   contenido.on('render-process-gone', (_evento, detalle) => {
     log.error('La pantalla se cerró inesperadamente:', detalle.reason);
+    anotarSistema(`${ventanaDe(contenido)}: la pantalla se cerró inesperadamente (${detalle.reason})`);
     if (detalle.reason !== 'clean-exit' && !ventana.isDestroyed()) contenido.reload();
   });
   ventana.on('unresponsive', () => log.warn('La ventana dejó de responder'));
@@ -246,6 +257,9 @@ function prepararContenido(ventana) {
 async function crearVentanaCaja() {
   const ventana = new BrowserWindow(opcionesVentana({ show: false, minWidth: 900, minHeight: 600 }));
   prepararContenido(ventana);
+  const nombreVentana = ventanaDe(ventana.webContents);
+  anotarSistema(`Se abrió la ventana de caja ${nombreVentana}`);
+  ventana.on('closed', () => anotarSistema(`Se cerró la ventana de caja ${nombreVentana}`));
 
   ventana.once('ready-to-show', () => {
     ventana.maximize();
@@ -258,6 +272,7 @@ async function crearVentanaCaja() {
     ventana.loadURL(urlCaja);
   } else {
     log.warn('Sin conexión a internet al abrir la caja');
+    anotarSistema(`${nombreVentana}: sin conexión a internet al abrir la caja`);
     ventana.loadFile(path.join(__dirname, 'sin-conexion.html'), { query: { offline: '1' } });
     esperarConexion(ventana);
   }
@@ -267,6 +282,8 @@ async function crearVentanaCaja() {
 // ---------------------------------------------------------------- arranque ---
 async function arrancar() {
   log.info(`Caja HomePoint ${app.getVersion()} arrancando`);
+  iniciarRegistro({ log });
+  anotarSistema(`Caja HomePoint ${app.getVersion()} arrancó`);
   Menu.setApplicationMenu(null);
   mostrarSplash();
 
@@ -274,6 +291,7 @@ async function arrancar() {
     servidor = await iniciarServidor(RAIZ_APP, log);
   } catch (error) {
     log.error('No se pudo encender el servidor local:', error.message);
+    anotarSistema('No se pudo encender el servidor local: ' + error.message);
     cerrarSplash();
     dialog.showErrorBox(
       'Caja HomePoint',
@@ -286,8 +304,8 @@ async function arrancar() {
   urlCaja = `http://localhost:${servidor.puerto}/${PAGINA_INICIAL}`;
   // Versión instalada: la muestra el selector de usuario (preload.js).
   ipcMain.on('caja:version', (evento) => { evento.returnValue = app.getVersion(); });
-  iniciarActualizador(log);
-  iniciarOffline({ log, hayInternet });
+  iniciarActualizador(log, anotarSistema);
+  iniciarOffline({ log, hayInternet, anotar: anotarSistema });
   usarLibreriasLocales();
 
   // La caja se abre sola al prender la PC (reemplaza INICIO AUTOMATICO.bat).
@@ -317,4 +335,5 @@ app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => {
   if (servidor) servidor.detener().catch(() => {});
   log.info('Caja HomePoint cerrada');
+  anotarSistema('Caja HomePoint se cerró');
 });

@@ -61,13 +61,17 @@ function notasComoTexto(notas) {
   return texto || null;
 }
 
+let anotarRegistro = () => {};
+
 function instalarAhora(log, motivo) {
   log.info(`Instalando la versión ${estado.nueva} (${motivo})`);
+  anotarRegistro(`Se instala la versión ${estado.nueva} (${motivo}): la caja se reinicia`);
   // Silenciosa y con reapertura automática de la caja.
   setImmediate(() => autoUpdater.quitAndInstall(true, true));
 }
 
-function iniciarActualizador(log) {
+function iniciarActualizador(log, anotar = () => {}) {
+  anotarRegistro = anotar;
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -86,6 +90,7 @@ function iniciarActualizador(log) {
 
   autoUpdater.on('update-downloaded', (info) => {
     log.info(`Versión ${info.version} descargada: se instala al cerrar la caja.`);
+    anotar(`Actualización ${info.version} descargada: se instala al cerrar la caja`);
     estado.estado = 'lista';
     estado.nueva = info.version;
     estado.notas = notasComoTexto(info.releaseNotes);

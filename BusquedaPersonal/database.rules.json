@@ -1,0 +1,102 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "publico": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+
+    "configuracion": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+
+    "contadores": {
+      "$anio": {
+        ".read": true,
+        ".write": "newData.exists()",
+        ".validate": "$anio.matches(/^20[0-9][0-9]$/) && newData.isNumber() && (newData.val() === (data.exists() ? data.val() : 0) + 1 || (auth != null && root.child('admins').child(auth.uid).val() === true))"
+      }
+    },
+
+    "dni": {
+      "$dni": {
+        ".write": "(auth != null && root.child('admins').child(auth.uid).val() === true) || !data.exists() || (newData.exists() && data.val() === newData.val())",
+        ".validate": "$dni.matches(/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]?$/) && newData.isString() && newData.val().length <= 40"
+      }
+    },
+
+    "cvs": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$id": {
+        "$pagina": {
+          ".write": "!data.exists() && newData.exists() && root.child('postulaciones').child($id).child('fechaEnvio').val() > now - 86400000",
+          ".validate": "$pagina.matches(/^pagina-[1-5]$/) && newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 1400000"
+        }
+      }
+    },
+
+    "postulaciones": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".indexOn": ["fechaEnvio", "estado"],
+
+      "$id": {
+        ".write": "(auth != null && root.child('admins').child(auth.uid).val() === true) || (!data.exists() && newData.exists())",
+        ".validate": "$id.matches(/^[A-Za-z0-9_-]+$/) && $id.length >= 15 && $id.length <= 40 && newData.hasChildren(['numero','dni','nombre','apellido','fechaNacimiento','sexo','estadoCivil','localidad','telefono','puesto','experiencia','trabajaActualmente','primerEmpleo','sucursal','traslado','licencia','disponibilidad','estudios','esfuerzoFisico','respuestas','archivos','cuestionarioVersion','consentimiento','fechaEnvio','estado'])",
+
+        "numero": { ".validate": "newData.isString() && newData.val().matches(/^HP-20[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9]?[0-9]?$/)" },
+        "dni": { ".validate": "newData.isString() && newData.val().matches(/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]?$/) && ((auth != null && root.child('admins').child(auth.uid).val() === true) || root.child('dni').child(newData.val()).val() === $id)" },
+        "nombre": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+        "apellido": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+        "fechaNacimiento": { ".validate": "newData.isString() && newData.val().matches(/^(19|20)[0-9][0-9]-[01][0-9]-[0-3][0-9]$/)" },
+        "sexo": { ".validate": "newData.isString() && newData.val().matches(/^(Masculino|Femenino|Prefiero no decirlo)$/)" },
+        "estadoCivil": { ".validate": "newData.isString() && newData.val().matches(/^(Soltero\\/a|Casado\\/a|Divorciado\\/a|Viudo\\/a|Prefiero no decirlo)$/)" },
+        "localidad": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 80" },
+        "telefono": { ".validate": "newData.isString() && newData.val().matches(/^549[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/)" },
+
+        "puesto": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 120" },
+        "experiencia": { ".validate": "newData.isBoolean()" },
+        "trabajaActualmente": { ".validate": "newData.isBoolean()" },
+        "anticipacion": { ".validate": "newData.isString() && newData.val().matches(/^(Inmediata|7 días|15 días)$/)" },
+        "primerEmpleo": { ".validate": "newData.isBoolean()" },
+        "ultimoLugar": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+        "ultimoPuesto": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" },
+        "antiguedad": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+        "sucursal": { ".validate": "newData.isString() && newData.val().matches(/^(Caseros|Munro|Indistinto)$/)" },
+        "traslado": { ".validate": "newData.isBoolean()" },
+        "licencia": { ".validate": "newData.isBoolean()" },
+        "disponibilidad": { ".validate": "newData.isString() && newData.val().matches(/^(Mañana|Tarde|Completa)$/)" },
+        "estudios": { ".validate": "newData.isString() && newData.val().matches(/^(Secundario incompleto|Secundario completo|Terciario o universitario)$/)" },
+        "esfuerzoFisico": { ".validate": "newData.isBoolean()" },
+        "remuneracion": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+
+        "respuestas": {
+          "$pregunta": { ".validate": "$pregunta.matches(/^P[0-9][0-9]?[0-9]?$/) && newData.isString() && newData.val().matches(/^[A-Z]$/)" }
+        },
+        "archivos": {
+          "$n": { ".validate": "$n.matches(/^[0-9]$/) && newData.isString() && newData.val().matches(/^pagina-[1-5]$/)" }
+        },
+        "cuestionarioVersion": { ".validate": "newData.isNumber()" },
+        "consentimiento": { ".validate": "newData.val() === true" },
+        "fechaEnvio": { ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() : newData.val() === now)" },
+
+        "estado": { ".validate": "newData.isString() && ((auth != null && root.child('admins').child(auth.uid).val() === true) ? newData.val().matches(/^(Nuevo|Preseleccionado|Entrevista|Contratado|Descartado)$/) : newData.val() === 'Nuevo')" },
+        "notasInternas": { ".validate": "auth != null && root.child('admins').child(auth.uid).val() === true && newData.isString() && newData.val().length <= 5000" },
+        "fechaContacto": { ".validate": "auth != null && root.child('admins').child(auth.uid).val() === true && newData.isNumber()" },
+        "fechaEdicion": { ".validate": "auth != null && root.child('admins').child(auth.uid).val() === true && newData.isNumber()" },
+
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

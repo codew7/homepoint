@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Panel de selección · HomePoint</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0A0A0A">
+  <meta name="color-scheme" content="dark light">
+  <script>
+    // Tema antes de pintar (evita el parpadeo): guardado en el dispositivo o el del sistema
+    (function () { var t; try { t = localStorage.getItem("hp_tema"); } catch (e) {}
+      if (t !== "claro" && t !== "oscuro") t = matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "oscuro";
+      document.documentElement.dataset.tema = t; })();
+  </script>
+  <link rel="icon" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilos.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin">
+
+  <!-- ============ LOGIN ============ -->
+  <section id="vista-login" class="login" hidden>
+    <div class="login__tema" data-selector-tema></div>
+    <div class="login__marca" aria-hidden="true">
+      <img src="logoblanco.png" alt="" width="138" height="24">
+      <p class="login__titular">Panel de<br><span>selección.</span></p>
+      <p class="login__pie">Distribuidora HomePoint · Caseros y Munro</p>
+    </div>
+    <form class="login__caja" id="form-login" novalidate>
+      <p class="login__eyebrow">Acceso restringido</p>
+      <h1>Ingresá a tu cuenta</h1>
+      <p class="login__sub">Solo para el equipo de selección de HomePoint.</p>
+      <div class="campo">
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label for="login-clave">Contraseña</label>
+        <input id="login-clave" type="password" autocomplete="current-password" required>
+      </div>
+      <p class="campo__error" id="login-error" role="alert"></p>
+      <button class="btn btn--primario" type="submit" id="btn-login">Ingresar</button>
+    </form>
+  </section>
+
+  <div id="cargando" class="cargando"><span class="giro"></span></div>
+
+  <!-- ============ PANEL ============ -->
+  <div id="vista-panel" hidden>
+    <header class="a-barra">
+      <div class="a-barra__interior">
+        <div class="a-barra__marca">
+          <img src="logoblanco.png" alt="HomePoint" height="18" width="104">
+          <span class="a-barra__titulo">Selección</span>
+        </div>
+        <nav class="a-tabs" role="tablist" aria-label="Secciones">
+          <button role="tab" class="a-tab activo" aria-selected="true" data-tab="postulantes">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 19c.8-3.3 3.4-5 6.5-5s5.7 1.7 6.5 5M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3c1.8.6 3 2.2 3.5 4.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span>Postulantes</span> <span class="insignia" id="contador-nuevos" hidden>0</span>
+          </button>
+          <button role="tab" class="a-tab" aria-selected="false" data-tab="configuracion">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="10" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <span>Configuración</span>
+          </button>
+        </nav>
+        <div class="a-usuario">
+          <span class="a-usuario__email" id="usuario-email"></span>
+          <div data-selector-tema></div>
+          <button class="btn btn--fantasma btn--chico" id="btn-salir">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="a-main">
+      <div id="aviso-panel" class="aviso aviso--error" hidden role="alert"></div>
+
+      <!-- ---------- POSTULANTES ---------- -->
+      <section id="tab-postulantes" role="tabpanel">
+        <div class="a-cabecera">
+          <div>
+            <p class="a-eyebrow">Búsqueda de personal</p>
+            <h1 class="a-titulo">Postulantes</h1>
+          </div>
+          <button class="btn btn--secundario btn--chico" id="btn-exportar">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Exportar a Excel
+          </button>
+        </div>
+
+        <div class="kpis" id="kpis"></div>
+
+        <div class="a-herramientas">
+          <div class="buscador">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input type="search" id="buscar" placeholder="Buscar por nombre, apellido o DNI" aria-label="Buscar por nombre, apellido o DNI">
+          </div>
+          <label class="a-select">
+            <span class="oculto-visual">Ordenar por</span>
+            <select id="ordenar" aria-label="Ordenar por"></select>
+          </label>
+          <button class="btn btn--secundario btn--chico" id="btn-filtros" aria-expanded="false" aria-controls="panel-filtros">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Filtros <span class="insignia" id="contador-filtros" hidden>0</span>
+          </button>
+        </div>
+
+        <div class="panel-filtros" id="panel-filtros" hidden>
+          <div class="panel-filtros__grilla" id="grilla-filtros"></div>
+          <div class="panel-filtros__pie"><button class="btn-texto" id="btn-limpiar-filtros">Limpiar filtros</button></div>
+        </div>
+
+        <div class="a-resultado">
+          <p id="resultado" aria-live="polite"></p>
+          <p class="leyenda">Puntajes orientativos para priorizar entrevistas.</p>
+        </div>
+        <div class="lista-cabeza" aria-hidden="true"><span>Postulante</span><span>Puesto y sucursal</span><span>Afinidad</span><span>Confiabilidad</span><span>Estado</span></div>
+        <div class="lista" id="lista"></div>
+      </section>
+
+      <!-- ---------- CONFIGURACIÓN ---------- -->
+      <section id="tab-configuracion" role="tabpanel" hidden>
+        <div class="a-cabecera">
+          <div>
+            <p class="a-eyebrow">Ajustes del proceso</p>
+            <h1 class="a-titulo">Configuración</h1>
+          </div>
+        </div>
+        <div class="config-grilla">
+
+          <article class="tarjeta">
+            <h2>Entrevistas</h2>
+            <p class="tarjeta__sub">Se usa en todas las invitaciones por WhatsApp hasta que la cambies.</p>
+            <form id="form-entrevista" novalidate>
+              <div class="grilla-2">
+                <div class="campo"><label for="ent-fecha">Día</label><input type="date" id="ent-fecha" required></div>
+                <div class="campo"><label for="ent-hora">Hora</label><input type="time" id="ent-hora" required></div>
+              </div>
+              <fieldset class="campo">
+                <legend>Lugar</legend>
+                <div class="chips">
+                  <label class="chip"><input type="radio" name="ent-sucursal" value="Caseros"><span>Caseros</span></label>
+                  <label class="chip"><input type="radio" name="ent-sucursal" value="Munro"><span>Munro</span></label>
+                  <label class="chip"><input type="radio" name="ent-sucursal" value="Otro"><span>Otro lugar</span></label>
+                </div>
+              </fieldset>
+              <div class="campo">
+                <label for="ent-lugar">Texto del lugar (así aparece en el mensaje)</label>
+                <input type="text" id="ent-lugar" maxlength="200" placeholder="Ej.: nuestra sucursal de Caseros (Av. San Martín 2724)">
+              </div>
+              <p class="vista-previa" id="ent-previa"></p>
+              <p class="campo__error" id="ent-error"></p>
+              <button class="btn btn--primario btn--chico" type="submit">Guardar entrevista</button>
+              <span class="guardado" id="ent-ok" hidden>Guardado</span>
+            </form>
+          </article>
+
+          <article class="tarjeta">
+            <h2>Pesos del perfil</h2>
+            <p class="tarjeta__sub">Cuánto pesa cada rasgo en el puntaje general (promedio ponderado). 0 = no cuenta.</p>
+            <form id="form-pesos" novalidate>
+              <div id="campos-pesos" class="pesos"></div>
+              <p class="leyenda">Herramienta orientativa para priorizar entrevistas.</p>
+              <button class="btn btn--primario btn--chico" type="submit">Guardar pesos</button>
+              <span class="guardado" id="pesos-ok" hidden>Guardado</span>
+            </form>
+          </article>
+
+          <article class="tarjeta tarjeta--ancha">
+            <h2>Puestos disponibles</h2>
+            <p class="tarjeta__sub">Lo que ve el público en la página de inicio y en el formulario. La “frase” completa la pregunta: “¿Tenés experiencia trabajando en …?”.</p>
+            <div id="lista-puestos-admin" class="puestos-admin"></div>
+            <div class="fila-botones">
+              <button class="btn btn--secundario btn--chico" id="btn-agregar-puesto" type="button">+ Agregar puesto</button>
+              <button class="btn btn--primario btn--chico" id="btn-guardar-puestos" type="button">Guardar puestos</button>
+              <span class="guardado" id="puestos-ok" hidden>Guardado</span>
+            </div>
+          </article>
+
+          <article class="tarjeta tarjeta--ancha">
+            <h2>Cuestionario</h2>
+            <p class="tarjeta__sub">Preguntas, opciones y puntajes. Al guardar, se publica automáticamente una versión <strong>sin puntajes</strong> para el formulario.</p>
+            <p id="cuest-estado" class="cuest-estado"></p>
+            <div class="fila-botones">
+              <label class="btn btn--secundario btn--chico">
+                <input type="file" id="cuest-archivo" accept=".json,application/json" class="oculto-visual">
+                Cargar cuestionario.json
+              </label>
+              <button class="btn btn--secundario btn--chico" id="btn-cuest-editar" type="button">Editar acá</button>
+              <button class="btn btn--secundario btn--chico" id="btn-cuest-descargar" type="button">Descargar copia</button>
+            </div>
+            <div id="cuest-editor" hidden>
+              <label for="cuest-texto" class="oculto-visual">Contenido del cuestionario</label>
+              <textarea id="cuest-texto" spellcheck="false" rows="18"></textarea>
+              <p class="campo__error" id="cuest-error"></p>
+              <div class="fila-botones">
+                <button class="btn btn--primario btn--chico" id="btn-cuest-guardar" type="button">Guardar y publicar</button>
+                <button class="btn btn--fantasma btn--chico" id="btn-cuest-cancelar" type="button">Cancelar</button>
+              </div>
+            </div>
+            <span class="guardado" id="cuest-ok" hidden>Publicado</span>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ FICHA DEL POSTULANTE ============ -->
+  <dialog id="dlg-ficha" class="hoja" aria-labelledby="ficha-nombre">
+    <div class="hoja__cabeza">
+      <span class="avatar avatar--grande" id="ficha-avatar" aria-hidden="true"></span>
+      <div class="hoja__titulos">
+        <h2 id="ficha-nombre"></h2>
+        <p id="ficha-sub" class="hoja__sub"></p>
+      </div>
+      <button class="cerrar" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="hoja__cuerpo" id="ficha-cuerpo"></div>
+  </dialog>
+
+  <!-- ============ INVITACIÓN WHATSAPP ============ -->
+  <dialog id="dlg-whatsapp" class="dialogo dialogo--largo" aria-labelledby="wa-titulo">
+    <h2 id="wa-titulo">Invitar a entrevista</h2>
+    <div class="aviso aviso--alerta" id="wa-aviso" hidden>
+      <p>Todavía no cargaste el día, la hora y el lugar de la entrevista.</p>
+      <button class="btn btn--secundario btn--chico" id="wa-ir-config" type="button">Configurar entrevista</button>
+    </div>
+    <label for="wa-texto" class="etiqueta">Mensaje (podés editarlo solo para esta persona)</label>
+    <textarea id="wa-texto" rows="8"></textarea>
+    <p class="campo__ayuda">Al abrir WhatsApp, el estado pasa a “Entrevista” y se registra la fecha de contacto.</p>
+    <div class="dialogo__acciones">
+      <button class="btn btn--fantasma" data-cerrar type="button">Cancelar</button>
+      <button class="btn btn--whatsapp" id="wa-enviar" type="button">Abrir WhatsApp</button>
+    </div>
+  </dialog>
+
+  <!-- ============ EDITAR DATOS ============ -->
+  <dialog id="dlg-editar" class="dialogo dialogo--largo" aria-labelledby="ed-titulo">
+    <h2 id="ed-titulo">Editar datos</h2>
+    <p class="campo__ayuda">Usalo solo para corregir datos a pedido del postulante.</p>
+    <form id="form-editar" novalidate>
+      <div id="ed-campos" class="ed-campos"></div>
+      <p class="campo__error" id="ed-error"></p>
+      <div class="dialogo__acciones">
+        <button class="btn btn--fantasma" data-cerrar type="button">Cancelar</button>
+        <button class="btn btn--primario" type="submit">Guardar cambios</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ VISOR DE CV ============ -->
+  <dialog id="dlg-visor" class="visor" aria-label="Currículum">
+    <div class="visor__barra">
+      <span id="visor-pagina"></span>
+      <div class="visor__acciones">
+        <button class="btn btn--fantasma btn--chico" id="visor-menos" aria-label="Alejar">−</button>
+        <button class="btn btn--fantasma btn--chico" id="visor-mas" aria-label="Acercar">+</button>
+        <button class="btn btn--fantasma btn--chico" id="visor-descargar" type="button">Descargar página</button>
+        <button class="btn btn--fantasma btn--chico" data-cerrar aria-label="Cerrar">Cerrar</button>
+      </div>
+    </div>
+    <div class="visor__lienzo" id="visor-lienzo"></div>
+  </dialog>
+
+  <div class="tostada" id="tostada" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/tema.js"></script>
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Registro de la caja</title>
+  <!--
+    Visor del registro diario (registro.js). Sólo lee: la página no tiene
+    ninguna forma de escribir, borrar ni cambiar los archivos. Se abre con
+    5 clics seguidos en la versión del selector de usuario.
+  -->
+  <style>
+    :root {
+      --fondo: #F6F5F1;
+      --panel: #FFFFFF;
+      --texto: #17181C;
+      --suave: #6B6D74;
+      --tenue: #9A9CA3;
+      --borde: rgba(23, 24, 28, 0.09);
+      --hover: rgba(23, 24, 28, 0.035);
+      --violeta: #6c4eb6;
+      --violeta-suave: rgba(108, 78, 182, 0.10);
+      --verde: #15803d;
+      --verde-suave: rgba(21, 128, 61, 0.09);
+      --rojo: #b91c1c;
+      --rojo-suave: rgba(185, 28, 28, 0.08);
+      --ambar: #b45309;
+      --ambar-suave: rgba(217, 119, 6, 0.10);
+      --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--fondo);
+      color: var(--texto);
+      font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      display: grid;
+      grid-template-columns: 236px 1fr;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; color: inherit; }
+
+    /* --- días --- */
+    aside {
+      background: #17181C;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .marca { padding: 20px 18px 14px; }
+    .marca h1 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+    .marca p { margin-top: 3px; font-size: 12px; color: rgba(255,255,255,.5); }
+    .solo-lectura {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+      font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+      color: rgba(255,255,255,.62); background: rgba(255,255,255,.07);
+      border-radius: 999px; padding: 3px 9px 3px 7px;
+    }
+    .solo-lectura::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #8f74d9; }
+    #dias { list-style: none; padding: 4px 10px 16px; overflow-y: auto; flex: 1; }
+    #dias button {
+      width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+      padding: 8px 10px; border: 0; border-radius: 8px; background: transparent;
+      color: rgba(255,255,255,.78); text-align: left; cursor: pointer;
+      transition: background-color 120ms ease;
+    }
+    #dias button:hover { background: rgba(255,255,255,.06); }
+    #dias button[aria-current="true"] { background: var(--violeta); color: #fff; }
+    #dias button:focus-visible { outline: 2px solid #8f74d9; outline-offset: 1px; }
+    .dia-nombre { font-weight: 600; text-transform: capitalize; }
+    .dia-peso { font-size: 11px; color: rgba(255,255,255,.42); font-variant-numeric: tabular-nums; }
+    #dias button[aria-current="true"] .dia-peso { color: rgba(255,255,255,.75); }
+    .hoy-marca { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #c4b5f0; margin-left: 6px; }
+    #dias button[aria-current="true"] .hoy-marca { color: #fff; }
+
+    /* --- principal --- */
+    main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    header {
+      padding: 16px 22px 12px;
+      border-bottom: 1px solid var(--borde);
+      background: var(--panel);
+    }
+    .titulo { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .titulo h2 { font-size: 18px; font-weight: 650; letter-spacing: -.015em; text-transform: capitalize; }
+    #info { color: var(--suave); font-size: 12px; }
+    #vivo { display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--verde); font-weight: 600; }
+    #vivo.si { display: inline-flex; }
+    #vivo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: latir 2s ease-in-out infinite; }
+    @keyframes latir { 50% { opacity: .35; } }
+
+    .resumen { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .resumen button {
+      display: inline-flex; align-items: baseline; gap: 7px;
+      border: 1px solid var(--borde); background: var(--panel); border-radius: 9px;
+      padding: 5px 11px; cursor: pointer; color: var(--suave);
+      transition: background-color 120ms ease, border-color 120ms ease;
+    }
+    .resumen button:hover { background: var(--hover); }
+    .resumen button b { font-size: 15px; color: var(--texto); font-variant-numeric: tabular-nums; }
+    .resumen button[aria-pressed="true"] { border-color: var(--violeta); background: var(--violeta-suave); color: var(--violeta); }
+    .resumen button.ok b { color: var(--verde); }
+    .resumen button.mal b { color: var(--rojo); }
+
+    .filtros { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+    .filtros input[type="search"] {
+      flex: 1 1 260px; min-width: 200px; height: 34px; padding: 0 12px;
+      border: 1px solid var(--borde); border-radius: 9px; background: var(--fondo);
+    }
+    .filtros select {
+      height: 34px; padding: 0 8px; border: 1px solid var(--borde); border-radius: 9px; background: var(--panel);
+    }
+    .filtros input:focus-visible, .filtros select:focus-visible, .filtros button:focus-visible, .resumen button:focus-visible {
+      outline: 2px solid rgba(108,78,182,.5); outline-offset: 1px;
+    }
+    .filtros button {
+      height: 34px; padding: 0 12px; border: 1px solid var(--borde); border-radius: 9px;
+      background: var(--panel); cursor: pointer; white-space: nowrap;
+    }
+    .filtros button:hover { background: var(--hover); }
+    #conteo { color: var(--suave); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+
+    /* --- eventos --- */
+    #lista { flex: 1; overflow-y: auto; padding: 6px 0 40px; }
+    .ev {
+      display: grid;
+      grid-template-columns: 74px 34px 120px 104px 1fr;
+      gap: 0 12px;
+      padding: 6px 22px;
+      border-bottom: 1px solid rgba(23,24,28,.045);
+      align-items: baseline;
+    }
+    .ev:hover { background: var(--hover); }
+    .hora { font-family: var(--mono); font-size: 12.5px; color: var(--suave); font-variant-numeric: tabular-nums; }
+    .ventana { font-family: var(--mono); font-size: 11.5px; color: var(--tenue); }
+    .usuario { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .usuario.sistema { font-weight: 400; color: var(--tenue); font-style: italic; }
+    .cat {
+      justify-self: start; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+      padding: 1px 7px; border-radius: 5px; background: rgba(23,24,28,.06); color: var(--suave);
+      white-space: nowrap;
+    }
+    .cat-PEDIDO { background: var(--violeta-suave); color: var(--violeta); }
+    .cat-ARTÍCULO, .cat-ESCANEO { background: rgba(37, 99, 235, .08); color: #1d4ed8; }
+    .cat-COBRO, .cat-CLIENTE { background: rgba(13, 148, 136, .09); color: #0f766e; }
+    .cat-USUARIO { background: rgba(23,24,28,.07); color: var(--texto); }
+    .cat-ERROR { background: var(--rojo-suave); color: var(--rojo); }
+    .cat-AVISO { background: var(--ambar-suave); color: var(--ambar); }
+    .cat-HISTORIAL { background: rgba(147, 51, 234, .08); color: #7e22ce; }
+    .texto { min-width: 0; overflow-wrap: anywhere; }
+    .pantalla { font-size: 11px; color: var(--tenue); margin-right: 6px; }
+    .ev.ok .texto-principal { color: var(--verde); font-weight: 600; }
+    .ev.mal { background: var(--rojo-suave); }
+    .ev.mal .texto-principal { color: var(--rojo); font-weight: 600; }
+    .detalle { list-style: none; padding: 4px 0 2px; margin: 0; color: var(--suave); font-size: 12.5px; }
+    .detalle li { padding-left: 14px; position: relative; }
+    .detalle li::before { content: "·"; position: absolute; left: 3px; color: var(--tenue); }
+    mark { background: rgba(250, 204, 21, .45); color: inherit; border-radius: 2px; }
+
+    .vacio { padding: 60px 22px; text-align: center; color: var(--suave); }
+    .vacio b { display: block; font-size: 15px; color: var(--texto); margin-bottom: 4px; }
+
+    /* --- pestañas --- */
+    .pestanas { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid var(--borde); }
+    .pestanas button {
+      position: relative; display: inline-flex; align-items: center; gap: 8px;
+      height: 36px; padding: 0 14px; border: 0; background: transparent; cursor: pointer;
+      color: var(--suave); font-weight: 600;
+    }
+    .pestanas button:hover { color: var(--texto); }
+    .pestanas button[aria-selected="true"] { color: var(--violeta); }
+    .pestanas button[aria-selected="true"]::after {
+      content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px;
+      background: var(--violeta); border-radius: 2px;
+    }
+    .pestanas button:focus-visible { outline: 2px solid rgba(108,78,182,.5); outline-offset: -2px; border-radius: 8px; }
+    .pildora-n {
+      min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--rojo); color: #fff; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .pildora-n.tranqui { background: rgba(23,24,28,.1); color: var(--suave); }
+
+    /* --- panel de alertas --- */
+    .aviso-alertas { margin-top: 12px; font-size: 12.5px; color: var(--suave); max-width: 900px; }
+    .umbral { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--suave); white-space: nowrap; }
+    .umbral input {
+      width: 92px; height: 34px; padding: 0 8px; border: 1px solid var(--borde); border-radius: 9px;
+      background: var(--panel); font-variant-numeric: tabular-nums;
+    }
+    #aDescuento { width: 58px; }
+    #conteoAlertas { color: var(--suave); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+    .ranking { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .ranking:empty { display: none; }
+    .ranking button {
+      display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px;
+      border: 1px solid var(--borde); border-radius: 999px; background: var(--panel); cursor: pointer;
+      font-size: 12.5px;
+    }
+    .ranking button:hover { background: var(--hover); }
+    .ranking button[aria-pressed="true"] { border-color: var(--violeta); background: var(--violeta-suave); }
+    .ranking .r-nombre { font-weight: 600; }
+    .ranking .r-cuentas { display: inline-flex; gap: 4px; }
+    .ranking .r-cuentas span { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+    .r-alta { background: var(--rojo-suave); color: var(--rojo); }
+    .r-media { background: var(--ambar-suave); color: var(--ambar); }
+    .r-baja { background: rgba(23,24,28,.06); color: var(--suave); }
+
+    #listaAlertas { flex: 1; overflow-y: auto; padding: 14px 22px 40px; display: flex; flex-direction: column; gap: 10px; }
+    .alerta {
+      background: var(--panel); border: 1px solid var(--borde); border-left: 4px solid var(--tenue);
+      border-radius: 12px; padding: 12px 16px; box-shadow: 0 1px 2px rgba(23,24,28,.04);
+    }
+    .alerta.sev-alta { border-left-color: var(--rojo); }
+    .alerta.sev-media { border-left-color: #d97706; }
+    .alerta-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .sev { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; padding: 2px 8px; border-radius: 5px; }
+    .sev-alta .sev { background: var(--rojo-suave); color: var(--rojo); }
+    .sev-media .sev { background: var(--ambar-suave); color: var(--ambar); }
+    .sev-baja .sev { background: rgba(23,24,28,.06); color: var(--suave); }
+    .alerta-titulo { font-size: 14.5px; font-weight: 650; letter-spacing: -.005em; }
+    .alerta-quien { font-weight: 600; color: var(--violeta); }
+    .alerta-cuando { margin-left: auto; color: var(--suave); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .alerta-por { margin-top: 6px; color: var(--texto); max-width: 980px; }
+    .alerta details { margin-top: 8px; }
+    .alerta summary {
+      cursor: pointer; color: var(--violeta); font-weight: 600; font-size: 12.5px; width: max-content;
+      list-style: none; user-select: none;
+    }
+    .alerta summary::-webkit-details-marker { display: none; }
+    .alerta summary::before { content: "▸ "; display: inline-block; transition: transform 150ms ease; }
+    .alerta details[open] summary::before { transform: rotate(90deg); }
+    .contexto { margin: 8px -16px -12px; border-top: 1px solid var(--borde); background: var(--fondo); border-radius: 0 0 12px 12px; padding: 4px 0; }
+    .contexto .ev { padding-left: 16px; padding-right: 16px; }
+    .contexto .ev.clave { background: rgba(250, 204, 21, .16); }
+    .ev .dia-ctx { display: block; font-size: 10.5px; color: var(--tenue); }
+
+    @media (prefers-reduced-motion: reduce) { #vivo::before { animation: none; } }
+  </style>
+</head>
+<body>
+  <aside>
+    <div class="marca">
+      <h1>Registro de la caja</h1>
+      <p id="pc">Un archivo por día · se guardan 90 días</p>
+      <span class="solo-lectura">Sólo lectura</span>
+    </div>
+    <ul id="dias" aria-label="Días guardados"></ul>
+  </aside>
+
+  <main>
+    <header>
+      <div class="titulo">
+        <h2 id="tituloDia">Cargando…</h2>
+        <span id="info"></span>
+        <span id="vivo" title="Se actualiza solo cada pocos segundos">En vivo</span>
+      </div>
+      <div class="pestanas" role="tablist" aria-label="Vista">
+        <button type="button" role="tab" data-vista="eventos" aria-selected="true">Todos los eventos</button>
+        <button type="button" role="tab" data-vista="alertas" aria-selected="false">
+          Operaciones sospechosas <span id="nAlertas" class="pildora-n" hidden></span>
+        </button>
+      </div>
+
+      <div id="panelEventos">
+        <div class="resumen" id="resumen"></div>
+        <div class="filtros">
+          <input id="buscar" type="search" placeholder="Buscar: código, artículo, ticket, cliente…  (Ctrl+F)" autocomplete="off">
+          <select id="fUsuario" aria-label="Usuario"></select>
+          <select id="fCategoria" aria-label="Tipo"></select>
+          <select id="fVentana" aria-label="Ventana"></select>
+          <button id="orden" type="button" title="Cambiar el orden">Más recientes primero</button>
+          <button id="limpiar" type="button">Quitar filtros</button>
+          <span id="conteo"></span>
+        </div>
+      </div>
+
+      <div id="panelAlertas" hidden>
+        <p class="aviso-alertas">Son <b>indicios</b>, no pruebas: cada alerta marca algo que conviene revisar. Abrí “Ver qué pasó” para leer los eventos y, si hace falta, compará con la cámara o con el efectivo de la caja.</p>
+        <div class="filtros">
+          <select id="aRango" aria-label="Período">
+            <option value="dia">Día elegido</option>
+            <option value="7">Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+          </select>
+          <select id="aGravedad" aria-label="Gravedad">
+            <option value="">Todas las gravedades</option>
+            <option value="alta">Sólo graves</option>
+            <option value="media">Graves y medias</option>
+          </select>
+          <select id="aUsuario" aria-label="Usuario"></select>
+          <select id="aTipo" aria-label="Tipo de alerta"></select>
+          <label class="umbral" title="Desde este total un descarte cuenta como pedido grande">Monto alto desde $
+            <input id="aMonto" type="number" min="0" step="1000" inputmode="numeric"></label>
+          <label class="umbral" title="Descuento a partir del cual se marca">Descuento alto desde
+            <input id="aDescuento" type="number" min="1" max="100" step="1" inputmode="numeric"> %</label>
+          <span id="conteoAlertas"></span>
+        </div>
+        <div class="ranking" id="ranking"></div>
+      </div>
+    </header>
+    <div id="lista" role="log" aria-live="off"></div>
+    <div id="listaAlertas" hidden></div>
+  </main>
+
+<script>
+(() => {
+  const api = window.visorRegistro;
+  const $ = (id) => document.getElementById(id);
+  const lista = $('lista');
+
+  let hoy = null;
+  let diaActual = null;
+  let textoActual = '';
+  let eventos = [];
+  let recientesPrimero = true;
+  let rapido = null; // filtro rápido del resumen
+
+  const RAPIDOS = [
+    { id: 'ingresados', nombre: 'Pedidos ingresados', clase: 'ok',
+      prueba: (e) => e.cat === 'PEDIDO' && /✔ (INGRESADO|MODIFICADO|GUARDADO)/.test(e.texto) },
+    { id: 'descartados', nombre: 'Descartados', clase: 'mal',
+      prueba: (e) => e.cat === 'PEDIDO' && /DESCARTADO/.test(e.texto) },
+    { id: 'eliminados', nombre: 'Artículos eliminados', clase: '',
+      prueba: (e) => e.cat === 'ARTÍCULO' && /Eliminó/.test(e.texto) },
+    { id: 'noEncontrados', nombre: 'Códigos no encontrados', clase: '',
+      prueba: (e) => e.cat === 'ESCANEO' && /SIN COINCIDENCIAS|no encontr/i.test(e.texto) },
+    { id: 'errores', nombre: 'Errores', clase: 'mal',
+      prueba: (e) => e.cat === 'ERROR' || /✖ NO SE GUARDÓ|Error/.test(e.texto) }
+  ];
+
+  // ---------------------------------------------------------------- lectura
+  // Formato de cada renglón (registro.js):
+  //   HH:MM:SS  V1   usuario(12)   CATEGORÍA(11)  texto
+  //   <sangría>· detalle
+  function interpretar(texto) {
+    const salida = [];
+    let pc = '';
+    for (const linea of texto.split(/\r?\n/)) {
+      if (!linea.trim() || /^=+$/.test(linea)) continue;
+      if (/^ Caja HomePoint /.test(linea)) { pc = linea.trim(); continue; }
+      if (/^\s+· /.test(linea)) {
+        const ultimo = salida[salida.length - 1];
+        if (ultimo) ultimo.detalle.push(linea.replace(/^\s+· /, ''));
+        continue;
+      }
+      if (!/^\d\d:\d\d:\d\d  /.test(linea)) continue;
+      let resto = linea.slice(42);
+      let pantalla = '';
+      const m = /^\[(Caja|Historial)\] /.exec(resto);
+      if (m) { pantalla = m[1]; resto = resto.slice(m[0].length); }
+      salida.push({
+        hora: linea.slice(0, 8),
+        ventana: linea.slice(10, 13).trim(),
+        usuario: linea.slice(15, 27).trim(),
+        cat: linea.slice(29, 40).trim(),
+        pantalla,
+        texto: resto,
+        detalle: []
+      });
+    }
+    return { eventos: salida, pc };
+  }
+
+  // ------------------------------------------------------------- utilidades
+  function escapar(t) {
+    return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  }
+
+  function sinTildes(t) {
+    return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  // Resalta la búsqueda sin romper el escapado: se busca sobre el texto
+  // normalizado y se corta el texto original en las mismas posiciones.
+  function resaltar(t, buscado) {
+    if (!buscado) return escapar(t);
+    const base = sinTildes(t);
+    if (base.length !== t.length) return escapar(t);
+    let html = '', desde = 0, i;
+    while ((i = base.indexOf(buscado, desde)) !== -1) {
+      html += escapar(t.slice(desde, i)) + '<mark>' + escapar(t.slice(i, i + buscado.length)) + '</mark>';
+      desde = i + buscado.length;
+    }
+    return html + escapar(t.slice(desde));
+  }
+
+  function nombreDia(dia, largo) {
+    const [a, m, d] = dia.split('-').map(Number);
+    const fecha = new Date(a, m - 1, d);
+    return fecha.toLocaleDateString('es-AR', largo
+      ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+      : { weekday: 'short', day: '2-digit', month: '2-digit' });
+  }
+
+  function peso(bytes) {
+    return bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+  }
+
+  function llenarSelect(sel, etiquetaTodos, valores) {
+    const elegido = sel.value;
+    sel.innerHTML = `<option value="">${escapar(etiquetaTodos)}</option>` +
+      valores.map((v) => `<option value="${escapar(v)}">${escapar(v)}</option>`).join('');
+    sel.value = valores.includes(elegido) ? elegido : '';
+  }
+
+  // ------------------------------------------------------------------ pintar
+  function pintarFiltros() {
+    const unicos = (campo) => [...new Set(eventos.map((e) => e[campo]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    llenarSelect($('fUsuario'), 'Todos los usuarios', unicos('usuario'));
+    llenarSelect($('fCategoria'), 'Todos los tipos', unicos('cat'));
+    llenarSelect($('fVentana'), 'Todas las ventanas', unicos('ventana'));
+
+    $('resumen').innerHTML = RAPIDOS.map((r) => {
+      const n = eventos.filter(r.prueba).length;
+      return `<button type="button" class="${r.clase}" data-rapido="${r.id}" aria-pressed="${rapido === r.id}">` +
+        `<b>${n}</b>${escapar(r.nombre)}</button>`;
+    }).join('');
+  }
+
+  function pintarLista(mantenerScroll) {
+    const buscado = sinTildes($('buscar').value.trim());
+    const usuario = $('fUsuario').value;
+    const cat = $('fCategoria').value;
+    const ventana = $('fVentana').value;
+    const filtroRapido = RAPIDOS.find((r) => r.id === rapido);
+
+    let visibles = eventos.filter((e) =>
+      (!usuario || e.usuario === usuario) &&
+      (!cat || e.cat === cat) &&
+      (!ventana || e.ventana === ventana) &&
+      (!filtroRapido || filtroRapido.prueba(e)) &&
+      (!buscado || sinTildes(e.hora + ' ' + e.usuario + ' ' + e.cat + ' ' + e.texto + ' ' + e.detalle.join(' ')).includes(buscado))
+    );
+    if (recientesPrimero) visibles = visibles.slice().reverse();
+
+    $('conteo').textContent = visibles.length === eventos.length
+      ? `${eventos.length} eventos`
+      : `${visibles.length} de ${eventos.length} eventos`;
+
+    const scroll = lista.scrollTop;
+    if (!visibles.length) {
+      lista.innerHTML = eventos.length
+        ? '<div class="vacio"><b>Nada coincide con los filtros</b>Probá con otra búsqueda o tocá “Quitar filtros”.</div>'
+        : '<div class="vacio"><b>Este día no tiene eventos</b></div>';
+      return;
+    }
+
+    lista.innerHTML = visibles.map((e) => filaEvento(e, buscado)).join('');
+    if (mantenerScroll) lista.scrollTop = scroll;
+  }
+
+  // Un evento como renglón. `opciones.clave` lo resalta y `opciones.conDia`
+  // agrega la fecha (en las alertas de varios días).
+  function filaEvento(e, buscado, opciones) {
+    const o = opciones || {};
+    const ok = e.cat === 'PEDIDO' && /✔/.test(e.texto);
+    const mal = e.cat === 'ERROR' || /✖/.test(e.texto);
+    const detalle = e.detalle.length
+      ? '<ul class="detalle">' + e.detalle.map((d) => `<li>${resaltar(d, buscado)}</li>`).join('') + '</ul>'
+      : '';
+    return `<div class="ev${ok ? ' ok' : ''}${mal ? ' mal' : ''}${o.clave ? ' clave' : ''}">` +
+      `<span class="hora">${o.conDia && e.dia ? `<span class="dia-ctx">${escapar(nombreDia(e.dia, false))}</span>` : ''}${escapar(e.hora)}</span>` +
+      `<span class="ventana">${escapar(e.ventana === '--' ? '' : e.ventana)}</span>` +
+      `<span class="usuario${e.usuario === 'sistema' ? ' sistema' : ''}" title="${escapar(e.usuario)}">${resaltar(e.usuario, buscado)}</span>` +
+      `<span><span class="cat cat-${escapar(e.cat)}">${escapar(e.cat)}</span></span>` +
+      `<div class="texto">${e.pantalla ? `<span class="pantalla">${escapar(e.pantalla)}</span>` : ''}` +
+      `<span class="texto-principal">${resaltar(e.texto, buscado)}</span>${detalle}</div>` +
+      `</div>`;
+  }
+
+  // =================================================== OPERACIONES SOSPECHOSAS
+  // Se recorre el registro en orden, ventana por ventana, armando cada
+  // "pedido en pantalla" desde el primer artículo hasta que se guarda (✔) o se
+  // descarta (✖). Con eso se buscan las maniobras típicas para entregar
+  // mercadería sin cobrarla o quedarse con la plata. Son indicios: el visor
+  // sólo los muestra, no cambia nada.
+  const PESO = { alta: 3, media: 2, baja: 1 };
+  const NOMBRE_SEV = { alta: 'GRAVE', media: 'MEDIA', baja: 'LEVE' };
+  const CATS_PEDIDO = new Set(['ARTÍCULO', 'ESCANEO', 'COBRO', 'CLIENTE', 'PEDIDO', 'IMPRESIÓN', 'CAMBIOS', 'MODO', 'AVISO']);
+  const CONF_DEFECTO = { monto: 100000, descuento: 15, descartes: 3 };
+
+  function plataANum(s) {
+    const m = /(-?)\$ ?([\d.]+)/.exec(String(s || ''));
+    return m ? (m[1] ? -1 : 1) * Number(m[2].replace(/\./g, '')) : 0;
+  }
+  function fmt(n) { return (n < 0 ? '-$ ' : '$ ') + Math.abs(Math.round(n)).toLocaleString('es-AR'); }
+  function totalDe(e) {
+    let m = /Total (-?\$ ?[\d.]+)/.exec(e.texto);
+    if (m) return plataANum(m[1]);
+    m = /\d+ art\. \/ -?\d+ u · (-?\$ ?[\d.]+)/.exec(e.texto);
+    return m ? plataANum(m[1]) : 0;
+  }
+  function unidadesDe(e) { const m = /\d+ art\. \/ (-?\d+) u/.exec(e.texto); return m ? Number(m[1]) : 0; }
+  function articulosDe(e) { const m = /(\d+) art\. \//.exec(e.texto); return m ? Number(m[1]) : 0; }
+  function codigosDe(e) {
+    const s = new Set();
+    e.detalle.forEach((d) => { const m = /\[([^\]]+)\]/.exec(d); if (m) s.add(m[1]); });
+    return s;
+  }
+  function ticketDe(e) { const m = /(?:ticket|pedido) ([A-Za-z0-9_-]{4,})/.exec(e.texto); return m ? m[1] : ''; }
+  function medioDe(e) {
+    const partes = e.texto.split(' · ');
+    const i = partes.findIndex((p) => p.startsWith('Vendedor'));
+    return i > 0 ? partes[i - 1] : '';
+  }
+  function cuando(e) { return e.hora.slice(0, 5); }
+
+  function analizar(evs, conf) {
+    const alertas = [];
+    function alerta(sev, tipo, e, texto, contexto) {
+      alertas.push({ sev, tipo, usuario: e.usuario, dia: e.dia, hora: e.hora, t: e.t, ventana: e.ventana,
+        texto, clave: e, contexto: contexto && contexto.length ? contexto : [e] });
+    }
+
+    const sesiones = new Map();      // día|ventana → pedido en pantalla
+    const guardados = new Map();     // ticket → último ✔ de ese ticket
+    const descartes = [];            // para "lo rehízo más barato"
+    const descartesDia = new Map();  // usuario|día → [descartes]
+    const claves = new Map();        // usuario → horas de contraseñas incorrectas
+
+    const nueva = () => ({ eventos: [], medio: '', ingresar: false, cobro: null, aviso: '',
+      eliminados: [], elimMonto: 0, elimTrasCobro: [], precios: [], cantTrasCobro: [], manual: 0,
+      noImprimir: false, descPct: 0, nuevo: false });
+
+    function contrasenaMal(e) {
+      const lista = (claves.get(e.usuario) || []).filter((t) => e.t - t < 10 * 60000);
+      lista.push(e.t);
+      claves.set(e.usuario, lista);
+      if (lista.length === 2) alerta('baja', 'Contraseñas incorrectas seguidas', e,
+        'Puso mal una contraseña dos veces en menos de 10 minutos.');
+      if (lista.length === 3) alerta('media', 'Contraseñas incorrectas seguidas', e,
+        'Puso mal una contraseña 3 veces o más en menos de 10 minutos: puede estar probando claves.');
+    }
+
+    function cerrarDescarte(s, e) {
+      const total = totalDe(e), uds = unidadesDe(e), arts = articulosDe(e);
+      const motivo = (/DESCARTADO \(([^)]+)\)/.exec(e.texto) || [])[1] || '';
+      const ctx = s.eventos;
+      const d = { e, total, codigos: codigosDe(e) };
+      descartes.push(d);
+      const k = e.usuario + '|' + e.dia;
+      descartesDia.set(k, (descartesDia.get(k) || []).concat(e));
+      const perdido = `${arts} artículo${arts === 1 ? '' : 's'} / ${uds} u por ${fmt(total)}`;
+
+      if (s.cobro) {
+        const sev = s.aviso ? 'media' : 'alta';
+        alerta(sev, 'Preparó el cobro y descartó el pedido', e,
+          `${s.medio ? `Eligió el medio de pago “${s.medio}”` : 'Empezó a cobrar'}${s.ingresar ? ' y presionó Ingresar Orden' : ''}, ` +
+          `pero en vez de guardar el pedido lo descartó (${motivo}). Quedaron sin registrar ${perdido}.` +
+          (s.aviso ? ` Antes apareció el aviso: “${s.aviso}”.` : ''), ctx);
+      } else if (total >= conf.monto || uds >= 10) {
+        alerta('media', 'Descartó un pedido grande', e, `Descartó (${motivo}) ${perdido} sin haberlo cobrado.`, ctx);
+      } else if (/cerró|recargó|cambió de pantalla/.test(motivo)) {
+        alerta(total >= conf.monto / 4 ? 'media' : 'baja', 'Cerró la pantalla con un pedido cargado', e,
+          `Cerró, recargó o cambió de pantalla con ${perdido} cargados, sin usar el botón Nuevo.`, ctx);
+      } else if (/inactividad/.test(motivo) && total >= conf.monto / 4) {
+        alerta('baja', 'Dejó un pedido cargado sin terminar', e,
+          `La caja volvió sola al selector y se perdieron ${perdido}.`, ctx);
+      }
+    }
+
+    function cerrarGuardado(s, e) {
+      const total = totalDe(e);
+      const ticket = ticketDe(e);
+      const modificado = /^✔ MODIFICADO/.test(e.texto);
+      const ctx = s.eventos;
+      const cod = codigosDe(e);
+
+      // Descartó y a los pocos minutos ingresó lo mismo, pero más barato.
+      const previo = descartes.filter((d) => d.e.usuario === e.usuario && e.t - d.e.t >= 0 && e.t - d.e.t <= 15 * 60000 &&
+        d.total > total * 1.05 && d.codigos.size).find((d) => {
+        let comunes = 0;
+        d.codigos.forEach((c) => { if (cod.has(c)) comunes++; });
+        return comunes / d.codigos.size >= 0.5;
+      });
+      if (previo) {
+        alerta('alta', 'Descartó y volvió a cargar el pedido más barato', e,
+          `A las ${cuando(previo.e)} descartó un pedido de ${fmt(previo.total)} y a las ${cuando(e)} ingresó el ticket ${ticket} ` +
+          `con artículos parecidos por ${fmt(total)} (${fmt(previo.total - total)} menos).`, [previo.e].concat(ctx));
+      }
+
+      s.precios.forEach((p) => {
+        const pct = p.a ? Math.round((p.a - p.b) / p.a * 100) : 100;
+        alerta(p.b <= 0 || pct >= 30 ? 'alta' : 'media', 'Bajó el precio de un artículo', p.e,
+          `${p.nombre}: de ${fmt(p.a)} a ${fmt(p.b)} (−${pct} %). El pedido se guardó como ticket ${ticket} por ${fmt(total)}.`, ctx);
+      });
+
+      if (s.elimTrasCobro.length) {
+        alerta('alta', 'Sacó artículos después de elegir el medio de pago', s.elimTrasCobro[0], `Con el cobro ya empezado eliminó ` +
+          `${s.elimTrasCobro.length} artículo${s.elimTrasCobro.length === 1 ? '' : 's'} y después guardó el ticket ${ticket} por ${fmt(total)}.`, ctx);
+      } else if (s.eliminados.length) {
+        const parte = s.elimMonto / ((s.elimMonto + Math.max(total, 0)) || 1);
+        if (parte >= 0.3 && s.elimMonto >= conf.monto / 5) {
+          alerta('media', 'Sacó muchos artículos antes de cobrar', e,
+            `Eliminó ${s.eliminados.length} artículos por ${fmt(s.elimMonto)} (${Math.round(parte * 100)} % de lo cargado) y cobró ${fmt(total)} (ticket ${ticket}).`, ctx);
+        }
+      }
+
+      s.cantTrasCobro.forEach((c) => {
+        alerta('media', 'Bajó cantidades después de elegir el medio de pago', c.e,
+          `${c.nombre}: de ${c.a} a ${c.b} unidades con el cobro ya empezado (ticket ${ticket}).`, ctx);
+      });
+
+      const desc = plataANum((/Descuento (-?\$ ?[\d.]+)/.exec(e.texto) || [])[1]);
+      const pct = desc > 0 && total + desc > 0 ? desc / (total + desc) * 100 : 0;
+      if (pct >= conf.descuento) {
+        alerta(pct >= conf.descuento * 2 ? 'alta' : 'media', 'Descuento alto', e,
+          `Ticket ${ticket}: descuento de ${fmt(desc)} (${Math.round(pct)} %) sobre ${fmt(total + desc)}.`, ctx);
+      }
+
+      if (s.noImprimir && /efectivo/i.test(medioDe(e))) {
+        alerta('baja', 'Venta en efectivo sin ticket impreso', e,
+          `Ticket ${ticket} por ${fmt(total)} en efectivo: eligió no imprimir el comprobante.`, ctx);
+      }
+      if (s.manual) {
+        alerta('baja', 'Cargó artículos sin escanear', e,
+          `${s.manual} artículo${s.manual === 1 ? '' : 's'} del ticket ${ticket} se agregaron con la búsqueda manual en vez de la pistola.`, ctx);
+      }
+
+      if (modificado) {
+        const ant = guardados.get(ticket);
+        const totalAnt = ant ? totalDe(ant) : 0;
+        const antes = ant ? ` (lo había guardado ${ant.usuario} ${ant.dia !== e.dia ? 'el ' + nombreDia(ant.dia, false) : 'a las ' + cuando(ant)})` : '';
+        if (ant && totalAnt > total) {
+          alerta('alta', 'Modificó un pedido ya cobrado y bajó el total', e,
+            `Ticket ${ticket}: pasó de ${fmt(totalAnt)} a ${fmt(total)} (${fmt(totalAnt - total)} menos)${antes}.`, [ant].concat(ctx));
+        } else if (ant && medioDe(ant) !== medioDe(e)) {
+          alerta(/efectivo/i.test(medioDe(ant)) ? 'alta' : 'media', 'Cambió el medio de pago de un pedido ya cobrado', e,
+            `Ticket ${ticket}: de “${medioDe(ant)}” a “${medioDe(e)}”${antes}.`, [ant].concat(ctx));
+        } else {
+          alerta('baja', 'Modificó un pedido ya ingresado', e,
+            `Ticket ${ticket} por ${fmt(total)}${antes || ' (el original no está en los días analizados)'}.`, ctx);
+        }
+      }
+      if (ticket) guardados.set(ticket, e);
+    }
+
+    function revisarHistorial(e) {
+      const x = e.texto;
+      const ticket = ticketDe(e);
+      if (/^✖ CANCELÓ/.test(x)) {
+        const ant = guardados.get(ticket);
+        const horas = ant ? (e.t - ant.t) / 3600000 : null;
+        const crudo = (/Total (.+?) ·/.exec(x) || [])[1] || '';
+        const total = plataANum(crudo) || Number(crudo.replace(/[^\d]/g, '')) || (ant ? totalDe(ant) : 0);
+        const mismo = ant && ant.usuario === e.usuario;
+        alerta(ant && (mismo || horas < 24) ? 'alta' : 'media', 'Canceló un pedido ya cobrado', e,
+          `Canceló el ticket ${ticket}${total ? ' por ' + fmt(total) : ''} y el stock volvió al depósito. ` +
+          (ant ? `Lo había ingresado ${mismo ? 'la misma persona' : ant.usuario} hace ${horas < 1 ? Math.max(1, Math.round(horas * 60)) + ' min' : Math.round(horas) + ' h'}` +
+            ` (${medioDe(ant) || 'medio de pago desconocido'}).` : 'El pedido original no está en los días analizados.'),
+          ant ? [ant, e] : [e]);
+      } else if (/corrigió el pago parcial/.test(x)) {
+        alerta('media', 'Corrigió el pago de un pedido ya guardado', e,
+          `Cambió cómo se repartió el pago del pedido ${ticket}. Si pasó plata de efectivo a otro medio, conviene revisarlo.`);
+      } else if (/^Reimprimió el ticket/.test(x) && !guardados.has(ticket)) {
+        alerta('baja', 'Reimprimió un ticket viejo', e,
+          `Reimprimió el ticket ${ticket}, que no se cobró en los días analizados. Un ticket reimpreso puede usarse para retirar mercadería otra vez.`);
+      } else if (/contraseña incorrecta/i.test(x)) {
+        contrasenaMal(e);
+      }
+    }
+
+    for (const e of evs) {
+      const x = e.texto;
+      if (e.cat === 'SISTEMA' && /arrancó/.test(x)) { sesiones.clear(); continue; }
+      if (e.cat === 'HISTORIAL') { revisarHistorial(e); continue; }
+      if (/contraseña .*incorrecta/i.test(x)) { contrasenaMal(e); continue; }
+      if (e.cat === 'USUARIO' && /entró igual/.test(x)) {
+        alerta('baja', 'Entró con un usuario abierto en otro equipo', e,
+          'Usó “Entrar igual”: el usuario estaba conectado en otra caja y lo desconectó.');
+        continue;
+      }
+      if (!CATS_PEDIDO.has(e.cat)) continue;
+
+      const k = e.dia + '|' + e.ventana;
+      let s = sesiones.get(k);
+      // "Nuevo" con la pantalla vacía no anota descarte: el pedido siguiente empieza de cero.
+      if (s && s.nuevo && !/^✖ DESCARTADO/.test(x)) { s = null; sesiones.delete(k); }
+      if (!s) { s = nueva(); sesiones.set(k, s); }
+      s.eventos.push(e);
+
+      let m;
+      if (e.cat === 'COBRO' && (m = /^Medio de pago: (.+)$/.exec(x)) && m[1] !== '(vacío)') {
+        s.medio = m[1];
+        s.cobro = s.cobro || e;
+      } else if (e.cat === 'PEDIDO' && /^Presionó Ingresar Orden/.test(x)) {
+        s.ingresar = true;
+        s.cobro = s.cobro || e;
+      } else if (e.cat === 'AVISO' && s.ingresar) {
+        s.aviso = x.slice(0, 120);
+      } else if (e.cat === 'ARTÍCULO' && /^− Eliminó/.test(x)) {
+        s.eliminados.push(e);
+        s.elimMonto += Math.abs(plataANum(x.slice(x.lastIndexOf('= ') + 2)));
+        if (s.cobro) s.elimTrasCobro.push(e);
+      } else if (e.cat === 'ARTÍCULO' && /^\+ /.test(x) && /búsqueda manual/.test(x)) {
+        s.manual++;
+      } else if (e.cat === 'ARTÍCULO' && (m = /^~ Precio de (.+?): (-?\$ ?[\d.]+) → (-?\$ ?[\d.]+)/.exec(x))) {
+        const a = plataANum(m[2]), b = plataANum(m[3]);
+        if (b < a) s.precios.push({ e, nombre: m[1], a, b });
+      } else if (e.cat === 'ARTÍCULO' && (m = /^~ Cantidad de (.+?): (\d+) → (\d+)/.exec(x))) {
+        if (Number(m[3]) < Number(m[2]) && s.cobro) s.cantTrasCobro.push({ e, nombre: m[1], a: Number(m[2]), b: Number(m[3]) });
+      } else if (e.cat === 'IMPRESIÓN' && /no imprimir/.test(x)) {
+        s.noImprimir = true;
+      } else if (e.cat === 'CAMBIOS' && /^\+ Agregó/.test(x) && /DEVOLUCIÓN/.test(x)) {
+        if (/pedido original —/.test(x)) {
+          alerta('alta', 'Devolución sin pedido original', e,
+            'Cargó una devolución sin elegir el pedido original: no hay forma de saber si esa mercadería se vendió.', s.eventos.slice());
+        } else {
+          alerta('baja', 'Devolución de mercadería', e, 'Cargó una devolución con su pedido original.', s.eventos.slice());
+        }
+      } else if (e.cat === 'PEDIDO' && /^Presionó Nuevo$/.test(x)) {
+        s.nuevo = true;
+      }
+
+      if (e.cat === 'PEDIDO' && /^✔ /.test(x)) { cerrarGuardado(s, e); sesiones.delete(k); }
+      else if (e.cat === 'PEDIDO' && /^✖ DESCARTADO/.test(x)) { cerrarDescarte(s, e); sesiones.delete(k); }
+    }
+
+    // Patrón del día: muchos pedidos descartados por la misma persona.
+    descartesDia.forEach((lista, k) => {
+      if (lista.length < conf.descartes) return;
+      const suma = lista.reduce((a, e) => a + totalDe(e), 0);
+      const ultimo = lista[lista.length - 1];
+      alerta(lista.length >= conf.descartes * 2 ? 'alta' : 'media', 'Muchos pedidos descartados en el día', ultimo,
+        `Descartó ${lista.length} pedidos con artículos en el día, por ${fmt(suma)} en total.`, lista);
+    });
+
+    return alertas.sort((a, b) => PESO[b.sev] - PESO[a.sev] || b.t - a.t);
+  }
+
+  // ------------------------------------------------------------- pantalla
+  let vista = 'eventos';
+  let alertas = [];
+  let turnoAlertas = 0;
+  const textos = new Map(); // día → texto (el de hoy se vuelve a leer siempre)
+
+  function leerConf() {
+    let guardada = {};
+    try { guardada = JSON.parse(localStorage.getItem('visorConfSospechas') || '{}'); } catch {}
+    return Object.assign({}, CONF_DEFECTO, guardada);
+  }
+  function guardarConf(c) { try { localStorage.setItem('visorConfSospechas', JSON.stringify(c)); } catch {} }
+  const conf = leerConf();
+  $('aMonto').value = conf.monto;
+  $('aDescuento').value = conf.descuento;
+
+  function tiempo(dia, hora) { return new Date(`${dia}T${hora}`).getTime(); }
+  function conDia(dia, texto) {
+    return interpretar(texto).eventos.map((e) => Object.assign(e, { dia, t: tiempo(dia, e.hora) }));
+  }
+
+  function restarDias(dia, n) {
+    const [a, m, d] = dia.split('-').map(Number);
+    const f = new Date(a, m - 1, d - n);
+    return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+  }
+
+  async function eventosDelRango(rango) {
+    if (rango === 'dia') return diaActual ? conDia(diaActual, textoActual) : [];
+    const corte = restarDias(hoy, Number(rango) - 1);
+    const dias = (await api.dias()).map((d) => d.dia).filter((d) => d >= corte).sort();
+    let evs = [];
+    for (const dia of dias) {
+      let texto = dia !== hoy ? textos.get(dia) : null;
+      if (texto == null) {
+        texto = (await api.leer(dia)) || '';
+        if (dia !== hoy) textos.set(dia, texto);
+      }
+      evs = evs.concat(conDia(dia, texto));
+    }
+    return evs;
+  }
+
+  // Cantidad de alertas graves del día abierto, en la pestaña.
+  function pintarPestana() {
+    const delDia = diaActual ? analizar(conDia(diaActual, textoActual), conf) : [];
+    const graves = delDia.filter((a) => a.sev === 'alta').length;
+    const n = graves || delDia.filter((a) => a.sev === 'media').length;
+    const p = $('nAlertas');
+    p.hidden = !n;
+    p.textContent = n;
+    p.classList.toggle('tranqui', !graves);
+    p.title = graves ? `${graves} graves en este día` : `${n} de gravedad media en este día`;
+  }
+
+  async function calcularAlertas() {
+    const turno = ++turnoAlertas;
+    const rango = $('aRango').value;
+    if (rango !== 'dia') $('listaAlertas').innerHTML = '<div class="vacio"><b>Analizando…</b>Leyendo los días del período.</div>';
+    const evs = await eventosDelRango(rango);
+    if (turno !== turnoAlertas) return;
+    alertas = analizar(evs, conf);
+    pintarFiltrosAlertas();
+    pintarAlertas();
+  }
+
+  function pintarFiltrosAlertas() {
+    const usuarios = [...new Set(alertas.map((a) => a.usuario))].sort((a, b) => a.localeCompare(b, 'es'));
+    llenarSelect($('aUsuario'), 'Todos los usuarios', usuarios);
+    llenarSelect($('aTipo'), 'Todos los tipos de alerta', [...new Set(alertas.map((a) => a.tipo))].sort((a, b) => a.localeCompare(b, 'es')));
+
+    // Quién junta más alertas (las graves pesan más).
+    const porUsuario = new Map();
+    alertas.forEach((a) => {
+      const r = porUsuario.get(a.usuario) || { alta: 0, media: 0, baja: 0, puntos: 0 };
+      r[a.sev]++;
+      r.puntos += PESO[a.sev];
+      porUsuario.set(a.usuario, r);
+    });
+    const elegido = $('aUsuario').value;
+    $('ranking').innerHTML = [...porUsuario.entries()].sort((a, b) => b[1].puntos - a[1].puntos).map(([u, r]) =>
+      `<button type="button" data-usuario="${escapar(u)}" aria-pressed="${u === elegido}" title="Ver sólo las alertas de ${escapar(u)}">` +
+      `<span class="r-nombre">${escapar(u)}</span><span class="r-cuentas">` +
+      (r.alta ? `<span class="r-alta">${r.alta} graves</span>` : '') +
+      (r.media ? `<span class="r-media">${r.media} medias</span>` : '') +
+      (r.baja ? `<span class="r-baja">${r.baja} leves</span>` : '') +
+      `</span></button>`).join('');
+  }
+
+  function pintarAlertas() {
+    const grav = $('aGravedad').value;
+    const usuario = $('aUsuario').value;
+    const tipo = $('aTipo').value;
+    const variosDias = $('aRango').value !== 'dia';
+    const visibles = alertas.filter((a) =>
+      (!grav || PESO[a.sev] >= PESO[grav]) && (!usuario || a.usuario === usuario) && (!tipo || a.tipo === tipo));
+
+    const graves = alertas.filter((a) => a.sev === 'alta').length;
+    $('conteoAlertas').textContent = visibles.length === alertas.length
+      ? `${alertas.length} alertas · ${graves} graves`
+      : `${visibles.length} de ${alertas.length} alertas`;
+
+    const caja = $('listaAlertas');
+    if (!visibles.length) {
+      caja.innerHTML = alertas.length
+        ? '<div class="vacio"><b>Ninguna alerta con estos filtros</b></div>'
+        : '<div class="vacio"><b>No se encontró nada llamativo</b>En este período no hay operaciones que coincidan con los indicadores.</div>';
+      return;
+    }
+    caja.innerHTML = visibles.map((a, i) => {
+      const ctx = a.contexto.slice(-80);
+      return `<article class="alerta sev-${a.sev}">` +
+        `<div class="alerta-cab"><span class="sev">${NOMBRE_SEV[a.sev]}</span>` +
+        `<span class="alerta-titulo">${escapar(a.tipo)}</span>` +
+        `<span class="alerta-quien">${escapar(a.usuario)}</span>` +
+        `<span class="alerta-cuando">${variosDias ? escapar(nombreDia(a.dia, false)) + ' · ' : ''}${escapar(a.hora)}${a.ventana && a.ventana !== '--' ? ' · ' + escapar(a.ventana) : ''}</span></div>` +
+        `<p class="alerta-por">${escapar(a.texto)}</p>` +
+        `<details data-i="${i}"><summary>Ver qué pasó (${ctx.length} evento${ctx.length === 1 ? '' : 's'})</summary><div class="contexto"></div></details>` +
+        `</article>`;
+    }).join('');
+    // El detalle se arma al abrirlo: con muchas alertas, la lista carga rápido.
+    caja.querySelectorAll('details').forEach((d) => {
+      d.addEventListener('toggle', () => {
+        const cont = d.querySelector('.contexto');
+        if (!d.open || cont.childElementCount) return;
+        const a = visibles[Number(d.dataset.i)];
+        cont.innerHTML = a.contexto.slice(-80).map((e) => filaEvento(e, '', { clave: e === a.clave, conDia: variosDias })).join('');
+      });
+    });
+  }
+
+  function cambiarVista(nueva) {
+    vista = nueva;
+    document.querySelectorAll('.pestanas button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vista === vista)));
+    $('panelEventos').hidden = vista !== 'eventos';
+    lista.hidden = vista !== 'eventos';
+    $('panelAlertas').hidden = vista !== 'alertas';
+    $('listaAlertas').hidden = vista !== 'alertas';
+    if (vista === 'alertas') calcularAlertas();
+  }
+
+  document.querySelector('.pestanas').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-vista]');
+    if (b && b.dataset.vista !== vista) cambiarVista(b.dataset.vista);
+  });
+  $('aRango').addEventListener('change', calcularAlertas);
+  ['aGravedad', 'aTipo'].forEach((id) => $(id).addEventListener('change', pintarAlertas));
+  $('aUsuario').addEventListener('change', () => { pintarFiltrosAlertas(); pintarAlertas(); });
+  $('ranking').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-usuario]');
+    if (!b) return;
+    $('aUsuario').value = $('aUsuario').value === b.dataset.usuario ? '' : b.dataset.usuario;
+    pintarFiltrosAlertas();
+    pintarAlertas();
+  });
+  [['aMonto', 'monto'], ['aDescuento', 'descuento']].forEach(([id, campo]) => {
+    $(id).addEventListener('change', () => {
+      const v = Number($(id).value);
+      if (!(v > 0)) { $(id).value = conf[campo]; return; }
+      conf[campo] = v;
+      guardarConf({ monto: conf.monto, descuento: conf.descuento });
+      pintarPestana();
+      calcularAlertas();
+    });
+  });
+
+  // ------------------------------------------------------------------- datos
+  async function cargarDias() {
+    const dias = await api.dias();
+    $('dias').innerHTML = dias.length
+      ? dias.map((d) =>
+          `<li><button type="button" data-dia="${d.dia}" aria-current="${d.dia === diaActual}">` +
+          `<span class="dia-nombre">${escapar(nombreDia(d.dia, false))}${d.dia === hoy ? '<span class="hoy-marca">hoy</span>' : ''}</span>` +
+          `<span class="dia-peso">${peso(d.bytes)}</span></button></li>`).join('')
+      : '<li style="padding:8px 10px;color:rgba(255,255,255,.5)">Todavía no hay registros.</li>';
+    return dias;
+  }
+
+  async function abrirDia(dia, refresco) {
+    const texto = await api.leer(dia);
+    if (texto == null) {
+      if (!refresco) {
+        eventos = []; textoActual = '';
+        $('tituloDia').textContent = nombreDia(dia, true);
+        $('info').textContent = 'No se pudo leer este día.';
+        pintarFiltros(); pintarLista(false);
+      }
+      return;
+    }
+    if (refresco && texto === textoActual) return;
+    const cambioDeDia = dia !== diaActual;
+    diaActual = dia;
+    textoActual = texto;
+    const leido = interpretar(texto);
+    eventos = leido.eventos;
+
+    $('tituloDia').textContent = nombreDia(dia, true);
+    const partes = leido.pc.split(' · ');
+    $('info').textContent = [partes[0], partes[2]].filter(Boolean).join(' · ');
+    $('vivo').classList.toggle('si', dia === hoy);
+    document.querySelectorAll('#dias button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.dia === dia)));
+
+    pintarFiltros();
+    pintarLista(!cambioDeDia);
+    if (cambioDeDia) lista.scrollTop = 0;
+    pintarPestana();
+    if (vista === 'alertas' && ($('aRango').value === 'dia' ? true : dia === hoy)) calcularAlertas();
+  }
+
+  // --------------------------------------------------------------- eventos
+  $('dias').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-dia]');
+    if (b) abrirDia(b.dataset.dia, false);
+  });
+  $('resumen').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-rapido]');
+    if (!b) return;
+    rapido = rapido === b.dataset.rapido ? null : b.dataset.rapido;
+    pintarFiltros();
+    pintarLista(false);
+  });
+  let espera = null;
+  $('buscar').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => pintarLista(false), 120); });
+  ['fUsuario', 'fCategoria', 'fVentana'].forEach((id) => $(id).addEventListener('change', () => pintarLista(false)));
+  $('orden').addEventListener('click', () => {
+    recientesPrimero = !recientesPrimero;
+    $('orden').textContent = recientesPrimero ? 'Más recientes primero' : 'Más viejos primero';
+    pintarLista(false);
+    lista.scrollTop = 0;
+  });
+  $('limpiar').addEventListener('click', () => {
+    $('buscar').value = '';
+    ['fUsuario', 'fCategoria', 'fVentana'].forEach((id) => { $(id).value = ''; });
+    rapido = null;
+    pintarFiltros();
+    pintarLista(false);
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (vista === 'eventos' && ((ev.ctrlKey && ev.key.toLowerCase() === 'f') || (ev.key === '/' && document.activeElement !== $('buscar') && !/^(INPUT|SELECT)$/.test(document.activeElement.tagName)))) {
+      ev.preventDefault();
+      $('buscar').focus();
+      $('buscar').select();
+    } else if (ev.key === 'Escape' && document.activeElement === $('buscar')) {
+      $('buscar').value = '';
+      pintarLista(false);
+    } else if (ev.key === 'F5') {
+      ev.preventDefault();
+      textos.clear();
+      cargarDias().then(() => diaActual && abrirDia(diaActual, true)).then(() => { if (vista === 'alertas') calcularAlertas(); });
+    }
+  });
+
+  // ------------------------------------------------------------------ inicio
+  (async () => {
+    hoy = await api.hoy();
+    const dias = await cargarDias();
+    if (!dias.length) {
+      $('tituloDia').textContent = 'Sin registros';
+      lista.innerHTML = '<div class="vacio"><b>Todavía no hay nada anotado</b>El registro empieza a llenarse cuando se usa la caja.</div>';
+      return;
+    }
+    await abrirDia(dias[0].dia, false);
+  })();
+
+  // El día de hoy se actualiza solo mientras el visor está abierto.
+  setInterval(async () => {
+    const nuevoHoy = await api.hoy();
+    if (nuevoHoy !== hoy) { hoy = nuevoHoy; }
+    await cargarDias();
+    if (diaActual && diaActual === hoy) abrirDia(diaActual, true);
+  }, 4000);
+})();
+</script>
+</body>
+</html>

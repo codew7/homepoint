@@ -41,6 +41,7 @@ const CLAVE_COPIA = /^[a-z0-9-]{1,40}$/;
 
 let carpetas = null;
 let log = console;
+let anotar = () => {};
 let probarInternet = async () => true;
 
 // `habilitada` queda siempre en true: la página (modoOffline.js) lo sigue
@@ -129,6 +130,7 @@ function guardarPedido(entrada) {
   const nombre = String(orden).padStart(8, '0') + '_' + entrada.id + '.json';
   escribirSeguro(path.join(r.pendientes, nombre), JSON.stringify(registro));
   log.info(`Offline: pedido ${entrada.id} guardado en la bandeja (orden ${orden})`);
+  anotar(`Offline: pedido ${entrada.id} guardado en el disco (orden ${orden}), espera subirse`);
   return { orden };
 }
 
@@ -161,6 +163,7 @@ function marcarSubido(id) {
   escribirSeguro(path.join(r.subidos, nombre), JSON.stringify(registro));
   fs.unlinkSync(origen);
   log.info(`Offline: pedido ${id} confirmado en Firebase`);
+  anotar(`Offline: pedido ${id} subido a Firebase`);
   return { ok: true };
 }
 
@@ -175,6 +178,7 @@ function marcarError(id, mensaje) {
   registro.ultimoIntento = Date.now();
   escribirSeguro(archivo, JSON.stringify(registro));
   log.warn(`Offline: el pedido ${id} no se pudo subir (intento ${registro.intentos}): ${registro.ultimoError}`);
+  anotar(`Offline: el pedido ${id} no se pudo subir (intento ${registro.intentos}): ${registro.ultimoError}`);
   return { ok: true };
 }
 
@@ -211,6 +215,7 @@ function vigilarInternet() {
     if (nuevo !== estado.internet) {
       estado.internet = nuevo;
       log.info(`Offline: ${nuevo ? 'volvió internet' : 'sin internet'}`);
+      anotar(nuevo ? 'Volvió internet' : 'Se cortó internet');
       avisar();
     }
   };
@@ -239,6 +244,7 @@ function atender(canal, fn) {
 
 function iniciarOffline(opciones) {
   log = opciones.log || console;
+  anotar = opciones.anotar || anotar;
   probarInternet = opciones.hayInternet || probarInternet;
   rutas();
   vigilarInternet();
