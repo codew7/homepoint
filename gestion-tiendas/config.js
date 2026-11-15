@@ -10,6 +10,15 @@
 // Pages sin dominio propio: 'https://codew7.github.io/catalog/'.
 const SITIO_PUBLICO = 'https://catalog.dev.ar/';
 
+// Hoja de productos para Estadísticas (costo real = columna H). Es la misma
+// hoja del catálogo, con la llave de las herramientas de homepoint-admin
+// (la del catálogo sólo funciona desde catalog.dev.ar).
+const HOJA_COSTOS = {
+    API_KEY: 'AIzaSyDwiZWDc66tv4usDIA-IreiJMLFuk0236Q',
+    SPREADSHEET_ID: '1cD50d0-oSTogEe9tYo9ABUSP1ONCy3SAV92zsYYIG84',
+    RANGO: 'Lista!A2:K'
+};
+
 // Proyecto de Firebase compartido por todas las tiendas (el mismo que en el
 // config.js del catálogo público).
 const firebaseConfig = {

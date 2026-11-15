@@ -22,8 +22,9 @@ Los dos repositorios usan el **mismo proyecto de Firebase**. Lo único que escri
 | Archivo | Para qué sirve |
 |---|---|
 | `gestion-tiendas.html` / `gestion-tiendas.js` | Gestión de tiendas, usuarios y solicitudes. |
+| `estadisticas.js` | Sección Estadísticas: facturación de las tiendas y tu ganancia (ver "Estadísticas" más abajo). |
 | `index.html` | Redirige a `gestion-tiendas.html`. |
-| `config.js` | `SITIO_PUBLICO` (dirección del catálogo público) y `firebaseConfig`. |
+| `config.js` | `SITIO_PUBLICO` (dirección del catálogo público), `HOJA_COSTOS` (hoja de productos para Estadísticas, con la llave de homepoint-admin) y `firebaseConfig`. |
 | `database.rules.json` | Reglas de la Realtime Database. Hay que publicarlas en la consola de Firebase. |
 | `tienda-core.js`, `admin-auth.js`, `panel.css` | **Copias** de los mismos archivos del catálogo público. |
 
@@ -80,6 +81,20 @@ precio = costo × (1 + % de su escala) × (1 + ajuste global)
 Las tiendas con una opción distinta de la de por defecto muestran una etiqueta (`Valor Costo` o `Costo % +15%`) en la lista. Los catálogos ya abiertos toman el cambio al recargar. Se guarda en `tiendas/<id>/costo`; si no existe, se usa la columna E.
 
 La escala se elige según el costo, y "Hasta $X" incluye X. Las escalas por defecto son las de la hoja *Grupos* (Hasta $2.500 → 75% … más de $100.000 → 10%). Cada vendedor las edita desde **Panel → Precios**, que incluye un simulador y una tabla con productos reales.
+
+## Estadísticas
+
+Lee los pedidos **entregados** de todas las tiendas (últimos 90 días, por el día de entrega) y la hoja de productos. Para cada artículo:
+
+- **Facturación de la tienda:** lo que cobró al cliente (total del pedido, con descuento).
+- **Te compró:** el costo guardado en el pedido (lo que la tienda te paga, según su variable de costos).
+- **Tu costo real:** depende de la variable de costos de la tienda.
+  - *Valor Costo:* igual a lo que te pagó, así que no te deja ganancia.
+  - *Costo %:* lo que te pagó, sin el porcentaje.
+  - *Descuento Interior:* lo que te pagó × H / E, con la fila actual de la hoja. Se usa la proporción para que los aumentos de precios no distorsionen pedidos viejos. Si el artículo ya no está en la hoja, se estima con la proporción promedio y se avisa.
+- **Tu ganancia** = te compró − tu costo real. **Ganancia de la tienda** = facturación − te compró.
+
+Se usa la variable de costos **actual** de cada tienda. La hoja se lee con la llave de `HOJA_COSTOS`, que sólo funciona desde homepoint-admin.dev.ar. Incluye comparación con el período anterior, gráfico, tabla por tienda (ordenable y descargable en CSV), productos que más ganancia dejan, ganancia por variable de costos y avisos.
 
 ## Datos en la base
 

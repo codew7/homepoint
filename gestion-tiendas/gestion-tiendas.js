@@ -299,6 +299,15 @@
         renderTiendas();
         renderUsuarios();
         renderSolicitudes();
+        avisarEstadisticas();
+    }
+
+    // Estadísticas (estadisticas.js) se carga recién al abrir su sección: lee
+    // los pedidos de todas las tiendas y la hoja de productos.
+    function avisarEstadisticas(recargar) {
+        const sec = $('sec-estadisticas');
+        if (!yo || !datos.cargadas || !sec || !sec.classList.contains('activa') || !window.GestionEstadisticas) return;
+        window.GestionEstadisticas.activar({ db, tiendas: datos.tiendas, nombreTienda, recargar: !!recargar });
     }
 
     function stat(icono, etiqueta, valor, detalle) {
@@ -1238,6 +1247,7 @@
         document.querySelectorAll('.seccion').forEach(s => s.classList.toggle('activa', s.id === 'sec-' + seccion));
         document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('activo', b.dataset.ir === seccion));
         if (location.hash !== '#' + seccion) history.replaceState(null, '', '#' + seccion);
+        avisarEstadisticas();
     }
 
     document.addEventListener('click', (e) => {
@@ -1281,7 +1291,10 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarMenus(); });
     $('buscarTiendas').addEventListener('input', renderTiendas);
     $('buscarUsuarios').addEventListener('input', renderUsuarios);
-    $('btnRecargar').addEventListener('click', () => { if (yo) cargarTiendas().then(() => toast('Datos actualizados.')).catch(error); });
+    $('btnRecargar').addEventListener('click', () => {
+        if (!yo) return;
+        cargarTiendas().then(() => { avisarEstadisticas(true); toast('Datos actualizados.'); }).catch(error);
+    });
 
     function iconoTema() {
         const oscuro = document.documentElement.getAttribute('data-theme') === 'dark';
