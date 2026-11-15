@@ -65,9 +65,19 @@ Esa página trae el catálogo del sitio público y lo muestra con la dirección 
 ## Cómo se calcula el precio
 
 ```
-precio = costo (columna H) × (1 + % de su escala) × (1 + ajuste global)
+precio = costo × (1 + % de su escala) × (1 + ajuste global)
          → redondeado hacia arriba al múltiplo elegido
 ```
+
+**De dónde sale el costo** lo elegís vos para cada tienda en **Editar datos y responsables → Costo de los artículos** (el vendedor no lo puede cambiar):
+
+| Opción | Costo |
+|---|---|
+| **Descuento Interior** (por defecto) | columna E |
+| **Valor Costo** | columna H |
+| **Costo %** | columna H + el porcentaje que indiques (ej.: H $10.000 + 15% → $11.500) |
+
+Las tiendas con una opción distinta de la de por defecto muestran una etiqueta (`costo H` o `costo H +15%`) en la lista. Se guarda en `tiendas/<id>/costo`; si no existe, se usa la columna E.
 
 La escala se elige según el costo, y "Hasta $X" incluye X. Las escalas por defecto son las de la hoja *Grupos* (Hasta $2.500 → 75% … más de $100.000 → 10%). Cada vendedor las edita desde **Panel → Precios**, que incluye un simulador y una tabla con productos reales.
 
@@ -80,6 +90,7 @@ tiendas/<id>/
   admins/<uid>: true ← responsables de la tienda
   meta/              { nombre, url, notas, creada } ← sólo admin global (url = dominio propio, si tiene)
   estado/            { activa, mensaje }            ← público: pausada = el catálogo muestra "no disponible"
+  costo/             { modo: 'costo' | 'costoPct', pct? } ← público, sólo lo escribe el admin global. Sin nodo = columna E
   pedidos/<clave>/   { numero, fecha, status, entregado?, total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, entrega?, direccion?, notas?},
                        items[{nombre, cantidad, precio, costo?, codigo?}] }
                      ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.
@@ -92,7 +103,7 @@ admins/<uid>: true   ← admin global (vos)
 
 - Si un enlace apunta a una tienda que no existe, el catálogo muestra "Catálogo no encontrado".
 - **Imágenes**: el panel las comprime al subirlas (WEBP; logos de hasta ~320 KB y banners de hasta ~480 KB). Cada subida genera un id nuevo, así que el navegador del cliente las puede guardar en caché sin límite de tiempo. Al guardar se borran las que quedaron sin uso.
-- **Pedidos**: el panel de cada tienda tiene **Ventas → Pedidos** (en vivo; marcar entregado, volver a abierto, *cancelar y eliminar* en un solo paso) y **Ventas → Facturación** (facturado, costo y ganancia de los pedidos entregados, por período). El costo de cada artículo se copia de la columna H al momento de la compra. Los pedidos de **más de 90 días se borran solos**: lo hace el panel de la tienda al abrirse y también esta gestión al cargar (no hay Cloud Functions en el plan gratuito).
+- **Pedidos**: el panel de cada tienda tiene **Ventas → Pedidos** (en vivo; marcar entregado, volver a abierto, *cancelar y eliminar* en un solo paso) y **Ventas → Facturación** (facturado, costo y ganancia de los pedidos entregados, por período). El costo de cada artículo (columna E, H o H + %, según la tienda) se copia al momento de la compra. Los pedidos de **más de 90 días se borran solos**: lo hace el panel de la tienda al abrirse y también esta gestión al cargar (no hay Cloud Functions en el plan gratuito).
 - **Provincias y localidades**: el checkout usa `localidades-ar.json` del catálogo público (24 provincias y ~4.200 localidades, generado desde los datos de Georef de `Cotizadores/Disponibilidad/datos.json`).
 - **Caché del catálogo**: la última config de cada tienda queda guardada en el navegador del cliente. Así colores, logo y textos aparecen al instante y sin destello, y después se comparan con la base.
 

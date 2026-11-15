@@ -4,7 +4,7 @@
    Todo lo que tiene que dar EXACTAMENTE el mismo resultado en los dos lados
    vive acá: la configuración por defecto, la fusión con lo guardado en la
    Realtime Database, las gamas de colores, el cálculo del precio a partir del
-   costo (columna H) y el formato de montos y teléfonos. Si el panel y el
+   costo (columna E, o H según la tienda) y el formato de montos y teléfonos. Si el panel y el
    catálogo calcularan cada uno por su cuenta, el simulador de precios del
    panel podría mostrar una cifra distinta a la de la tarjeta.
 
@@ -304,7 +304,7 @@
 
     // ---------------------------------------------------------------------
     // 4 · PRECIOS
-    // Precio = costo (col. H) × (1 + % de su escala) × (1 + ajuste global),
+    // Precio = costo (col. E o H, ver 4b) × (1 + % de su escala) × (1 + ajuste global),
     // redondeado hacia arriba al múltiplo elegido. La escala se busca por el
     // costo: "Hasta $2.500" incluye los $2.500.
     // ---------------------------------------------------------------------
@@ -364,6 +364,39 @@
         if (!isFinite(costo) || costo <= 0) return null;
         const escala = escalaDe(costo, precios || DEFAULTS.precios);
         return { costo, escala, precio: calcularPrecio(costo, precios) };
+    }
+
+    // ---------------------------------------------------------------------
+    // 4b · DE QUÉ COLUMNA SALE EL COSTO
+    // Lo decide el admin global por tienda (tiendas/<id>/costo; el vendedor
+    // no lo puede cambiar):
+    //   · sin nodo / 'interior' → columna E (Descuento Interior), por defecto
+    //   · 'costo'               → columna H (Valor Costo)
+    //   · 'costoPct'            → columna H + un % (Costo %)
+    // Ese costo es la base de las escalas y el que queda en cada pedido.
+    // ---------------------------------------------------------------------
+    const COLUMNA_COSTO = { E: 4, H: 7 };   // índices base 0 en la fila de la hoja
+    const MODOS_COSTO = ['interior', 'costo', 'costoPct'];
+
+    function normalizarReglaCosto(r) {
+        const modo = r && MODOS_COSTO.includes(r.modo) ? r.modo : 'interior';
+        const pct = Number(r && r.pct);
+        return { modo, pct: modo === 'costoPct' && isFinite(pct) ? pct : 0 };
+    }
+
+    function costoDeFila(fila, regla) {
+        const r = normalizarReglaCosto(regla);
+        if (r.modo === 'interior') return parsearMonto(fila && fila[COLUMNA_COSTO.E]);
+        const h = parsearMonto(fila && fila[COLUMNA_COSTO.H]);
+        if (!isFinite(h)) return NaN;
+        return r.modo === 'costoPct' ? Math.round(h * (1 + r.pct / 100) * 100) / 100 : h;
+    }
+
+    function textoReglaCosto(regla) {
+        const r = normalizarReglaCosto(regla);
+        if (r.modo === 'costo') return 'Valor Costo (col. H)';
+        if (r.modo === 'costoPct') return `Valor Costo (col. H) ${r.pct >= 0 ? '+' : '−'}${Math.abs(r.pct)}%`;
+        return 'Descuento Interior (col. E)';
     }
 
     const _fmt = (global.Intl && Intl.NumberFormat) ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }) : null;
@@ -505,6 +538,13 @@
         return fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
     }
 
+    // Regla de costo de la tienda (ver 4b). Sin nodo o con error → null (columna E).
+    function pedirReglaCostoRemota() {
+        const url = urlNodo('costo');
+        if (!url || typeof fetch !== 'function') return Promise.resolve(null);
+        return fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    }
+
     const CLAVE_CACHE = () => 'tienda:' + tiendaId();
     const CLAVE_ASSET = (id) => 'tienda-asset:' + id;
 
@@ -632,6 +672,7 @@
         normalizarConfig, aArray, clonar,
         coloresDeTema, tokensDeTema, cssDeTema, aplicarTemaEnDocumento, modoInicial, urlTipografia, familiaTipografia,
         parsearMonto, escalasOrdenadas, escalaDe, calcularPrecio, detallePrecio, formatearNumero, formatearMonto,
+        COLUMNA_COSTO, MODOS_COSTO, normalizarReglaCosto, costoDeFila, textoReglaCosto, pedirReglaCostoRemota,
         normalizarWhatsApp, formatearTelefono, urlWhatsApp,
         tiendaId, idValido, urlTienda, urlPanelTienda, BASE_SITIO, IDS_RESERVADOS, baseDatosUrl, urlNodo, pedirConfigRemota, pedirEstadoRemoto, leerCache, guardarCache,
         assetsDeConfig, leerAssetCache, pedirAsset, limpiarAssetsHuerfanos,

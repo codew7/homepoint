@@ -11,6 +11,7 @@
          tiendas/<id>/admins/<uid>      true
          tiendas/<id>/meta              { nombre, url, notas, creada }
          tiendas/<id>/estado            { activa, mensaje }   ← lo lee el catálogo
+         tiendas/<id>/costo             { modo, pct }         ← columna del costo (sin nodo = E)
      · Sin Cloud Functions no se puede borrar una cuenta de Authentication ni
        cambiar la contraseña de otra persona: se "suspende" o se "quita"
        (pierde todo permiso) y se manda el email de restablecimiento.
@@ -197,11 +198,11 @@
         const nuevas = {};
         await Promise.all(ids.map(async id => {
             const base = 'tiendas/' + id + '/';
-            const [meta, estado, admins, identidad, apariencia, actualizado] = await Promise.all([
+            const [meta, estado, admins, identidad, apariencia, actualizado, costo] = await Promise.all([
                 leer(base + 'meta'), leer(base + 'estado'), leer(base + 'admins'),
-                leer(base + 'config/identidad'), leer(base + 'config/apariencia'), leer(base + 'config/actualizado')
+                leer(base + 'config/identidad'), leer(base + 'config/apariencia'), leer(base + 'config/actualizado'), leer(base + 'costo')
             ].map(p => p.catch(() => null)));
-            nuevas[id] = { id, meta: meta || {}, estado: estado || { activa: true }, admins: admins || {}, identidad: identidad || {}, apariencia: apariencia || null, actualizado: actualizado || 0 };
+            nuevas[id] = { id, meta: meta || {}, estado: estado || { activa: true }, admins: admins || {}, identidad: identidad || {}, apariencia: apariencia || null, actualizado: actualizado || 0, costo: T.normalizarReglaCosto(costo) };
         }));
         datos.tiendas = nuevas;
         datos.cargadas = true;
@@ -375,7 +376,7 @@
                 <div class="avatar" data-avatar-tienda="${esc(t.id)}">${esc(nombreTienda(t.id).charAt(0).toUpperCase())}</div>
                 <div class="fila-principal">
                     <strong>${esc(nombreTienda(t.id))} ${pausada ? '<span class="pill pausa">Pausada</span>' : '<span class="pill ok">Activa</span>'}</strong>
-                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}</span>
+                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.costo.modo !== 'interior' ? ` <span class="pill neutro" title="Columna del costo">${esc(t.costo.modo === 'costo' ? 'costo H' : 'costo H ' + (t.costo.pct >= 0 ? '+' : '−') + Math.abs(t.costo.pct) + '%')}</span>` : ''}</span>
                 </div>
                 <div class="fila-meta">
                     <div class="chips">${chips}</div>
@@ -675,20 +676,53 @@
                     <div class="campo ancho"><label for="etNotas">Notas internas</label><textarea id="etNotas" maxlength="500" rows="2" style="min-height:60px">${esc(t.meta.notas || '')}</textarea></div>
                 </div>
                 <hr class="separador">
+                <h3 class="modal-subtitulo" style="margin-bottom:6px">Costo de los artículos</h3>
+                <p class="ayuda" style="margin-top:0">De qué columna de la hoja sale el costo. Sobre ese costo se aplican las escalas de ganancia del vendedor, y es el que queda en sus pedidos y facturación. El vendedor no lo puede cambiar.</p>
+                <div class="opciones-radio">
+                    <label><input type="radio" name="etCosto" value="interior" ${t.costo.modo === 'interior' ? 'checked' : ''}>Descuento Interior (col. E) · por defecto</label>
+                    <label><input type="radio" name="etCosto" value="costo" ${t.costo.modo === 'costo' ? 'checked' : ''}>Valor Costo (col. H)</label>
+                    <label><input type="radio" name="etCosto" value="costoPct" ${t.costo.modo === 'costoPct' ? 'checked' : ''}>Costo % (col. H + un porcentaje)</label>
+                </div>
+                <div class="campos" id="etCostoPctCampo" style="margin-top:12px" ${t.costo.modo === 'costoPct' ? '' : 'hidden'}>
+                    <div class="campo"><label for="etCostoPct">Porcentaje sobre el Valor Costo</label><div class="con-sufijo"><input type="number" id="etCostoPct" min="-90" max="500" step="0.5" value="${esc(t.costo.modo === 'costoPct' ? t.costo.pct : '')}" placeholder="15"><span>%</span></div>
+                        <small id="etCostoEj"></small></div>
+                </div>
+                <hr class="separador">
                 <h3 class="modal-subtitulo" style="margin-bottom:10px">Responsables</h3>
                 ${checksUsuarios('etUsuarios', t.admins)}`,
             pie: `<button type="button" class="btn" data-cerrar>Cancelar</button>
                   <button type="submit" class="btn btn-primario" id="etGuardar"><i class="fas fa-check"></i>Guardar</button>`
         });
+        const modoCosto = () => m.q('input[name="etCosto"]:checked').value;
+        const pintarEjCosto = () => {
+            const pct = Number(m.q('#etCostoPct').value);
+            m.q('#etCostoEj').textContent = m.q('#etCostoPct').value !== '' && isFinite(pct)
+                ? `Ej.: un artículo con Valor Costo $10.000 queda con costo ${T.formatearMonto(T.costoDeFila({ 7: 10000 }, { modo: 'costoPct', pct }))}.`
+                : '';
+        };
+        m.el.querySelectorAll('input[name="etCosto"]').forEach(r => r.addEventListener('change', () => {
+            m.q('#etCostoPctCampo').hidden = modoCosto() !== 'costoPct';
+            if (modoCosto() === 'costoPct') m.q('#etCostoPct').focus();
+        }));
+        m.q('#etCostoPct').addEventListener('input', pintarEjCosto);
+        pintarEjCosto();
+
         m.form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const urlTxt = m.q('#etUrl').value.trim();
             const url = normalizarUrl(urlTxt);
             if (urlTxt && !url) { avisoModal(m, 'El dominio propio no es válido.'); return; }
+            const modo = modoCosto();
+            const pct = Number(m.q('#etCostoPct').value);
+            if (modo === 'costoPct' && (m.q('#etCostoPct').value === '' || !isFinite(pct) || pct < -90 || pct > 500)) {
+                avisoModal(m, 'Indicá el porcentaje sobre el Valor Costo (entre -90 y 500).'); m.q('#etCostoPct').focus(); return;
+            }
             const c = {
                 [`tiendas/${id}/meta/nombre`]: m.q('#etNombre').value.trim(),
                 [`tiendas/${id}/meta/url`]: url,
-                [`tiendas/${id}/meta/notas`]: m.q('#etNotas').value.trim()
+                [`tiendas/${id}/meta/notas`]: m.q('#etNotas').value.trim(),
+                // Sin nodo = columna E (lo mínimo en la base)
+                [`tiendas/${id}/costo`]: modo === 'interior' ? null : (modo === 'costoPct' ? { modo, pct } : { modo })
             };
             const elegidos = new Set(marcados(m, 'etUsuarios'));
             Object.keys(datos.usuarios).forEach(uid => {
