@@ -336,7 +336,8 @@
                 cargandoBtn($('mcGuardarClave'), false);
             });
         }
-        setTimeout(() => $('mcNombre').focus(), 60);
+        // En el celular no: abriría el teclado tapando media ventana
+        if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) setTimeout(() => $('mcNombre').focus(), 60);
     }
 
     // ---- Flujo principal ----
