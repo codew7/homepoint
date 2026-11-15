@@ -10,8 +10,12 @@
          usuarios/<uid>                 { email, nombre, activo, debeCambiarClave, creado, tiendas{} }
          tiendas/<id>/admins/<uid>      true
          tiendas/<id>/meta              { nombre, url, notas, creada }
-         tiendas/<id>/estado            { activa, mensaje }   ← lo lee el catálogo
-         tiendas/<id>/costo             { modo, pct }         ← columna del costo (sin nodo = E)
+         tiendas/<id>/estado            { activa, mensaje, desde, pausadaPor }   ← lo lee el catálogo;
+                                        pausadaPor 'tienda' = la pausó su responsable (Tienda → Estado)
+         tiendas/<id>/baja              { fecha, uid, email, borrarUsuario, motivo? } ← el responsable pide eliminarla
+         registros/<uid>                { tiendaNombre, tienda, url?, nombre, email, comentario?, fecha }
+                                        ← tienda pedida desde registro.html; al aprobarla se crea todo lo de arriba
+         tiendas/<id>/costo             { modo, pct }         ← variable de costos (sin nodo = Descuento Interior)
      · Sin Cloud Functions no se puede borrar una cuenta de Authentication ni
        cambiar la contraseña de otra persona. "Quitar del sistema" le saca
        todo permiso y deja bajas/<uid>: la cuenta se borra sola cuando esa
@@ -29,7 +33,7 @@
 
     let db = null;
     let yo = null;
-    const datos = { tiendas: {}, usuarios: {}, solicitudes: {}, bajas: {}, cargadas: false };
+    const datos = { tiendas: {}, usuarios: {}, solicitudes: {}, bajas: {}, registros: {}, cargadas: false };
     const logos = {};
 
     // ======================================================================
@@ -200,11 +204,11 @@
         const nuevas = {};
         await Promise.all(ids.map(async id => {
             const base = 'tiendas/' + id + '/';
-            const [meta, estado, admins, identidad, apariencia, actualizado, costo] = await Promise.all([
+            const [meta, estado, admins, identidad, apariencia, actualizado, costo, baja] = await Promise.all([
                 leer(base + 'meta'), leer(base + 'estado'), leer(base + 'admins'),
-                leer(base + 'config/identidad'), leer(base + 'config/apariencia'), leer(base + 'config/actualizado'), leer(base + 'costo')
+                leer(base + 'config/identidad'), leer(base + 'config/apariencia'), leer(base + 'config/actualizado'), leer(base + 'costo'), leer(base + 'baja')
             ].map(p => p.catch(() => null)));
-            nuevas[id] = { id, meta: meta || {}, estado: estado || { activa: true }, admins: admins || {}, identidad: identidad || {}, apariencia: apariencia || null, actualizado: actualizado || 0, costo: T.normalizarReglaCosto(costo) };
+            nuevas[id] = { id, meta: meta || {}, estado: estado || { activa: true }, admins: admins || {}, identidad: identidad || {}, apariencia: apariencia || null, actualizado: actualizado || 0, costo: T.normalizarReglaCosto(costo), baja: baja || null };
         }));
         datos.tiendas = nuevas;
         datos.cargadas = true;
@@ -245,6 +249,7 @@
         db.ref('usuarios').on('value', s => { datos.usuarios = s.val() || {}; renderTodo(); }, error);
         db.ref('solicitudes').on('value', s => { datos.solicitudes = s.val() || {}; renderTodo(); }, error);
         db.ref('bajas').on('value', s => { datos.bajas = s.val() || {}; renderTodo(); }, error);
+        db.ref('registros').on('value', s => { datos.registros = s.val() || {}; renderTodo(); }, error);
     }
 
     async function actualizar(cambios, msg) {
@@ -307,12 +312,12 @@
         const pausadas = ts.filter(t => t.estado.activa === false).length;
         const suspendidos = us.filter(u => u.activo === false).length;
         const pendientes = us.filter(u => u.debeCambiarClave === true && u.activo !== false).length;
-        const nSol = Object.keys(datos.solicitudes).length;
+        const nSol = Object.keys(datos.solicitudes).length + ts.filter(t => t.baja).length + Object.keys(datos.registros).length;
         const ultima = ts.filter(t => t.actualizado).sort((a, b) => b.actualizado - a.actualizado)[0];
         $('stats').innerHTML =
             stat('fa-store', 'Tiendas', datos.cargadas ? ts.length : '–', `${ts.length - pausadas} activas · ${pausadas} pausadas`) +
             stat('fa-users', 'Usuarios', us.length, `${us.length - suspendidos} activos · ${suspendidos} suspendidos` + (pendientes ? ` · ${pendientes} sin estrenar` : '')) +
-            stat('fa-inbox', 'Solicitudes', nSol, nSol ? 'esperando tu aprobación' : 'nada pendiente') +
+            stat('fa-inbox', 'Solicitudes', nSol, nSol ? 'esperando tu respuesta' : 'nada pendiente') +
             stat('fa-cloud-arrow-up', 'Última publicación', ultima ? esc(hace(ultima.actualizado)) : '–', ultima ? esc(nombreTienda(ultima.id)) : 'ninguna tienda publicó todavía');
         $('primerosPasos').hidden = !datos.cargadas || ts.length > 0;
         const nav = $('navSolicitudes');
@@ -382,8 +387,8 @@
             <div class="fila-item${pausada ? ' apagada' : ''}">
                 <div class="avatar" data-avatar-tienda="${esc(t.id)}">${esc(nombreTienda(t.id).charAt(0).toUpperCase())}</div>
                 <div class="fila-principal">
-                    <strong>${esc(nombreTienda(t.id))} ${pausada ? '<span class="pill pausa">Pausada</span>' : '<span class="pill ok">Activa</span>'}</strong>
-                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.costo.modo !== 'interior' ? ` <span class="pill neutro" title="Columna del costo">${esc(t.costo.modo === 'costo' ? 'costo H' : 'costo H ' + (t.costo.pct >= 0 ? '+' : '−') + Math.abs(t.costo.pct) + '%')}</span>` : ''}</span>
+                    <strong>${esc(nombreTienda(t.id))} ${pausada ? `<span class="pill pausa">${t.estado.pausadaPor === 'tienda' ? 'Pausada por la tienda' : 'Pausada'}</span>` : '<span class="pill ok">Activa</span>'}${t.baja ? ' <span class="pill mal" title="Su responsable pidió eliminarla">Pidió la baja</span>' : ''}</strong>
+                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.costo.modo !== 'interior' ? ` <span class="pill neutro" title="Variable de costos">${esc(T.textoReglaCosto(t.costo))}</span>` : ''}</span>
                 </div>
                 <div class="fila-meta">
                     <div class="chips">${chips}</div>
@@ -452,7 +457,68 @@
             ${bajas.map(b => `<span class="pastilla" title="Quitada ${esc(hace(b.fecha))}">${esc(b.email || 'sin email')}</span>`).join(' ')}</p>`;
     }
 
+    function renderBajasTiendas() {
+        const lista = Object.values(datos.tiendas).filter(t => t.baja).sort((a, b) => (b.baja.fecha || 0) - (a.baja.fecha || 0));
+        if (!lista.length) {
+            $('listaBajasTiendas').innerHTML = '<div class="vacio"><i class="fas fa-store"></i><p>Ninguna tienda pidió ser eliminada.</p></div>';
+            return;
+        }
+        $('listaBajasTiendas').innerHTML = lista.map(t => {
+            const b = t.baja;
+            const u = datos.usuarios[b.uid];
+            return `
+            <div class="fila-item">
+                <div class="avatar" data-avatar-tienda="${esc(t.id)}">${esc(nombreTienda(t.id).charAt(0).toUpperCase())}</div>
+                <div class="fila-principal">
+                    <strong>${esc(nombreTienda(t.id))} ${b.borrarUsuario ? '<span class="pill mal">También su usuario</span>' : ''}</strong>
+                    <span class="sub">Pedido por ${esc(u ? nombreUsuario(u) : (b.email || 'su responsable'))}${b.motivo ? ' · «' + esc(b.motivo) + '»' : ''}</span>
+                </div>
+                <div class="fila-meta">
+                    <span class="chip-tienda">${esc(t.id)}</span>
+                    <span>${esc(hace(b.fecha))}</span>
+                </div>
+                <div class="fila-acciones">
+                    <button type="button" class="btn btn-chico btn-peligro" data-accion="eliminar-tienda" data-id="${esc(t.id)}"><i class="fas fa-trash"></i>Eliminar</button>
+                    <button type="button" class="btn btn-chico" data-accion="rechazar-baja" data-id="${esc(t.id)}"><i class="fas fa-xmark"></i>Rechazar</button>
+                </div>
+            </div>`;
+        }).join('');
+        lista.forEach(t => { const av = $('listaBajasTiendas').querySelector(`[data-avatar-tienda="${t.id}"]`); if (av) pintarAvatarTienda(av, t); });
+    }
+
+    function renderRegistros() {
+        $('enlaceRegistro').href = T.BASE_SITIO + 'registro';
+        const uids = Object.keys(datos.registros).sort((a, b) => (datos.registros[b].fecha || 0) - (datos.registros[a].fecha || 0));
+        if (!uids.length) {
+            $('listaRegistros').innerHTML = '<div class="vacio"><i class="fas fa-store"></i><p>No hay tiendas nuevas para revisar. Compartí el formulario de registro para recibirlas acá.</p></div>';
+            return;
+        }
+        $('listaRegistros').innerHTML = uids.map(uid => {
+            const r = datos.registros[uid];
+            const ocupada = !!datos.tiendas[r.tienda];
+            const existente = datos.usuarios[uid];
+            return `
+            <div class="fila-item">
+                <div class="avatar">${esc(String(r.tiendaNombre || r.tienda || '?').charAt(0).toUpperCase())}</div>
+                <div class="fila-principal">
+                    <strong>${esc(r.tiendaNombre)} ${ocupada ? '<span class="pill mal" title="Al aprobar, elegí otra dirección">ID en uso</span>' : ''}${existente ? ' <span class="pill neutro">Ya es usuario</span>' : ''}</strong>
+                    <span class="sub"><span class="chip-tienda">${esc(r.tienda)}</span> ${esc(r.nombre)} · ${esc(r.email)}${r.comentario ? ' · «' + esc(r.comentario) + '»' : ''}</span>
+                </div>
+                <div class="fila-meta">
+                    ${r.url ? `<span>${esc(sinProtocolo(r.url))}</span>` : ''}
+                    <span>${esc(hace(r.fecha))}</span>
+                </div>
+                <div class="fila-acciones">
+                    <button type="button" class="btn btn-chico btn-primario" data-accion="aprobar-registro" data-id="${esc(uid)}"><i class="fas fa-check"></i>Revisar</button>
+                    <button type="button" class="btn btn-chico btn-peligro" data-accion="rechazar-registro" data-id="${esc(uid)}"><i class="fas fa-xmark"></i>Rechazar</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     function renderSolicitudes() {
+        renderRegistros();
+        renderBajasTiendas();
         const uids = Object.keys(datos.solicitudes).sort((a, b) => (datos.solicitudes[b].fecha || 0) - (datos.solicitudes[a].fecha || 0));
         if (!uids.length) {
             $('listaSolicitudes').innerHTML = '<div class="vacio"><i class="fas fa-inbox"></i><p>No hay solicitudes pendientes.</p></div>';
@@ -497,6 +563,7 @@
             html = `
                 <a href="${esc(urlCatalogo(t))}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Ver catálogo</a>
                 <button type="button" data-accion="editar-tienda" data-id="${esc(id)}"><i class="fas fa-pen"></i>Editar datos y responsables</button>
+                <button type="button" data-accion="variable-costos" data-id="${esc(id)}"><i class="fas fa-percent"></i>Variable de costos</button>
                 <button type="button" data-accion="copiar-catalogo" data-id="${esc(id)}"><i class="fas fa-link"></i>Copiar enlace del catálogo</button>
                 <button type="button" data-accion="copiar-panel" data-id="${esc(id)}"><i class="fas fa-sliders"></i>Copiar enlace del panel</button>
                 <button type="button" data-accion="pagina-dominio" data-id="${esc(id)}"><i class="fas fa-globe"></i>Página para dominio propio</button>
@@ -680,6 +747,162 @@
         m.q('#credCopiar').addEventListener('click', () => copiar(texto));
     }
 
+    // Variable de costos: de dónde sale el costo de los artículos de la tienda
+    // (tiendas/<id>/costo; sin nodo = Descuento Interior). El vendedor no lo ve
+    // ni lo puede cambiar.
+    function modalVariableCostos(id) {
+        const t = datos.tiendas[id];
+        const opcion = (modo, titulo, detalle) => `
+            <label class="check" style="align-items:flex-start;padding:10px 12px;border:1px solid var(--borde);border-radius:var(--radio-md)">
+                <input type="radio" name="vcModo" value="${modo}" ${t.costo.modo === modo ? 'checked' : ''} style="margin-top:2px">
+                <span><strong>${titulo}</strong>${detalle ? `<br><small class="ayuda" style="margin:0">${detalle}</small>` : ''}</span>
+            </label>`;
+        const m = abrirModal({
+            titulo: 'Variable de costos', icono: 'fa-percent',
+            cuerpo: `
+                <p class="ayuda" style="margin-top:0">Costo de los artículos de <strong>${esc(nombreTienda(id))}</strong>. Sobre ese costo se aplican las escalas de ganancia del vendedor, y es el que queda en sus pedidos y facturación.</p>
+                <div style="display:grid;gap:8px">
+                    ${opcion('interior', 'Descuento Interior', 'Opción por defecto.')}
+                    ${opcion('costo', 'Valor Costo', '')}
+                    ${opcion('costoPct', 'Costo %', 'Valor Costo más un porcentaje.')}
+                </div>
+                <div class="campo" id="vcPctCampo" style="margin-top:12px" ${t.costo.modo === 'costoPct' ? '' : 'hidden'}>
+                    <label for="vcPct">Porcentaje sobre el Valor Costo</label>
+                    <div class="con-sufijo"><input type="number" id="vcPct" min="-90" max="500" step="0.5" value="${esc(t.costo.modo === 'costoPct' ? t.costo.pct : '')}" placeholder="15"><span>%</span></div>
+                    <small id="vcEj"></small>
+                </div>
+                <p class="ayuda">Los catálogos que ya estén abiertos toman el cambio al recargar la página.</p>`,
+            pie: `<button type="button" class="btn" data-cerrar>Cancelar</button>
+                  <button type="submit" class="btn btn-primario" id="vcGuardar"><i class="fas fa-check"></i>Guardar</button>`
+        });
+        const modo = () => m.q('input[name="vcModo"]:checked').value;
+        const pintarEj = () => {
+            const txt = m.q('#vcPct').value, pct = Number(txt);
+            m.q('#vcEj').textContent = txt !== '' && isFinite(pct)
+                ? `Ej.: un artículo con Valor Costo de $10.000 queda con costo ${T.formatearMonto(T.costoDeFila({ [T.COLUMNA_COSTO.H]: 10000 }, { modo: 'costoPct', pct }))}.`
+                : '';
+        };
+        m.el.querySelectorAll('input[name="vcModo"]').forEach(r => r.addEventListener('change', () => {
+            m.q('#vcPctCampo').hidden = modo() !== 'costoPct';
+            if (modo() === 'costoPct') m.q('#vcPct').focus();
+        }));
+        m.q('#vcPct').addEventListener('input', pintarEj);
+        pintarEj();
+
+        m.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const md = modo();
+            const txt = m.q('#vcPct').value, pct = Number(txt);
+            if (md === 'costoPct' && (txt === '' || !isFinite(pct) || pct < -90 || pct > 500)) {
+                avisoModal(m, 'Indicá el porcentaje sobre el Valor Costo (entre -90 y 500).'); m.q('#vcPct').focus(); return;
+            }
+            // Descuento Interior = sin nodo (lo mínimo en la base)
+            const valor = md === 'interior' ? null : (md === 'costoPct' ? { modo: md, pct } : { modo: md });
+            cargando(m.q('#vcGuardar'), true);
+            try { await actualizar({ [`tiendas/${id}/costo`]: valor }, 'Variable de costos actualizada.'); m.cerrar(); }
+            catch (err) { cargando(m.q('#vcGuardar'), false); avisoModal(m, esc(window.TiendaAuth.mensajeDe(err))); }
+        });
+    }
+
+    // Aprobar una tienda pedida desde registro.html: se crea igual que con
+    // "Nueva tienda", con la cuenta que la persona ya creó (su contraseña).
+    function modalAprobarRegistro(uid) {
+        const r = datos.registros[uid];
+        if (!r) return;
+        const previo = datos.usuarios[uid];
+        const m = abrirModal({
+            titulo: 'Aprobar tienda nueva', icono: 'fa-store', ancha: true,
+            cuerpo: `
+                <p class="ayuda" style="margin-top:0">Pedida por <strong>${esc(r.nombre)}</strong> (${esc(r.email)}) ${esc(hace(r.fecha))}. Podés corregir los datos antes de aprobar.${previo ? ' Ya es usuario: la tienda se suma a las que administra.' : ''}</p>
+                ${r.comentario ? `<div class="login-aviso"><i class="fas fa-comment"></i><span>${esc(r.comentario)}</span></div>` : ''}
+                <div class="campos">
+                    <div class="campo"><label for="arNombre">Nombre comercial</label><input type="text" id="arNombre" maxlength="60" value="${esc(r.tiendaNombre)}"></div>
+                    <div class="campo"><label for="arId">ID de la tienda</label><input type="text" id="arId" maxlength="31" spellcheck="false" value="${esc(r.tienda)}">
+                        <small id="arEnlace"></small></div>
+                    <div class="campo ancho"><label for="arUrl">Dominio propio (opcional)</label><input type="url" id="arUrl" value="${esc(r.url || '')}" placeholder="https://bazarlucia.com.ar/"></div>
+                    <div class="campo ancho"><label for="arNotas">Notas internas <span style="text-transform:none;font-weight:500">(sólo las ves vos)</span></label><textarea id="arNotas" maxlength="500" rows="2" style="min-height:60px">${esc(r.comentario || '')}</textarea></div>
+                </div>`,
+            pie: `<button type="button" class="btn" data-cerrar>Cancelar</button>
+                  <button type="submit" class="btn btn-primario" id="arOk"><i class="fas fa-check"></i>Aprobar y crear tienda</button>`
+        });
+        const pintar = () => {
+            const id = m.q('#arId').value;
+            m.q('#arEnlace').innerHTML = datos.tiendas[id] ? '<span style="color:var(--rojo)">Ya existe una tienda con ese ID.</span>' : esc(sinProtocolo(T.urlTienda(id || '…')));
+        };
+        m.q('#arId').addEventListener('input', () => { m.q('#arId').value = m.q('#arId').value.toLowerCase().replace(/[^a-z0-9-]/g, ''); pintar(); });
+        pintar();
+
+        m.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nombre = m.q('#arNombre').value.trim();
+            const id = m.q('#arId').value.trim();
+            const urlTxt = m.q('#arUrl').value.trim();
+            const url = normalizarUrl(urlTxt);
+            if (!nombre) { avisoModal(m, 'Escribí el nombre comercial.'); return; }
+            if (T.IDS_RESERVADOS.includes(id)) { avisoModal(m, `<code>${esc(id)}</code> es una palabra reservada: elegí otro ID.`); return; }
+            if (!T.idValido(id)) { avisoModal(m, 'El ID tiene que tener entre 2 y 31 caracteres: minúsculas, números y guiones.'); return; }
+            if (datos.tiendas[id]) { avisoModal(m, `Ya existe una tienda con el ID <code>${esc(id)}</code>: elegí otro.`); return; }
+            if (urlTxt && !url) { avisoModal(m, 'El dominio propio no es válido.'); return; }
+            const c = {
+                [`tiendas/${id}/meta`]: { nombre, url, notas: m.q('#arNotas').value.trim(), creada: TS(), creadaPor: yo.uid },
+                [`tiendas/${id}/estado`]: { activa: true },
+                [`tiendas/${id}/config`]: configInicial(nombre),
+                [`tiendas/${id}/admins/${uid}`]: true,
+                [`registros/${uid}`]: null,
+                [`solicitudes/${uid}`]: null,
+                [`bajas/${uid}`]: null
+            };
+            if (previo) {
+                c[`usuarios/${uid}/tiendas/${id}`] = true;
+                c[`usuarios/${uid}/activo`] = true;
+            } else {
+                c[`usuarios/${uid}`] = { email: r.email, nombre: r.nombre, activo: true, debeCambiarClave: false, creado: TS(), tiendas: { [id]: true } };
+            }
+            cargando(m.q('#arOk'), true, 'Creando…');
+            try {
+                await actualizar(c);
+                m.cerrar();
+                mostrarBienvenida(r, id);
+            } catch (err) { cargando(m.q('#arOk'), false); avisoModal(m, esc(window.TiendaAuth.mensajeDe(err))); }
+        });
+    }
+
+    // Mensaje para avisarle que ya puede entrar (no hay envío automático de emails)
+    function mostrarBienvenida(r, id) {
+        const t = datos.tiendas[id] || { id, meta: {} };
+        const texto = [
+            `¡Hola ${String(r.nombre || '').split(' ')[0]}! Tu tienda ${nombreTienda(id)} ya está habilitada.`,
+            '',
+            `Tu catálogo: ${urlCatalogo(t)}`,
+            `Panel: ${urlPanel(t)}`,
+            `Usuario: ${r.email}`,
+            'Contraseña: la que elegiste al registrarte.',
+            '',
+            'Entrá al panel para cargar tu logo, tus colores, tus contactos y tus precios.'
+        ].join('\n');
+        const m = abrirModal({
+            titulo: 'Tienda aprobada', icono: 'fa-circle-check', ancha: true,
+            cuerpo: `<p><strong>${esc(nombreTienda(id))}</strong> ya está creada. Avisale a ${esc(r.nombre)} que puede entrar:</p>
+                <pre class="credenciales">${esc(texto)}</pre>
+                <hr class="separador"><h3 class="modal-subtitulo">Enlaces de la tienda</h3>${enlacesTienda(id)}`,
+            pie: `<a class="btn" href="mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Tu tienda ya está habilitada')}&body=${encodeURIComponent(texto)}"><i class="fas fa-envelope"></i>Email</a>
+                  <a class="btn" href="https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp</a>
+                  <button type="button" class="btn btn-primario" id="bvCopiar"><i class="fas fa-copy"></i>Copiar</button>`
+        });
+        m.q('#bvCopiar').addEventListener('click', () => copiar(texto));
+    }
+
+    // Rechazar: se borra la solicitud. Si la cuenta se creó sólo para esto,
+    // queda marcada en bajas/<uid> y se borra sola cuando vuelva a entrar.
+    async function rechazarRegistro(uid) {
+        const r = datos.registros[uid];
+        if (!r) return;
+        if (!confirm(`¿Rechazar la tienda "${r.tiendaNombre}" de ${r.nombre}?`)) return;
+        const c = { [`registros/${uid}`]: null };
+        if (!datos.usuarios[uid]) c[`bajas/${uid}`] = { email: String(r.email || '').slice(0, 200), fecha: TS() };
+        try { await actualizar(c, 'Solicitud rechazada.'); } catch (err) { error(err); }
+    }
+
     function modalEditarTienda(id) {
         const t = datos.tiendas[id];
         const m = abrirModal({
@@ -692,53 +915,20 @@
                     <div class="campo ancho"><label for="etNotas">Notas internas</label><textarea id="etNotas" maxlength="500" rows="2" style="min-height:60px">${esc(t.meta.notas || '')}</textarea></div>
                 </div>
                 <hr class="separador">
-                <h3 class="modal-subtitulo" style="margin-bottom:6px">Costo de los artículos</h3>
-                <p class="ayuda" style="margin-top:0">De qué columna de la hoja sale el costo. Sobre ese costo se aplican las escalas de ganancia del vendedor, y es el que queda en sus pedidos y facturación. El vendedor no lo puede cambiar.</p>
-                <div class="opciones-radio">
-                    <label><input type="radio" name="etCosto" value="interior" ${t.costo.modo === 'interior' ? 'checked' : ''}>Descuento Interior (col. E) · por defecto</label>
-                    <label><input type="radio" name="etCosto" value="costo" ${t.costo.modo === 'costo' ? 'checked' : ''}>Valor Costo (col. H)</label>
-                    <label><input type="radio" name="etCosto" value="costoPct" ${t.costo.modo === 'costoPct' ? 'checked' : ''}>Costo % (col. H + un porcentaje)</label>
-                </div>
-                <div class="campos" id="etCostoPctCampo" style="margin-top:12px" ${t.costo.modo === 'costoPct' ? '' : 'hidden'}>
-                    <div class="campo"><label for="etCostoPct">Porcentaje sobre el Valor Costo</label><div class="con-sufijo"><input type="number" id="etCostoPct" min="-90" max="500" step="0.5" value="${esc(t.costo.modo === 'costoPct' ? t.costo.pct : '')}" placeholder="15"><span>%</span></div>
-                        <small id="etCostoEj"></small></div>
-                </div>
-                <hr class="separador">
                 <h3 class="modal-subtitulo" style="margin-bottom:10px">Responsables</h3>
                 ${checksUsuarios('etUsuarios', t.admins)}`,
             pie: `<button type="button" class="btn" data-cerrar>Cancelar</button>
                   <button type="submit" class="btn btn-primario" id="etGuardar"><i class="fas fa-check"></i>Guardar</button>`
         });
-        const modoCosto = () => m.q('input[name="etCosto"]:checked').value;
-        const pintarEjCosto = () => {
-            const pct = Number(m.q('#etCostoPct').value);
-            m.q('#etCostoEj').textContent = m.q('#etCostoPct').value !== '' && isFinite(pct)
-                ? `Ej.: un artículo con Valor Costo $10.000 queda con costo ${T.formatearMonto(T.costoDeFila({ 7: 10000 }, { modo: 'costoPct', pct }))}.`
-                : '';
-        };
-        m.el.querySelectorAll('input[name="etCosto"]').forEach(r => r.addEventListener('change', () => {
-            m.q('#etCostoPctCampo').hidden = modoCosto() !== 'costoPct';
-            if (modoCosto() === 'costoPct') m.q('#etCostoPct').focus();
-        }));
-        m.q('#etCostoPct').addEventListener('input', pintarEjCosto);
-        pintarEjCosto();
-
         m.form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const urlTxt = m.q('#etUrl').value.trim();
             const url = normalizarUrl(urlTxt);
             if (urlTxt && !url) { avisoModal(m, 'El dominio propio no es válido.'); return; }
-            const modo = modoCosto();
-            const pct = Number(m.q('#etCostoPct').value);
-            if (modo === 'costoPct' && (m.q('#etCostoPct').value === '' || !isFinite(pct) || pct < -90 || pct > 500)) {
-                avisoModal(m, 'Indicá el porcentaje sobre el Valor Costo (entre -90 y 500).'); m.q('#etCostoPct').focus(); return;
-            }
             const c = {
                 [`tiendas/${id}/meta/nombre`]: m.q('#etNombre').value.trim(),
                 [`tiendas/${id}/meta/url`]: url,
-                [`tiendas/${id}/meta/notas`]: m.q('#etNotas').value.trim(),
-                // Sin nodo = columna E (lo mínimo en la base)
-                [`tiendas/${id}/costo`]: modo === 'interior' ? null : (modo === 'costoPct' ? { modo, pct } : { modo })
+                [`tiendas/${id}/meta/notas`]: m.q('#etNotas').value.trim()
             };
             const elegidos = new Set(marcados(m, 'etUsuarios'));
             Object.keys(datos.usuarios).forEach(uid => {
@@ -765,7 +955,7 @@
             e.preventDefault();
             cargando(m.q('#paOk'), true);
             try {
-                await actualizar({ [`tiendas/${id}/estado`]: { activa: false, mensaje: m.q('#paMensaje').value.trim(), desde: TS() } }, 'Tienda pausada.');
+                await actualizar({ [`tiendas/${id}/estado`]: { activa: false, mensaje: m.q('#paMensaje').value.trim(), desde: TS(), pausadaPor: 'admin' } }, 'Tienda pausada.');
                 m.cerrar();
             } catch (err) { cargando(m.q('#paOk'), false); avisoModal(m, esc(window.TiendaAuth.mensajeDe(err))); }
         });
@@ -775,8 +965,13 @@
         const t = datos.tiendas[id];
         const m = abrirModal({
             titulo: 'Eliminar tienda', icono: 'fa-trash',
-            cuerpo: `<p>Se borra <strong>toda</strong> la configuración de <strong>${esc(nombreTienda(id))}</strong>: textos, logos, banners, escalas y responsables. No se puede deshacer.</p>
-                <p class="ayuda">Si sólo querés que deje de verse, usá <strong>Pausar</strong>.</p>
+            cuerpo: `<p>Se borra <strong>toda</strong> la configuración de <strong>${esc(nombreTienda(id))}</strong>: textos, logos, banners, escalas, pedidos y responsables. No se puede deshacer.</p>
+                ${t.baja ? `<p class="ayuda">Su responsable pidió la eliminación ${esc(hace(t.baja.fecha))}${t.baja.motivo ? ': «' + esc(t.baja.motivo) + '»' : ''}.</p>` : '<p class="ayuda">Si sólo querés que deje de verse, usá <strong>Pausar</strong>.</p>'}
+                ${t.baja && t.baja.borrarUsuario ? (() => {
+                    const u = datos.usuarios[t.baja.uid];
+                    const otras = u ? Object.keys(u.tiendas || {}).filter(x => x !== id) : [];
+                    return `<label class="check" style="margin:0 0 12px"><input type="checkbox" id="elUsuario" checked><span>También quitar del sistema a <strong>${esc(u ? nombreUsuario(u) : (t.baja.email || 'su usuario'))}</strong>, como pidió (sus datos se borran y su cuenta se elimina cuando vuelva a entrar)${otras.length ? `. <strong>Ojo:</strong> también administra ${otras.map(x => esc(nombreTienda(x))).join(', ')} y pierde ese acceso` : ''}.</span></label>`;
+                })() : ''}
                 <div class="campo"><label for="elId">Escribí <code>${esc(id)}</code> para confirmar</label><input type="text" id="elId" autocomplete="off" spellcheck="false"></div>`,
             pie: `<button type="button" class="btn" data-cerrar>Cancelar</button>
                   <button type="submit" class="btn btn-primario" id="elOk" style="background:var(--rojo);border-color:var(--rojo)"><i class="fas fa-trash"></i>Eliminar</button>`
@@ -784,8 +979,12 @@
         m.form.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (m.q('#elId').value.trim() !== id) { avisoModal(m, 'El ID no coincide.'); return; }
-            const c = { [`tiendas/${id}`]: null };
-            Object.keys(t.admins).forEach(uid => { if (datos.usuarios[uid]) c[`usuarios/${uid}/tiendas/${id}`] = null; });
+            let c = {};
+            if (t.baja && t.baja.borrarUsuario && m.q('#elUsuario') && m.q('#elUsuario').checked) c = cambiosQuitarUsuario(t.baja.uid, t.baja.email);
+            Object.keys(t.admins).forEach(uid => { if (datos.usuarios[uid] && c[`usuarios/${uid}`] !== null) c[`usuarios/${uid}/tiendas/${id}`] = null; });
+            // La tienda entera (incluye admins, baja y pedidos); sus rutas internas no se repiten
+            Object.keys(c).forEach(k => { if (k.indexOf(`tiendas/${id}/`) === 0) delete c[k]; });
+            c[`tiendas/${id}`] = null;
             cargando(m.q('#elOk'), true, 'Eliminando…');
             try { await actualizar(c, 'Tienda eliminada.'); m.cerrar(); }
             catch (err) { cargando(m.q('#elOk'), false); avisoModal(m, esc(window.TiendaAuth.mensajeDe(err))); }
@@ -958,6 +1157,16 @@
         } catch (e) { error(e); }
     }
 
+    // Quitar del sistema: sin permisos en ninguna tienda y marca en bajas/<uid>
+    // (la cuenta se borra de Authentication cuando vuelve a entrar).
+    function cambiosQuitarUsuario(uid, emailRespaldo) {
+        const u = datos.usuarios[uid] || {};
+        const c = { [`usuarios/${uid}`]: null, [`bajas/${uid}`]: { email: String(u.email || emailRespaldo || '').slice(0, 200), fecha: TS() } };
+        Object.keys(u.tiendas || {}).forEach(t => { if (datos.tiendas[t]) c[`tiendas/${t}/admins/${uid}`] = null; });
+        Object.values(datos.tiendas).forEach(t => { if (t.admins[uid]) c[`tiendas/${t.id}/admins/${uid}`] = null; });
+        return c;
+    }
+
     function modalQuitarUsuario(uid) {
         const u = datos.usuarios[uid];
         const m = abrirModal({
@@ -969,9 +1178,7 @@
         });
         m.form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const c = { [`usuarios/${uid}`]: null, [`bajas/${uid}`]: { email: String(u.email || '').slice(0, 200), fecha: TS() } };
-            Object.keys(u.tiendas || {}).forEach(t => { if (datos.tiendas[t]) c[`tiendas/${t}/admins/${uid}`] = null; });
-            Object.values(datos.tiendas).forEach(t => { if (t.admins[uid]) c[`tiendas/${t.id}/admins/${uid}`] = null; });
+            const c = cambiosQuitarUsuario(uid);
             cargando(m.q('#quOk'), true, 'Quitando…');
             try { await actualizar(c, 'Usuario quitado.'); m.cerrar(); }
             catch (err) { cargando(m.q('#quOk'), false); avisoModal(m, esc(window.TiendaAuth.mensajeDe(err))); }
@@ -1045,6 +1252,7 @@
         switch (b.dataset.accion) {
             case 'nueva-tienda': modalNuevaTienda(); break;
             case 'editar-tienda': modalEditarTienda(id); break;
+            case 'variable-costos': modalVariableCostos(id); break;
             case 'pagina-dominio': modalDominioPropio(id); break;
             case 'copiar-catalogo': copiar(urlCatalogo(datos.tiendas[id])); break;
             case 'copiar-panel': copiar(urlPanel(datos.tiendas[id])); break;
@@ -1060,6 +1268,14 @@
             case 'quitar-usuario': modalQuitarUsuario(id); break;
             case 'aprobar': modalAprobar(id); break;
             case 'rechazar': rechazar(id); break;
+            case 'aprobar-registro': modalAprobarRegistro(id); break;
+            case 'rechazar-registro': rechazarRegistro(id); break;
+            case 'copiar-registro': copiar(T.BASE_SITIO + 'registro'); break;
+            case 'rechazar-baja':
+                if (confirm(`¿Rechazar el pedido de eliminación de ${nombreTienda(id)}? La tienda sigue funcionando y su responsable puede volver a pedirlo.`)) {
+                    actualizar({ [`tiendas/${id}/baja`]: null }, 'Pedido de eliminación rechazado.').catch(error);
+                }
+                break;
         }
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarMenus(); });

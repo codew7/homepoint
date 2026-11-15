@@ -49,7 +49,7 @@ Los dos repositorios usan el **mismo proyecto de Firebase**. Lo único que escri
 2. Copiar el mensaje con las credenciales y mandarlo por WhatsApp o email. Incluye el enlace del catálogo y el del panel. **La contraseña no se puede volver a ver.**
 3. Listo: la tienda ya está publicada en su enlace. **No hay que subir nada.** El vendedor entra a `…/su-tienda/admin`, elige su contraseña definitiva y arma su tienda.
 
-> Palabras reservadas que no se pueden usar como ID: `admin`, `principal`, `index`, `api`, `img`, `assets`, `www`, `catalogo`, `tienda`.
+> Palabras reservadas que no se pueden usar como ID: `admin`, `principal`, `index`, `api`, `img`, `assets`, `www`, `catalogo`, `tienda`, `registro`.
 
 ## Dominio propio (opcional)
 
@@ -69,7 +69,7 @@ precio = costo × (1 + % de su escala) × (1 + ajuste global)
          → redondeado hacia arriba al múltiplo elegido
 ```
 
-**De dónde sale el costo** lo elegís vos para cada tienda en **Editar datos y responsables → Costo de los artículos** (el vendedor no lo puede cambiar):
+**De dónde sale el costo** lo elegís vos para cada tienda en el menú **⋯ → Variable de costos** (el vendedor no lo puede cambiar). En pantalla las opciones se muestran sólo por su nombre; esta tabla dice de qué columna de la hoja sale cada una:
 
 | Opción | Costo |
 |---|---|
@@ -77,7 +77,7 @@ precio = costo × (1 + % de su escala) × (1 + ajuste global)
 | **Valor Costo** | columna H |
 | **Costo %** | columna H + el porcentaje que indiques (ej.: H $10.000 + 15% → $11.500) |
 
-Las tiendas con una opción distinta de la de por defecto muestran una etiqueta (`costo H` o `costo H +15%`) en la lista. Se guarda en `tiendas/<id>/costo`; si no existe, se usa la columna E.
+Las tiendas con una opción distinta de la de por defecto muestran una etiqueta (`Valor Costo` o `Costo % +15%`) en la lista. Los catálogos ya abiertos toman el cambio al recargar. Se guarda en `tiendas/<id>/costo`; si no existe, se usa la columna E.
 
 La escala se elige según el costo, y "Hasta $X" incluye X. Las escalas por defecto son las de la hoja *Grupos* (Hasta $2.500 → 75% … más de $100.000 → 10%). Cada vendedor las edita desde **Panel → Precios**, que incluye un simulador y una tabla con productos reales.
 
@@ -89,9 +89,12 @@ tiendas/<id>/
   assets/<id>/       { dataUrl, tipo, ancho, alto }   ← logos y banners, comprimidos en el navegador
   admins/<uid>: true ← responsables de la tienda
   meta/              { nombre, url, notas, creada } ← sólo admin global (url = dominio propio, si tiene)
-  estado/            { activa, mensaje }            ← público: pausada = el catálogo muestra "no disponible"
+  estado/            { activa, mensaje, desde, pausadaPor } ← público: pausada = el catálogo muestra "no disponible".
+                     pausadaPor 'tienda' = la pausó su responsable (Panel → Tienda → Estado) y la puede reactivar;
+                     si la pausaste vos ('admin'), sólo vos la reactivás (lo exigen las reglas)
+  baja/              { fecha, uid, email, borrarUsuario, motivo? } ← el responsable pide eliminar la tienda (y opcionalmente su usuario)
   costo/             { modo: 'costo' | 'costoPct', pct? } ← público, sólo lo escribe el admin global. Sin nodo = columna E
-  pedidos/<clave>/   { numero, fecha, status, entregado?, total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, entrega?, direccion?, notas?},
+  pedidos/<clave>/   { numero, fecha, status, entregado?, total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, dni? (7-8 dígitos), entrega?, direccion?, notas?},
                        items[{nombre, cantidad, precio, costo?, codigo?}] }
                      ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.
                        Unidades, subtotal, descuento y costo total NO se guardan: el panel los calcula de los artículos.
@@ -99,6 +102,7 @@ tiendas/<id>/
 usuarios/<uid>/      { email, nombre, activo, debeCambiarClave, creado, ultimoIngreso, tiendas{} }
 bajas/<uid>/         { email, fecha }             ← usuario quitado: su cuenta se borra de Authentication cuando vuelve a entrar
 solicitudes/<uid>/   { email, nombre, tienda, fecha } ← pedidos de acceso desde el login
+registros/<uid>/     { tiendaNombre, tienda, url?, nombre, email, comentario?, fecha } ← tiendas pedidas desde registro.html (la persona sólo puede crearla o cancelarla)
 admins/<uid>: true   ← admin global (vos)
 ```
 
@@ -117,7 +121,9 @@ Desde la **gestión de tiendas** se puede:
 
 - **Tiendas**: crear, editar el nombre interno, el dominio propio y las notas, asignar responsables, copiar los enlaces del catálogo y del panel, descargar la página para dominio propio, **pausar** (los clientes ven un aviso con tu mensaje) o eliminar.
 - **Usuarios**: crear con contraseña temporal, asignar tiendas, mandar el email de restablecimiento, pedir contraseña nueva en el próximo ingreso, **suspender** (no puede guardar nada) y quitar del sistema.
-- **Solicitudes**: si alguien entra a un panel sin permiso (por ejemplo, con Google), toca *Solicitar acceso* y aparece acá para aprobarlo con un clic.
+- **Solicitudes → Tiendas nuevas**: lo que llega desde el formulario público `catalog.dev.ar/registro` (botones *Ver formulario* y *Copiar enlace*). La persona elige su contraseña al registrarse; la tienda **no existe** hasta que tocás **Revisar → Aprobar y crear tienda** (podés corregir nombre, ID, dominio y notas). Después aparece el mensaje de bienvenida para mandarle por email o WhatsApp: no hay envío automático. **Rechazar** borra la solicitud y, si la cuenta se creó sólo para eso, se borra sola cuando vuelva a entrar.
+- **Solicitudes → Eliminación de tiendas**: lo que piden los responsables desde *Panel → Tienda → Estado*. **Eliminar** abre la confirmación de siempre; si también pidió borrar su usuario, viene tildado *quitarlo del sistema* (su cuenta se borra cuando vuelva a entrar). **Rechazar** borra el pedido y la tienda sigue igual. Las tiendas con pedido pendiente muestran *Pidió la baja*.
+- **Solicitudes → Acceso a paneles**: si alguien entra a un panel sin permiso (por ejemplo, con Google), toca *Solicitar acceso* y aparece acá para aprobarlo con un clic.
 
 Cada usuario cambia su contraseña desde **Mi cuenta** (su nombre, arriba a la derecha) o con "¿Olvidaste tu contraseña?" en el login.
 

@@ -147,6 +147,7 @@
                     <button type="button" class="btn btn-texto login-link" id="loginOlvide">¿Olvidaste tu contraseña?</button>
                     <div class="login-separador"><span>o</span></div>
                     <button type="button" class="btn login-btn" id="loginGoogle"><i class="fab fa-google"></i>Ingresar con Google</button>
+                    ${opc.global ? '' : `<p class="login-sub" style="margin:4px 0 0;text-align:center;font-size:.82rem">¿Todavía no tenés tienda? <a href="${esc(T_BASE() + 'registro')}">Creá la tuya</a></p>`}
                 </form>
 
                 <form id="loginCambio" hidden novalidate>
@@ -175,6 +176,9 @@
     function vista(nombre) {
         ['loginCargando', 'loginForm', 'loginCambio', 'loginSinPermiso'].forEach(id => { $(id).hidden = id !== nombre; });
     }
+
+    // Dirección del sitio público (registro.html vive ahí)
+    function T_BASE() { return (window.TiendaCore && window.TiendaCore.BASE_SITIO) || '/'; }
 
     async function leerPermiso(usuario, opc) {
         const db = firebase.database();
@@ -474,6 +478,15 @@
                 esGlobal = !!r.global;
                 if (!r.permitido) {
                     const quien = `<strong>${esc(usuario.email || usuario.uid)}</strong>`;
+                    // Pidió una tienda desde registro.html y todavía no se aprobó
+                    const registro = opc.global ? null : await firebase.database().ref('registros/' + usuario.uid).once('value').then(s => s.val()).catch(() => null);
+                    if (registro) {
+                        $('sinPermisoTexto').innerHTML = `Tu solicitud para crear <strong>${esc(registro.tiendaNombre || registro.tienda)}</strong> está en revisión. Cuando el administrador la apruebe vas a poder entrar con este mismo usuario.`;
+                        $('loginSolicitar').hidden = true;
+                        vista('loginSinPermiso');
+                        ocupado(false);
+                        return;
+                    }
                     $('sinPermisoTexto').innerHTML =
                         r.motivo === 'global' ? `La cuenta ${quien} no es administradora del sistema.`
                         : r.motivo === 'suspendido' ? `El acceso de ${quien} está suspendido. Comunicate con el administrador.`

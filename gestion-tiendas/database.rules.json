@@ -46,6 +46,23 @@
       }
     },
 
+    "registros": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || (auth.uid === $uid && (!data.exists() || !newData.exists())))",
+        ".validate": "newData.hasChildren(['tiendaNombre', 'tienda', 'nombre', 'email', 'fecha'])",
+        "tiendaNombre": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 60" },
+        "tienda": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9-]{1,30}$/) && !root.child('tiendas').child(newData.val()).exists()" },
+        "url": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "nombre": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 80" },
+        "email": { ".validate": "newData.isString() && auth.token.email != null && newData.val() === auth.token.email.toLowerCase()" },
+        "comentario": { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "fecha": { ".validate": "newData.val() === now" },
+        "$otro": { ".validate": false }
+      }
+    },
+
     "solicitudes": {
       ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
       ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
@@ -94,8 +111,22 @@
         },
         "estado": {
           ".read": true,
+          ".write": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true && root.child('usuarios').child(auth.uid).child('activo').val() !== false && (!data.exists() || data.child('activa').val() !== false || data.child('pausadaPor').val() === 'tienda') && (newData.child('activa').val() === true || newData.child('pausadaPor').val() === 'tienda')",
           "activa": { ".validate": "newData.isBoolean()" },
-          "mensaje": { ".validate": "newData.isString() && newData.val().length <= 400" }
+          "mensaje": { ".validate": "newData.isString() && newData.val().length <= 400" },
+          "pausadaPor": { ".validate": "newData.val() === 'tienda' || newData.val() === 'admin'" },
+          "desde": { ".validate": "newData.isNumber() && newData.val() <= now" }
+        },
+        "baja": {
+          ".read": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true",
+          ".write": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true && root.child('usuarios').child(auth.uid).child('activo').val() !== false",
+          ".validate": "newData.hasChildren(['fecha', 'uid', 'borrarUsuario'])",
+          "fecha": { ".validate": "newData.val() === now" },
+          "uid": { ".validate": "newData.val() === auth.uid" },
+          "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "borrarUsuario": { ".validate": "newData.isBoolean()" },
+          "motivo": { ".validate": "newData.isString() && newData.val().length <= 400" },
+          "$otro": { ".validate": false }
         },
         "admins": {
           "$uid": {
@@ -126,6 +157,7 @@
               "provincia": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 60" },
               "localidad": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 80" },
               "entrega": { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "dni": { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{7,8}$/)" },
               "direccion": { ".validate": "newData.isString() && newData.val().length <= 140" },
               "notas": { ".validate": "newData.isString() && newData.val().length <= 400" },
               "$otro": { ".validate": false }

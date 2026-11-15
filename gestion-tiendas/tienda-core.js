@@ -87,6 +87,7 @@
             descuento: { activo: false, montoDesde: 100000, unidadesDesde: 5, pct: 10, nota: '' },
             formasEntrega: [],          // opcional: si queda vacío, no se pregunta
             pedirDireccion: 'no',       // 'no' | 'opcional' | 'requerido'
+            pedirDni: 'no',             // 'no' | 'opcional' | 'requerido'
             pedirNotas: false,
             textoConfirmacion: 'Te vamos a responder por WhatsApp para coordinar el pago y la entrega.'
         },
@@ -369,8 +370,8 @@
 
     // ---------------------------------------------------------------------
     // 4b · DE QUÉ COLUMNA SALE EL COSTO
-    // Lo decide el admin global por tienda (tiendas/<id>/costo; el vendedor
-    // no lo puede cambiar):
+    // "Variable de costos": la decide el admin global por tienda
+    // (tiendas/<id>/costo; el vendedor no la puede cambiar):
     //   · sin nodo / 'interior' → columna E (Descuento Interior), por defecto
     //   · 'costo'               → columna H (Valor Costo)
     //   · 'costoPct'            → columna H + un % (Costo %)
@@ -395,9 +396,9 @@
 
     function textoReglaCosto(regla) {
         const r = normalizarReglaCosto(regla);
-        if (r.modo === 'costo') return 'Valor Costo (col. H)';
-        if (r.modo === 'costoPct') return `Valor Costo (col. H) ${r.pct >= 0 ? '+' : '−'}${Math.abs(r.pct)}%`;
-        return 'Descuento Interior (col. E)';
+        if (r.modo === 'costo') return 'Valor Costo';
+        if (r.modo === 'costoPct') return `Costo % ${r.pct >= 0 ? '+' : '−'}${Math.abs(r.pct)}%`;
+        return 'Descuento Interior';
     }
 
     const _fmt = (global.Intl && Intl.NumberFormat) ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }) : null;
@@ -468,7 +469,7 @@
     // BASE_SITIO es la carpeta desde donde se cargó este archivo, así funciona
     // igual en la raíz de un dominio o en una subcarpeta de GitHub Pages.
     const ID_TIENDA_VALIDO = /^[a-z0-9][a-z0-9-]{1,30}$/;
-    const IDS_RESERVADOS = ['admin', 'principal', 'index', 'api', 'img', 'assets', 'www', 'catalogo', 'tienda'];
+    const IDS_RESERVADOS = ['admin', 'principal', 'index', 'api', 'img', 'assets', 'www', 'catalogo', 'tienda', 'registro'];
 
     // En el repositorio de gestión, config.js define SITIO_PUBLICO (la
     // dirección del catálogo público) para armar los enlaces de cada tienda.
