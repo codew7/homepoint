@@ -51,7 +51,7 @@ fs.mkdirSync(DIR, { recursive: true });
 // Valores comunes en ajustes.js. Los de la linea (numero, base de WhatsApp,
 // base de pedidos) salen de linea.json de su carpeta, si existe; si no, se
 // usan los de ajustes.js (la linea principal).
-const CFG = Object.assign({ NOMBRE_LINEA: '', AVISOS_DESPACHO: true, MODO: 'envios', ALIAS: [] }, require('./ajustes'));
+const CFG = Object.assign({ NOMBRE_LINEA: '', AVISOS_DESPACHO: true, MODO: 'envios' }, require('./ajustes'));
 try {
   const linea = JSON.parse(fs.readFileSync(path.join(DIR, 'linea.json'), 'utf8'));
   if (linea.nombre) CFG.NOMBRE_LINEA = String(linea.nombre);
@@ -60,14 +60,14 @@ try {
   if ('pedidosUrl' in linea) CFG.PEDIDOS_DATABASE_URL = String(linea.pedidosUrl || '').replace(/\/+$/, '');
   if ('avisosDespacho' in linea) CFG.AVISOS_DESPACHO = linea.avisosDespacho !== false;
   if (linea.modo === 'cobros') CFG.MODO = 'cobros';
-  if (Array.isArray(linea.alias)) CFG.ALIAS = linea.alias.map(String).filter(Boolean);
 } catch (_) { /* sin linea.json: valores de ajustes.js */ }
 // Modo de la linea:
 //   'envios' (la principal): cotizaciones ("Subtotal $"), comprobantes de
 //            pago del cliente, mis remitos y avisos de despacho.
 //   'cobros' (las demas): solo comprobantes de pago del cliente. Lo unico
-//            mio que se guarda es el mensaje con el alias para transferir
-//            (CFG.ALIAS), que cumple el papel de la cotizacion. Ningun
+//            mio que se guarda es el mensaje con la palabra "alias" (el
+//            que le pasa los datos para transferir), que cumple el papel
+//            de la cotizacion. Ningun
 //            archivo mio se guarda y no manda avisos de despacho.
 const COBROS = CFG.MODO === 'cobros';
 if (COBROS) CFG.AVISOS_DESPACHO = false;
@@ -202,24 +202,18 @@ setInterval(() => {
 // Mis mensajes con esto en el texto son cotizaciones y se guardan
 const ES_COTIZACION = /subtotal\s*\$/i;
 
-// En las lineas de cobros, la "cotizacion" es mi mensaje con el alias para
-// transferir (ej. ARBOL.CACA.TOMAS). Se compara sin mayusculas ni tildes y
-// sin importar si las palabras van separadas por punto, espacio, guion o
-// guion bajo (arbol.caca.tomas, Arbol Caca Tomas...).
+// En las lineas de cobros, la "cotizacion" es mi mensaje que trae la palabra
+// "alias" (el que le pasa al cliente los datos para transferir). Los alias
+// en si rotan todo el tiempo, asi que no se comparan: alcanza con la palabra,
+// sin importar mayusculas ni tildes ("Alias:", "ALIAS", "alias ->"...).
 function sinTildes(t) {
   return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
-const RE_ALIAS = (() => {
-  const partes = CFG.ALIAS
-    .map(a => sinTildes(a).split(/[^a-z0-9]+/).filter(Boolean))
-    .filter(p => p.length)
-    .map(p => p.join('[\\s._-]*'));
-  return partes.length ? new RegExp('(?:^|[^a-z0-9])(?:' + partes.join('|') + ')(?![a-z0-9])') : null;
-})();
+const RE_ALIAS = /(?:^|[^a-z0-9])alias(?![a-z0-9])/;
 
 // Si el texto es la marca de esta linea: cotizacion (envios) o alias (cobros)
 function esMarca(tx) {
-  if (COBROS) return !!(RE_ALIAS && RE_ALIAS.test(sinTildes(tx)));
+  if (COBROS) return RE_ALIAS.test(sinTildes(tx));
   return ES_COTIZACION.test(String(tx || ''));
 }
 
@@ -581,7 +575,7 @@ async function textoDePdf(buffer) {
     const t = (aNumero(msg.messageTimestamp) || Math.floor(Date.now() / 1000)) * 1000;
     const id = claveSegura(key.id);
 
-    // Mios con "Subtotal $" (o con el alias, en las lineas de cobros): cotizaciones
+    // Mios con "Subtotal $" (o con la palabra "alias", en las lineas de cobros): cotizaciones
     if (key.fromMe && esMarca(tx)) {
       rutas[base + '/msgs/' + id] = Object.assign({ t, yo: true, tipo, tx, cot: true }, datosCotizacion(tx));
       const meta = metas[tel] || (metas[tel] = { jid: key.remoteJid, ultimo: 0 });
@@ -1452,8 +1446,7 @@ async function textoDePdf(buffer) {
   }
   if (!CFG.PEDIDOS_DATABASE_URL) log('Esta línea no tiene base de pedidos: no se asignan comprobantes a pedidos ni se borran chats de curiosos.');
   if (COBROS) {
-    log('Línea de cobros: solo se guardan los comprobantes de pago de los clientes y los mensajes con el alias' +
-      (CFG.ALIAS.length ? ' (' + CFG.ALIAS.join(', ') + ').' : '. ATENCIÓN: no hay ningún alias cargado.'));
+    log('Línea de cobros: solo se guardan los comprobantes de pago de los clientes y nuestros mensajes con la palabra «alias».');
   }
   log('Iniciando WhatsApp' + (CFG.NOMBRE_LINEA ? ' (línea ' + CFG.NOMBRE_LINEA + ', ' + CFG.NUMERO_ESPERADO + ')' : '') + '...');
   await conectar();

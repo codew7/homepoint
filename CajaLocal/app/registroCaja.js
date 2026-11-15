@@ -92,4 +92,35 @@
     const r = e && e.reason;
     anotar('ERROR', 'Promesa sin atender: ' + (r && r.message ? r.message : String(r)));
   });
+
+  // Subida del registro a Firebase, a cargo de registroNube.js del programa: el
+  // programa sube los .txt al abrir y al cerrar la caja con la sesión de la
+  // página. Acá sólo se le pasa el token del usuario con sesión iniciada; se
+  // renueva cada 40 minutos para que al cerrar siga vigente (dura una hora).
+  // Va en 'load' porque Firebase se inicializa después de este script.
+  if (typeof puente.credencial !== 'function') return;
+  window.addEventListener('load', () => {
+    try {
+      if (!window.firebase || !firebase.apps || !firebase.apps.length || !firebase.auth) return;
+      const appFb = firebase.app();
+      const db = appFb.options && appFb.options.databaseURL;
+      if (!db) return;
+      const pv = window.PuntoVenta || null;
+      let usuarioFb = null;
+      const enviar = (forzar) => {
+        if (!usuarioFb) return;
+        usuarioFb.getIdTokenResult(!!forzar).then((r) => {
+          puente.credencial({
+            token: r.token,
+            expira: Date.parse(r.expirationTime),
+            db,
+            pv: pv ? pv.actual() : '',
+            pvNombre: pv ? pv.nombre() : ''
+          });
+        }).catch(() => {});
+      };
+      appFb.auth().onIdTokenChanged((u) => { usuarioFb = u; enviar(false); });
+      setInterval(() => enviar(true), 40 * 60 * 1000);
+    } catch (_) {}
+  });
 })();

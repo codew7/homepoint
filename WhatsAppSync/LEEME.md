@@ -136,19 +136,19 @@ pero una PC puede tener dos o tres: cada una funciona por separado y, si una fal
 
 | | **Envíos** | **Cobros** |
 |---|---|---|
-| Mensajes nuestros que se guardan | Cotizaciones (con «Subtotal $») | Solo el mensaje con el **alias** para transferir |
+| Mensajes nuestros que se guardan | Cotizaciones (con «Subtotal $») | Solo el mensaje con la palabra **alias** |
 | Comprobantes de pago del cliente | Sí | Sí |
 | Archivos que mandamos nosotros | Remitos de envío | **Ninguno** |
 | Aviso de despacho (Flecha Carga) | Sí | No |
 | Asignar comprobantes a pedidos | Sí, con su base de pedidos | Sí, con su base de pedidos |
 
-En las líneas de **cobros**, el mensaje con el alias (ej. `ARBOL.CACA.TOMAS`) cumple el papel de la cotización:
-se guarda y sirve para ubicar el pedido; si trae un importe con `$`, se usa para compararlo con el comprobante.
-El alias se reconoce sin importar mayúsculas, tildes ni si las palabras van con punto, espacio o guion.
-Se pueden cargar varios separados por coma.
+En las líneas de **cobros**, nuestro mensaje que trae la palabra **alias** (el que le pasa al cliente los datos
+para transferir) cumple el papel de la cotización: se guarda y sirve para ubicar el pedido; si trae un importe con `$`,
+se usa para compararlo con el comprobante. Como los alias rotan todo el tiempo, no se carga ninguno: alcanza con
+que el mensaje diga «alias» (no importan mayúsculas ni tildes: «Alias:», «ALIAS», etc.).
 
 **Agregar la línea:** en la ventana, botón **+** (o clic derecho en el ícono → **Agregar línea...**):
-tipo (Envíos o Cobros), nombre, número, clave, alias (en cobros) y, si tiene, base de pedidos
+tipo (Envíos o Cobros), nombre, número, clave y, si tiene, base de pedidos
 → **Guardar y vincular** → escanear el QR con el celular de esa línea.
 
 **Línea principal:** en cada PC, una de sus líneas es la **principal** (★ en la pestaña). Puede ser de cualquier tipo.
@@ -157,7 +157,7 @@ Va primera, y es la que usan **Descargar comprobantes** y el **Verificador**. Pa
 la principal, la siguiente pasa a serlo.
 
 - Arriba de la ventana hay una pestaña por línea, con un punto verde (conectada), amarillo (esperando) o rojo (falta algo).
-- En **Datos de la línea** se ven y se cambian sus datos (también el tipo y el alias), y está **Quitar línea de esta PC**.
+- En **Datos de la línea** se ven y se cambian sus datos (también el tipo), y está **Quitar línea de esta PC**.
 - En el celular, el dispositivo vinculado aparece como *WhatsAppSync · nombre de la línea*.
 - Los **avisos de despacho** salen de cada línea de tipo Envíos, para los envíos que pedidosv2 carga en **su** base.
   Hoy pedidosv2 solo carga en la base `whatsappsync-e3245`, así que en la práctica salen desde esa línea.

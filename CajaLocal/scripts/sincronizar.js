@@ -49,6 +49,9 @@ const ARCHIVOS = [
   'modoOffline.css',
   // Registro diario de lo que se hace en la caja (en la web no hace nada).
   'registroCaja.js',
+  // Lectura y análisis del registro: lo usa el visor local
+  // (electron/visor-registro.html), igual que el panel web actividadCajas.html.
+  'registroAnalisis.js',
   'config.js',
   'config2.js',
   'logo.png',

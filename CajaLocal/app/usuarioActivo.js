@@ -297,7 +297,10 @@
     const app = window.cajaApp;
     overlay.querySelector('.usr-version').textContent =
       app && app.escritorio
-        ? 'Caja local' + (app.version ? ' · v' + app.version : '')
+        ? 'Caja local' + (app.version ? ' · v' + app.version : '') +
+          // Nombre del equipo (o el de Windows si todavía no tiene): el mismo
+          // con el que aparece en el panel "Actividad de las cajas".
+          (app.equipo && (app.equipo.nombre || app.equipo.host) ? ' · ' + (app.equipo.nombre || app.equipo.host) : '')
         : 'Versión web';
 
     // Función oculta: 5 clics seguidos en la versión abren el visor del

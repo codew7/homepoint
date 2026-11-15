@@ -62,16 +62,23 @@ function notasComoTexto(notas) {
 }
 
 let anotarRegistro = () => {};
+// Lo que se hace antes de salir para instalar (main.js: subir el registro).
+let antesDeSalir = () => Promise.resolve();
 
 function instalarAhora(log, motivo) {
   log.info(`Instalando la versión ${estado.nueva} (${motivo})`);
   anotarRegistro(`Se instala la versión ${estado.nueva} (${motivo}): la caja se reinicia`);
-  // Silenciosa y con reapertura automática de la caja.
-  setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  // Silenciosa y con reapertura automática de la caja. Primero se sube el
+  // registro: el instalador cierra la caja apenas arranca.
+  Promise.resolve()
+    .then(() => antesDeSalir())
+    .catch(() => {})
+    .finally(() => setImmediate(() => autoUpdater.quitAndInstall(true, true)));
 }
 
-function iniciarActualizador(log, anotar = () => {}) {
+function iniciarActualizador(log, anotar = () => {}, alSalir) {
   anotarRegistro = anotar;
+  if (typeof alSalir === 'function') antesDeSalir = alSalir;
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;

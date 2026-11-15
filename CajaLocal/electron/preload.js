@@ -25,13 +25,18 @@ contextBridge.exposeInMainWorld('cajaApp', {
   escritorio: true,
   // Versión instalada (la del package.json), p. ej. "2.1.2".
   version: (() => { try { return ipcRenderer.sendSync('caja:version'); } catch (_) { return ''; } })(),
+  // Este equipo: { id, nombre, host }. El nombre lo pone el administrador en
+  // el panel "Actividad de las cajas" (registroNube.js); lo muestra el selector.
+  equipo: (() => { try { return ipcRenderer.sendSync('caja:equipo'); } catch (_) { return null; } })(),
   reintentarConexion: () => ipcRenderer.send('conexion:reintentar'),
   // Registro diario (registro.js): registroCaja.js manda acá cada evento.
   // send y no invoke: anotar nunca hace esperar a la caja.
   registro: {
     anotar: (entrada) => { try { ipcRenderer.send('registro:anotar', entrada); } catch (_) {} },
     // Visor sólo de lectura (5 clics en la versión del selector de usuario).
-    abrirVisor: () => { try { ipcRenderer.send('registro:visor'); } catch (_) {} }
+    abrirVisor: () => { try { ipcRenderer.send('registro:visor'); } catch (_) {} },
+    // Token de la sesión de Firebase, para subir el registro (registroNube.js).
+    credencial: (datos) => { try { ipcRenderer.send('registro:credencial', datos); } catch (_) {} }
   },
   offline: {
     obtener: () => ipcRenderer.invoke('offline:obtener'),

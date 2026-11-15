@@ -11,7 +11,8 @@
 //
 //  Registro técnico: %APPDATA%\Caja HomePoint\logs\main.log
 //  Registro diario de lo que se hace en la caja: %APPDATA%\Caja HomePoint\registro\
-//  (ver registro.js; Ctrl+Shift+L abre la carpeta).
+//  (ver registro.js; Ctrl+Shift+L abre la carpeta). Se sube a Firebase al abrir
+//  y al cerrar la caja (ver registroNube.js).
 // =============================================================================
 
 const { app, BrowserWindow, Menu, shell, ipcMain, net, dialog, session } = require('electron');
@@ -23,6 +24,7 @@ const { iniciarServidor, PAGINA_INICIAL } = require('./servidor');
 const { iniciarActualizador } = require('./actualizador');
 const { iniciarOffline } = require('./offline');
 const { iniciarRegistro, anotarSistema, ventanaDe, carpetaRegistro } = require('./registro');
+const { iniciarRegistroNube, subirAlCerrar } = require('./registroNube');
 const LIBRERIAS = require('./librerias');
 
 log.initialize();
@@ -38,6 +40,10 @@ const PRUEBA_CONEXION = 'https://www.gstatic.com/generate_204';
 let servidor = null;
 let urlCaja = null;
 let splash = null;
+// Cerrando: se está subiendo el registro antes de salir (ver before-quit).
+let cerrando = false;
+let cierreListo = false;
+let reabrirAlCerrar = false;
 
 // Una sola copia del programa: si alguien vuelve a hacer doble clic, la copia
 // que ya está corriendo abre otra ventana de caja.
@@ -45,6 +51,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    // Si justo se está cerrando (subiendo el registro), se vuelve a abrir al terminar.
+    if (cerrando) { reabrirAlCerrar = true; return; }
     if (urlCaja) crearVentanaCaja();
   });
   app.whenReady().then(arrancar);
@@ -283,6 +291,7 @@ async function crearVentanaCaja() {
 async function arrancar() {
   log.info(`Caja HomePoint ${app.getVersion()} arrancando`);
   iniciarRegistro({ log });
+  iniciarRegistroNube({ log, carpetaRegistro });
   anotarSistema(`Caja HomePoint ${app.getVersion()} arrancó`);
   Menu.setApplicationMenu(null);
   mostrarSplash();
@@ -304,7 +313,7 @@ async function arrancar() {
   urlCaja = `http://localhost:${servidor.puerto}/${PAGINA_INICIAL}`;
   // Versión instalada: la muestra el selector de usuario (preload.js).
   ipcMain.on('caja:version', (evento) => { evento.returnValue = app.getVersion(); });
-  iniciarActualizador(log, anotarSistema);
+  iniciarActualizador(log, anotarSistema, prepararSalida);
   iniciarOffline({ log, hayInternet, anotar: anotarSistema });
   usarLibreriasLocales();
 
@@ -332,8 +341,29 @@ app.on('certificate-error', (evento, _contenido, url, _error, _certificado, resp
 
 app.on('window-all-closed', () => app.quit());
 
+// Antes de salir se sube el registro del día (con tope de tiempo, ver
+// registroNube.js). La salida se frena una sola vez y después sigue sola.
+// La actualización usa lo mismo antes de instalar (actualizador.js).
+let salida = null;
+function prepararSalida() {
+  if (!salida) {
+    cerrando = true;
+    anotarSistema('Caja HomePoint se cerró');
+    salida = subirAlCerrar().finally(() => { cierreListo = true; });
+  }
+  return salida;
+}
+
+app.on('before-quit', (evento) => {
+  if (cierreListo) return;
+  evento.preventDefault();
+  prepararSalida().then(() => {
+    if (reabrirAlCerrar) app.relaunch();
+    app.quit();
+  });
+});
+
 app.on('will-quit', () => {
   if (servidor) servidor.detener().catch(() => {});
   log.info('Caja HomePoint cerrada');
-  anotarSistema('Caja HomePoint se cerró');
 });

@@ -177,7 +177,6 @@
         <dt>Nombre</dt><dd id="dNombre"></dd>
         <dt>Tipo</dt><dd id="dTipo"></dd>
         <dt>Principal</dt><dd id="dPrincipal"></dd>
-        <dt id="dtAlias">Alias</dt><dd id="dAlias"></dd>
         <dt>Número</dt><dd id="dNumero"></dd>
         <dt>Proyecto</dt><dd id="dProyecto"></dd>
         <dt>Base WhatsApp</dt><dd id="dBase"></dd>
@@ -206,7 +205,7 @@
         <span>Tipo de línea</span>
         <div class="tipos">
           <label class="tipo"><input type="radio" name="modo" value="cobros" checked>
-            <b>Cobros</b><small>Solo guarda los comprobantes de pago de los clientes y los mensajes con el alias. Ningún archivo nuestro.</small></label>
+            <b>Cobros</b><small>Solo guarda los comprobantes de pago de los clientes y nuestros mensajes con la palabra «alias». Ningún archivo nuestro.</small></label>
           <label class="tipo" id="fTipoEnvios"><input type="radio" name="modo" value="envios">
             <b>Envíos</b><small>Cotizaciones («Subtotal $»), comprobantes de los clientes, nuestros remitos y avisos de despacho.</small></label>
         </div>
@@ -234,13 +233,6 @@
         <span>Base de WhatsApp</span>
         <input id="fBase" spellcheck="false" placeholder="https://…-default-rtdb.firebaseio.com">
         <small>Se completa sola al elegir la clave. Si no coincide, copiala de Firebase → Realtime Database.</small>
-      </label>
-
-      <label class="campo" data-campo="alias" id="fCampoAlias">
-        <span>Alias para transferencias</span>
-        <input id="fAlias" spellcheck="false" placeholder="Ej.: ARBOL.CACA.TOMAS">
-        <small>El alias que mandamos al cliente para que transfiera. Ese mensaje se guarda y sirve para ubicar el pedido.
-          No importan mayúsculas, tildes ni si las palabras van con punto o espacio. Si son varios, separalos con coma.</small>
       </label>
 
       <label class="campo" data-campo="pedidosUrl">
@@ -358,8 +350,6 @@
       ? 'Sí: va primera y la usan Descargar comprobantes y el Verificador'
       : 'No';
     $('btnPrincipal').hidden = l.principal;
-    $('dtAlias').hidden = $('dAlias').hidden = !cobros;
-    $('dAlias').textContent = (l.alias || []).join(', ') || 'Sin alias';
     $('dNumero').textContent = l.numeroVisible;
     $('dProyecto').textContent = l.proyecto || 'Sin clave';
     $('dBase').textContent = l.databaseUrl || '—';
@@ -408,10 +398,9 @@
     const r = document.querySelector('input[name=modo]:checked');
     return r ? r.value : 'cobros';
   }
-  // El alias es solo de las lineas de cobros. Al elegir Envios se sugiere el nombre.
+  // Al elegir Envios se sugiere el nombre.
   function elegirTipo() {
     const envios = tipoElegido() === 'envios';
-    $('fCampoAlias').hidden = envios;
     if (formAbierto && !formAbierto.id && envios && !$('fNombre').value.trim()) $('fNombre').value = 'Envíos';
     if (formAbierto && !formAbierto.id && !envios && $('fNombre').value === 'Envíos') $('fNombre').value = '';
   }
@@ -430,7 +419,6 @@
     $('fBtnClave').textContent = l ? 'Cambiar…' : 'Elegir archivo…';
     $('fBase').value = l ? l.databaseUrl : '';
     $('fPedidos').value = l ? l.pedidosUrl : '';
-    $('fAlias').value = l ? (l.alias || []).join(', ') : '';
     // Tipo: libre, al agregar y al editar
     document.querySelector('input[name=modo][value=' + (l ? l.modo : 'cobros') + ']').checked = true;
     elegirTipo();
@@ -475,8 +463,7 @@
         numero: $('fNumero').value,
         databaseUrl: $('fBase').value,
         pedidosUrl: $('fPedidos').value,
-        modo: tipoElegido(),
-        alias: $('fAlias').value
+        modo: tipoElegido()
       });
       if (!r.ok) { marcarError(r.campo || '', r.error || 'No se pudo guardar.'); return; }
       formAbierto = null;

@@ -9,7 +9,7 @@
 // linea principal (la de Envios): al pasar una instalacion vieja a lineas, con
 // "node index.js" suelto y en descargar-comprobantes.js. El resto vale para
 // todas las lineas. Las lineas de cobros (las demas) solo guardan los
-// comprobantes del cliente y el mensaje con su alias (ver index.js).
+// comprobantes del cliente y nuestro mensaje con la palabra "alias" (ver index.js).
 
 module.exports = {
   // (LINEA PRINCIPAL) Numero de WhatsApp que se vincula (solo digitos, con 549).

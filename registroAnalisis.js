@@ -4,7 +4,7 @@
    Un solo original para las dos pantallas que muestran el registro:
      · el visor local de la caja de escritorio
        (CajaLocal/electron/visor-registro.html, 5 clics en la versión);
-     · el panel web "Actividad de las cajas" (actividadCajas.html), que junta
+     · el panel web "Actividad de las cajas", actividadCajas.html, que junta
        los registros que suben todos los equipos.
 
    Sólo lee texto y devuelve datos: no toca la pantalla ni la red.
@@ -40,7 +40,7 @@ const RAPIDOS = [
 ];
 
 // ---------------------------------------------------------------- lectura
-// Formato de cada renglón (registro.js):
+// Formato de cada renglón, tal como lo escribe registro.js del programa:
 //   HH:MM:SS  V1   usuario(12)   CATEGORÍA(11)  texto
 //   <sangría>· detalle
 function interpretar(texto) {

@@ -12,7 +12,7 @@
 //
 // Datos en %APPDATA%\WhatsAppSync (la carpeta de instalacion no se puede
 // escribir):
-//   lineas\<id>\linea.json        { nombre, numero, databaseUrl, pedidosUrl, modo, alias, principal, avisosDespacho, creada }
+//   lineas\<id>\linea.json        { nombre, numero, databaseUrl, pedidosUrl, modo, principal, avisosDespacho, creada }
 //   lineas\<id>\clave-firebase.json, sesion\, logs\ ...   (lo de cada linea)
 //   ocr\                          idioma del lector de texto (compartido)
 //   app.json                      preferencias de la app
@@ -22,7 +22,7 @@
 // Tipo de cada linea (se elige al agregarla y se puede cambiar):
 //   Envios: cotizaciones, comprobantes, remitos y avisos de despacho.
 //   Cobros: solo comprobantes de pago de los clientes; lo unico propio que
-//     se guarda es el mensaje con el alias para transferir.
+//     se guarda es el mensaje con la palabra "alias" (datos para transferir).
 // Aparte, una linea de la PC es la PRINCIPAL (se elige en la ventana): va
 // primera y es la que usan "Descargar comprobantes" y el Verificador. Puede
 // ser de cualquier tipo. (La carpeta "principal" es solo el nombre que tomo
@@ -122,24 +122,6 @@ function ordenarLineas() {
   for (const L of lista) lineas.set(L.id, L);
 }
 
-// "ARBOL.CACA.TOMAS, otro.alias" -> ['ARBOL.CACA.TOMAS', 'otro.alias'].
-// Varios alias se separan con coma, punto y coma o renglon (un alias puede
-// tener espacios entre sus palabras).
-function leerAlias(texto) {
-  const lista = Array.isArray(texto) ? texto : String(texto || '').split(/[,;\n]+/);
-  const vistos = new Set();
-  const salida = [];
-  for (const a of lista) {
-    const limpio = String(a || '').trim().replace(/\s+/g, ' ').slice(0, 60);
-    const clave = limpio.toLowerCase();
-    if (limpio && !vistos.has(clave)) { vistos.add(clave); salida.push(limpio); }
-  }
-  return salida;
-}
-function letrasDeAlias(a) {
-  return String(a).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '');
-}
-
 function slug(nombre) {
   const s = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
@@ -192,7 +174,8 @@ function leerLineas() {
       // Versiones anteriores: el tipo salia de la carpeta
       if (cfg.modo !== 'envios' && cfg.modo !== 'cobros') { cfg.modo = id === ID_VIEJA ? 'envios' : 'cobros'; cambio = true; }
       if ((cfg.avisosDespacho !== false) !== (cfg.modo === 'envios')) { cfg.avisosDespacho = cfg.modo === 'envios'; cambio = true; }
-      if (cfg.modo === 'cobros' && !Array.isArray(cfg.alias)) { cfg.alias = []; cambio = true; }
+      // Versiones anteriores: alias cargados a mano (ya no se usan)
+      if ('alias' in cfg) { delete cfg.alias; cambio = true; }
       if (id === ID_VIEJA && cfg.nombre === 'Principal') { cfg.nombre = NOMBRE_ENVIOS; cambio = true; }
       if (cambio) guardarCfg(L);
       lista.push(L);
@@ -426,7 +409,6 @@ function datosLinea(L) {
     avisosDespacho: L.cfg.avisosDespacho !== false,
     modo: modoDe(L),
     principal: !!L.cfg.principal,
-    alias: Array.isArray(L.cfg.alias) ? L.cfg.alias : [],
     proyecto: proyectoDeClave(L),
     respaldo: !!L.respaldo,
     ...L.estado
@@ -677,15 +659,6 @@ async function guardarLinea(datos) {
   if (otras.some(L => limpiarUrl(L.cfg.databaseUrl) === databaseUrl)) {
     return { ok: false, campo: 'databaseUrl', error: 'Esa base de WhatsApp ya la usa otra línea.' };
   }
-  let alias = [];
-  if (modo === 'cobros') {
-    alias = leerAlias(datos.alias);
-    if (!alias.length) {
-      return { ok: false, campo: 'alias', error: 'Cargá el alias que mandan para transferir (ej. ARBOL.CACA.TOMAS). Así se reconoce el pedido de transferencia.' };
-    }
-    const corto = alias.find(a => letrasDeAlias(a).length < 6);
-    if (corto) return { ok: false, campo: 'alias', error: 'El alias "' + corto + '" es muy corto: tiene que tener al menos 6 letras o números.' };
-  }
   const pedidosUrl = limpiarUrl(datos.pedidosUrl);
   if (pedidosUrl) {
     if (!RE_URL_BASE.test(pedidosUrl)) return { ok: false, campo: 'pedidosUrl', error: 'La dirección de la base de pedidos no es válida.' };
@@ -703,9 +676,9 @@ async function guardarLinea(datos) {
     // La primera linea de la PC queda como principal
     L = crearLinea(id, { creada: Date.now(), principal: lineas.size === 0 });
   }
-  const antes = { ...L.cfg, alias: (L.cfg.alias || []).join('\n') };
+  const antes = { ...L.cfg };
   L.cfg = { ...L.cfg, nombre, numero, databaseUrl, pedidosUrl, modo, avisosDespacho: modo === 'envios' };
-  if (modo === 'cobros') L.cfg.alias = alias; else delete L.cfg.alias;
+  delete L.cfg.alias;
   if (L.respaldo) {
     // Instalacion vieja que no se pudo migrar: sigue en la raiz
   } else {
@@ -724,7 +697,7 @@ async function guardarLinea(datos) {
     refrescarMenu();
     iniciarMotor(L);
   } else if (antes.numero !== numero || antes.databaseUrl !== databaseUrl || antes.pedidosUrl !== pedidosUrl ||
-             antes.alias !== alias.join('\n') || antes.modo !== modo || claveNueva || ERRORES.includes(L.estado.conexion)) {
+             antes.modo !== modo || claveNueva || ERRORES.includes(L.estado.conexion)) {
     // Si cambio el numero, el motor ve que la sesion es de otro telefono,
     // la desvincula y muestra un QR nuevo.
     reiniciarMotor(L);
