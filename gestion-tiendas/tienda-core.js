@@ -73,7 +73,8 @@
             colorAcento: '#12365c',
             modoInicial: 'sistema',     // 'sistema' | 'claro' | 'oscuro'
             permitirCambioModo: true,
-            tipografia: 'Plus Jakarta Sans'
+            tipografia: 'Plus Jakarta Sans',
+            estilo: 'clasico'           // ver ESTILOS (sección 3b)
         },
         precios: {
             escalas: ESCALAS_SUGERIDAS,
@@ -245,6 +246,32 @@
         return { claro, oscuro };
     }
 
+    // ---------------------------------------------------------------------
+    // 3b · ESTILOS DEL CATÁLOGO
+    // Tres personalidades sobre el mismo HTML. El estilo se marca con
+    // data-estilo en <html> y lo dibuja estilos.css; "clasico" es el diseño
+    // original y no agrega nada. Cada estilo puede traer su propia tipografía
+    // de títulos y precios (--display): el texto general sigue siendo la
+    // tipografía que eligió la tienda.
+    // ---------------------------------------------------------------------
+    const ESTILOS = {
+        clasico:  { nombre: 'Clásico',  descripcion: 'Ordenado y directo, con tarjetas bien definidas.' },
+        boutique: { nombre: 'Boutique', descripcion: 'Editorial y cálido: tipografía con serifa, papel marfil y mucho aire.',
+                    display: 'Fraunces', fuente: 'Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600' },
+        vitrina:  { nombre: 'Vitrina',  descripcion: 'Inmersivo y moderno: vidrio esmerilado, formas redondeadas y productos iluminados.',
+                    display: 'Bricolage Grotesque', fuente: 'Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800' }
+    };
+
+    function estiloDe(apariencia) {
+        const e = apariencia && apariencia.estilo;
+        return ESTILOS[e] ? e : 'clasico';
+    }
+
+    function urlFuenteEstilo(estilo) {
+        const e = ESTILOS[estilo];
+        return e && e.fuente ? 'https://fonts.googleapis.com/css2?family=' + e.fuente + '&display=swap' : '';
+    }
+
     function familiaTipografia(nombre) {
         const n = TIPOGRAFIAS.includes(nombre) ? nombre : TIPOGRAFIAS[0];
         return `'${n}','Segoe UI',system-ui,-apple-system,sans-serif`;
@@ -259,10 +286,12 @@
         const t = tokensDeTema(apariencia);
         const decl = (obj) => Object.keys(obj).map(k => `${k}:${obj[k]};`).join('');
         const fuente = familiaTipografia(apariencia && apariencia.tipografia);
+        const est = ESTILOS[estiloDe(apariencia)];
+        const display = est.display ? `'${est.display}',${fuente}` : fuente;
         // html:root y no :root: el <style> de la gama se inserta en el <head>
         // antes que la hoja principal, así que necesita más especificidad
         // para ganarle a los tokens de la sección 1 sin depender del orden.
-        return `html:root{${decl(t.claro)}--ui:${fuente};--display:${fuente};}` +
+        return `html:root{${decl(t.claro)}--ui:${fuente};--display:${display};}` +
                `html:root[data-theme="dark"]{${decl(t.oscuro)}}`;
     }
 
@@ -288,6 +317,20 @@
             doc.head.appendChild(link);
         }
         if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+
+        // Estilo del catálogo (sección 3b): la marca en <html> y su tipografía
+        const estilo = estiloDe(apariencia);
+        if (estilo === 'clasico') doc.documentElement.removeAttribute('data-estilo');
+        else doc.documentElement.setAttribute('data-estilo', estilo);
+        const hrefEstilo = urlFuenteEstilo(estilo);
+        let linkEstilo = doc.getElementById('fuente-estilo');
+        if (hrefEstilo && !linkEstilo) {
+            linkEstilo = doc.createElement('link');
+            linkEstilo.id = 'fuente-estilo';
+            linkEstilo.rel = 'stylesheet';
+            doc.head.appendChild(linkEstilo);
+        }
+        if (linkEstilo && hrefEstilo && linkEstilo.getAttribute('href') !== hrefEstilo) linkEstilo.setAttribute('href', hrefEstilo);
     }
 
     // Modo inicial (claro/oscuro) respetando la elección manual del visitante
@@ -670,7 +713,7 @@
     }
 
     global.TiendaCore = {
-        DEFAULTS, ESCALAS_SUGERIDAS, TEMAS, TIPOGRAFIAS,
+        DEFAULTS, ESCALAS_SUGERIDAS, TEMAS, TIPOGRAFIAS, ESTILOS, estiloDe, urlFuenteEstilo,
         normalizarConfig, aArray, clonar,
         coloresDeTema, tokensDeTema, cssDeTema, aplicarTemaEnDocumento, modoInicial, urlTipografia, familiaTipografia,
         parsearMonto, escalasOrdenadas, escalaDe, calcularPrecio, detallePrecio, formatearNumero, formatearMonto,
