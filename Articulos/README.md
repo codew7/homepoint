@@ -19,6 +19,7 @@ Todas las vistas comparten:
 | `asignarImagen.html` | Asignar foto (cámara) a artículos sin imagen |
 | `imprimirEtiqueta.html` | Selección de artículos + generación de etiquetas PDF |
 | `descripcion.html` | Generación de descripciones de producto con IA (Gemini) |
+| `descripcionLote.html` | Descripciones en lote para PC con la suscripción de Claude (requiere `auditoria/servidor.py`) |
 
 ---
 
@@ -147,6 +148,19 @@ Genera la descripción de un producto a partir de una foto de su packaging, usan
   - `thinkingConfig.thinkingBudget: 0` en los modelos que lo soportan, para evitar la latencia extra del "thinking" en una tarea simple de lectura de etiqueta.
 - El prompt (`buildPrompt`) le pide a Gemini un texto en español con dos secciones fijas — `Descripción:` (párrafo comercial breve) e `Info:` (lista de datos visibles en el packaging: marca, contenido, modelo, ingredientes, etc.) — sin inventar datos que no estén en la imagen.
 - Al guardar, hace `ref.update({ Descripcion: texto, Timestamp: ... })` sobre el nodo del artículo (update parcial, no reemplaza el resto de los campos).
+
+---
+
+## `descripcionLote.html`
+
+Alternativa para PC a `descripcion.html`: genera descripciones **en lote con la suscripción de Claude** (vía Claude Code instalado en la PC, sin API key) a partir de la foto ya guardada del artículo, su nombre y su categoría.
+
+- **Cómo se usa**: doble clic en `auditoria/Descripciones con Claude.bat` (levanta `servidor.py` en `localhost:8787` y abre la página); dejar abierta la ventana negra. Es el mismo servidor de la auditoría de categorías.
+- **Lista**: pestañas por estado (Sin generar, En cola, Para revisar, Aceptadas, Rechazadas, Omitidas) con contadores, búsqueda, y filtros de categoría, descripción (sin/con), foto, disponibilidad y orden (se recuerdan entre sesiones). Selección por casilla, Shift+clic para rangos, "seleccionar 10/25/50/todos los filtrados". Los artículos que no interesan se **omiten** (de a uno o los seleccionados) y se pueden restaurar.
+- **Generación**: "Generar seleccionados" los pone en cola y se procesan de a dos en segundo plano. Se puede quitar un artículo de la cola, pausar/reanudar o vaciarla. Se pausa sola al llegar al límite de uso de la suscripción, si se cae el servidor o tras 3 errores seguidos.
+- **Revisión** (panel derecho): foto, descripción actual (si tiene) y la propuesta editable, con avisos si la foto no muestra el producto o Claude dejó una nota. Aceptar (Ctrl+Enter / A) guarda en Firebase al momento; también Rechazar (R), Regenerar (G), Saltar (S) y Omitir (O). Aceptar y rechazar se pueden deshacer desde el aviso.
+- **Precisión**: el prompt (`INSTRUCCIONES_DESC` en `servidor.py`) prohíbe suponer medidas, materiales, potencias, compatibilidades o usos que no estén escritos o sean evidentes en la foto; el formato del texto es el mismo `Descripción:` / `Info:` de `descripcion.html`.
+- Lo generado queda en `auditoria/descripciones.json` (fuera de git): cerrar la página no pierde nada ni vuelve a gastar del límite.
 
 ---
 

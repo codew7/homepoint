@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f6f7fb">
+<title>Descripciones en lote · HomePoint</title>
+<link rel="icon" href="../faviconnegro.png" type="image/png">
+
+<!--
+  Descripciones en lote (para PC).
+  Claude (con la suscripción, vía Claude Code) mira la foto guardada de cada
+  artículo + su nombre y categoría, y propone una descripción con solo lo que
+  se ve o se sabe. Se eligen varios artículos, se generan en cadena y cada
+  descripción se acepta (se guarda en Firebase en el momento), se edita o se
+  rechaza. Los artículos que no interesan se omiten.
+
+  IMPORTANTE: la página se usa desde el hosting, pero para generar necesita
+  Articulos/auditoria/"Descripciones con Claude.bat" corriendo en la PC (es el
+  mismo servidor.py de la auditoría de categorías, en http://localhost:8787).
+  El servidor descarga la foto de Storage (sin CORS), llama a Claude Code y
+  guarda lo generado y las decisiones en auditoria/descripciones.json. La
+  descripción aceptada se escribe en Firebase (articulos/{codigo}/Descripcion)
+  directo desde esta página, con el mismo formato "Descripción:/Info:" que usa
+  descripcion.html.
+-->
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="../config.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f6f7fb; --card:#fff; --card-2:#f8f9fc; --card-3:#f1f3f9;
+  --text:#0e1424; --text-2:#3a4256; --muted:#7a8398; --faint:#a9b0c1;
+  --border:#e8eaf1; --border-2:#dfe2ec;
+  --primary:#2b2f37;
+  --lime:#7cb342; --lime-600:#5a9216; --lime-soft:#eef6e2;
+  --amber:#d97706; --amber-soft:#fef3e2;
+  --danger:#e11d48; --danger-soft:#fdebee;
+  --blue:#3f6fd8; --blue-soft:#eaf0fd;
+  --violet:#7c3aed; --violet-soft:#f1eafe;
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',monospace;
+  --r:18px; --r-sm:12px; --r-xs:9px;
+  --sh-sm:0 1px 2px rgba(14,20,36,.05),0 1px 3px rgba(14,20,36,.04);
+  --sh-lg:0 18px 44px -16px rgba(14,20,36,.22),0 6px 16px -8px rgba(14,20,36,.10);
+  --ease:cubic-bezier(.2,.8,.25,1);
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font)}
+body{min-height:100dvh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+
+/* ===== Login ===== */
+.login{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);transition:opacity .4s ease}
+.login.hidden{opacity:0;pointer-events:none}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-lg);padding:34px 28px 28px}
+.logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--primary),#3d424c);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.tag{font-family:var(--mono);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;color:var(--lime-600);font-weight:600;margin-bottom:8px}
+.login-card h1{font-size:1.5rem;font-weight:800;letter-spacing:-.025em;margin-bottom:6px}
+.login-card .sub{color:var(--muted);font-size:.88rem;margin-bottom:24px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.74rem;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.inp{width:100%;padding:12px 14px;background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);font-size:.94rem;outline:none;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(43,47,55,.10)}
+.login-err{color:var(--danger);font-size:.8rem;min-height:1.2em;margin-top:12px;text-align:center}
+
+/* ===== Botones ===== */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 15px;border-radius:var(--r-xs);font-weight:700;font-size:.84rem;white-space:nowrap;transition:background .15s,border-color .15s,opacity .15s,transform .12s var(--ease)}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-dark{background:var(--text);color:#fff}
+.btn-dark:hover:not(:disabled){background:#252a35}
+.btn-ok{background:var(--lime-600);color:#fff}
+.btn-ok:hover:not(:disabled){background:#4c7d12}
+.btn-no{background:var(--danger-soft);color:var(--danger)}
+.btn-no:hover:not(:disabled){background:#fbd9df}
+.btn-ghost{background:var(--card);border:1px solid var(--border-2);color:var(--text-2)}
+.btn-ghost:hover:not(:disabled){background:var(--card-2);border-color:var(--faint)}
+.btn-block{width:100%;height:46px;font-size:.92rem}
+.btn-sm{height:30px;padding:0 10px;font-size:.76rem}
+.lnk{font-size:.76rem;font-weight:700;color:var(--blue);padding:4px 6px;border-radius:6px}
+.lnk:hover{background:var(--blue-soft)}
+.lnk:disabled{color:var(--faint);background:none;cursor:not-allowed}
+kbd{font-family:var(--mono);font-size:.64rem;font-weight:600;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25)}
+.btn-ghost kbd,.btn-no kbd{background:var(--card-3);border-color:var(--border-2);color:var(--muted)}
+
+/* ===== Topbar ===== */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:rgba(246,247,251,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--primary),#3d424c);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand b{display:block;font-weight:800;font-size:.98rem;letter-spacing:-.02em}
+.brand small{display:block;font-size:.68rem;color:var(--muted);font-weight:500}
+.top-right{display:flex;align-items:center;gap:8px}
+.pill{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--muted);padding:5px 10px 5px 8px;background:var(--card);border:1px solid var(--border);border-radius:20px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--lime);flex-shrink:0}
+.dot.off{background:var(--danger)}
+.dot.wait{background:var(--faint)}
+.icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text-2)}
+.icon-btn:hover{background:var(--card-2)}
+
+/* ===== Layout ===== */
+.wrap{max-width:1480px;margin:0 auto;padding:20px 20px 80px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.head h1{font-size:1.4rem;font-weight:800;letter-spacing:-.025em}
+.head p{color:var(--muted);font-size:.86rem;margin-top:4px;max-width:720px;line-height:1.5}
+.alert{margin-top:14px;padding:13px 15px;border-radius:var(--r-sm);font-size:.84rem;line-height:1.5;background:var(--amber-soft);color:#7c4a03;border:1px solid #f7dcb0}
+.alert b{font-weight:700}
+.alert code{font-family:var(--mono);font-size:.78rem;background:rgba(255,255,255,.6);padding:1px 5px;border-radius:5px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 500px;gap:18px;margin-top:16px;align-items:start}
+
+/* ===== Panel izquierdo ===== */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--sh-sm)}
+
+.run{padding:13px 15px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.run-info{flex:1;min-width:220px}
+.run-txt{font-size:.84rem;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:8px;min-width:0}
+.run-txt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.run-sub{font-size:.74rem;color:var(--muted);margin-top:3px}
+.bar{height:6px;background:var(--card-3);border-radius:6px;overflow:hidden;margin-top:8px}
+.bar span{display:block;height:100%;width:0;background:var(--lime);border-radius:6px;transition:width .5s var(--ease)}
+.run-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sel{height:38px;padding:0 30px 0 11px;border:1px solid var(--border-2);border-radius:var(--r-xs);background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a8398' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;-webkit-appearance:none;appearance:none;font-size:.8rem;font-weight:600;color:var(--text-2);outline:none;cursor:pointer;max-width:100%}
+.sel:focus{border-color:var(--primary)}
+.sel.on{border-color:var(--text);color:var(--text)}
+.spin{width:13px;height:13px;border:2px solid var(--border-2);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.tools{position:sticky;top:59px;z-index:40;margin-top:12px;padding:10px 0 8px;background:rgba(246,247,251,.94);backdrop-filter:blur(10px)}
+.tabs{display:flex;background:var(--card-3);border-radius:10px;padding:3px;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{height:32px;padding:0 11px;border-radius:8px;font-size:.77rem;font-weight:700;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:6px;transition:background .15s,color .15s}
+.tab:hover{color:var(--text-2)}
+.tab.on{background:var(--card);color:var(--text);box-shadow:var(--sh-sm)}
+.tab em{font-style:normal;font-family:var(--mono);font-size:.68rem;font-weight:600;color:var(--faint)}
+.tab.on em{color:var(--muted)}
+.tab i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;height:38px;padding:0 12px 0 34px;border:1px solid var(--border-2);border-radius:var(--r-xs);background:var(--card);font-size:.84rem;outline:none}
+.search input:focus{border-color:var(--primary)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--faint)}
+
+.selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:.78rem;color:var(--muted)}
+.selbar b{color:var(--text);font-variant-numeric:tabular-nums}
+.selbar .grow{flex:1}
+.chk{width:17px;height:17px;accent-color:var(--text);cursor:pointer;flex-shrink:0}
+.chk:disabled{cursor:not-allowed;opacity:.35}
+
+.list{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:20px 52px minmax(0,1fr) auto auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;box-shadow:var(--sh-sm);transition:border-color .15s,background .15s}
+.row.sel-on{border-color:var(--text);background:#fcfcfe}
+.row.viendo{box-shadow:0 0 0 2px var(--blue)}
+.thumb{width:52px;height:52px;border-radius:9px;object-fit:cover;background:var(--card-3);display:block}
+.thumb-empty{width:52px;height:52px;border-radius:9px;background:var(--card-3);display:flex;align-items:center;justify-content:center;color:var(--faint)}
+.cod{font-family:var(--mono);font-size:.7rem;color:var(--muted);font-weight:500}
+.name{font-weight:700;font-size:.84rem;letter-spacing:-.01em;line-height:1.3;word-break:break-word}
+.sub2{display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap}
+.cat{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;font-size:.68rem;font-weight:700;white-space:nowrap;background:var(--card-3);color:var(--text-2)}
+.mini{font-size:.68rem;color:var(--faint);font-weight:600}
+.err-txt{font-size:.7rem;color:var(--danger);margin-top:3px}
+.st{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:7px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.st.pendiente{background:var(--card-3);color:var(--muted)}
+.st.cola{background:var(--blue-soft);color:var(--blue)}
+.st.generando{background:var(--blue-soft);color:var(--blue)}
+.st.generada{background:var(--amber-soft);color:var(--amber)}
+.st.aceptada{background:var(--lime-soft);color:var(--lime-600)}
+.st.rechazada{background:var(--danger-soft);color:var(--danger)}
+.st.omitida{background:var(--card-3);color:var(--faint);text-decoration:line-through}
+.st.sinfoto{background:var(--card-3);color:var(--faint)}
+.acts{display:flex;align-items:center;gap:2px}
+.empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:.86rem}
+.empty b{display:block;color:var(--text);font-size:1rem;margin-bottom:4px}
+.more{margin:12px auto 0;display:flex}
+
+/* ===== Panel de revisión ===== */
+.review{position:sticky;top:72px;max-height:calc(100dvh - 88px);display:flex;flex-direction:column;overflow:hidden}
+.rv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid var(--border)}
+.rv-head b{font-size:.9rem;font-weight:800;letter-spacing:-.01em}
+.rv-head .cnt{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.rv-nav{display:flex;gap:4px}
+.rv-body{padding:14px 15px;overflow-y:auto;flex:1}
+.rv-top{display:grid;grid-template-columns:150px minmax(0,1fr);gap:13px}
+.rv-img{width:150px;height:150px;border-radius:12px;object-fit:contain;background:var(--card-3);display:block;cursor:zoom-in;border:1px solid var(--border)}
+.rv-name{font-weight:800;font-size:.95rem;letter-spacing:-.015em;line-height:1.3;word-break:break-word}
+.rv-meta{display:flex;flex-direction:column;gap:6px}
+.flag{font-size:.75rem;line-height:1.4;padding:7px 9px;border-radius:8px}
+.flag.warn{background:var(--amber-soft);color:#7c4a03}
+.flag.bad{background:var(--danger-soft);color:#9f1239}
+.lbl{display:flex;justify-content:space-between;align-items:center;font-size:.72rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px}
+.lbl span{font-family:var(--mono);font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint)}
+.actual{font-size:.8rem;line-height:1.5;color:var(--text-2);background:var(--card-2);border:1px dashed var(--border-2);border-radius:10px;padding:9px 11px;white-space:pre-wrap;max-height:150px;overflow-y:auto}
+.area{width:100%;min-height:230px;resize:vertical;padding:11px 12px;border:1px solid var(--border-2);border-radius:10px;font-size:.84rem;line-height:1.5;outline:none;background:var(--card)}
+.area:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(43,47,55,.08)}
+.rv-foot{padding:12px 15px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;background:var(--card-2)}
+.rv-row{display:flex;gap:8px}
+.rv-row .btn{flex:1}
+.hint{font-size:.68rem;color:var(--faint);text-align:center}
+.rv-empty{padding:44px 22px;text-align:center;color:var(--muted);font-size:.85rem;line-height:1.5}
+.rv-empty b{display:block;color:var(--text);font-size:.98rem;margin-bottom:4px}
+
+/* Toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:2000;background:var(--text);color:#fff;padding:10px 10px 10px 16px;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .25s var(--ease);max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast.err{background:var(--danger)}
+.toast button{color:#b9e27f;font-weight:700;font-size:.8rem;padding:5px 9px;border-radius:7px}
+.toast button:hover{background:rgba(255,255,255,.1)}
+.toast .t-msg{padding:4px 0}
+
+@media (max-width:1180px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .review{position:static;max-height:none;order:-1}
+}
+@media (max-width:640px){
+  .wrap{padding:16px 16px 80px}
+  .topbar{padding:10px 16px}
+  .pill .lbl{display:none}
+  .row{grid-template-columns:20px 44px minmax(0,1fr);gap:9px}
+  .row .st,.row .acts{grid-column:3}
+  .thumb,.thumb-empty{width:44px;height:44px}
+  .rv-top{grid-template-columns:minmax(0,1fr)}
+  .rv-img{width:100%;height:220px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+    <div class="tag">HomePoint · Admin</div>
+    <h1>Descripciones en lote</h1>
+    <div class="sub">Iniciá sesión para generar y revisar descripciones.</div>
+    <div class="field"><label for="loginEmail">Email</label><input type="email" class="inp" id="loginEmail" placeholder="correo@ejemplo.com" autocomplete="email"></div>
+    <div class="field"><label for="loginPass">Contraseña</label><input type="password" class="inp" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password"></div>
+    <button class="btn btn-dark btn-block" id="loginBtn">Ingresar</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <a class="mark" href="descripcion.html" target="_blank" rel="noopener" title="Abrir Descripciones (celular) en otra pestaña"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></a>
+    <div><b>Artículos</b><small>Descripciones en lote · Claude</small></div>
+  </div>
+  <div class="top-right">
+    <span class="pill" title="Servidor local que usa Claude Code"><span class="dot wait" id="srvDot"></span><span class="lbl" id="srvTxt">Claude…</span></span>
+    <span class="pill" title="Conexión con Firebase"><span class="dot" id="connDot"></span><span class="lbl" id="connTxt">online</span></span>
+    <button class="icon-btn" id="logoutBtn" title="Cerrar sesión" aria-label="Cerrar sesión"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="head">
+    <div>
+      <h1>Descripciones en lote</h1>
+      <p>Elegí artículos, generá sus descripciones en cadena con Claude (mira la foto, el nombre y la categoría, y no agrega datos que no se vean) y aceptá, editá o rechazá cada una. Al aceptar se guarda en el momento.</p>
+    </div>
+    <div class="mini" id="meta">Cargando artículos…</div>
+  </section>
+
+  <div class="alert" id="srvAlert" hidden></div>
+
+  <div class="grid">
+    <!-- ===== IZQUIERDA: lista ===== -->
+    <section>
+      <div class="card run">
+        <div class="run-info">
+          <div class="run-txt" id="runTxt"><span>Cargando…</span></div>
+          <div class="run-sub" id="runSub"></div>
+          <div class="bar"><span id="runBar"></span></div>
+        </div>
+        <div class="run-ctl">
+          <select class="sel" id="modelo" title="Modelo de Claude">
+            <option value="sonnet">Sonnet · recomendado</option>
+            <option value="haiku">Haiku · rápido, gasta menos</option>
+            <option value="opus">Opus · más preciso, gasta más</option>
+          </select>
+          <button class="btn btn-ghost" id="vaciarBtn" hidden>Vaciar cola</button>
+          <button class="btn btn-ghost" id="pausaBtn" hidden>Pausar</button>
+          <button class="btn btn-dark" id="genBtn" disabled>Generar seleccionados</button>
+        </div>
+      </div>
+
+      <div class="tools">
+        <div class="tabs" role="tablist" id="tabs">
+          <button class="tab" data-tab="pendiente"><i style="background:var(--faint)"></i>Sin generar <em id="tPendiente">0</em></button>
+          <button class="tab" data-tab="cola"><i style="background:var(--blue)"></i>En cola <em id="tCola">0</em></button>
+          <button class="tab" data-tab="generada"><i style="background:var(--amber)"></i>Para revisar <em id="tGenerada">0</em></button>
+          <button class="tab" data-tab="aceptada"><i style="background:var(--lime)"></i>Aceptadas <em id="tAceptada">0</em></button>
+          <button class="tab" data-tab="rechazada"><i style="background:var(--danger)"></i>Rechazadas <em id="tRechazada">0</em></button>
+          <button class="tab" data-tab="omitida"><i style="background:var(--border-2)"></i>Omitidas <em id="tOmitida">0</em></button>
+          <button class="tab" data-tab="todas">Todas <em id="tTodas">0</em></button>
+        </div>
+        <div class="filters">
+          <label class="search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" id="q" placeholder="Nombre, código o cód. de barras" autocomplete="off">
+          </label>
+          <select class="sel" id="fCat" title="Categoría"><option value="">Todas las categorías</option></select>
+          <select class="sel" id="fDesc" title="Descripción guardada en Firebase">
+            <option value="sin">Sin descripción</option>
+            <option value="con">Con descripción</option>
+            <option value="">Con y sin descripción</option>
+          </select>
+          <select class="sel" id="fFoto" title="Foto">
+            <option value="con">Con foto</option>
+            <option value="sin">Sin foto</option>
+            <option value="">Con y sin foto</option>
+          </select>
+          <select class="sel" id="fDisp" title="Disponibilidad">
+            <option value="si">Solo disponibles</option>
+            <option value="">Disponibles y no</option>
+          </select>
+          <select class="sel" id="fOrden" title="Orden">
+            <option value="codigo">Más recientes</option>
+            <option value="nombre">Nombre A-Z</option>
+            <option value="categoria">Categoría</option>
+          </select>
+          <button class="lnk" id="limpiarFiltros" type="button">Limpiar filtros</button>
+        </div>
+        <div class="selbar">
+          <input type="checkbox" class="chk" id="chkTodos" title="Seleccionar los artículos visibles">
+          <span><b id="nSel">0</b> seleccionados</span>
+          <span class="grow"></span>
+          <span>Seleccionar:</span>
+          <button class="lnk" data-tomar="10" type="button">10</button>
+          <button class="lnk" data-tomar="25" type="button">25</button>
+          <button class="lnk" data-tomar="50" type="button">50</button>
+          <button class="lnk" data-tomar="all" type="button">todos los filtrados (<span id="nFiltrables">0</span>)</button>
+          <button class="lnk" id="selNinguno" type="button">ninguno</button>
+          <button class="lnk" id="omitirSel" type="button" title="Marcar los seleccionados como omitidos (no interesan)">omitir seleccionados</button>
+        </div>
+      </div>
+
+      <div class="list" id="list"></div>
+      <button class="btn btn-ghost more" id="moreBtn" hidden>Mostrar más</button>
+    </section>
+
+    <!-- ===== DERECHA: revisión ===== -->
+    <aside class="card review" id="review">
+      <div class="rv-head">
+        <div><b>Revisión</b> <span class="cnt" id="rvCnt"></span></div>
+        <div class="rv-nav">
+          <button class="icon-btn" id="rvPrev" title="Anterior" aria-label="Anterior"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="icon-btn" id="rvNext" title="Siguiente (S)" aria-label="Siguiente"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+      </div>
+      <div id="rvContent"></div>
+    </aside>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span class="t-msg" id="toastMsg"></span><button id="toastAct" hidden>Deshacer</button></div>
+
+<script>
+// ============================================================
+//  Firebase (config.js → pedidos-87064)
+// ============================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const articulosRef = db.ref('articulos');
+
+let firebaseConectado = false;
+db.ref('.info/connected').on('value', snap => {
+  firebaseConectado = snap.val() === true;
+  $('connDot').classList.toggle('off', !firebaseConectado);
+  $('connTxt').textContent = firebaseConectado ? 'online' : 'offline';
+});
+function verificarConexionFirebase(ms = 5000){
+  if (firebaseConectado) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const ref = db.ref('.info/connected');
+    const timer = setTimeout(() => { ref.off('value', cb); resolve(false); }, ms);
+    const cb = s => { if (s.val() === true){ clearTimeout(timer); ref.off('value', cb); resolve(true); } };
+    ref.on('value', cb);
+  });
+}
+function conTimeout(promise, ms, msg){
+  let t;
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg || 'Timeout')), ms); })
+  ]).finally(() => clearTimeout(t));
+}
+
+// ============================================================
+//  Config
+// ============================================================
+const EN_PARALELO = 2;            // descripciones generándose a la vez
+const PAGINA = 80;                // filas por tanda en la lista
+const LS_MODELO = 'hpDescLoteModelo';
+const LS_FILTROS = 'hpDescLoteFiltros';
+// Servidor local (auditoria/servidor.py). Abierta desde el hosting, la página le habla a la PC.
+const SERVIDOR = ['localhost', '127.0.0.1'].includes(location.hostname) ? '' : 'http://localhost:8787';
+// servidor.py solo descarga fotos de estos hosts.
+const FOTO_OK = /^https:\/\/(firebasestorage|storage)\.googleapis\.com\//i;
+
+// ============================================================
+//  Estado
+// ============================================================
+let articulos = {};               // key -> registro de Firebase
+let descs = {};                   // key -> registro de servidor.py (descripciones.json)
+let servidorOk = false;
+let tab = 'pendiente';
+let limite = PAGINA;
+const seleccion = new Set();
+const cola = [];                  // keys esperando generarse
+const generando = new Set();      // keys que se están generando ahora
+const errores = {};               // key -> último error al generar (solo en esta sesión)
+const ediciones = {};             // key -> texto editado y todavía no aceptado
+const saltados = new Set();       // "Saltar" en revisión: vuelve al final de la fila
+const run = { activo: false, pausado: false, hechos: 0, total: 0, fallidos: 0, errSeguidos: 0, ultimoError: '' };
+let revKey = null;                // artículo que se está revisando
+let ultimoClick = null;           // para seleccionar rangos con Shift
+
+// ============================================================
+//  Helpers
+// ============================================================
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => n.toLocaleString('es-AR');
+// Mismo recorte que hace servidor.py: así se reconoce si el artículo cambió desde que se generó.
+const normNombre = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+const normCat = s => String(s || '').trim().slice(0, 80);
+
+// Disponible === "SI": el registro guarda booleano true, pero toleramos strings legacy (igual que descripcion.html).
+function isDisponible(a){
+  const v = a && a.Disponible;
+  if (v === true) return true;
+  return typeof v === 'string' && v.trim().toUpperCase() === 'SI';
+}
+function tieneDescripcion(a){ return !!(a && typeof a.Descripcion === 'string' && a.Descripcion.trim()); }
+// Foto que se le pasa a Claude: la principal (Foto) o la alternativa (Img), siempre que esté en Storage.
+function fotoDe(a){
+  for (const u of [a && a.Foto, a && a.Img]){
+    const s = String(u || '').trim();
+    if (FOTO_OK.test(s)) return s;
+  }
+  return '';
+}
+function thumbDe(a){ return fotoDe(a) || String((a && (a.Foto || a.Img)) || '').trim(); }
+
+let toastTimer = null, toastUndo = null;
+function toast(msg, tipo, deshacer){
+  $('toastMsg').textContent = msg;
+  $('toast').className = 'toast show' + (tipo === 'err' ? ' err' : '');
+  toastUndo = deshacer || null;
+  $('toastAct').hidden = !deshacer;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').classList.remove('show'); toastUndo = null; }, deshacer ? 7000 : 3600);
+}
+$('toastAct').addEventListener('click', () => {
+  const fn = toastUndo; toastUndo = null;
+  $('toast').classList.remove('show');
+  if (fn) fn();
+});
+
+async function api(ruta, cuerpo){
+  const res = await fetch(SERVIDOR + ruta, cuerpo === undefined ? { cache: 'no-store' } : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
+  });
+  let datos = null;
+  try { datos = await res.json(); } catch (_){}
+  if (!res.ok){
+    const e = new Error((datos && datos.mensaje) || ('Error ' + res.status));
+    e.status = res.status;
+    throw e;
+  }
+  return datos;
+}
+
+// ============================================================
+//  Estado de cada artículo
+// ============================================================
+// Registro de servidor.py vigente: se descarta si cambió el nombre, la categoría o la foto.
+function registroDe(k){
+  const a = articulos[k], r = descs[k];
+  if (!a || !r) return null;
+  if (r.nombre !== normNombre(a.Nombre) || r.categoria !== normCat(a.Categoria) || r.foto !== fotoDe(a)) return null;
+  return r;
+}
+// pendiente · cola · generando · generada (para revisar) · aceptada · rechazada · omitida
+function estadoDe(k){
+  if (generando.has(k)) return 'generando';
+  if (cola.includes(k)) return 'cola';
+  const r = registroDe(k);
+  if (!r) return 'pendiente';
+  if (r.decision) return r.decision;
+  return r.texto ? 'generada' : 'pendiente';
+}
+const ROTULO = { pendiente: 'Sin generar', cola: 'En cola', generando: 'Generando…', generada: 'Para revisar',
+                 aceptada: 'Aceptada', rechazada: 'Rechazada', omitida: 'Omitida' };
+// Se puede mandar a generar si tiene foto usable y no está ya en proceso.
+const generable = k => !!fotoDe(articulos[k]) && !['cola', 'generando'].includes(estadoDe(k)) && !!normNombre(articulos[k].Nombre);
+
+// ============================================================
+//  Carga
+// ============================================================
+function cargarArticulos(){
+  return articulosRef.once('value').then(snap => { articulos = snap.val() || {}; });
+}
+
+async function cargarServidor(){
+  try {
+    const est = await api('/api/estado');
+    if (!est.descripciones){
+      throw Object.assign(new Error('viejo'), { viejo: true });
+    }
+    descs = await api('/api/descripciones') || {};
+    servidorOk = !!est.claude;
+    $('srvDot').className = 'dot' + (servidorOk ? '' : ' off');
+    $('srvTxt').textContent = servidorOk ? 'Claude listo' : 'Sin Claude Code';
+    $('srvAlert').hidden = true;
+    if (!servidorOk){
+      mostrarAlerta('<b>No encuentro Claude Code en esta PC.</b> Instalalo, abrí una terminal, ejecutá <code>claude</code> una vez para iniciar sesión con tu suscripción y volvé a abrir el .bat.');
+    }
+  } catch (e){
+    servidorOk = false;
+    $('srvDot').className = 'dot off';
+    $('srvTxt').textContent = 'Sin servidor';
+    mostrarAlerta(e.viejo
+      ? '<b>El servidor local abierto es una versión vieja.</b> Cerrá la ventana negra del servidor y abrí <code>Articulos/auditoria/Descripciones con Claude.bat</code>.'
+      : '<b>Esta página necesita el servidor local para usar Claude.</b> Hacé doble clic en <code>Articulos/auditoria/Descripciones con Claude.bat</code> en la PC donde está Claude Code, dejá abierta la ventana negra y recargá esta página. Si el navegador pregunta si puede acceder a tu red local, tocá <b>Permitir</b>. Mientras tanto podés revisar lo que ya se generó.');
+  }
+}
+function mostrarAlerta(html){ $('srvAlert').innerHTML = html; $('srvAlert').hidden = false; }
+
+// ============================================================
+//  Filtros
+// ============================================================
+function leerFiltros(){
+  return { q: $('q').value.trim().toLowerCase(), cat: $('fCat').value, desc: $('fDesc').value,
+           foto: $('fFoto').value, disp: $('fDisp').value, orden: $('fOrden').value };
+}
+function guardarFiltros(){
+  const f = leerFiltros(); delete f.q;
+  try { localStorage.setItem(LS_FILTROS, JSON.stringify({ ...f, tab })); } catch (_){}
+}
+function restaurarFiltros(){
+  let f = null;
+  try { f = JSON.parse(localStorage.getItem(LS_FILTROS) || 'null'); } catch (_){}
+  if (!f) return;
+  for (const [id, v] of [['fDesc', f.desc], ['fFoto', f.foto], ['fDisp', f.disp], ['fOrden', f.orden]]){
+    if (typeof v === 'string' && [...$(id).options].some(o => o.value === v)) $(id).value = v;
+  }
+  if (f.cat) $('fCat').dataset.pend = f.cat;   // se aplica cuando se carguen las categorías
+  if (typeof f.tab === 'string' && document.querySelector(`[data-tab="${f.tab}"]`)) tab = f.tab;
+}
+
+// Filtros que no son el estado: definen el universo sobre el que se cuentan las pestañas.
+function pasaFiltros(k, f){
+  const a = articulos[k];
+  if (!a) return false;
+  if (f.disp === 'si' && !isDisponible(a)) return false;
+  if (f.cat && normCat(a.Categoria) !== f.cat) return false;
+  if (f.foto === 'con' && !fotoDe(a)) return false;
+  if (f.foto === 'sin' && fotoDe(a)) return false;
+  // Lo aceptado acá ya tiene Descripcion: no se esconde con "sin descripción" para poder deshacerlo.
+  const est = estadoDe(k);
+  if (f.desc === 'sin' && tieneDescripcion(a) && est !== 'aceptada') return false;
+  if (f.desc === 'con' && !tieneDescripcion(a)) return false;
+  if (f.q){
+    const hay = [k, a.Codigo, a.Nombre, a.CodigoBarras].map(v => String(v || '').toLowerCase()).join(' ');
+    if (!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+function ordenar(ks, orden){
+  const nom = k => normNombre(articulos[k].Nombre);
+  if (orden === 'nombre') return ks.sort((x, y) => nom(x).localeCompare(nom(y), 'es'));
+  if (orden === 'categoria') return ks.sort((x, y) => normCat(articulos[x].Categoria).localeCompare(normCat(articulos[y].Categoria), 'es') || nom(x).localeCompare(nom(y), 'es'));
+  return ks.sort((x, y) => String(articulos[y].Codigo || y).localeCompare(String(articulos[x].Codigo || x), 'es', { numeric: true }));
+}
+function universo(f){ return Object.keys(articulos).filter(k => pasaFiltros(k, f)); }
+function filtrados(){
+  const f = leerFiltros();
+  const ks = universo(f).filter(k => {
+    if (tab === 'todas') return true;
+    const e = estadoDe(k);
+    return e === tab || (tab === 'cola' && e === 'generando');
+  });
+  return ordenar(ks, f.orden);
+}
+
+function renderFiltroCategorias(){
+  const cats = [...new Set(Object.values(articulos).map(a => a && normCat(a.Categoria)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  const sel = $('fCat'), actual = sel.dataset.pend || sel.value;
+  delete sel.dataset.pend;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  if (cats.includes(actual)) sel.value = actual;
+}
+
+// ============================================================
+//  Render
+// ============================================================
+function render(){
+  renderTabs();
+  renderRun();
+  renderLista();
+  renderRevision();
+}
+
+function renderTabs(){
+  const f = leerFiltros();
+  const c = { pendiente: 0, cola: 0, generada: 0, aceptada: 0, rechazada: 0, omitida: 0, todas: 0 };
+  universo(f).forEach(k => {
+    let e = estadoDe(k); if (e === 'generando') e = 'cola';
+    c[e]++; c.todas++;
+  });
+  ['Pendiente','Cola','Generada','Aceptada','Rechazada','Omitida','Todas'].forEach(t => $('t' + t).textContent = fmt(c[t.toLowerCase()]));
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  ['fCat','fDesc','fFoto','fDisp'].forEach(id => $(id).classList.toggle('on', !!$(id).value && id !== 'fDisp'));
+  const total = Object.keys(articulos).length;
+  $('meta').textContent = `${fmt(c.todas)} de ${fmt(total)} artículos con estos filtros`;
+}
+
+function renderRun(){
+  const enCurso = generando.size + cola.length;
+  const pct = run.total ? Math.round(run.hechos / run.total * 100) : 0;
+  const nSel = [...seleccion].filter(generable).length;
+  $('genBtn').disabled = !servidorOk || !nSel;
+  $('genBtn').textContent = nSel ? `Generar seleccionados (${fmt(nSel)})` : 'Generar seleccionados';
+  $('pausaBtn').hidden = !enCurso;
+  $('pausaBtn').textContent = run.pausado ? 'Reanudar' : 'Pausar';
+  $('pausaBtn').disabled = !servidorOk;
+  $('vaciarBtn').hidden = !cola.length;
+  $('runBar').style.width = (enCurso || run.hechos ? pct : 0) + '%';
+
+  let txt, sub = '';
+  if (generando.size){
+    const k = [...generando][0];
+    txt = `<span class="spin"></span><span>Generando: ${esc(normNombre(articulos[k] && articulos[k].Nombre) || k)}</span>`;
+    sub = `${fmt(run.hechos)} de ${fmt(run.total)} listas` + (cola.length ? ` · ${fmt(cola.length)} en cola` : '') +
+          (run.fallidos ? ` · ${fmt(run.fallidos)} con error` : '') + (run.pausado ? ' · se pausa al terminar las que están en curso' : '');
+  } else if (cola.length && run.pausado){
+    txt = `<span>En pausa · ${fmt(cola.length)} en cola</span>`;
+    sub = run.ultimoError ? 'Último error: ' + esc(run.ultimoError) : 'Tocá Reanudar para seguir.';
+  } else if (run.total){
+    txt = `<span>Listo: ${fmt(run.hechos - run.fallidos)} descripciones generadas</span>`;
+    sub = (run.fallidos ? `${fmt(run.fallidos)} con error (marcadas en rojo en la lista). ` : '') + 'Revisalas en el panel de la derecha.';
+  } else {
+    txt = '<span>Seleccioná artículos y tocá Generar</span>';
+    sub = 'Se generan de a ' + EN_PARALELO + ' en segundo plano; mientras tanto podés ir revisando. Shift+clic selecciona un rango.';
+  }
+  $('runTxt').innerHTML = txt;
+  $('runSub').innerHTML = sub;
+}
+
+const IMG_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+
+function filaHTML(k){
+  const a = articulos[k], est = estadoDe(k), foto = thumbDe(a), usable = !!fotoDe(a);
+  const pick = generable(k);
+  const thumb = foto
+    ? `<img class="thumb" src="${esc(foto)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb-empty&quot;>${IMG_ICON.replace(/"/g, '&quot;')}</div>'">`
+    : `<div class="thumb-empty">${IMG_ICON}</div>`;
+  const chip = !usable && est === 'pendiente'
+    ? `<span class="st sinfoto" title="${foto ? 'La foto no está en Firebase Storage' : 'El artículo no tiene foto'}">Sin foto</span>`
+    : `<span class="st ${est}">${est === 'generando' ? '<span class="spin"></span>' : ''}${ROTULO[est]}</span>`;
+  const acts = [];
+  if (est === 'cola') acts.push(`<button class="lnk" data-act="quitar" data-k="${esc(k)}">Quitar</button>`);
+  if (est === 'generada') acts.push(`<button class="lnk" data-act="ver" data-k="${esc(k)}">Revisar</button>`);
+  if (['pendiente', 'generada', 'rechazada'].includes(est)) acts.push(`<button class="lnk" data-act="omitir" data-k="${esc(k)}" title="No interesa: sacarlo de la lista">Omitir</button>`);
+  if (est === 'omitida') acts.push(`<button class="lnk" data-act="restaurar" data-k="${esc(k)}">Restaurar</button>`);
+  if (est === 'rechazada' || est === 'aceptada') acts.push(`<button class="lnk" data-act="ver" data-k="${esc(k)}">Ver</button>`);
+  return `<div class="row${seleccion.has(k) ? ' sel-on' : ''}${revKey === k ? ' viendo' : ''}" data-k="${esc(k)}">
+    <input type="checkbox" class="chk" data-k="${esc(k)}" ${seleccion.has(k) ? 'checked' : ''} ${pick ? '' : 'disabled'} aria-label="Seleccionar">
+    ${thumb}
+    <div style="min-width:0">
+      <div class="cod">#${esc(a.Codigo || k)}</div>
+      <div class="name">${esc(a.Nombre || '(sin nombre)')}</div>
+      <div class="sub2">
+        ${a.Categoria ? `<span class="cat">${esc(a.Categoria)}</span>` : '<span class="mini">sin categoría</span>'}
+        ${tieneDescripcion(a) ? '<span class="mini">· ya tiene descripción</span>' : ''}
+        ${isDisponible(a) ? '' : '<span class="mini">· no disponible</span>'}
+      </div>
+      ${errores[k] && est === 'pendiente' ? `<div class="err-txt">Error: ${esc(errores[k])}</div>` : ''}
+    </div>
+    ${chip}
+    <div class="acts">${acts.join('')}</div>
+  </div>`;
+}
+
+let visibles = [];
+function renderLista(){
+  const ks = filtrados();
+  visibles = ks.slice(0, limite);
+  const elegibles = ks.filter(generable);
+  $('nFiltrables').textContent = fmt(elegibles.length);
+  $('nSel').textContent = fmt(seleccion.size);
+  const visElegibles = visibles.filter(generable);
+  const todosSel = visElegibles.length && visElegibles.every(k => seleccion.has(k));
+  $('chkTodos').checked = !!todosSel;
+  $('chkTodos').indeterminate = !todosSel && visElegibles.some(k => seleccion.has(k));
+  $('chkTodos').disabled = !visElegibles.length;
+  $('omitirSel').disabled = !seleccion.size;
+
+  if (!ks.length){
+    const msg = {
+      pendiente: '<b>No hay artículos sin generar con estos filtros</b>Probá cambiar la categoría o el filtro de descripción.',
+      cola: '<b>No hay nada en cola</b>Seleccioná artículos y tocá Generar.',
+      generada: '<b>No hay descripciones para revisar</b>Las que generes van a aparecer acá y en el panel de revisión.',
+      aceptada: '<b>Todavía no aceptaste ninguna</b>',
+      rechazada: '<b>No hay rechazadas</b>',
+      omitida: '<b>No hay omitidas</b>',
+      todas: '<b>No hay artículos con estos filtros</b>'
+    }[tab];
+    $('list').innerHTML = `<div class="empty">${msg}</div>`;
+  } else {
+    $('list').innerHTML = visibles.map(filaHTML).join('');
+  }
+  $('moreBtn').hidden = ks.length <= limite;
+  $('moreBtn').textContent = `Mostrar más (${fmt(ks.length - limite)})`;
+}
+
+// ============================================================
+//  Panel de revisión
+// ============================================================
+// Fila de revisión: todo lo generado sin decidir (sin importar los filtros), lo más viejo primero;
+// lo "saltado" va al final.
+function filaRevision(){
+  const ks = Object.keys(articulos).filter(k => estadoDe(k) === 'generada');
+  return ks.sort((x, y) => (saltados.has(x) - saltados.has(y)) || ((descs[x].fecha || 0) - (descs[y].fecha || 0)));
+}
+
+function renderRevision(){
+  const fila = filaRevision();
+  if (revKey && !articulos[revKey]) revKey = null;
+  // Si lo que se mostraba ya se decidió (o cambió), pasar al siguiente de la fila.
+  if (!revKey || (!fila.includes(revKey) && !['aceptada', 'rechazada'].includes(estadoDe(revKey)))) revKey = fila[0] || null;
+  const pos = fila.indexOf(revKey);
+  $('rvCnt').textContent = fila.length ? (pos >= 0 ? `${pos + 1} de ${fmt(fila.length)}` : `${fmt(fila.length)} para revisar`) : '';
+  $('rvPrev').disabled = fila.length < 2 && pos >= 0;
+  $('rvNext').disabled = fila.length < 2 && pos >= 0;
+
+  if (!revKey){
+    $('rvContent').innerHTML = `<div class="rv-empty"><b>Nada para revisar</b>${cola.length || generando.size
+      ? 'Las descripciones van a ir apareciendo acá a medida que Claude las termine.'
+      : 'Elegí artículos en la lista y tocá <b>Generar seleccionados</b>.'}</div>`;
+    return;
+  }
+  const k = revKey, a = articulos[k], r = registroDe(k) || {}, est = estadoDe(k);
+  const decidido = est === 'aceptada' || est === 'rechazada';
+  const texto = k in ediciones ? ediciones[k] : (est === 'aceptada' && r.textoGuardado) || r.texto || '';
+  const foto = thumbDe(a);
+  const flags = [];
+  if (r.producto_visible === false) flags.push('<div class="flag bad"><b>La foto no muestra bien el producto.</b> La descripción es genérica: revisala con cuidado.</div>');
+  if (r.dudas) flags.push(`<div class="flag warn"><b>Nota de Claude:</b> ${esc(r.dudas)}</div>`);
+  if (decidido) flags.push(`<div class="flag ${est === 'aceptada' ? 'warn' : 'bad'}" style="${est === 'aceptada' ? 'background:var(--lime-soft);color:var(--lime-600)' : ''}">${est === 'aceptada' ? 'Aceptada y guardada en Firebase.' : 'Rechazada.'} ${est === 'rechazada' ? 'Podés aceptarla igual o regenerarla.' : ''}</div>`);
+
+  $('rvContent').innerHTML = `
+    <div class="rv-body">
+      <div class="rv-top">
+        ${foto ? `<img class="rv-img" src="${esc(foto)}" alt="" id="rvImg" title="Abrir la foto en otra pestaña">` : `<div class="rv-img thumb-empty" style="width:150px;height:150px">${IMG_ICON}</div>`}
+        <div class="rv-meta">
+          <div class="cod">#${esc(a.Codigo || k)}</div>
+          <div class="rv-name">${esc(a.Nombre || '')}</div>
+          <div>${a.Categoria ? `<span class="cat">${esc(a.Categoria)}</span>` : '<span class="mini">sin categoría</span>'} <span class="mini">· ${esc(r.modelo || '')}</span></div>
+          ${flags.join('')}
+        </div>
+      </div>
+      ${tieneDescripcion(a) && est !== 'aceptada' ? `<div class="lbl">Descripción actual <span>se reemplaza al aceptar</span></div><div class="actual">${esc(a.Descripcion)}</div>` : ''}
+      <div class="lbl">Descripción ${est === 'aceptada' ? 'guardada' : 'propuesta'} <span id="rvLen">${texto.length} car.</span></div>
+      <textarea class="area" id="rvArea" spellcheck="true">${esc(texto)}</textarea>
+    </div>
+    <div class="rv-foot">
+      ${est === 'aceptada' ? `
+        <div class="rv-row">
+          <button class="btn btn-ghost" id="rvDeshacer">Deshacer aceptación</button>
+          <button class="btn btn-ok" id="rvAceptar">Guardar cambios</button>
+        </div>` : `
+        <button class="btn btn-ok btn-block" id="rvAceptar">Aceptar y guardar <kbd>Ctrl+Enter</kbd></button>
+        <div class="rv-row">
+          ${est === 'rechazada' ? '' : '<button class="btn btn-no" id="rvRechazar">Rechazar <kbd>R</kbd></button>'}
+          <button class="btn btn-ghost" id="rvRegen" ${servidorOk && fotoDe(a) ? '' : 'disabled'}>Regenerar <kbd>G</kbd></button>
+          ${est === 'generada' ? '<button class="btn btn-ghost" id="rvSaltar">Saltar <kbd>S</kbd></button>' : ''}
+        </div>`}
+      <div class="hint">Atajos fuera del texto: A aceptar · R rechazar · G regenerar · S saltar · O omitir artículo</div>
+    </div>`;
+
+  const area = $('rvArea');
+  area.addEventListener('input', () => { ediciones[k] = area.value; $('rvLen').textContent = area.value.length + ' car.'; });
+  if ($('rvImg')) $('rvImg').addEventListener('click', () => window.open(foto, '_blank', 'noopener'));
+  $('rvAceptar').addEventListener('click', () => aceptar(k));
+  if ($('rvRechazar')) $('rvRechazar').addEventListener('click', () => rechazar(k));
+  if ($('rvRegen')) $('rvRegen').addEventListener('click', () => regenerar(k));
+  if ($('rvSaltar')) $('rvSaltar').addEventListener('click', () => saltar(k));
+  if ($('rvDeshacer')) $('rvDeshacer').addEventListener('click', () => deshacerAceptacion(k));
+}
+
+function mover(delta){
+  const fila = filaRevision();
+  if (!fila.length) return;
+  const pos = fila.indexOf(revKey);
+  revKey = fila[(pos < 0 ? 0 : pos + delta + fila.length) % fila.length];
+  render();
+}
+function verEnRevision(k){
+  revKey = k;
+  render();
+  if (window.matchMedia('(max-width:1180px)').matches) $('review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function saltar(k){ saltados.add(k); mover(1); }
+
+// ============================================================
+//  Decisiones
+// ============================================================
+let ocupado = false;
+
+async function guardarRegistro(k, reg){
+  descs[k] = reg;
+  if (reg === null) delete descs[k];
+  await api('/api/descripcion-registro', { codigo: k, registro: reg });
+}
+
+// Escribe la descripción en el nodo del artículo y verifica leyendo de vuelta
+// (mismo patrón que persistirDescripcion() en descripcion.html). texto null la borra.
+async function escribirDescripcion(k, texto){
+  if (!await verificarConexionFirebase(5000)) throw new Error('Sin conexión a Firebase. Verificá tu internet.');
+  const ref = articulosRef.child(k);
+  await conTimeout(ref.update({ Descripcion: texto, Timestamp: firebase.database.ServerValue.TIMESTAMP }), 15000, 'Timeout: la escritura tardó demasiado.');
+  const check = await conTimeout(ref.child('Descripcion').once('value'), 10000, 'No se pudo verificar el guardado.');
+  if ((check.val() || null) !== (texto || null)) throw new Error('La verificación del guardado falló.');
+  if (articulos[k]){
+    if (texto) articulos[k].Descripcion = texto; else delete articulos[k].Descripcion;
+  }
+}
+
+async function aceptar(k){
+  if (ocupado) return;
+  const r = registroDe(k);
+  if (!r) return;
+  const texto = String(k in ediciones ? ediciones[k] : (r.decision === 'aceptada' && r.textoGuardado) || r.texto || '').trim();
+  if (!texto){ toast('La descripción está vacía', 'err'); return; }
+  const previa = tieneDescripcion(articulos[k]) ? articulos[k].Descripcion : null;
+  const regPrevio = { ...r };
+  const eraAceptada = r.decision === 'aceptada';
+  ocupado = true; setBotones(true);
+  try {
+    await escribirDescripcion(k, texto);
+  } catch (e){
+    ocupado = false; setBotones(false);
+    toast(e.message || 'No se pudo guardar', 'err');
+    return;
+  }
+  delete ediciones[k];
+  saltados.delete(k);
+  const reg = { ...r, decision: 'aceptada', fechaDecision: Date.now(), textoGuardado: texto };
+  if (!eraAceptada) reg.descripcionPrevia = previa;
+  // descripcionPrevia solo vive en memoria (servidor.py no la guarda): alcanza para el Deshacer.
+  try { await guardarRegistro(k, reg); } catch (_){ descs[k] = reg; }
+  ocupado = false;
+  if (eraAceptada){ toast('Cambios guardados'); render(); return; }
+  revKey = null;
+  render();
+  toast('Descripción guardada', null, async () => {
+    try {
+      await escribirDescripcion(k, previa);
+      await guardarRegistro(k, regPrevio);
+      ediciones[k] = texto;
+      revKey = k; render();
+      toast('Se restauró la descripción anterior');
+    } catch (e){ toast('No se pudo deshacer: ' + e.message, 'err'); }
+  });
+}
+
+async function deshacerAceptacion(k){
+  if (ocupado) return;
+  const r = registroDe(k);
+  if (!r || r.decision !== 'aceptada') return;
+  const previa = 'descripcionPrevia' in r ? r.descripcionPrevia : undefined;
+  if (previa === undefined && !confirm('No tengo guardada la descripción anterior de este artículo (se aceptó en otra sesión). Si seguís, la descripción se borra de Firebase. ¿Continuar?')) return;
+  ocupado = true; setBotones(true);
+  try {
+    await escribirDescripcion(k, previa || null);
+    const reg = { ...r }; delete reg.decision; delete reg.fechaDecision; delete reg.textoGuardado; delete reg.descripcionPrevia;
+    ediciones[k] = r.textoGuardado || r.texto;
+    await guardarRegistro(k, reg);
+    toast('Aceptación deshecha');
+  } catch (e){ toast('No se pudo deshacer: ' + e.message, 'err'); }
+  ocupado = false;
+  revKey = k; render();
+}
+
+async function decidir(k, decision, msg){
+  const r = registroDe(k) || { nombre: normNombre(articulos[k].Nombre), categoria: normCat(articulos[k].Categoria), foto: fotoDe(articulos[k]) };
+  const previo = descs[k] ? { ...descs[k] } : null;
+  try {
+    await guardarRegistro(k, { ...r, decision, fechaDecision: Date.now() });
+  } catch (e){
+    if (previo) descs[k] = previo; else delete descs[k];
+    toast('No se pudo guardar en el servidor local: ' + e.message, 'err');
+    render();
+    return;
+  }
+  saltados.delete(k);
+  seleccion.delete(k);
+  if (revKey === k) revKey = null;
+  render();
+  toast(msg, null, async () => {
+    try { await guardarRegistro(k, previo); render(); }
+    catch (e){ toast('No se pudo deshacer: ' + e.message, 'err'); }
+  });
+}
+const rechazar = k => { if (registroDe(k)) decidir(k, 'rechazada', 'Descripción rechazada'); };
+const omitir = k => decidir(k, 'omitida', 'Artículo omitido');
+
+async function restaurar(k){
+  const r = descs[k];
+  if (!r) return render();
+  const reg = { ...r }; delete reg.decision; delete reg.fechaDecision;
+  try { await guardarRegistro(k, reg.texto ? reg : null); } catch (e){ toast('No se pudo restaurar: ' + e.message, 'err'); }
+  render();
+}
+
+async function omitirSeleccionados(){
+  const ks = [...seleccion].filter(k => ['pendiente', 'generada', 'rechazada'].includes(estadoDe(k)));
+  if (!ks.length) return;
+  if (!confirm(`¿Omitir ${ks.length} artículos? Dejan de aparecer en "Sin generar" (se pueden restaurar desde "Omitidas").`)) return;
+  let fallos = 0;
+  for (const k of ks){
+    const r = registroDe(k) || { nombre: normNombre(articulos[k].Nombre), categoria: normCat(articulos[k].Categoria), foto: fotoDe(articulos[k]) };
+    try { await guardarRegistro(k, { ...r, decision: 'omitida', fechaDecision: Date.now() }); seleccion.delete(k); }
+    catch (_){ fallos++; }
+  }
+  render();
+  toast(fallos ? `No se pudieron omitir ${fallos}` : `${ks.length} artículos omitidos`, fallos ? 'err' : null);
+}
+
+function setBotones(dis){ document.querySelectorAll('.rv-foot button').forEach(b => b.disabled = dis); }
+
+// ============================================================
+//  Cola de generación
+// ============================================================
+function encolar(ks, alFrente){
+  const nuevos = ks.filter(k => generable(k));
+  if (!nuevos.length) return 0;
+  if (alFrente) cola.unshift(...nuevos); else cola.push(...nuevos);
+  nuevos.forEach(k => { seleccion.delete(k); delete errores[k]; });
+  if (!run.activo && !generando.size) Object.assign(run, { hechos: 0, total: 0, fallidos: 0, ultimoError: '' });
+  run.total += nuevos.length;
+  run.pausado = false;
+  arrancar();
+  return nuevos.length;
+}
+
+function arrancar(){
+  if (!servidorOk || run.pausado) { render(); return; }
+  run.activo = true;
+  run.errSeguidos = 0;
+  const libres = EN_PARALELO - generando.size;
+  for (let i = 0; i < libres && cola.length; i++) trabajador();
+  render();
+}
+
+async function trabajador(){
+  while (!run.pausado && cola.length){
+    const k = cola.shift();
+    const a = articulos[k];
+    if (!a || !fotoDe(a)){ run.hechos++; run.fallidos++; continue; }
+    generando.add(k);
+    render();
+    try {
+      const res = await api('/api/describir', {
+        codigo: k, nombre: normNombre(a.Nombre), categoria: normCat(a.Categoria), foto: fotoDe(a), modelo: $('modelo').value
+      });
+      descs[k] = res.registro;
+      delete ediciones[k];
+      saltados.delete(k);
+      run.errSeguidos = 0;
+    } catch (e){
+      run.fallidos++;
+      errores[k] = e.message;
+      run.ultimoError = e.message;
+      if (e.status === 429){
+        run.pausado = true;
+        toast('Se alcanzó el límite de uso de tu suscripción. Lo generado quedó guardado: reanudá más tarde.', 'err');
+      } else if (!e.status){
+        run.pausado = true;              // el servidor se cerró
+        toast('Se perdió la conexión con el servidor local. Abrí el .bat y tocá Reanudar.', 'err');
+      } else if (++run.errSeguidos >= 3){
+        run.pausado = true;
+        toast('Se pausó por varios errores seguidos: ' + e.message, 'err');
+      }
+    }
+    generando.delete(k);
+    run.hechos++;
+    render();
+  }
+  if (!generando.size){
+    run.activo = false;
+    if (!cola.length && run.total && !run.pausado){
+      toast(run.fallidos ? `Listo. ${run.fallidos} no se pudieron generar.` : 'Listo: todas las descripciones están para revisar');
+    }
+    render();
+  }
+}
+
+// ============================================================
+//  Eventos
+// ============================================================
+$('genBtn').addEventListener('click', () => {
+  try { localStorage.setItem(LS_MODELO, $('modelo').value); } catch (_){}
+  const ks = ordenar([...seleccion].filter(generable), leerFiltros().orden);
+  const n = encolar(ks);
+  if (n) toast(`${n} artículos en cola`);
+});
+$('pausaBtn').addEventListener('click', () => {
+  if (run.pausado){ run.pausado = false; arrancar(); }
+  else { run.pausado = true; render(); }
+});
+$('vaciarBtn').addEventListener('click', () => {
+  const n = cola.length;
+  cola.length = 0;
+  run.total -= n;
+  render();
+  toast(`Se quitaron ${n} artículos de la cola`);
+});
+
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (b){
+    const k = b.dataset.k, act = b.dataset.act;
+    if (act === 'quitar'){ const i = cola.indexOf(k); if (i >= 0){ cola.splice(i, 1); run.total--; } render(); }
+    else if (act === 'ver') verEnRevision(k);
+    else if (act === 'omitir') omitir(k);
+    else if (act === 'restaurar') restaurar(k);
+    return;
+  }
+  const row = e.target.closest('.row');
+  if (!row) return;
+  const k = row.dataset.k;
+  if (!generable(k)){
+    if (estadoDe(k) === 'generada' || estadoDe(k) === 'aceptada' || estadoDe(k) === 'rechazada') verEnRevision(k);
+    return;
+  }
+  const chk = e.target.classList.contains('chk');
+  const marcar = chk ? e.target.checked : !seleccion.has(k);
+  // Shift+clic: aplica lo mismo a todo el rango visible desde el último clic.
+  if (e.shiftKey && ultimoClick && visibles.includes(ultimoClick)){
+    const [i, j] = [visibles.indexOf(ultimoClick), visibles.indexOf(k)].sort((x, y) => x - y);
+    visibles.slice(i, j + 1).filter(generable).forEach(x => marcar ? seleccion.add(x) : seleccion.delete(x));
+  } else {
+    marcar ? seleccion.add(k) : seleccion.delete(k);
+  }
+  ultimoClick = k;
+  renderLista(); renderRun();
+});
+// Evita que Shift+clic seleccione el texto de las filas.
+$('list').addEventListener('mousedown', e => { if (e.shiftKey) e.preventDefault(); });
+
+$('chkTodos').addEventListener('change', e => {
+  visibles.filter(generable).forEach(k => e.target.checked ? seleccion.add(k) : seleccion.delete(k));
+  renderLista(); renderRun();
+});
+document.querySelectorAll('[data-tomar]').forEach(b => b.addEventListener('click', () => {
+  const ks = filtrados().filter(generable);
+  const n = b.dataset.tomar === 'all' ? ks.length : +b.dataset.tomar;
+  // Toma los próximos N que todavía no estén seleccionados.
+  ks.filter(k => !seleccion.has(k)).slice(0, n).forEach(k => seleccion.add(k));
+  renderLista(); renderRun();
+}));
+$('selNinguno').addEventListener('click', () => { seleccion.clear(); renderLista(); renderRun(); });
+$('omitirSel').addEventListener('click', omitirSeleccionados);
+
+function alCambiarFiltro(){ limite = PAGINA; guardarFiltros(); renderTabs(); renderLista(); }
+function setTab(t){ tab = t; alCambiarFiltro(); }
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+let qTimer = null;
+$('q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(alCambiarFiltro, 150); });
+['fCat', 'fDesc', 'fFoto', 'fDisp', 'fOrden'].forEach(id => $(id).addEventListener('change', alCambiarFiltro));
+$('limpiarFiltros').addEventListener('click', () => {
+  $('q').value = ''; $('fCat').value = ''; $('fDesc').value = 'sin'; $('fFoto').value = 'con'; $('fDisp').value = 'si'; $('fOrden').value = 'codigo';
+  tab = 'pendiente';
+  alCambiarFiltro();
+});
+$('moreBtn').addEventListener('click', () => { limite += PAGINA; renderLista(); });
+$('rvPrev').addEventListener('click', () => mover(-1));
+$('rvNext').addEventListener('click', () => { if (revKey && estadoDe(revKey) === 'generada') saltados.add(revKey); mover(1); });
+
+document.addEventListener('keydown', e => {
+  if (!revKey || $('login').classList.contains('hidden') === false) return;
+  const enTexto = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); aceptar(revKey); return; }
+  if (enTexto || e.ctrlKey || e.metaKey || e.altKey) return;
+  const est = estadoDe(revKey);
+  const k = e.key.toLowerCase();
+  if (k === 'a' && est !== 'aceptada'){ e.preventDefault(); aceptar(revKey); }
+  else if (k === 'r' && est === 'generada'){ e.preventDefault(); rechazar(revKey); }
+  else if (k === 'g' && servidorOk && est !== 'aceptada'){ e.preventDefault(); regenerar(revKey); }
+  else if (k === 's' || e.key === 'ArrowRight'){ e.preventDefault(); if (est === 'generada') saltados.add(revKey); mover(1); }
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); mover(-1); }
+  else if (k === 'o' && est === 'generada'){ e.preventDefault(); omitir(revKey); }
+});
+
+function regenerar(k){
+  if (!servidorOk) return;
+  delete ediciones[k];
+  // Lo rechazado/aceptado vuelve a "sin decidir" para poder entrar a la cola.
+  if (descs[k] && descs[k].decision && descs[k].decision !== 'aceptada'){
+    const reg = { ...descs[k] }; delete reg.decision; delete reg.fechaDecision;
+    descs[k] = reg;
+    api('/api/descripcion-registro', { codigo: k, registro: reg }).catch(() => {});
+  }
+  if (encolar([k], true)){
+    if (revKey === k) revKey = null;
+    toast('Regenerando…');
+  }
+  render();
+}
+
+window.addEventListener('beforeunload', e => { if (cola.length || generando.size){ e.preventDefault(); e.returnValue = ''; } });
+
+// Al volver a la pestaña, reintentar el servidor si no estaba (p. ej. se abrió el .bat después).
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && iniciada && !servidorOk){ await cargarServidor(); render(); }
+});
+
+// ============================================================
+//  Sesión
+// ============================================================
+function handleLogin(){
+  const email = $('loginEmail').value.trim(), pass = $('loginPass').value;
+  const btn = $('loginBtn'), err = $('loginErr');
+  if (!email || !pass){ err.textContent = 'Completá ambos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
+  auth.signInWithEmailAndPassword(email, pass).catch(e => {
+    err.textContent = ['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code) ? 'Email o contraseña incorrectos'
+      : e.code === 'auth/too-many-requests' ? 'Demasiados intentos. Esperá un momento' : 'Error al iniciar sesión';
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+$('loginBtn').addEventListener('click', handleLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+$('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+$('logoutBtn').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) auth.signOut(); });
+
+let iniciada = false;
+auth.onAuthStateChanged(user => {
+  if (user){
+    $('login').classList.add('hidden');
+    if (!iniciada){ iniciada = true; init(); }
+  } else {
+    $('login').classList.remove('hidden');
+    $('loginBtn').disabled = false; $('loginBtn').textContent = 'Ingresar';
+  }
+});
+
+async function init(){
+  try { const m = localStorage.getItem(LS_MODELO); if (m && [...$('modelo').options].some(o => o.value === m)) $('modelo').value = m; } catch (_){}
+  restaurarFiltros();
+  try {
+    await Promise.all([cargarArticulos(), cargarServidor()]);
+  } catch (e){
+    $('meta').textContent = 'No se pudieron cargar los artículos: ' + e.message;
+    toast('No se pudieron cargar los artículos', 'err');
+    return;
+  }
+  renderFiltroCategorias();
+  // Si quedó algo para revisar de otra sesión, arrancar mostrándolo.
+  if (filaRevision().length && tab === 'pendiente') toast(`Tenés ${filaRevision().length} descripciones para revisar`);
+  render();
+}
+</script>
+</body>
+</html>
