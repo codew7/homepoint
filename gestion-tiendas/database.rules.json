@@ -134,6 +134,41 @@
             ".validate": "newData.val() === true"
           }
         },
+        "publicos": {
+          ".read": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true",
+          ".indexOn": ["vence"],
+          "$clave": {
+            ".read": true,
+            ".write": "auth != null && root.child('tiendas').child($tienda).child('admins').child(auth.uid).val() === true && root.child('usuarios').child(auth.uid).child('activo').val() !== false",
+            ".validate": "$clave.matches(/^[a-z2-9]{5}-[a-z0-9]{10}$/) && newData.hasChildren(['numero', 'fecha', 'status', 'items', 'total', 'vence'])",
+            "numero": { ".validate": "newData.isString() && newData.val().matches(/^[A-Z2-9]{5}$/)" },
+            "fecha": { ".validate": "newData.isNumber()" },
+            "status": { ".validate": "newData.val() === 'ABIERTO' || newData.val() === 'ENTREGADO'" },
+            "vence": { ".validate": "newData.isNumber() && newData.val() <= now + 2764800000" },
+            "subtotal": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
+            "descuento": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
+            "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
+            "cliente": {
+              "nombre": { ".validate": "newData.isString() && newData.val().length <= 80" },
+              "provincia": { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "localidad": { ".validate": "newData.isString() && newData.val().length <= 80" },
+              "entrega": { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "direccion": { ".validate": "newData.isString() && newData.val().length <= 140" },
+              "$otro": { ".validate": false }
+            },
+            "items": {
+              "$i": {
+                ".validate": "$i.matches(/^[0-9]{1,2}$/) && newData.hasChildren(['nombre', 'cantidad', 'precio'])",
+                "codigo": { ".validate": "newData.isString() && newData.val().length <= 60" },
+                "nombre": { ".validate": "newData.isString() && newData.val().length <= 160" },
+                "cantidad": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10000" },
+                "precio": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+                "$otro": { ".validate": false }
+              }
+            },
+            "$otro": { ".validate": false }
+          }
+        },
         "ultimoPedido": {
           ".write": "newData.val() === now && (!data.exists() || now - data.val() >= 3000)",
           ".validate": "newData.isNumber()"
@@ -149,6 +184,7 @@
             "status": { ".validate": "data.exists() ? (newData.val() === 'ABIERTO' || newData.val() === 'ENTREGADO') : newData.val() === 'ABIERTO'" },
             "entregado": { ".validate": "data.parent().exists() && newData.isNumber() && newData.val() <= now" },
             "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
+            "enlace": { ".validate": "newData.isString() && newData.val().matches(/^[a-z2-9]{5}-[a-z0-9]{10}$/)" },
             "cliente": {
               ".validate": "newData.hasChildren(['nombre', 'telefono', 'email', 'provincia', 'localidad'])",
               "nombre": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 80" },

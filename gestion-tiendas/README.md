@@ -49,7 +49,7 @@ Los dos repositorios usan el **mismo proyecto de Firebase**. Lo único que escri
 2. Copiar el mensaje con las credenciales y mandarlo por WhatsApp o email. Incluye el enlace del catálogo y el del panel. **La contraseña no se puede volver a ver.**
 3. Listo: la tienda ya está publicada en su enlace. **No hay que subir nada.** El vendedor entra a `…/su-tienda/admin`, elige su contraseña definitiva y arma su tienda.
 
-> Palabras reservadas que no se pueden usar como ID: `admin`, `principal`, `index`, `api`, `img`, `assets`, `www`, `catalogo`, `tienda`, `registro`.
+> Palabras reservadas que no se pueden usar como ID: `admin`, `principal`, `index`, `api`, `img`, `assets`, `www`, `catalogo`, `tienda`, `registro`, `pedido`.
 
 ## Dominio propio (opcional)
 
@@ -98,6 +98,10 @@ tiendas/<id>/
                        items[{nombre, cantidad, precio, costo?, codigo?}] }
                      ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.
                        Unidades, subtotal, descuento y costo total NO se guardan: el panel los calcula de los artículos.
+  publicos/<clave>/  { numero, fecha, status, items[{nombre, cantidad, precio, codigo?}], subtotal?, descuento?, total, cliente{nombre, entrega, direccion, localidad, provincia}, vence }
+                     ← copia de sólo lectura de un pedido para el comprador (Panel → pedido → Enviar al cliente).
+                       Se lee sólo conociendo la clave (número + 10 caracteres al azar); nadie puede listarlas.
+                       Vence a los 30 días; el panel borra las vencidas al abrirse. El pedido guarda la clave en "enlace".
   ultimoPedido       ← hora del último pedido: las reglas piden 3 segundos entre pedidos de una tienda (freno contra pedidos falsos en masa)
 usuarios/<uid>/      { email, nombre, activo, debeCambiarClave, creado, ultimoIngreso, tiendas{} }
 bajas/<uid>/         { email, fecha }             ← usuario quitado: su cuenta se borra de Authentication cuando vuelve a entrar

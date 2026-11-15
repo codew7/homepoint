@@ -469,7 +469,7 @@
     // BASE_SITIO es la carpeta desde donde se cargó este archivo, así funciona
     // igual en la raíz de un dominio o en una subcarpeta de GitHub Pages.
     const ID_TIENDA_VALIDO = /^[a-z0-9][a-z0-9-]{1,30}$/;
-    const IDS_RESERVADOS = ['admin', 'principal', 'index', 'api', 'img', 'assets', 'www', 'catalogo', 'tienda', 'registro'];
+    const IDS_RESERVADOS = ['admin', 'principal', 'index', 'api', 'img', 'assets', 'www', 'catalogo', 'tienda', 'registro', 'pedido'];
 
     // En el repositorio de gestión, config.js define SITIO_PUBLICO (la
     // dirección del catálogo público) para armar los enlaces de cada tienda.
