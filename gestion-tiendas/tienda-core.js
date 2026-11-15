@@ -704,6 +704,38 @@
 
     function limitePedidos(ahora) { return (ahora || Date.now()) - DIAS_PEDIDOS * 864e5; }
 
+    // ---- Compras por email (tiendas/<id>/compras/<email>/<pedido>) ----
+    // Copia mínima de cada pedido, agrupada por el email del comprador, para
+    // la opción "Ingresar" del catálogo. Sólo lo que el comprador ya conoce:
+    // número, fecha, estado, artículos y total (nunca costos, teléfono, DNI
+    // ni notas). Se puede leer un email puntual, pero no listar los emails.
+    // La escribe el checkout al confirmar y la mantiene al día el panel.
+    //
+    // La clave es el email en minúsculas con "." → "," (Firebase no acepta
+    // puntos en las claves). Las reglas comprueban esa misma conversión.
+    function claveEmail(email) {
+        const e = String(email || '').trim().toLowerCase();
+        if (!validarEmail(e) || /[#$\[\]\/]/.test(e)) return '';
+        return e.replace(/\./g, ',');
+    }
+
+    // Claves en orden alfabético: así el panel compara con lo guardado
+    // (Firebase devuelve las claves ordenadas) con un simple JSON.stringify.
+    function resumenCompra(p) {
+        p = p || {};
+        return {
+            fecha: Number(p.fecha) || 0,
+            items: aArray(p.items).map(it => ({
+                cantidad: Number(it.cantidad) || 0,
+                nombre: String(it.nombre || '').slice(0, 160),
+                precio: Number(it.precio) || 0
+            })),
+            numero: String(p.numero || ''),
+            status: p.status === ESTADOS_PEDIDO.ENTREGADO ? ESTADOS_PEDIDO.ENTREGADO : ESTADOS_PEDIDO.ABIERTO,
+            total: Number(p.total) || 0
+        };
+    }
+
     // Favicon de respaldo: la inicial de la tienda sobre su color principal
     function faviconInicial(nombre, apariencia) {
         const { primario } = coloresDeTema(apariencia);
@@ -722,6 +754,6 @@
         tiendaId, idValido, urlTienda, urlPanelTienda, BASE_SITIO, IDS_RESERVADOS, baseDatosUrl, urlNodo, pedirConfigRemota, pedirEstadoRemoto, leerCache, guardarCache,
         assetsDeConfig, leerAssetCache, pedirAsset, limpiarAssetsHuerfanos,
         escaparHtml, textoEnriquecido, leerRuta, escribirRuta, faviconInicial,
-        DIAS_PEDIDOS, ESTADOS_PEDIDO, generarNumeroPedido, validarEmail, limitePedidos
+        DIAS_PEDIDOS, ESTADOS_PEDIDO, generarNumeroPedido, validarEmail, limitePedidos, claveEmail, resumenCompra
     };
 })(window);

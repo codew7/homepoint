@@ -41,7 +41,7 @@ const fs = require('fs');
 const path = require('path');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
-const CFG = require('./ajustes');
+const CFG = Object.assign({}, require('./ajustes'));
 
 const MINUTOS_ENTRE_REVISIONES = 5;
 const SEGUNDOS_MARCAS = 15;
@@ -63,13 +63,34 @@ function evento(ev, datos) {
   if (JSON_EVENTOS) console.log('@@' + JSON.stringify(Object.assign({ ev, t: Date.now() }, datos)));
 }
 
-// La clave esta junto a este archivo, o en la carpeta de datos de la app
-// instalada: la de la linea principal (%APPDATA%\WhatsAppSync\lineas\principal)
-// o, en versiones viejas de una sola linea, %APPDATA%\WhatsAppSync.
-// Este script trabaja solo con la linea principal (DATABASE_URL de ajustes.js).
-const CLAVES = [
+// Este script trabaja solo con la linea PRINCIPAL de esta PC (la que se elige
+// en la ventana de WhatsAppSync con "Hacer principal"). Se busca:
+//   1. En la app instalada: %APPDATA%\WhatsAppSync\lineas\<id>\linea.json con
+//      "principal": true -> su clave, su base de WhatsApp y su base de pedidos.
+//   2. Si no: clave-firebase.json junto a este archivo, con los datos de
+//      ajustes.js (modo suelto, sin app instalada).
+//   3. Versiones viejas de una sola linea: %APPDATA%\WhatsAppSync.
+function lineaPrincipalInstalada() {
+  const dir = path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas');
+  let carpetas = [];
+  try { carpetas = fs.readdirSync(dir); } catch (_) { return null; }
+  for (const id of carpetas) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(path.join(dir, id, 'linea.json'), 'utf8'));
+      const clave = path.join(dir, id, 'clave-firebase.json');
+      if (cfg.principal && cfg.databaseUrl && fs.existsSync(clave)) return { cfg, clave };
+    } catch (_) { /* carpeta sin linea.json */ }
+  }
+  return null;
+}
+const instalada = lineaPrincipalInstalada();
+if (instalada) {
+  CFG.DATABASE_URL = instalada.cfg.databaseUrl;
+  CFG.PEDIDOS_DATABASE_URL = instalada.cfg.pedidosUrl || '';
+  console.log('Línea principal: ' + (instalada.cfg.nombre || '') + ' (' + CFG.DATABASE_URL + ')');
+}
+const CLAVES = instalada ? [instalada.clave] : [
   path.join(__dirname, 'clave-firebase.json'),
-  path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas', 'principal', 'clave-firebase.json'),
   path.join(process.env.APPDATA || '', 'WhatsAppSync', 'clave-firebase.json')
 ];
 const archivoClave = CLAVES.find(c => fs.existsSync(c));
@@ -144,6 +165,7 @@ function codigoPedido(id) {
 const nombresPedido = new Map();
 async function nombreDelPedido(id) {
   if (nombresPedido.has(id)) return nombresPedido.get(id);
+  if (!CFG.PEDIDOS_DATABASE_URL) return '';   // linea sin base de pedidos: nombre de WhatsApp
   let nombre = '';
   try {
     const r = await fetch(CFG.PEDIDOS_DATABASE_URL + '/pedidos/' + encodeURIComponent(id) + '/cliente/nombre.json',

@@ -12,19 +12,21 @@
 //
 // Datos en %APPDATA%\WhatsAppSync (la carpeta de instalacion no se puede
 // escribir):
-//   lineas\<id>\linea.json        { nombre, numero, databaseUrl, pedidosUrl, modo, alias, avisosDespacho, creada }
+//   lineas\<id>\linea.json        { nombre, numero, databaseUrl, pedidosUrl, modo, alias, principal, avisosDespacho, creada }
 //   lineas\<id>\clave-firebase.json, sesion\, logs\ ...   (lo de cada linea)
 //   ocr\                          idioma del lector de texto (compartido)
 //   app.json                      preferencias de la app
 // Las versiones anteriores (una sola linea) guardaban todo en la raiz: al
 // primer arranque se pasa a lineas\principal sin volver a escanear el QR.
 //
-// Tipos de linea:
-//   Envios (id "principal", una sola): cotizaciones, comprobantes, remitos y
-//     avisos de despacho. Es la que usan pedidosv2, la descarga de
-//     comprobantes y el Verificador.
-//   Cobros (las demas): solo comprobantes de pago de los clientes; lo unico
-//     propio que se guarda es el mensaje con el alias para transferir.
+// Tipo de cada linea (se elige al agregarla y se puede cambiar):
+//   Envios: cotizaciones, comprobantes, remitos y avisos de despacho.
+//   Cobros: solo comprobantes de pago de los clientes; lo unico propio que
+//     se guarda es el mensaje con el alias para transferir.
+// Aparte, una linea de la PC es la PRINCIPAL (se elige en la ventana): va
+// primera y es la que usan "Descargar comprobantes" y el Verificador. Puede
+// ser de cualquier tipo. (La carpeta "principal" es solo el nombre que tomo
+// la instalacion vieja; no define nada.)
 // =====================================================================
 
 const { app, BrowserWindow, Tray, Menu, dialog, ipcMain, utilityProcess, nativeImage, shell } = require('electron');
@@ -99,10 +101,26 @@ function numeroVisible(numero) {
 const RE_URL_BASE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(firebaseio\.com|firebasedatabase\.app)$/i;
 function limpiarUrl(u) { return String(u || '').trim().replace(/\/+$/, ''); }
 
-// La linea de envios es siempre la de id "principal"; las demas, de cobros.
-const ID_ENVIOS = 'principal';
+// Carpeta de la instalacion vieja (una sola linea, la de envios)
+const ID_VIEJA = 'principal';
 const NOMBRE_ENVIOS = 'Envíos';
-function modoDe(id) { return id === ID_ENVIOS ? 'envios' : 'cobros'; }
+function modoDe(L) { return L && L.cfg && L.cfg.modo === 'cobros' ? 'cobros' : 'envios'; }
+
+// Siempre hay exactamente una principal (si hay lineas)
+function ordenarLineas() {
+  const lista = listaLineas();
+  const elegida = lista.filter(L => L.cfg.principal);
+  if (elegida.length !== 1) {
+    const una = elegida[0] || lista.find(L => L.id === ID_VIEJA) || lista[0];
+    for (const L of lista) {
+      const debe = L === una;
+      if (!!L.cfg.principal !== debe) { L.cfg.principal = debe; if (!L.respaldo) guardarCfg(L); }
+    }
+  }
+  lista.sort((a, b) => (a.cfg.principal ? -1 : b.cfg.principal ? 1 : (a.cfg.creada || 0) - (b.cfg.creada || 0)));
+  lineas.clear();
+  for (const L of lista) lineas.set(L.id, L);
+}
 
 // "ARBOL.CACA.TOMAS, otro.alias" -> ['ARBOL.CACA.TOMAS', 'otro.alias'].
 // Varios alias se separan con coma, punto y coma o renglon (un alias puede
@@ -171,16 +189,17 @@ function leerLineas() {
       const cfg = JSON.parse(fs.readFileSync(path.join(DIR_LINEAS, id, 'linea.json'), 'utf8'));
       const L = crearLinea(id, cfg);
       let cambio = false;
-      if (cfg.modo !== modoDe(id)) { cfg.modo = modoDe(id); cambio = true; }
-      if (cfg.modo === 'cobros' && cfg.avisosDespacho !== false) { cfg.avisosDespacho = false; cambio = true; }
+      // Versiones anteriores: el tipo salia de la carpeta
+      if (cfg.modo !== 'envios' && cfg.modo !== 'cobros') { cfg.modo = id === ID_VIEJA ? 'envios' : 'cobros'; cambio = true; }
+      if ((cfg.avisosDespacho !== false) !== (cfg.modo === 'envios')) { cfg.avisosDespacho = cfg.modo === 'envios'; cambio = true; }
       if (cfg.modo === 'cobros' && !Array.isArray(cfg.alias)) { cfg.alias = []; cambio = true; }
-      if (id === ID_ENVIOS && cfg.nombre === 'Principal') { cfg.nombre = NOMBRE_ENVIOS; cambio = true; }
+      if (id === ID_VIEJA && cfg.nombre === 'Principal') { cfg.nombre = NOMBRE_ENVIOS; cambio = true; }
       if (cambio) guardarCfg(L);
       lista.push(L);
     } catch (_) { /* carpeta sin linea.json: se ignora */ }
   }
-  lista.sort((a, b) => (a.id === ID_ENVIOS ? -1 : b.id === ID_ENVIOS ? 1 : (a.cfg.creada || 0) - (b.cfg.creada || 0)));
   for (const L of lista) lineas.set(L.id, L);
+  ordenarLineas();
 }
 
 function listaLineas() { return [...lineas.values()]; }
@@ -206,6 +225,7 @@ function migrarInstalacionVieja() {
     const cfg = {
       nombre: NOMBRE_ENVIOS,
       modo: 'envios',
+      principal: true,
       numero: AJUSTES.NUMERO_ESPERADO,
       databaseUrl: AJUSTES.DATABASE_URL,
       pedidosUrl: AJUSTES.PEDIDOS_DATABASE_URL || '',
@@ -226,8 +246,8 @@ function migrarInstalacionVieja() {
 // Si la migracion fallo, la instalacion vieja sigue andando desde la raiz.
 function lineaDeRespaldo() {
   if (lineas.size || !fs.existsSync(path.join(DATOS, 'clave-firebase.json'))) return;
-  const L = crearLinea(ID_ENVIOS, {
-    nombre: NOMBRE_ENVIOS, modo: 'envios', numero: AJUSTES.NUMERO_ESPERADO, databaseUrl: AJUSTES.DATABASE_URL,
+  const L = crearLinea(ID_VIEJA, {
+    nombre: NOMBRE_ENVIOS, modo: 'envios', principal: true, numero: AJUSTES.NUMERO_ESPERADO, databaseUrl: AJUSTES.DATABASE_URL,
     pedidosUrl: AJUSTES.PEDIDOS_DATABASE_URL || '', avisosDespacho: true
   });
   L.dir = DATOS;
@@ -404,7 +424,8 @@ function datosLinea(L) {
     databaseUrl: L.cfg.databaseUrl || '',
     pedidosUrl: L.cfg.pedidosUrl || '',
     avisosDespacho: L.cfg.avisosDespacho !== false,
-    modo: modoDe(L.id),
+    modo: modoDe(L),
+    principal: !!L.cfg.principal,
     alias: Array.isArray(L.cfg.alias) ? L.cfg.alias : [],
     proyecto: proyectoDeClave(L),
     respaldo: !!L.respaldo,
@@ -415,7 +436,6 @@ function datosLinea(L) {
 function estadoVentana() {
   return {
     lineas: listaLineas().map(datosLinea),
-    hayEnvios: lineas.has(ID_ENVIOS),
     seleccionada,
     maxLineas: MAX_LINEAS,
     inicioConWindows,
@@ -630,11 +650,8 @@ async function guardarLinea(datos) {
   if (datos.id && !editando) return { ok: false, error: 'Esa línea ya no existe.' };
   if (!editando && lineas.size >= MAX_LINEAS) return { ok: false, error: 'Ya hay ' + MAX_LINEAS + ' líneas en esta PC.' };
 
-  // Tipo: al editar no cambia; al agregar, Envios solo si esta PC no la tiene
-  const modo = editando ? modoDe(editando.id) : (datos.modo === 'envios' ? 'envios' : 'cobros');
-  if (!editando && modo === 'envios' && lineas.has(ID_ENVIOS)) {
-    return { ok: false, campo: 'modo', error: 'Esta PC ya tiene la línea de Envíos. Las demás son de cobros.' };
-  }
+  // Tipo: libre, al agregar o al editar
+  const modo = datos.modo === 'cobros' ? 'cobros' : 'envios';
   const nombre = String(datos.nombre || '').trim().slice(0, 30);
   if (!nombre) return { ok: false, campo: 'nombre', error: 'Poné un nombre para la línea (por ejemplo, el del local).' };
   const numero = normalizarNumero(datos.numero);
@@ -681,17 +698,13 @@ async function guardarLinea(datos) {
 
   let L = editando;
   if (!L) {
-    let id = ID_ENVIOS;
-    if (modo === 'cobros') {
-      id = slug(nombre);
-      for (let i = 2; id === ID_ENVIOS || lineas.has(id) || fs.existsSync(path.join(DIR_LINEAS, id)); i++) id = slug(nombre) + '-' + i;
-    } else if (fs.existsSync(path.join(DIR_LINEAS, id))) {
-      fs.rmSync(path.join(DIR_LINEAS, id), { recursive: true, force: true });   // restos de una linea quitada
-    }
-    L = crearLinea(id, { creada: Date.now(), modo, avisosDespacho: modo === 'envios' });
+    let id = slug(nombre);
+    for (let i = 2; id === ID_VIEJA || lineas.has(id) || fs.existsSync(path.join(DIR_LINEAS, id)); i++) id = slug(nombre) + '-' + i;
+    // La primera linea de la PC queda como principal
+    L = crearLinea(id, { creada: Date.now(), principal: lineas.size === 0 });
   }
   const antes = { ...L.cfg, alias: (L.cfg.alias || []).join('\n') };
-  L.cfg = { ...L.cfg, nombre, numero, databaseUrl, pedidosUrl, modo };
+  L.cfg = { ...L.cfg, nombre, numero, databaseUrl, pedidosUrl, modo, avisosDespacho: modo === 'envios' };
   if (modo === 'cobros') L.cfg.alias = alias; else delete L.cfg.alias;
   if (L.respaldo) {
     // Instalacion vieja que no se pudo migrar: sigue en la raiz
@@ -706,11 +719,12 @@ async function guardarLinea(datos) {
   }
   if (!editando) {
     lineas.set(L.id, L);
+    ordenarLineas();
     seleccionada = L.id;
     refrescarMenu();
     iniciarMotor(L);
   } else if (antes.numero !== numero || antes.databaseUrl !== databaseUrl || antes.pedidosUrl !== pedidosUrl ||
-             antes.alias !== alias.join('\n') || claveNueva || ERRORES.includes(L.estado.conexion)) {
+             antes.alias !== alias.join('\n') || antes.modo !== modo || claveNueva || ERRORES.includes(L.estado.conexion)) {
     // Si cambio el numero, el motor ve que la sesion es de otro telefono,
     // la desvincula y muestra un QR nuevo.
     reiniciarMotor(L);
@@ -743,7 +757,22 @@ async function quitarLinea(id) {
   } else {
     try { fs.rmSync(L.dir, { recursive: true, force: true }); } catch (_) { /* nada */ }
   }
+  ordenarLineas();   // si era la principal, la siguiente pasa a serlo
   if (seleccionada === id) seleccionada = (listaLineas()[0] || {}).id || '';
+  refrescarMenu();
+  actualizar();
+  return true;
+}
+
+// Elegir otra linea como principal
+function hacerPrincipal(id) {
+  const elegida = lineas.get(id);
+  if (!elegida || elegida.cfg.principal) return false;
+  for (const L of lineas.values()) {
+    const debe = L === elegida;
+    if (!!L.cfg.principal !== debe) { L.cfg.principal = debe; if (!L.respaldo) guardarCfg(L); }
+  }
+  ordenarLineas();
   refrescarMenu();
   actualizar();
   return true;
@@ -789,6 +818,7 @@ ipcMain.handle('elegir-clave', async (_e, id) => {
 
 ipcMain.handle('guardar-linea', (_e, datos) => guardarLinea(datos || {}));
 ipcMain.handle('quitar-linea', (_e, id) => quitarLinea(id));
+ipcMain.handle('hacer-principal', (_e, id) => hacerPrincipal(id));
 ipcMain.handle('reiniciar', (_e, id) => { const L = linea(id); return L ? reiniciarMotor(L) : null; });
 ipcMain.handle('abrir-carpeta', (_e, id) => { const L = linea(id); return shell.openPath(L ? L.dir : DATOS); });
 ipcMain.handle('inicio-windows', (_e, si) => configurarInicio(si));

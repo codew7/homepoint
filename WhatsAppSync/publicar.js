@@ -111,15 +111,23 @@ async function subirArchivo(release, archivo, nombre, tipo) {
 // Aviso por Firebase a todas las PCs
 // ---------------------------------------------------------------------
 async function avisarPorFirebase(version, notas) {
+  // El aviso va siempre a la base fija de ajustes.js (DATABASE_URL), que es
+  // la que escuchan todas las PCs, sea cual sea su linea principal. Se busca
+  // en esta PC una clave de ese mismo proyecto.
   const ajustes = require('./ajustes');
-  const claves = [
-    path.join(DIR, 'clave-firebase.json'),
-    path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas', 'principal', 'clave-firebase.json'),
-    path.join(process.env.APPDATA || '', 'WhatsAppSync', 'clave-firebase.json')
-  ];
-  const archivo = claves.find(c => fs.existsSync(c));
+  const dirLineas = path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas');
+  const claves = [path.join(DIR, 'clave-firebase.json')];
+  try { for (const id of fs.readdirSync(dirLineas)) claves.push(path.join(dirLineas, id, 'clave-firebase.json')); } catch (_) { /* sin app instalada */ }
+  claves.push(path.join(process.env.APPDATA || '', 'WhatsAppSync', 'clave-firebase.json'));
+  const host = String(ajustes.DATABASE_URL || '').replace(/^https:\/\//, '');
+  const archivo = claves.find(c => {
+    try {
+      const proyecto = JSON.parse(fs.readFileSync(c, 'utf8')).project_id;
+      return proyecto && (host.startsWith(proyecto + '-default-rtdb') || host.startsWith(proyecto + '.'));
+    } catch (_) { return false; }
+  });
   if (!archivo) {
-    console.log('   No encontré la clave de Firebase de Envíos en esta PC: las PCs la van a encontrar solas en 10 minutos como mucho.');
+    console.log('   No encontré en esta PC la clave del proyecto de ' + host + ': las PCs la van a encontrar solas en 10 minutos como mucho.');
     return;
   }
   const { initializeApp, cert } = require('firebase-admin/app');

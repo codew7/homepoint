@@ -132,9 +132,9 @@ pero una PC puede tener dos o tres: cada una funciona por separado y, si una fal
 3. Si tiene base de pedidos: tiene que tener el mismo formato que pedidosv2, dejar **leer sin clave** y tener
    índice en `timestamp` para `pedidos`. La app lo prueba al guardar y avisa si algo falta.
 
-**Dos tipos de línea:**
+**Dos tipos de línea** (cada línea puede ser de cualquiera de los dos, y se puede cambiar cuando quieras):
 
-| | **Envíos** (la principal, una sola) | **Cobros** (las demás) |
+| | **Envíos** | **Cobros** |
 |---|---|---|
 | Mensajes nuestros que se guardan | Cotizaciones (con «Subtotal $») | Solo el mensaje con el **alias** para transferir |
 | Comprobantes de pago del cliente | Sí | Sí |
@@ -148,14 +148,21 @@ El alias se reconoce sin importar mayúsculas, tildes ni si las palabras van con
 Se pueden cargar varios separados por coma.
 
 **Agregar la línea:** en la ventana, botón **+** (o clic derecho en el ícono → **Agregar línea...**):
-tipo (Cobros, o Envíos si esta PC no la tiene), nombre, número, clave, alias (en cobros) y, si tiene, base de pedidos
-→ **Guardar y vincular** → escanear el QR con el celular de esa línea. El tipo no se cambia después.
+tipo (Envíos o Cobros), nombre, número, clave, alias (en cobros) y, si tiene, base de pedidos
+→ **Guardar y vincular** → escanear el QR con el celular de esa línea.
+
+**Línea principal:** en cada PC, una de sus líneas es la **principal** (★ en la pestaña). Puede ser de cualquier tipo.
+Va primera, y es la que usan **Descargar comprobantes** y el **Verificador**. Para cambiarla: pestaña de la línea →
+**Datos de la línea** → **Hacer principal**. La primera línea que se agrega en una PC queda como principal; si se quita
+la principal, la siguiente pasa a serlo.
 
 - Arriba de la ventana hay una pestaña por línea, con un punto verde (conectada), amarillo (esperando) o rojo (falta algo).
-- En **Datos de la línea** se ven y se cambian sus datos (también el alias), y está **Quitar línea de esta PC**.
+- En **Datos de la línea** se ven y se cambian sus datos (también el tipo y el alias), y está **Quitar línea de esta PC**.
 - En el celular, el dispositivo vinculado aparece como *WhatsAppSync · nombre de la línea*.
-- **Descargar comprobantes** y el **Verificador** trabajan solo con la línea Envíos.
-- pedidosv2 sigue mostrando solo las conversaciones de la línea Envíos.
+- Los **avisos de despacho** salen de cada línea de tipo Envíos, para los envíos que pedidosv2 carga en **su** base.
+  Hoy pedidosv2 solo carga en la base `whatsappsync-e3245`, así que en la práctica salen desde esa línea.
+- pedidosv2 sigue mostrando solo las conversaciones de la base `whatsappsync-e3245` (la de la línea Envíos original).
+- El aviso de **actualización** también va siempre por esa base, sin importar cuál sea la principal.
 
 **Pasar una línea a otra PC:** en la PC vieja, **Quitar línea de esta PC**. En la nueva, **+** con los mismos datos
 y escanear el QR. ⚠️ Una línea no puede estar en dos PCs a la vez: se pisan la conexión y aparece "Hay otra copia conectada".

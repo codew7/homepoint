@@ -102,6 +102,11 @@ tiendas/<id>/
                      ← copia de sólo lectura de un pedido para el comprador (Panel → pedido → Enviar al cliente).
                        Se lee sólo conociendo la clave (número + 10 caracteres al azar); nadie puede listarlas.
                        Vence a los 30 días; el panel borra las vencidas al abrirse. El pedido guarda la clave en "enlace".
+  compras/<email>/<clave>/ { numero, fecha, status, items[{nombre, cantidad, precio}], total }
+                     ← copia mínima de cada pedido, agrupada por el email del comprador (minúsculas, "." → ","),
+                       para la opción "Ingresar" del catálogo. Se lee conociendo el email exacto; nadie puede listar
+                       los emails. La crea el checkout junto con el pedido y la mantiene al día el panel
+                       (ediciones, entregas, pedidos borrados o vencidos). Sin costos, teléfono, DNI ni notas.
   ultimoPedido       ← hora del último pedido: las reglas piden 3 segundos entre pedidos de una tienda (freno contra pedidos falsos en masa)
 usuarios/<uid>/      { email, nombre, activo, debeCambiarClave, creado, ultimoIngreso, tiendas{} }
 bajas/<uid>/         { email, fecha }             ← usuario quitado: su cuenta se borra de Authentication cuando vuelve a entrar

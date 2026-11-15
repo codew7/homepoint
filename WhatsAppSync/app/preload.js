@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('was', {
   olvidarClaveForm: () => ipcRenderer.invoke('olvidar-clave-form'),
   guardarLinea: (datos) => ipcRenderer.invoke('guardar-linea', datos),
   quitarLinea: (id) => ipcRenderer.invoke('quitar-linea', id),
+  hacerPrincipal: (id) => ipcRenderer.invoke('hacer-principal', id),
   reiniciar: (id) => ipcRenderer.invoke('reiniciar', id),
   abrirCarpeta: (id) => ipcRenderer.invoke('abrir-carpeta', id),
   desvincular: (id) => ipcRenderer.invoke('desvincular', id),
