@@ -106,6 +106,15 @@
   .campo.mal input, .campo.mal .clave { border-color: var(--err); }
   .clave { display: flex; align-items: center; gap: 10px; border: 1px dashed var(--line); border-radius: 8px; padding: 5px 5px 5px 10px; }
   .clave b { flex: 1; font-size: 12.5px; font-family: var(--mono); font-weight: 600; color: var(--ink-2); word-break: break-all; }
+  .tipos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tipo {
+    display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--surface-2); cursor: pointer;
+  }
+  .tipo b { font-size: 13px; }
+  .tipo small { grid-column: 1 / -1; }
+  .tipo:has(input:checked) { border-color: var(--ok); background: var(--ok-soft); }
+  .tipo.apagado { opacity: .5; cursor: default; }
   .campo-error { margin-top: 2px; min-height: 0; }
   .acciones { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
   .acciones button.principal { margin-top: 0; }
@@ -166,6 +175,8 @@
       <summary>Datos de la línea</summary>
       <dl class="datos">
         <dt>Nombre</dt><dd id="dNombre"></dd>
+        <dt>Tipo</dt><dd id="dTipo"></dd>
+        <dt id="dtAlias">Alias</dt><dd id="dAlias"></dd>
         <dt>Número</dt><dd id="dNumero"></dd>
         <dt>Proyecto</dt><dd id="dProyecto"></dd>
         <dt>Base WhatsApp</dt><dd id="dBase"></dd>
@@ -188,6 +199,16 @@
       <h2 id="fTitulo">Agregar línea de WhatsApp</h2>
       <p id="fIntro">Cada línea es un número de WhatsApp con su propio proyecto de Firebase.
         En esta PC pueden funcionar hasta 3 a la vez.</p>
+
+      <div class="campo" data-campo="modo" id="fCampoModo">
+        <span>Tipo de línea</span>
+        <div class="tipos">
+          <label class="tipo"><input type="radio" name="modo" value="cobros" checked>
+            <b>Cobros</b><small>Solo guarda los comprobantes de pago de los clientes y los mensajes con el alias. Ningún archivo nuestro.</small></label>
+          <label class="tipo" id="fTipoEnvios"><input type="radio" name="modo" value="envios">
+            <b>Envíos</b><small>La línea principal: cotizaciones, comprobantes, remitos y avisos de despacho. Una sola.</small></label>
+        </div>
+      </div>
 
       <label class="campo" data-campo="nombre">
         <span>Nombre</span>
@@ -213,6 +234,13 @@
         <small>Se completa sola al elegir la clave. Si no coincide, copiala de Firebase → Realtime Database.</small>
       </label>
 
+      <label class="campo" data-campo="alias" id="fCampoAlias">
+        <span>Alias para transferencias</span>
+        <input id="fAlias" spellcheck="false" placeholder="Ej.: ARBOL.CACA.TOMAS">
+        <small>El alias que mandamos al cliente para que transfiera. Ese mensaje se guarda y sirve para ubicar el pedido.
+          No importan mayúsculas, tildes ni si las palabras van con punto o espacio. Si son varios, separalos con coma.</small>
+      </label>
+
       <label class="campo" data-campo="pedidosUrl">
         <span>Base de pedidos <i>(opcional)</i></span>
         <input id="fPedidos" spellcheck="false" placeholder="https://…-default-rtdb.firebaseio.com">
@@ -236,6 +264,7 @@
       <button id="btnDesvincular" class="peligro">Desvincular WhatsApp</button>
     </div>
     <p class="nota">Cerrar esta ventana no lo detiene. Para salir: clic derecho en el ícono de la bandeja → Salir.</p>
+    <p class="nota" id="version" style="margin-top: 4px"></p>
   </footer>
 
 <script>
@@ -286,6 +315,7 @@
 
   function pintar(e) {
     ultimo = e;
+    $('version').textContent = e.actualizacion || ('Versión ' + (e.version || ''));
     const l = lineaActual(e);
     if (!l && !formAbierto) { abrirForm(null); return; }
     pintarTabs(e);
@@ -320,6 +350,10 @@
     $('nAdjuntos').textContent = (l.adjuntosHoy || 0).toLocaleString('es-AR');
 
     $('dNombre').textContent = l.nombre;
+    const cobros = l.modo === 'cobros';
+    $('dTipo').textContent = cobros ? 'Cobros (solo comprobantes de clientes)' : 'Envíos (línea principal)';
+    $('dtAlias').hidden = $('dAlias').hidden = !cobros;
+    $('dAlias').textContent = (l.alias || []).join(', ') || 'Sin alias';
     $('dNumero').textContent = l.numeroVisible;
     $('dProyecto').textContent = l.proyecto || 'Sin clave';
     $('dBase').textContent = l.databaseUrl || '—';
@@ -364,6 +398,19 @@
     }
   }
 
+  function tipoElegido() {
+    const r = document.querySelector('input[name=modo]:checked');
+    return r ? r.value : 'cobros';
+  }
+  // El alias es solo de las lineas de cobros. Al elegir Envios se sugiere el nombre.
+  function elegirTipo() {
+    const envios = tipoElegido() === 'envios';
+    $('fCampoAlias').hidden = envios;
+    if (formAbierto && !formAbierto.id && envios && !$('fNombre').value.trim()) $('fNombre').value = 'Envíos';
+    if (formAbierto && !formAbierto.id && !envios && $('fNombre').value === 'Envíos') $('fNombre').value = '';
+  }
+  document.querySelectorAll('input[name=modo]').forEach(r => r.addEventListener('change', elegirTipo));
+
   function abrirForm(l) {
     window.was.olvidarClaveForm();
     formAbierto = { id: l ? l.id : '' };
@@ -377,6 +424,14 @@
     $('fBtnClave').textContent = l ? 'Cambiar…' : 'Elegir archivo…';
     $('fBase').value = l ? l.databaseUrl : '';
     $('fPedidos').value = l ? l.pedidosUrl : '';
+    $('fAlias').value = l ? (l.alias || []).join(', ') : '';
+    // Tipo: se elige solo al agregar. Envios, si esta PC todavia no la tiene.
+    const hayEnvios = !!(ultimo && ultimo.hayEnvios);
+    $('fCampoModo').hidden = !!l;
+    $('fTipoEnvios').classList.toggle('apagado', hayEnvios);
+    document.querySelector('input[name=modo][value=envios]').disabled = hayEnvios;
+    document.querySelector('input[name=modo][value=' + (l ? l.modo : 'cobros') + ']').checked = true;
+    elegirTipo();
     $('fGuardar').textContent = l ? 'Guardar cambios' : 'Guardar y vincular';
     $('fCancelar').hidden = !(ultimo && ultimo.lineas && ultimo.lineas.length);
     $('form').hidden = false;
@@ -417,7 +472,9 @@
         nombre: $('fNombre').value,
         numero: $('fNumero').value,
         databaseUrl: $('fBase').value,
-        pedidosUrl: $('fPedidos').value
+        pedidosUrl: $('fPedidos').value,
+        modo: tipoElegido(),
+        alias: $('fAlias').value
       });
       if (!r.ok) { marcarError(r.campo || '', r.error || 'No se pudo guardar.'); return; }
       formAbierto = null;

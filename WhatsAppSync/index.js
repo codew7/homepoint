@@ -51,7 +51,7 @@ fs.mkdirSync(DIR, { recursive: true });
 // Valores comunes en ajustes.js. Los de la linea (numero, base de WhatsApp,
 // base de pedidos) salen de linea.json de su carpeta, si existe; si no, se
 // usan los de ajustes.js (la linea principal).
-const CFG = Object.assign({ NOMBRE_LINEA: '', AVISOS_DESPACHO: true }, require('./ajustes'));
+const CFG = Object.assign({ NOMBRE_LINEA: '', AVISOS_DESPACHO: true, MODO: 'envios', ALIAS: [] }, require('./ajustes'));
 try {
   const linea = JSON.parse(fs.readFileSync(path.join(DIR, 'linea.json'), 'utf8'));
   if (linea.nombre) CFG.NOMBRE_LINEA = String(linea.nombre);
@@ -59,7 +59,18 @@ try {
   if (linea.databaseUrl) CFG.DATABASE_URL = String(linea.databaseUrl);
   if ('pedidosUrl' in linea) CFG.PEDIDOS_DATABASE_URL = String(linea.pedidosUrl || '').replace(/\/+$/, '');
   if ('avisosDespacho' in linea) CFG.AVISOS_DESPACHO = linea.avisosDespacho !== false;
+  if (linea.modo === 'cobros') CFG.MODO = 'cobros';
+  if (Array.isArray(linea.alias)) CFG.ALIAS = linea.alias.map(String).filter(Boolean);
 } catch (_) { /* sin linea.json: valores de ajustes.js */ }
+// Modo de la linea:
+//   'envios' (la principal): cotizaciones ("Subtotal $"), comprobantes de
+//            pago del cliente, mis remitos y avisos de despacho.
+//   'cobros' (las demas): solo comprobantes de pago del cliente. Lo unico
+//            mio que se guarda es el mensaje con el alias para transferir
+//            (CFG.ALIAS), que cumple el papel de la cotizacion. Ningun
+//            archivo mio se guarda y no manda avisos de despacho.
+const COBROS = CFG.MODO === 'cobros';
+if (COBROS) CFG.AVISOS_DESPACHO = false;
 const ARCHIVO_CLAVE = path.join(DIR, 'clave-firebase.json');
 const DIR_SESION = path.join(DIR, 'sesion');
 const ARCHIVO_LIDS = path.join(DIR, 'lids.json');
@@ -191,8 +202,29 @@ setInterval(() => {
 // Mis mensajes con esto en el texto son cotizaciones y se guardan
 const ES_COTIZACION = /subtotal\s*\$/i;
 
+// En las lineas de cobros, la "cotizacion" es mi mensaje con el alias para
+// transferir (ej. ARBOL.CACA.TOMAS). Se compara sin mayusculas ni tildes y
+// sin importar si las palabras van separadas por punto, espacio, guion o
+// guion bajo (arbol.caca.tomas, Arbol Caca Tomas...).
+function sinTildes(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+const RE_ALIAS = (() => {
+  const partes = CFG.ALIAS
+    .map(a => sinTildes(a).split(/[^a-z0-9]+/).filter(Boolean))
+    .filter(p => p.length)
+    .map(p => p.join('[\\s._-]*'));
+  return partes.length ? new RegExp('(?:^|[^a-z0-9])(?:' + partes.join('|') + ')(?![a-z0-9])') : null;
+})();
+
+// Si el texto es la marca de esta linea: cotizacion (envios) o alias (cobros)
+function esMarca(tx) {
+  if (COBROS) return !!(RE_ALIAS && RE_ALIAS.test(sinTildes(tx)));
+  return ES_COTIZACION.test(String(tx || ''));
+}
+
 function esCotizacion(v) {
-  return !!(v && (v.cot || (v.yo && ES_COTIZACION.test(String(v.tx || '')))));
+  return !!(v && (v.cot || (v.yo && esMarca(v.tx))));
 }
 
 // "375.320" | "1.275.598,00" | "213000" -> numero (formato argentino)
@@ -211,8 +243,13 @@ const RE_SUBTOTAL_COT = /subtotal\s*\$\s*([\d.]+(?:,\d{1,2})?)/i;
 const RE_PEDIDO_COT = /pedido\s*(?:n[°º.o]?\s*)?:\s*#?\s*([A-Za-z0-9_-]{6})(?![A-Za-z0-9_-])/i;
 function datosCotizacion(tx) {
   const d = {};
+  if (COBROS) {
+    let mayor = 0;
+    for (const m of String(tx || '').matchAll(/\$\s*([\d.]+(?:,\d{1,2})?)/g)) mayor = Math.max(mayor, numeroAR(m[1]));
+    if (mayor) d.cotTotal = Math.round(mayor);
+  }
   const total = RE_TOTAL_COT.exec(tx) || RE_SUBTOTAL_COT.exec(tx);
-  if (total && numeroAR(total[1])) d.cotTotal = Math.round(numeroAR(total[1]));
+  if (total && numeroAR(total[1])) d.cotTotal = Math.round(numeroAR(total[1]));   // "Total $" manda
   const pedido = RE_PEDIDO_COT.exec(tx);
   if (pedido) d.cotPedido = pedido[1];
   return d;
@@ -500,7 +537,7 @@ async function textoDePdf(buffer) {
         // Edite un mensaje mio que no estaba guardado y ahora es una cotizacion
         if (key.fromMe && prot.type === TIPO_EDITAR && prot.editedMessage) {
           const nuevo = textoDe(normalizeMessageContent(prot.editedMessage));
-          if (nuevo.tx && ES_COTIZACION.test(nuevo.tx)) {
+          if (nuevo.tx && esMarca(nuevo.tx)) {
             const t = (aNumero(msg.messageTimestamp) || Math.floor(Date.now() / 1000)) * 1000;
             rutas[rutaMsg] = Object.assign({ t, yo: true, tipo: nuevo.tipo || 'texto', tx: nuevo.tx, cot: true, editado: true },
               datosCotizacion(nuevo.tx));
@@ -517,7 +554,7 @@ async function textoDePdf(buffer) {
           if (nuevo.tx) {
             rutas[rutaMsg].tx = nuevo.tx;
             rutas[rutaMsg].editado = true;
-            if (ES_COTIZACION.test(nuevo.tx)) Object.assign(rutas[rutaMsg], datosCotizacion(nuevo.tx));
+            if (esMarca(nuevo.tx)) Object.assign(rutas[rutaMsg], datosCotizacion(nuevo.tx));
           }
         }
         return;
@@ -529,7 +566,7 @@ async function textoDePdf(buffer) {
         if (nuevo.tx) {
           rutas[rutaMsg + '/tx'] = nuevo.tx;
           rutas[rutaMsg + '/editado'] = true;
-          if (ES_COTIZACION.test(nuevo.tx)) {
+          if (esMarca(nuevo.tx)) {
             const d = datosCotizacion(nuevo.tx);
             rutas[rutaMsg + '/cotTotal'] = d.cotTotal || null;
             rutas[rutaMsg + '/cotPedido'] = d.cotPedido || null;
@@ -544,8 +581,8 @@ async function textoDePdf(buffer) {
     const t = (aNumero(msg.messageTimestamp) || Math.floor(Date.now() / 1000)) * 1000;
     const id = claveSegura(key.id);
 
-    // Mios con "Subtotal $": cotizaciones
-    if (key.fromMe && ES_COTIZACION.test(tx)) {
+    // Mios con "Subtotal $" (o con el alias, en las lineas de cobros): cotizaciones
+    if (key.fromMe && esMarca(tx)) {
       rutas[base + '/msgs/' + id] = Object.assign({ t, yo: true, tipo, tx, cot: true }, datosCotizacion(tx));
       const meta = metas[tel] || (metas[tel] = { jid: key.remoteJid, ultimo: 0 });
       if (t > meta.ultimo) meta.ultimo = t;
@@ -557,6 +594,7 @@ async function textoDePdf(buffer) {
     //   - del cliente: un comprobante de pago (cat:'pago')
     //   - mios: un remito o comprobante de envio (cat:'remito')
     // (img:true = el visor busca la imagen en imgs/)
+    if (COBROS && key.fromMe) return;   // lineas de cobros: ningun archivo mio se guarda
     const clase = claseAdjunto(contenido);
     if (!clase || t < Date.now() - CFG.DIAS_FOTOS * 86400000) return;
     const doc = contenido.documentMessage;
@@ -1253,8 +1291,9 @@ async function textoDePdf(buffer) {
             const texto = await textoDeImagen(Buffer.from(img, 'base64'));
             let comp, cat;
             if (v.yo) {
-              // Remito mio: si no se pudo leer, se deja como estaba
-              comp = texto === null || esRemito(texto) ? 'remito' : 'no';
+              // Remito mio: si no se pudo leer, se deja como estaba.
+              // En las lineas de cobros no se guarda ningun archivo mio.
+              comp = COBROS ? 'no' : texto === null || esRemito(texto) ? 'remito' : 'no';
               cat = 'remito';
             } else {
               comp = texto === null ? 'duda' : clasificarComprobante(texto);
@@ -1412,6 +1451,10 @@ async function textoDePdf(buffer) {
     } catch (e) { log('No se pudieron borrar avisos viejos:', e.message); }
   }
   if (!CFG.PEDIDOS_DATABASE_URL) log('Esta línea no tiene base de pedidos: no se asignan comprobantes a pedidos ni se borran chats de curiosos.');
+  if (COBROS) {
+    log('Línea de cobros: solo se guardan los comprobantes de pago de los clientes y los mensajes con el alias' +
+      (CFG.ALIAS.length ? ' (' + CFG.ALIAS.join(', ') + ').' : '. ATENCIÓN: no hay ningún alias cargado.'));
+  }
   log('Iniciando WhatsApp' + (CFG.NOMBRE_LINEA ? ' (línea ' + CFG.NOMBRE_LINEA + ', ' + CFG.NUMERO_ESPERADO + ')' : '') + '...');
   await conectar();
 })().catch(e => {

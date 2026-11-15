@@ -101,12 +101,12 @@ al cliente, desde el 11 7646-0030:
 4. Subí `pedidosv2.html` y `config-whatsapp.js` al hosting.
 
 ### 5. Instalar en la PC servidor
-1. Copiá el instalador **`WhatsAppSync Setup 1.5.0.exe`** (carpeta `dist`) a la PC servidor y abrilo.
+1. Copiá el instalador **`WhatsAppSync-Setup-X.exe`** (carpeta `dist`) a la PC servidor y abrilo.
    Windows puede mostrar *"Windows protegió su PC"* porque el instalador no está firmado:
    tocá **Más información → Ejecutar de todas formas**.
 2. Se instala solo, sin preguntas, y abre la ventana de WhatsAppSync. Si la PC ya tenía una versión
-   anterior, la pasa sola a la línea **Principal** (no hace falta volver a escanear) y termina acá.
-3. En una PC nueva aparece **Agregar línea de WhatsApp**: poné el nombre (ej. *Principal*), el número
+   anterior, la pasa sola a la línea **Envíos** (no hace falta volver a escanear) y termina acá.
+3. En una PC nueva aparece **Agregar línea de WhatsApp**: elegí el tipo **Envíos**, el número
    (**11 7646-0030**) y elegí la clave privada de Firebase
    (**Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada**,
    el archivo `.json` que se descarga). La dirección de la base se completa sola.
@@ -132,15 +132,30 @@ pero una PC puede tener dos o tres: cada una funciona por separado y, si una fal
 3. Si tiene base de pedidos: tiene que tener el mismo formato que pedidosv2, dejar **leer sin clave** y tener
    índice en `timestamp` para `pedidos`. La app lo prueba al guardar y avisa si algo falta.
 
+**Dos tipos de línea:**
+
+| | **Envíos** (la principal, una sola) | **Cobros** (las demás) |
+|---|---|---|
+| Mensajes nuestros que se guardan | Cotizaciones (con «Subtotal $») | Solo el mensaje con el **alias** para transferir |
+| Comprobantes de pago del cliente | Sí | Sí |
+| Archivos que mandamos nosotros | Remitos de envío | **Ninguno** |
+| Aviso de despacho (Flecha Carga) | Sí | No |
+| Asignar comprobantes a pedidos | Sí, con su base de pedidos | Sí, con su base de pedidos |
+
+En las líneas de **cobros**, el mensaje con el alias (ej. `ARBOL.CACA.TOMAS`) cumple el papel de la cotización:
+se guarda y sirve para ubicar el pedido; si trae un importe con `$`, se usa para compararlo con el comprobante.
+El alias se reconoce sin importar mayúsculas, tildes ni si las palabras van con punto, espacio o guion.
+Se pueden cargar varios separados por coma.
+
 **Agregar la línea:** en la ventana, botón **+** (o clic derecho en el ícono → **Agregar línea...**):
-nombre, número, clave y, si tiene, base de pedidos → **Guardar y vincular** → escanear el QR con el celular de esa línea.
+tipo (Cobros, o Envíos si esta PC no la tiene), nombre, número, clave, alias (en cobros) y, si tiene, base de pedidos
+→ **Guardar y vincular** → escanear el QR con el celular de esa línea. El tipo no se cambia después.
 
 - Arriba de la ventana hay una pestaña por línea, con un punto verde (conectada), amarillo (esperando) o rojo (falta algo).
-- En **Datos de la línea** se ven y se cambian sus datos, y está **Quitar línea de esta PC**.
+- En **Datos de la línea** se ven y se cambian sus datos (también el alias), y está **Quitar línea de esta PC**.
 - En el celular, el dispositivo vinculado aparece como *WhatsAppSync · nombre de la línea*.
-- El **aviso de despacho** de Flecha Carga sale solo desde la línea **Principal**.
-- **Descargar comprobantes** y el **Verificador** trabajan solo con la línea Principal.
-- pedidosv2 sigue mostrando solo las conversaciones de la línea Principal.
+- **Descargar comprobantes** y el **Verificador** trabajan solo con la línea Envíos.
+- pedidosv2 sigue mostrando solo las conversaciones de la línea Envíos.
 
 **Pasar una línea a otra PC:** en la PC vieja, **Quitar línea de esta PC**. En la nueva, **+** con los mismos datos
 y escanear el QR. ⚠️ Una línea no puede estar en dos PCs a la vez: se pisan la conexión y aparece "Hay otra copia conectada".
@@ -162,7 +177,33 @@ y escanear el QR. ⚠️ Una línea no puede estar en dos PCs a la vez: se pisan
   Puede tardar un rato; el avance queda en `limpieza-cotizaciones.json` y, si se corta, sigue
   en el próximo arranque.
 
-### Armar un instalador nuevo (si se cambia el programa)
+### Actualizaciones automáticas
+Las PCs se actualizan **solas, sin preguntar nada**: bajan la versión nueva en segundo plano, se cierran
+y se vuelven a abrir (escondidas en la bandeja, como siempre). Las líneas se detienen con cuidado antes,
+así que no hace falta volver a escanear el QR.
+
+**Publicar una versión nueva** (después de hacer cambios en el programa):
+1. Doble clic en **`publicar-actualizacion.bat`** (en esta carpeta).
+2. La primera vez pide un **token de GitHub** y explica cómo sacarlo. Queda guardado en `.token-github`
+   (no se sube a git; no lo compartas).
+3. Pregunta qué cambió (opcional) y hace todo solo: sube un número la versión, arma el instalador,
+   lo sube a GitHub (entrega **whatsappsync** del repositorio homepoint) y avisa a las PCs.
+4. Las PCs prendidas se actualizan **en segundos**. Las que estaban apagadas o sin internet,
+   al prenderse o en 10 minutos como mucho.
+
+**Una sola vez, para que el aviso sea al instante:** publicar de nuevo `database.rules.json` en la base
+de **Envíos** (Firebase → Realtime Database → Reglas → pegar y **Publicar**). Sin eso igual se actualizan,
+pero revisando cada 10 minutos.
+
+**Primera vez en cada PC:** las versiones anteriores no saben actualizarse solas. Después de la primera
+publicación, instalá a mano en cada PC el instalador `dist\WhatsAppSync-Setup-X.exe` que armó el publicador.
+De ahí en adelante, todo es automático.
+
+- La versión instalada y el estado de la actualización se ven al pie de la ventana.
+- Lo que pasó queda en la **Actividad** de cada línea y en `actualizaciones.log` (carpeta de datos).
+- La entrega en GitHub es un *pre-release*: así la app Android de pedidos, que busca el último release, no la confunde con la suya.
+
+### Armar un instalador a mano (sin publicarlo)
 En esta carpeta: `npm install` (una vez) y después `npm run instalador`. Sale en `dist`.
 Para probar sin instalar: `npm start`. El `whatsAppSync.bat` queda como modo alternativo
 sin bandeja: no usarlo al mismo tiempo que la app.

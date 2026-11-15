@@ -6,9 +6,10 @@
 // cada linea (numero, base de WhatsApp, base de pedidos) se carga desde la
 // ventana de la app y queda en %APPDATA%\WhatsAppSync\lineas\<id>\linea.json.
 // Los tres valores de abajo marcados (LINEA PRINCIPAL) solo se usan para la
-// linea principal: al pasar una instalacion vieja a lineas, con
+// linea principal (la de Envios): al pasar una instalacion vieja a lineas, con
 // "node index.js" suelto y en descargar-comprobantes.js. El resto vale para
-// todas las lineas.
+// todas las lineas. Las lineas de cobros (las demas) solo guardan los
+// comprobantes del cliente y el mensaje con su alias (ver index.js).
 
 module.exports = {
   // (LINEA PRINCIPAL) Numero de WhatsApp que se vincula (solo digitos, con 549).
