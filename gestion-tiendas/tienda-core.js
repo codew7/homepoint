@@ -95,7 +95,8 @@
             soloDisponiblesPorDefecto: true,
             mostrarCodigo: true,
             productosPorPagina: 30,
-            categoriasOcultas: []
+            categoriasOcultas: [],
+            articulosOcultos: []      // claves (código o, si no tiene, nombre) que no se muestran
         },
         banners: {
             superior: [],       // [{ desktop: assetId, movil: assetId }]

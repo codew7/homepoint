@@ -13,8 +13,10 @@
          tiendas/<id>/estado            { activa, mensaje }   ← lo lee el catálogo
          tiendas/<id>/costo             { modo, pct }         ← columna del costo (sin nodo = E)
      · Sin Cloud Functions no se puede borrar una cuenta de Authentication ni
-       cambiar la contraseña de otra persona: se "suspende" o se "quita"
-       (pierde todo permiso) y se manda el email de restablecimiento.
+       cambiar la contraseña de otra persona. "Quitar del sistema" le saca
+       todo permiso y deja bajas/<uid>: la cuenta se borra sola cuando esa
+       persona vuelve a entrar (admin-auth.js). Para la contraseña se manda
+       el email de restablecimiento.
    ========================================================================== */
 (function () {
     'use strict';
@@ -27,7 +29,7 @@
 
     let db = null;
     let yo = null;
-    const datos = { tiendas: {}, usuarios: {}, solicitudes: {}, cargadas: false };
+    const datos = { tiendas: {}, usuarios: {}, solicitudes: {}, bajas: {}, cargadas: false };
     const logos = {};
 
     // ======================================================================
@@ -242,6 +244,7 @@
     function escuchar() {
         db.ref('usuarios').on('value', s => { datos.usuarios = s.val() || {}; renderTodo(); }, error);
         db.ref('solicitudes').on('value', s => { datos.solicitudes = s.val() || {}; renderTodo(); }, error);
+        db.ref('bajas').on('value', s => { datos.bajas = s.val() || {}; renderTodo(); }, error);
     }
 
     async function actualizar(cambios, msg) {
@@ -266,7 +269,11 @@
         }
     }
 
-    function errorDeAlta(e) {
+    function errorDeAlta(e, email) {
+        const pendiente = email && Object.values(datos.bajas).some(b => String(b.email || '').toLowerCase() === email);
+        if (e && e.code === 'auth/email-already-in-use' && pendiente) {
+            return 'Ese email es de un usuario que quitaste y cuya cuenta todavía no se borró (se borra sola cuando vuelve a entrar). Para usarlo ya, borrala en la consola de Firebase: <em>Authentication → Usuarios</em>, y volvé a intentar.';
+        }
         if (e && e.code === 'auth/email-already-in-use') {
             return 'Ya existe una cuenta con ese email. Si esa persona ya tuvo acceso, pedile que entre al panel de su tienda y toque <strong>Solicitar acceso</strong>: la vas a ver en <em>Solicitudes</em> para aprobarla.';
         }
@@ -403,10 +410,10 @@
             .sort((a, b) => nombreUsuario(datos.usuarios[a]).localeCompare(nombreUsuario(datos.usuarios[b])));
         if (!Object.keys(datos.usuarios).length) {
             $('listaUsuarios').innerHTML = `<div class="vacio"><i class="fas fa-users"></i><p>Todavía no hay usuarios. Creá uno nuevo o aprobá una solicitud.</p>
-                <button type="button" class="btn btn-primario" data-accion="nuevo-usuario"><i class="fas fa-user-plus"></i>Nuevo usuario</button></div>`;
+                <button type="button" class="btn btn-primario" data-accion="nuevo-usuario"><i class="fas fa-user-plus"></i>Nuevo usuario</button></div>` + htmlBajas();
             return;
         }
-        if (!uids.length) { $('listaUsuarios').innerHTML = '<div class="vacio"><i class="fas fa-magnifying-glass"></i><p>Ningún usuario coincide con la búsqueda.</p></div>'; return; }
+        if (!uids.length) { $('listaUsuarios').innerHTML = '<div class="vacio"><i class="fas fa-magnifying-glass"></i><p>Ningún usuario coincide con la búsqueda.</p></div>' + htmlBajas(); return; }
         $('listaUsuarios').innerHTML = uids.map(uid => {
             const u = datos.usuarios[uid];
             const suspendido = u.activo === false;
@@ -433,7 +440,16 @@
                     </div>
                 </div>
             </div>`;
-        }).join('');
+        }).join('') + htmlBajas();
+    }
+
+    // Cuentas quitadas que todavía existen en Authentication (se borran solas
+    // cuando la persona vuelve a entrar).
+    function htmlBajas() {
+        const bajas = Object.values(datos.bajas).sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+        if (!bajas.length) return '';
+        return `<p class="ayuda" style="margin:14px 4px 0"><i class="fas fa-user-clock"></i> Cuentas quitadas que esperan borrarse de Authentication (se borran solas la próxima vez que esa persona intente entrar):
+            ${bajas.map(b => `<span class="pastilla" title="Quitada ${esc(hace(b.fecha))}">${esc(b.email || 'sin email')}</span>`).join(' ')}</p>`;
     }
 
     function renderSolicitudes() {
@@ -589,7 +605,7 @@
                 if (resp === 'nuevo') uid = await crearCuenta(uEmail, uClave, uNombre);
             } catch (err) {
                 cargando(m.q('#ntCrear'), false);
-                avisoModal(m, errorDeAlta(err));
+                avisoModal(m, errorDeAlta(err, uEmail));
                 return;
             }
             const c = {};
@@ -871,7 +887,7 @@
             cargando(m.q('#nuCrear'), true, 'Creando…');
             let uid;
             try { uid = await crearCuenta(email, clave, nombre); }
-            catch (err) { cargando(m.q('#nuCrear'), false); avisoModal(m, errorDeAlta(err)); return; }
+            catch (err) { cargando(m.q('#nuCrear'), false); avisoModal(m, errorDeAlta(err, email)); return; }
             const c = { [`usuarios/${uid}`]: { email, nombre, activo: true, debeCambiarClave: cambiar, creado: TS(), tiendas: Object.fromEntries(tiendas.map(t => [t, true])) } };
             tiendas.forEach(t => { c[`tiendas/${t}/admins/${uid}`] = true; });
             try { await actualizar(c); }
@@ -947,13 +963,13 @@
         const m = abrirModal({
             titulo: 'Quitar usuario', icono: 'fa-user-xmark',
             cuerpo: `<p><strong>${esc(nombreUsuario(u))}</strong> (${esc(u.email || '')}) pierde el acceso a todas sus tiendas y desaparece de esta lista. Las tiendas no se borran.</p>
-                <p class="ayuda">La cuenta de ingreso sigue existiendo en Firebase Authentication, pero sin permisos no puede entrar a ningún panel. Si querés borrarla del todo: consola de Firebase → Authentication → Usuarios.</p>`,
+                <p class="ayuda">La cuenta de ingreso se borra sola de Firebase Authentication la próxima vez que esa persona intente entrar. Hasta entonces queda sin ningún permiso. Si necesitás borrarla ya: consola de Firebase → Authentication → Usuarios.</p>`,
             pie: `<button type="button" class="btn" data-cerrar>Cancelar</button>
                   <button type="submit" class="btn btn-primario" id="quOk" style="background:var(--rojo);border-color:var(--rojo)"><i class="fas fa-user-xmark"></i>Quitar</button>`
         });
         m.form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const c = { [`usuarios/${uid}`]: null };
+            const c = { [`usuarios/${uid}`]: null, [`bajas/${uid}`]: { email: String(u.email || '').slice(0, 200), fecha: TS() } };
             Object.keys(u.tiendas || {}).forEach(t => { if (datos.tiendas[t]) c[`tiendas/${t}/admins/${uid}`] = null; });
             Object.values(datos.tiendas).forEach(t => { if (t.admins[uid]) c[`tiendas/${t.id}/admins/${uid}`] = null; });
             cargando(m.q('#quOk'), true, 'Quitando…');
@@ -987,6 +1003,7 @@
             if (!tiendas.length) { avisoModal(m, 'Elegí al menos una tienda.'); return; }
             const c = {
                 [`solicitudes/${uid}`]: null,
+                [`bajas/${uid}`]: null,
                 [`usuarios/${uid}/email`]: (previo && previo.email) || s.email,
                 [`usuarios/${uid}/nombre`]: m.q('#apNombre').value.trim(),
                 [`usuarios/${uid}/activo`]: true

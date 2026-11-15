@@ -97,6 +97,7 @@ tiendas/<id>/
                        Unidades, subtotal, descuento y costo total NO se guardan: el panel los calcula de los artículos.
   ultimoPedido       ← hora del último pedido: las reglas piden 3 segundos entre pedidos de una tienda (freno contra pedidos falsos en masa)
 usuarios/<uid>/      { email, nombre, activo, debeCambiarClave, creado, ultimoIngreso, tiendas{} }
+bajas/<uid>/         { email, fecha }             ← usuario quitado: su cuenta se borra de Authentication cuando vuelve a entrar
 solicitudes/<uid>/   { email, nombre, tienda, fecha } ← pedidos de acceso desde el login
 admins/<uid>: true   ← admin global (vos)
 ```
@@ -123,5 +124,5 @@ Cada usuario cambia su contraseña desde **Mi cuenta** (su nombre, arriba a la d
 **Limitaciones** (sin Cloud Functions, que requieren el plan Blaze):
 
 - No se puede ver ni fijar la contraseña de otra persona: se le manda el email de restablecimiento.
-- "Quitar del sistema" le saca todos los permisos, pero la cuenta sigue existiendo en *Authentication*. Para borrarla del todo, hay que hacerlo desde la consola.
+- "Quitar del sistema" le saca todos los permisos al instante y deja una marca en `bajas/<uid>`. La cuenta de *Authentication* **se borra sola la próxima vez que esa persona intente entrar** (a un panel o a la gestión): una página sólo puede borrar la cuenta de quien está logueado. Si su sesión es vieja, se le cierra y, al volver a ingresar, se borra. Mientras tanto aparece en *Usuarios → Cuentas quitadas que esperan borrarse*. Si nunca vuelve a entrar, queda sin permisos; para borrarla ya, hacelo desde la consola.
 - Si se suspende a un usuario con el panel abierto, puede seguir mirándolo, pero ya no puede guardar.

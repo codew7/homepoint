@@ -15,6 +15,12 @@
      · Sin permiso, la persona puede "solicitar acceso" (solicitudes/<uid>) y
        la gestión de tiendas la aprueba sin copiar UIDs a mano.
      · "Mi cuenta": nombre y cambio de contraseña.
+     · bajas/<uid> (lo escribe la gestión al "Quitar del sistema"): la cuenta
+       se borra sola de Authentication la próxima vez que esa persona entra.
+       Sin Cloud Functions es la única forma gratuita: una página sólo puede
+       borrar la cuenta de quien está logueado, y Firebase exige que haya
+       ingresado hace poco (si la sesión es vieja, se la saca y se le pide
+       entrar de nuevo, y ahí se borra).
    El permiso real lo hacen cumplir las reglas (database.rules.json); acá sólo
    se evita mostrar un panel que después no va a poder guardar.
    ========================================================================== */
@@ -184,6 +190,30 @@
         return { permitido: false, motivo: (perfil && perfil.activo === false) ? 'suspendido' : 'sinPermiso', perfil };
     }
 
+    // ---- Cuenta dada de baja (bajas/<uid>) ----
+    // Devuelve el texto a mostrar en el login, o '' si la cuenta no tiene baja.
+    const RECIENTE_MS = 4 * 60 * 1000;   // Firebase pide un ingreso de hace menos de 5 min para borrar
+    async function procesarBaja(usuario) {
+        const ref = firebase.database().ref('bajas/' + usuario.uid);
+        const baja = await ref.once('value').then(s => s.val()).catch(() => null);
+        if (!baja) return '';
+        const ingreso = Date.parse(usuario.metadata && usuario.metadata.lastSignInTime) || 0;
+        if (Date.now() - ingreso < RECIENTE_MS) {
+            try {
+                // Primero el aviso (después de borrar la cuenta ya no hay permiso)
+                await ref.remove();
+                try {
+                    await usuario.delete();
+                    return 'Tu usuario fue dado de baja del sistema y la cuenta se eliminó.';
+                } catch (err) {
+                    await ref.set(baja).catch(() => {});   // queda pendiente para el próximo ingreso
+                }
+            } catch (err) {}
+        }
+        await firebase.auth().signOut().catch(() => {});
+        return 'Este usuario fue dado de baja del sistema.';
+    }
+
     // ---- Chip de usuario + "Mi cuenta" ----
     let perfilActual = null;
     let esGlobal = false;
@@ -316,6 +346,7 @@
         const pantalla = crearPantalla(opc);
         let accesoConcedido = false;
         let resolver;
+        let avisoBaja = '';
 
         const ocupado = (si) => {
             ['loginGoogle', 'loginOlvide'].forEach(id => { $(id).disabled = si; });
@@ -425,10 +456,19 @@
                 if (!usuario) {
                     vista('loginForm');
                     ocupado(false);
+                    if (avisoBaja) { aviso('loginError', avisoBaja); avisoBaja = ''; }
                     setTimeout(() => $('loginEmail').focus(), 50);
                     return;
                 }
                 vista('loginCargando');
+                const textoBaja = await procesarBaja(usuario);
+                if (textoBaja) {
+                    // La sesión ya se cerró (o la cuenta se borró): el próximo
+                    // aviso de onAuthStateChanged vuelve al formulario con este texto.
+                    avisoBaja = textoBaja;
+                    if (!firebase.auth().currentUser) { vista('loginForm'); ocupado(false); aviso('loginError', textoBaja); avisoBaja = ''; }
+                    return;
+                }
                 const r = await leerPermiso(usuario, opc);
                 perfilActual = r.perfil || null;
                 esGlobal = !!r.global;
