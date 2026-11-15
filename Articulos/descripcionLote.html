@@ -212,6 +212,22 @@ kbd{font-family:var(--mono);font-size:.64rem;font-weight:600;padding:1px 5px;bor
 .rv-empty{padding:44px 22px;text-align:center;color:var(--muted);font-size:.85rem;line-height:1.5}
 .rv-empty b{display:block;color:var(--text);font-size:.98rem;margin-bottom:4px}
 
+/* Modal del prompt */
+.modal{position:fixed;inset:0;z-index:1200;background:rgba(14,20,36,.45);display:none;align-items:center;justify-content:center;padding:20px}
+.modal.active{display:flex}
+.modal-card{width:100%;max-width:860px;max-height:calc(100dvh - 40px);background:var(--card);border-radius:var(--r);box-shadow:var(--sh-lg);display:flex;flex-direction:column;overflow:hidden}
+.modal-head{padding:16px 18px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.modal-head h2{font-size:1.05rem;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.modal-head p{font-size:.78rem;color:var(--muted);line-height:1.5;margin-top:4px;max-width:680px}
+.modal-head code{font-family:var(--mono);font-size:.72rem;background:var(--card-3);padding:1px 5px;border-radius:5px}
+.badge{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:5px;background:var(--card-3);color:var(--muted)}
+.badge.mod{background:var(--violet-soft);color:var(--violet)}
+.prompt-area{flex:1;min-height:340px;margin:0 18px;padding:12px 14px;border:1px solid var(--border-2);border-radius:10px;font-family:var(--mono);font-size:.76rem;line-height:1.55;resize:none;outline:none;background:var(--card-2)}
+.prompt-area:focus{border-color:var(--primary);background:var(--card)}
+.prompt-tail{margin:8px 18px 0;font-family:var(--mono);font-size:.7rem;color:var(--muted);background:var(--card-3);border-radius:8px;padding:8px 12px;white-space:pre-wrap}
+.modal-foot{padding:14px 18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.modal-foot .grow{flex:1}
+
 /* Toast */
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:2000;background:var(--text);color:#fff;padding:10px 10px 10px 16px;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .25s var(--ease);max-width:calc(100vw - 32px)}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -292,6 +308,7 @@ kbd{font-family:var(--mono);font-size:.64rem;font-weight:600;padding:1px 5px;bor
             <option value="haiku">Haiku · rápido, gasta menos</option>
             <option value="opus">Opus · más preciso, gasta más</option>
           </select>
+          <button class="btn btn-ghost" id="promptBtn" title="Ver y editar el prompt que recibe Claude">Prompt</button>
           <button class="btn btn-ghost" id="vaciarBtn" hidden>Vaciar cola</button>
           <button class="btn btn-ghost" id="pausaBtn" hidden>Pausar</button>
           <button class="btn btn-dark" id="genBtn" disabled>Generar seleccionados</button>
@@ -366,6 +383,31 @@ kbd{font-family:var(--mono);font-size:.64rem;font-weight:600;padding:1px 5px;bor
     </aside>
   </div>
 </main>
+
+<!-- ===== MODAL: prompt ===== -->
+<div class="modal" id="promptModal">
+  <div class="modal-card" role="dialog" aria-labelledby="promptTitle">
+    <div class="modal-head">
+      <div>
+        <h2 id="promptTitle">Prompt de las descripciones <span class="badge" id="promptBadge">predeterminado</span></h2>
+        <p>Esto es exactamente lo que lee Claude junto con la foto. Editalo y tocá <b>Guardar</b> (Ctrl+S): se aplica a las próximas descripciones que se generen; las ya generadas no cambian (usá Regenerar). Conservá la sección <b>Devolvé</b> con <code>producto_visible</code>, <code>descripcion</code>, <code>info</code> y <code>dudas</code>: son los campos que espera la página.</p>
+      </div>
+      <button class="icon-btn" id="promptClose" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <textarea class="prompt-area" id="promptArea" spellcheck="false"></textarea>
+    <div class="prompt-tail">Al final se agrega solo, para cada artículo:
+Artículo:
+- Nombre: …
+- Categoría: …</div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="promptDefault" title="Carga el prompt original en el editor (se aplica al guardar)">Restaurar predeterminado</button>
+      <span class="mini" id="promptLen"></span>
+      <span class="grow"></span>
+      <button class="btn btn-ghost" id="promptCancel">Cancelar</button>
+      <button class="btn btn-dark" id="promptSave">Guardar</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="t-msg" id="toastMsg"></span><button id="toastAct" hidden>Deshacer</button></div>
 
@@ -1097,7 +1139,7 @@ $('rvPrev').addEventListener('click', () => mover(-1));
 $('rvNext').addEventListener('click', () => { if (revKey && estadoDe(revKey) === 'generada') saltados.add(revKey); mover(1); });
 
 document.addEventListener('keydown', e => {
-  if (!revKey || $('login').classList.contains('hidden') === false) return;
+  if (!revKey || !$('login').classList.contains('hidden') || $('promptModal').classList.contains('active')) return;
   const enTexto = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); aceptar(revKey); return; }
   if (enTexto || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1126,6 +1168,64 @@ function regenerar(k){
   }
   render();
 }
+
+// ============================================================
+//  Prompt editable (lo guarda servidor.py en prompt_descripciones.txt)
+// ============================================================
+let promptInfo = null;
+function pintarPromptLen(){
+  const v = $('promptArea').value;
+  $('promptLen').textContent = fmt(v.length) + ' caracteres';
+  const esDefault = promptInfo && v.trim() === promptInfo.predeterminado;
+  $('promptBadge').textContent = esDefault ? 'predeterminado' : 'personalizado';
+  $('promptBadge').classList.toggle('mod', !esDefault);
+}
+async function abrirPrompt(){
+  try { promptInfo = await api('/api/prompt-descripciones'); }
+  catch (e){ toast('No se pudo leer el prompt: abrí el servidor local (' + e.message + ')', 'err'); return; }
+  $('promptArea').value = promptInfo.prompt;
+  pintarPromptLen();
+  $('promptModal').classList.add('active');
+  $('promptArea').focus();
+  $('promptArea').setSelectionRange(0, 0);
+  $('promptArea').scrollTop = 0;
+}
+function cerrarPrompt(){
+  if (promptInfo && $('promptArea').value.trim() !== promptInfo.prompt.trim() && !confirm('Hay cambios sin guardar en el prompt. ¿Descartarlos?')) return;
+  $('promptModal').classList.remove('active');
+}
+async function guardarPrompt(){
+  const v = $('promptArea').value.trim();
+  if (!v){ toast('El prompt no puede quedar vacío', 'err'); return; }
+  if (!['producto_visible', 'descripcion', 'info', 'dudas'].every(c => v.includes(c))){
+    if (!confirm('El prompt no menciona alguno de los campos producto_visible, descripcion, info o dudas. Claude igual tiene que devolverlos y el resultado puede salir peor. ¿Guardar igual?')) return;
+  }
+  $('promptSave').disabled = true;
+  try {
+    // Si quedó igual al predeterminado se borra el personalizado (así toma futuras mejoras del original).
+    promptInfo = await api('/api/prompt-descripciones', { prompt: v === promptInfo.predeterminado ? null : v });
+    $('promptModal').classList.remove('active');
+    toast(promptInfo.personalizado ? 'Prompt guardado: se usa en las próximas descripciones' : 'Se usa el prompt predeterminado');
+  } catch (e){ toast('No se pudo guardar el prompt: ' + e.message, 'err'); }
+  $('promptSave').disabled = false;
+}
+$('promptBtn').addEventListener('click', abrirPrompt);
+$('promptClose').addEventListener('click', cerrarPrompt);
+$('promptCancel').addEventListener('click', cerrarPrompt);
+$('promptSave').addEventListener('click', guardarPrompt);
+$('promptArea').addEventListener('input', pintarPromptLen);
+$('promptDefault').addEventListener('click', () => {
+  if (!promptInfo) return;
+  $('promptArea').value = promptInfo.predeterminado;
+  pintarPromptLen();
+  toast('Se cargó el predeterminado: tocá Guardar para aplicarlo');
+});
+$('promptModal').addEventListener('click', e => { if (e.target === $('promptModal')) cerrarPrompt(); });
+document.addEventListener('keydown', e => {
+  if (!$('promptModal').classList.contains('active')) return;
+  if (e.key === 'Escape'){ e.preventDefault(); cerrarPrompt(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); guardarPrompt(); }
+});
 
 window.addEventListener('beforeunload', e => { if (cola.length || generando.size){ e.preventDefault(); e.returnValue = ''; } });
 
