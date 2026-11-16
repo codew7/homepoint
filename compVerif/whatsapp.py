@@ -442,7 +442,7 @@ class Integracion:
             cliente, codigo = partes_nombre(f["archivo"])
             items.append({"wa_id": f["wa_id"], "estado": f["estado"], "t": f["t"], "cliente": cliente, "pedido": codigo,
                           "analisis_id": f["analisis_id"], "semaforo": a.get("semaforo"), "veredicto": a.get("veredicto"),
-                          "monto": a.get("monto"), "banco": a.get("banco"), "error": f["error"]})
+                          "monto": a.get("monto"), "banco": a.get("banco"), "alias": a.get("alias"), "error": f["error"]})
         cuenta = lambda estado: sum(1 for f in filas.values() if f["estado"] == estado)
         alertas = sum(1 for i in items if i["estado"] == historial.LISTO and i["semaforo"] == "rojo" and not i["veredicto"])
         revisar = sum(1 for i in items if i["estado"] == historial.LISTO and i["semaforo"] == "amarillo" and not i["veredicto"])

@@ -11,8 +11,10 @@ operacion por banco).
 
 import json
 import os
+import re
 import sqlite3
 import threading
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -62,7 +64,45 @@ CREATE TABLE IF NOT EXISTS whatsapp (
 PENDIENTE, EN_COLA, LISTO, ERROR = "pendiente", "en_cola", "listo", "error"
 
 COLUMNAS_LISTA = ("id", "creado", "archivo", "extension", "tipo", "banco", "titular", "operacion", "coelsa", "fecha_op",
-                  "monto", "semaforo", "veredicto", "sha256", "dhash", "texto_hash", "origen", "wa_id", "cliente")
+                  "monto", "semaforo", "veredicto", "sha256", "dhash", "texto_hash", "origen", "wa_id", "cliente", "alias")
+
+# Alias propio: los comprobantes pagados a este alias se pueden filtrar aparte. Muchos
+# comprobantes muestran solo el CVU, asi que el CVU de esa cuenta (Mercado Pago) cuenta igual.
+ALIAS_ENVIOS = "ENVIOS.HP"
+CVU_ENVIOS = "0000003100049179832328"
+# Campos leidos donde puede aparecer el alias si Claude no lo puso en alias_destino
+CAMPOS_ALIAS = ("alias_destino", "concepto", "otros_codigos", "titular_destino", "cbu_destino")
+
+
+def normalizar_alias(valor):
+    """'Envíos . hp' -> 'ENVIOS.HP' (mayusculas, sin acentos ni espacios); None si esta vacio."""
+    texto = unicodedata.normalize("NFKD", str(valor or "")).encode("ascii", "ignore").decode().upper()
+    return re.sub(r"\s+", "", texto) or None
+
+
+def es_cvu_envios(valor):
+    """True si el CBU/CVU leido es el de ALIAS_ENVIOS. Si viene enmascarado (con asteriscos),
+    tienen que coincidir todos los digitos que se ven y al menos 8."""
+    texto = re.sub(r"[\s-]", "", str(valor or ""))
+    if len(texto) != len(CVU_ENVIOS) or not re.fullmatch(r"[\d*xX]+", texto):
+        return False
+    visibles = [(a, b) for a, b in zip(texto, CVU_ENVIOS) if a.isdigit()]
+    return len(visibles) >= 8 and all(a == b for a, b in visibles)
+
+
+def alias_de(datos):
+    """Alias de destino normalizado. Si ENVIOS.HP aparece en otro campo leido, o el CVU de
+    destino es el de esa cuenta, cuenta como ENVIOS.HP."""
+    datos = datos or {}
+    alias = normalizar_alias(datos.get("alias_destino"))
+    if alias != ALIAS_ENVIOS and es_cvu_envios(datos.get("cbu_destino")):
+        return ALIAS_ENVIOS
+    if alias != ALIAS_ENVIOS:
+        for campo in CAMPOS_ALIAS:
+            v = datos.get(campo)
+            if ALIAS_ENVIOS in (normalizar_alias(" ".join(map(str, v)) if isinstance(v, list) else v) or ""):
+                return ALIAS_ENVIOS
+    return alias
 
 
 def _conexion():
@@ -76,6 +116,16 @@ def _conexion():
     for col in ("titular", "origen", "wa_id", "cliente"):
         if col not in existentes:
             con.execute(f"ALTER TABLE analisis ADD COLUMN {col} TEXT")
+    if "alias" not in existentes:
+        # Se completa una sola vez con lo que ya se habia leido de cada comprobante
+        con.execute("ALTER TABLE analisis ADD COLUMN alias TEXT")
+        for f in con.execute("SELECT id, detalle FROM analisis").fetchall():
+            try:
+                alias = alias_de(json.loads(f["detalle"]).get("datos"))
+            except (TypeError, ValueError):
+                continue
+            if alias:
+                con.execute("UPDATE analisis SET alias=? WHERE id=?", (alias, f["id"]))
     con.execute("CREATE INDEX IF NOT EXISTS ix_wa ON analisis(wa_id)")
     return con
 
@@ -98,6 +148,7 @@ def _columnas(reg):
         "monto": reg.get("monto"), "semaforo": reg.get("semaforo"), "veredicto": reg.get("veredicto"),
         "veredicto_fecha": reg.get("veredicto_fecha"),
         "origen": origen.get("tipo"), "wa_id": origen.get("wa_id"), "cliente": origen.get("cliente"),
+        "alias": alias_de(datos),
     }
 
 
@@ -129,17 +180,24 @@ def obtener(id_):
     return reg
 
 
-def listar(texto="", limite=300, excluir=None, origen=None):
-    """origen: None (todos), "whatsapp" o "manual"."""
+def listar(texto="", limite=300, excluir=None, origen=None, alias=None):
+    """origen: None (todos), "whatsapp" o "manual". alias: None (todos), "envios" (pagados a
+    ALIAS_ENVIOS) u "otros" (el resto, incluidos los que no muestran alias)."""
     sql = f"SELECT {', '.join(COLUMNAS_LISTA)} FROM analisis"
     condiciones, params = [], []
     if texto:
-        condiciones.append("(operacion LIKE ? OR coelsa LIKE ? OR archivo LIKE ? OR banco LIKE ? OR titular LIKE ? OR cliente LIKE ?)")
-        params += [f"%{texto}%"] * 6
+        condiciones.append("(operacion LIKE ? OR coelsa LIKE ? OR archivo LIKE ? OR banco LIKE ? OR titular LIKE ? OR cliente LIKE ? OR alias LIKE ?)")
+        params += [f"%{texto}%"] * 7
     if origen == "whatsapp":
         condiciones.append("origen = 'whatsapp'")
     elif origen == "manual":
         condiciones.append("origen IS NULL")
+    if alias == "envios":
+        condiciones.append("alias = ?")
+        params.append(ALIAS_ENVIOS)
+    elif alias == "otros":
+        condiciones.append("(alias IS NULL OR alias != ?)")
+        params.append(ALIAS_ENVIOS)
     if condiciones:
         sql += " WHERE " + " AND ".join(condiciones)
     sql += " ORDER BY id DESC LIMIT ?"
@@ -203,6 +261,13 @@ def wa_de_analisis(id_):
     with _lock, _conexion() as con:
         fila = con.execute("SELECT wa_id FROM whatsapp WHERE analisis_id=?", (id_,)).fetchone()
     return fila["wa_id"] if fila else None
+
+
+def wa_archivo(id_):
+    """Nombre actual (con la marca [ALTERADO], etc.) del archivo de WhatsAppSync de un analisis, o None."""
+    with _lock, _conexion() as con:
+        fila = con.execute("SELECT archivo FROM whatsapp WHERE analisis_id=?", (id_,)).fetchone()
+    return fila["archivo"] if fila else None
 
 
 def wa_resultados():

@@ -628,7 +628,7 @@
 
         .skeleton-row {
             display: grid;
-            grid-template-columns: 120px 1.4fr 1fr 110px 1fr 110px 40px 40px;
+            grid-template-columns: 120px 1.4fr 1fr 110px 1fr 110px 60px 40px 40px;
             gap: 14px;
             align-items: center;
             height: 38px;
@@ -789,6 +789,421 @@
         }
 
         /* ============================================================
+           COMPROBANTES DE WHATSAPP
+           ============================================================ */
+        .comp-column {
+            text-align: center;
+            width: 104px;
+            white-space: nowrap;
+        }
+
+        /* Sin línea de WhatsApp para el punto de venta consultado: no hay columna */
+        .table-container.sin-wa .comp-column {
+            display: none;
+        }
+
+        .btn-comp {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            height: 26px;
+            padding: 0 10px;
+            border-radius: 13px;
+            border: 1px solid var(--border-2);
+            background: #f1f5f9;
+            color: var(--ink-3);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color .15s, border-color .15s, transform .15s;
+        }
+
+        .btn-comp:hover { transform: translateY(-1px); }
+        .btn-comp svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+        .btn-comp.is-ok {
+            background: var(--accent-soft);
+            color: #0a5f58;
+            border-color: #bfe3df;
+        }
+
+        .btn-comp.is-amarillo {
+            background: #fef3c7;
+            color: var(--amber-text);
+            border-color: #fcd34d;
+        }
+
+        .btn-comp.is-rojo {
+            background: var(--danger-soft);
+            color: var(--danger);
+            border-color: #fecdca;
+        }
+
+        .comp-celda {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .comp-fila-sel {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--wa);
+        }
+
+        .comp-fila-sel:disabled { cursor: not-allowed; opacity: .4; }
+        .comp-fila-sel[hidden] { display: none; }
+
+        .comp-th {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            cursor: pointer;
+        }
+
+        .comp-column .spinner {
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* Aviso de la columna (falta iniciar sesión, error de lectura) */
+        .wa-aviso {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--wa);
+            border-radius: var(--r-sm);
+            padding: 9px 12px;
+            margin-bottom: 14px;
+            color: var(--ink-3);
+        }
+
+        .wa-aviso[hidden] { display: none; }
+        .wa-aviso.is-error { border-left-color: var(--danger); }
+
+        /* Visor de comprobantes */
+        .comp-visor {
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            background: rgba(15, 23, 42, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .comp-visor[hidden] { display: none; }
+
+        .comp-visor-card {
+            width: 100%;
+            max-width: 560px;
+            max-height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-top: 3px solid var(--wa);
+            border-radius: var(--r-md);
+            box-shadow: var(--shadow-md);
+            padding: 14px 16px 16px;
+        }
+
+        .comp-visor-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .comp-visor-titulo {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .comp-visor-titulo b {
+            font-size: 15px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .comp-visor-titulo span {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-2);
+        }
+
+        .comp-visor-x {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: var(--r-md);
+            background: transparent;
+            color: var(--text-2);
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .comp-visor-x:hover { background: var(--surface-2); }
+
+        .comp-visor-resumen {
+            font-size: 12px;
+            padding: 7px 10px;
+            border-radius: var(--r-sm);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+
+        .comp-visor-resumen.is-ok { background: var(--accent-soft); border-color: #bfe3df; color: #0a5f58; }
+        .comp-visor-resumen.is-amarillo { background: var(--amber-soft); border-color: #fcd34d; color: var(--amber-text); }
+        .comp-visor-resumen.is-rojo { background: var(--danger-soft); border-color: #fecdca; color: var(--danger); }
+
+        .comp-visor-img {
+            flex: 1 1 auto;
+            min-height: 220px;
+            max-height: 62vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--r-sm);
+        }
+
+        .comp-visor-img img {
+            display: block;
+            max-width: 100%;
+            max-height: 62vh;
+            object-fit: contain;
+        }
+
+        .comp-visor-ph {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-2);
+            font-size: 12px;
+        }
+
+        .comp-visor-pie {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .comp-visor-info {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+            font-size: 12px;
+            color: var(--ink-3);
+        }
+
+        .comp-visor-info .comp-alerta {
+            display: block;
+            margin-top: 2px;
+            font-weight: 500;
+        }
+
+        .comp-alerta.is-rojo { color: var(--danger); }
+        .comp-alerta.is-amarillo { color: var(--amber-text); }
+
+        .comp-visor-acciones {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .comp-sel {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: auto;
+        }
+
+        .comp-enviado {
+            font-size: 12px;
+            color: var(--text-2);
+        }
+
+        .comp-enviado.is-enviado {
+            color: #0a7a3e;
+            font-weight: 600;
+        }
+
+        .comp-enviado.is-enviado::before { content: '✓ '; }
+
+        /* Miniaturas de los comprobantes del pedido */
+        .comp-tiras {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+        }
+
+        .comp-tiras[hidden] { display: none; }
+
+        .comp-mini {
+            position: relative;
+            flex: 0 0 64px;
+            height: 64px;
+            border: 2px solid var(--border);
+            border-radius: var(--r-sm);
+            background: var(--surface-2);
+            overflow: hidden;
+        }
+
+        .comp-mini.is-actual { border-color: var(--accent); }
+
+        .comp-mini-ver {
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 0;
+            background: transparent;
+            color: var(--text-2);
+            font-family: var(--font-mono);
+            cursor: pointer;
+        }
+
+        .comp-mini-ver img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .comp-mini-sel {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .comp-mini-env {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 122, 62, 0.88);
+            color: #fff;
+            font-size: 9px;
+            font-weight: 600;
+            text-align: center;
+            line-height: 15px;
+            pointer-events: none;
+        }
+
+        /* Tilde de "todo enviado" dentro del botón de la fila */
+        .btn-comp .comp-env-ok {
+            color: #0a7a3e;
+            font-family: var(--font-sans);
+            font-weight: 700;
+        }
+
+        .btn-comp.is-rojo .comp-env-ok,
+        .btn-comp.is-amarillo .comp-env-ok { color: inherit; }
+
+        /* Barra de seleccionados (por encima del visor, para usarla con él abierto) */
+        .sel-barra {
+            position: fixed;
+            left: 50%;
+            bottom: 16px;
+            transform: translateX(-50%);
+            z-index: 95;
+            width: min(920px, calc(100% - 32px));
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: var(--ink);
+            color: #fff;
+            border-radius: var(--r-md);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
+            padding: 10px 12px 10px 16px;
+        }
+
+        .sel-barra[hidden] { display: none; }
+
+        .sel-texto {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .sel-acciones {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .sel-btn {
+            font-family: var(--font-sans);
+            font-size: 12px;
+            font-weight: 500;
+            height: 30px;
+            padding: 0 12px;
+            border-radius: var(--r-md);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background-color .15s;
+        }
+
+        .sel-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
+        .sel-btn:disabled { opacity: .5; cursor: wait; }
+        .sel-btn[hidden] { display: none; }
+        .sel-btn.is-wa { background: var(--wa); border-color: var(--wa); color: #06341a; font-weight: 600; }
+        .sel-btn.is-wa:hover:not(:disabled) { background: #1ebe57; }
+        .sel-btn.is-sutil { border-color: transparent; color: #cbd5e1; }
+
+        /* Deja lugar a la barra al final de la página y del visor */
+        body.con-seleccion .workspace { padding-bottom: 96px; }
+        body.con-seleccion .comp-visor { padding-bottom: 90px; }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            top: calc(var(--topbar-h) + 12px);
+            transform: translateX(-50%);
+            z-index: 110;
+            max-width: calc(100% - 32px);
+            background: var(--ink-2);
+            color: #fff;
+            border-radius: var(--r-md);
+            box-shadow: var(--shadow-md);
+            padding: 9px 14px;
+            font-size: 13px;
+        }
+
+        .toast[hidden] { display: none; }
+
+        .comp-visor-acciones button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        /* ============================================================
            RESPONSIVE
            ============================================================ */
         @media (max-width: 980px) {
@@ -841,7 +1256,7 @@
         /* Impresión: solo indicadores y datos */
         @media print {
             body { background: #fff; }
-            .topbar, .filters, .pagination, .checkbox-column { display: none !important; }
+            .topbar, .filters, .pagination, .checkbox-column, .comp-column, .wa-aviso, .comp-visor { display: none !important; }
             .workspace { max-width: none; padding: 0; }
             .kpis, .table-container { border: none; box-shadow: none; }
             .table-container { max-height: none; overflow: visible; }
@@ -888,6 +1303,12 @@
 
         <div id="error" class="error" style="display: none;"></div>
 
+        <!-- Estado de los comprobantes de WhatsApp (sin sesión o con error) -->
+        <div id="waAviso" class="wa-aviso" role="status" hidden>
+            <span id="waAvisoTexto"></span>
+            <button type="button" id="waAvisoBtn" class="clear-filters is-accent"></button>
+        </div>
+
         <div class="filters">
             <div class="filters-grid">
                 <div class="filter-group">
@@ -919,14 +1340,14 @@
 
         <div id="loading" class="loading">
             <div class="loading-caption"><span class="spinner" aria-hidden="true"></span>Cargando transferencias…</div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
-            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
+            <div class="skeleton-row"><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span><span class="skeleton-cell"></span></div>
         </div>
 
         <div id="tableContainer" class="table-container" style="display: none;">
@@ -939,6 +1360,14 @@
                         <th style="text-align:right;">Total Final</th>
                         <th>Alias</th>
                         <th>Medio de Pago</th>
+                        <th class="comp-column" title="Comprobantes recibidos por WhatsApp">
+                            <label class="comp-th">
+                                <input type="checkbox" id="compSelPagina" class="comp-fila-sel" hidden
+                                       title="Seleccionar los comprobantes no enviados de esta página"
+                                       aria-label="Seleccionar los comprobantes no enviados de esta página">
+                                Comprobante
+                            </label>
+                        </th>
                         <th style="text-align:center;">Contacto</th>
                         <th style="text-align:center;">Verificado</th>
                     </tr>
@@ -970,7 +1399,7 @@
     <div id="loginPunto" class="login-punto" role="dialog" aria-modal="true" aria-labelledby="loginPuntoTitulo" hidden>
         <form id="loginPuntoForm" class="login-punto-card" novalidate>
             <h2 id="loginPuntoTitulo">Iniciar sesión</h2>
-            <p>Para consultar <strong id="loginPuntoNombre"></strong> ingresá con un usuario de ese punto de venta.</p>
+            <p id="loginPuntoTexto"></p>
             <label class="filter-label" for="loginPuntoEmail">Email</label>
             <input type="email" id="loginPuntoEmail" class="filter-input" autocomplete="username" required>
             <label class="filter-label" for="loginPuntoClave">Contraseña</label>
@@ -983,10 +1412,56 @@
         </form>
     </div>
 
+    <!-- Visor de comprobantes de WhatsApp de un pedido -->
+    <div id="compVisor" class="comp-visor" role="dialog" aria-modal="true" aria-labelledby="compVisorTitulo" hidden>
+        <div class="comp-visor-card">
+            <div class="comp-visor-head">
+                <div class="comp-visor-titulo">
+                    <b id="compVisorTitulo"></b>
+                    <span id="compVisorSub"></span>
+                </div>
+                <button type="button" class="comp-visor-x" id="compVisorCerrar" aria-label="Cerrar">&times;</button>
+            </div>
+            <div id="compVisorResumen" class="comp-visor-resumen"></div>
+            <div id="compVisorImg" class="comp-visor-img"></div>
+            <div class="comp-visor-pie">
+                <button type="button" class="page-btn" id="compVisorAnt" aria-label="Comprobante anterior">‹</button>
+                <div id="compVisorInfo" class="comp-visor-info" aria-live="polite"></div>
+                <button type="button" class="page-btn" id="compVisorSig" aria-label="Comprobante siguiente">›</button>
+            </div>
+            <div id="compVisorTiras" class="comp-tiras" aria-label="Comprobantes del pedido" hidden></div>
+            <div class="comp-visor-acciones">
+                <label class="comp-sel">
+                    <input type="checkbox" id="compVisorSel" class="custom-checkbox">
+                    Seleccionar para enviar
+                </label>
+                <button type="button" id="compVisorSelTodos" class="clear-filters" hidden></button>
+                <span id="compVisorEnviado" class="comp-enviado"></span>
+                <button type="button" id="compVisorMarca" class="clear-filters"></button>
+                <button type="button" id="compVisorAbrir" class="clear-filters">Abrir en pestaña nueva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comprobantes seleccionados para mandar por WhatsApp (cada uno como su propio archivo) -->
+    <div id="selBarra" class="sel-barra" role="region" aria-label="Comprobantes seleccionados" hidden>
+        <span id="selTexto" class="sel-texto" aria-live="polite"></span>
+        <div class="sel-acciones">
+            <button type="button" id="selCompartir" class="sel-btn is-wa" title="Abre la ventana de compartir del sistema: elegí WhatsApp y el chat">Compartir por WhatsApp</button>
+            <button type="button" id="selDescargar" class="sel-btn" title="Baja cada comprobante como un archivo JPG aparte (no los marca como enviados)">Descargar</button>
+            <button type="button" id="selMarcar" class="sel-btn" title="Marca los seleccionados como enviados sin compartirlos desde acá">Marcar enviados</button>
+            <button type="button" id="selLimpiar" class="sel-btn is-sutil">Quitar selección</button>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <!-- Proyecto de Firebase de WhatsAppSync (comprobantes de pago). Si falta, la columna no aparece. -->
+    <script src="pedidosv2/config-whatsapp.js"></script>
 
     <script>
         // Inicializar Firebase con el config del punto de venta (firebaseConfig lo define
@@ -1035,7 +1510,8 @@
 
         // Tarjeta de inicio de sesión para otro punto de venta. Resuelve al entrar y
         // rechaza con LOGIN_CANCELADO si se cancela.
-        function pedirLogin(app, nombre) {
+        // opciones (las usa WhatsApp): { texto, email (precargado), error }
+        function pedirLogin(app, nombre, opciones = {}) {
             return new Promise((resolve, reject) => {
                 const overlay = document.getElementById('loginPunto');
                 const form = document.getElementById('loginPuntoForm');
@@ -1046,11 +1522,20 @@
                 const cancelar = document.getElementById('loginPuntoCancelar');
                 const foco = document.activeElement;
 
-                document.getElementById('loginPuntoNombre').textContent = nombre;
+                const texto = document.getElementById('loginPuntoTexto');
+                texto.textContent = '';
+                if (opciones.texto) {
+                    texto.textContent = opciones.texto;
+                } else {
+                    const fuerte = document.createElement('strong');
+                    fuerte.textContent = nombre;
+                    texto.append('Para consultar ', fuerte, ' ingresá con un usuario de ese punto de venta.');
+                }
                 form.reset();
+                if (opciones.email) email.value = opciones.email;
                 error.textContent = '';
                 overlay.hidden = false;
-                setTimeout(() => email.focus(), 30);
+                setTimeout(() => (opciones.email ? clave : email).focus(), 30);
 
                 function cerrar() {
                     overlay.hidden = true;
@@ -1069,7 +1554,9 @@
                         resolve();
                     } catch (err) {
                         console.error('Error al iniciar sesión en el punto de venta:', err);
-                        error.textContent = 'Usuario o contraseña incorrectos.';
+                        error.textContent = err && err.code === 'auth/too-many-requests'
+                            ? 'Demasiados intentos. Esperá un momento.'
+                            : (opciones.error || 'Usuario o contraseña incorrectos.');
                         clave.value = '';
                         clave.focus();
                     } finally {
@@ -1192,6 +1679,771 @@
             } catch (error) {
                 console.error('Error al migrar verificados locales:', error);
             }
+        }
+
+        // ------------------------------------------ Comprobantes de WhatsApp --
+        // WhatsAppSync (PC del local) guarda cada comprobante de pago que manda un
+        // cliente en su propio proyecto de Firebase y lo asigna a un pedido:
+        //   imgsIdx/{id}      = { tel, t, pedido, conf, monto, comp, cat, yo, verif }
+        //                       índice liviano, sin la imagen
+        //   imgs/{tel}/{id}/d = la imagen (JPG en base64), se baja solo al verla
+        //   asigManual/{id}   = corrección a mano desde pedidosv2 (manda sobre la automática)
+        // Esta página solo LEE (no escribe nada en ese proyecto). Misma lógica que
+        // pedidosv2/pedidosv2.html (waPedidoDeComprobante, waEstadoPagado, waVerif).
+        // La app se llama 'whatsapp' igual que en pedidosv2: al ser el mismo sitio,
+        // la sesión que ya se inició allá sirve acá y no se pide de nuevo.
+        //
+        // Solo los puntos de venta con su línea de WhatsApp en la web: la línea de
+        // whatsappsync-e3245 asigna contra la base de pedidos de Munro. Para sumar
+        // otro punto, agregar aquí su config de Firebase de WhatsApp.
+        const WA_POR_PUNTO = {
+            '1': typeof whatsappFirebaseConfig !== 'undefined' ? whatsappFirebaseConfig : null
+        };
+        const WA_MARGEN_DIAS = 3;        // comprobantes de hasta 3 días antes de la ventana
+        const WA_MAX_SIN_FECHA = 60;     // tope de consultas sueltas para pedidos sin fecha
+
+        let waApp = null;                // app de WhatsApp del punto consultado (o null)
+        let waEstado = 'off';            // off | cargando | login | error | listo
+        let waPorPedido = new Map();     // pedidoId -> [{ id, tel, t, monto, comp, conf, verif }]
+        let waAsigManual = {};
+        let waRefs = [];                 // listeners activos (se apagan al recargar)
+        let waCargaVigente = 0;
+        const waFotos = new Map();       // id comprobante -> { url, blob } | null (no disponible)
+
+        const IC_COMP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>';
+
+        function escHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // Código corto del pedido: el mismo que pedidosv2 y el nombre de archivo en la PC
+        function codigoPedido(id) {
+            return String(id || '').slice(-8).toUpperCase();
+        }
+
+        function waAppDe(punto) {
+            const cfg = WA_POR_PUNTO[punto];
+            if (!cfg || !cfg.apiKey) return null;
+            const nombre = punto === '1' ? 'whatsapp' : 'whatsapp-' + punto;
+            try {
+                return firebase.apps.find(a => a.name === nombre) || firebase.initializeApp(cfg, nombre);
+            } catch (error) {
+                console.warn('WhatsApp: no se pudo iniciar el proyecto de comprobantes', error);
+                return null;
+            }
+        }
+
+        function waEsComprobantePago(v) {
+            return !!(v && v.tel && v.t && v.cat !== 'remito' && !v.yo);
+        }
+
+        // Pedido al que pertenece un comprobante (la corrección a mano manda)
+        function waPedidoDeComprobante(id, v) {
+            const m = waAsigManual[id];
+            if (m) return { pedido: m.pedido || null, conf: 'manual' };
+            return { pedido: (v && v.pedido) || null, conf: (v && v.conf) || '' };
+        }
+
+        function waAgrupar(idx) {
+            const mapa = new Map();
+            for (const [id, v] of Object.entries(idx)) {
+                if (!waEsComprobantePago(v)) continue;
+                const a = waPedidoDeComprobante(id, v);
+                if (!a.pedido) continue;
+                if (!mapa.has(a.pedido)) mapa.set(a.pedido, []);
+                mapa.get(a.pedido).push({
+                    id, tel: String(v.tel), t: Number(v.t) || 0, monto: Number(v.monto) || 0,
+                    comp: v.comp || '', conf: a.conf, verif: v.verif || null
+                });
+            }
+            mapa.forEach(l => l.sort((a, b) => a.t - b.t));
+            return mapa;
+        }
+
+        // Resultado del Verificador de comprobantes: 'rojo' | 'amarillo' | ''
+        function waVerif(a) {
+            const s = a && a.verif && a.verif.s;
+            return s === 'rojo' || s === 'rechazado' ? 'rojo' : s === 'amarillo' ? 'amarillo' : '';
+        }
+
+        // Aviso de un comprobante suelto: { nivel, texto }
+        function waAlerta(a) {
+            const v = waVerif(a);
+            const m = a.verif && a.verif.m ? ': ' + a.verif.m : '';
+            if (v === 'rojo') return { nivel: 'rojo', texto: a.verif.s === 'rechazado' ? 'Rechazado en el verificador' : 'Posiblemente alterado' + m };
+            if (v === 'amarillo') return { nivel: 'amarillo', texto: 'El verificador sugiere revisarlo' + m };
+            if (a.comp === 'duda') return { nivel: 'rojo', texto: 'Dudoso: puede no ser un comprobante' };
+            if (!a.monto) return { nivel: 'amarillo', texto: 'No se pudo leer el importe' };
+            if (a.conf === 'revisar' || a.conf === 'media') return { nivel: 'amarillo', texto: 'Asignación a este pedido a revisar' };
+            return { nivel: '', texto: '' };
+        }
+
+        function waClaveDe(pedido) {
+            if (waPorPedido.has(pedido.id)) return pedido.id;
+            if (pedido._key && waPorPedido.has(pedido._key)) return pedido._key;
+            return pedido._key || pedido.id;
+        }
+
+        function waListaDe(pedido) {
+            return waPorPedido.get(waClaveDe(pedido)) || [];
+        }
+
+        // Resumen de los comprobantes de un pedido frente a lo que se debe transferir
+        function waResumen(pedido) {
+            const lista = waListaDe(pedido);
+            if (!lista.length) return null;
+            let suma = 0, sinMonto = 0, rojos = 0, amarillos = 0;
+            lista.forEach(a => {
+                suma += a.monto;
+                if (!a.monto) sinMonto++;
+                const n = waAlerta(a).nivel;
+                if (n === 'rojo') rojos++; else if (n === 'amarillo') amarillos++;
+            });
+            const total = montoDe(pedido);
+            const completo = total > 0 && suma >= total - Math.max(1, total * 0.01);
+            const color = rojos ? 'rojo' : (completo && !amarillos) ? 'ok' : 'amarillo';
+            let texto = sinMonto === lista.length
+                ? 'Sin importe leído · a transferir ' + formatearMoneda(total)
+                : 'Leído ' + formatearMoneda(suma) + ' de ' + formatearMoneda(total) + (completo ? ' · completo' : ' · falta ' + formatearMoneda(Math.max(0, total - suma)));
+            if (rojos) texto += ' · ' + rojos + ' con alerta';
+            else if (amarillos) texto += ' · ' + amarillos + ' a revisar';
+            return { lista, color, texto };
+        }
+
+        function celdaComprobante(pedido) {
+            if (!waApp) return '';
+            if (waEstado === 'cargando') return '<span class="spinner" role="img" aria-label="Cargando comprobantes"></span>';
+            if (waEstado !== 'listo') return '';
+            const r = waResumen(pedido);
+            if (!r) return '<span class="badge-vacio" title="Sin comprobantes de WhatsApp asignados">—</span>';
+            const nEnv = r.lista.filter(a => enviados[a.id]).length;
+            const texto = r.texto + (nEnv ? (nEnv === r.lista.length ? ' · enviado por WhatsApp' : ' · ' + nEnv + ' de ' + r.lista.length + ' enviados') : '');
+            const tilde = nEnv === r.lista.length ? '<span class="comp-env-ok" aria-hidden="true">✓</span>' : '';
+            const sel = filaSelEstado(pedido);
+            return `<div class="comp-celda">
+                <input type="checkbox" class="comp-fila-sel" data-comp-sel="${escHtml(pedido.id)}"${sel.todos ? ' checked' : ''}${sel.lista.length ? '' : ' disabled'}
+                       title="Seleccionar para enviar por WhatsApp" aria-label="Seleccionar los comprobantes de ${escHtml(pedido.cliente?.nombre || 'este pedido')} para enviar">
+                <button type="button" class="btn-comp is-${r.color}" data-comp-pedido="${escHtml(pedido.id)}" title="${escHtml(texto)}" aria-label="Ver ${r.lista.length} comprobante(s): ${escHtml(texto)}">${IC_COMP}<span>${r.lista.length}</span>${tilde}</button>
+            </div>`;
+        }
+
+        // Repinta solo las celdas de comprobante y el aviso (sin rearmar la tabla)
+        function pintarComprobantes() {
+            document.getElementById('tableContainer').classList.toggle('sin-wa', !waApp);
+            const aviso = document.getElementById('waAviso');
+            const avisoTexto = document.getElementById('waAvisoTexto');
+            const avisoBtn = document.getElementById('waAvisoBtn');
+            aviso.classList.toggle('is-error', waEstado === 'error');
+            if (waEstado === 'login') {
+                avisoTexto.textContent = 'Para ver los comprobantes de WhatsApp de cada pedido, iniciá sesión (se pide una sola vez).';
+                avisoBtn.textContent = 'Conectar';
+                aviso.hidden = false;
+            } else if (waEstado === 'error') {
+                avisoTexto.textContent = 'No se pudieron leer los comprobantes de WhatsApp.';
+                avisoBtn.textContent = 'Reintentar';
+                aviso.hidden = false;
+            } else {
+                aviso.hidden = true;
+            }
+            const porId = new Map(transferenciasData.map(p => [String(p.id), p]));
+            document.querySelectorAll('td[data-comp-celda]').forEach(td => {
+                const p = porId.get(td.getAttribute('data-comp-celda'));
+                td.innerHTML = p ? celdaComprobante(p) : '';
+            });
+            pintarChecksFila();
+        }
+
+        // ------------------------------- Selección desde la tabla --
+        // Comprobantes de un pedido que se pueden mandar (los borrados de Firebase no)
+        function compDisponibles(pedido) {
+            return waListaDe(pedido).filter(a => waFotos.get(a.id) !== null);
+        }
+
+        function filaSelEstado(pedido) {
+            const lista = compDisponibles(pedido);
+            const n = lista.filter(a => seleccion.has(a.id)).length;
+            return { lista, n, todos: lista.length > 0 && n === lista.length };
+        }
+
+        // Suma o quita de la selección los comprobantes de un pedido
+        function selPedido(pedido, on, soloNoEnviados = false) {
+            const clave = waClaveDe(pedido);
+            compDisponibles(pedido)
+                .filter(a => !soloNoEnviados || !enviados[a.id])
+                .forEach(a => selPoner(selItem(a, pedido, clave), on));
+        }
+
+        // Pedidos de la página visible que tienen casilla de comprobantes
+        function pedidosConCasilla() {
+            const porId = new Map(transferenciasData.map(p => [String(p.id), p]));
+            return [...document.querySelectorAll('#tableBody .comp-fila-sel')]
+                .map(cb => ({ cb, p: porId.get(cb.getAttribute('data-comp-sel')) }))
+                .filter(x => x.p);
+        }
+
+        // Tildes de fila (completa / a medias) y de cabecera, según la selección
+        function pintarChecksFila() {
+            const filas = pedidosConCasilla();
+            filas.forEach(({ cb, p }) => {
+                const e = filaSelEstado(p);
+                cb.checked = e.todos;
+                cb.indeterminate = e.n > 0 && !e.todos;
+                cb.disabled = !e.lista.length;
+            });
+            const cab = document.getElementById('compSelPagina');
+            cab.hidden = waEstado !== 'listo' || !filas.length;
+            const noEnv = filas.flatMap(({ p }) => compDisponibles(p).filter(a => !enviados[a.id]));
+            const sel = noEnv.filter(a => seleccion.has(a.id)).length;
+            cab.checked = noEnv.length > 0 && sel === noEnv.length;
+            cab.indeterminate = sel > 0 && sel < noEnv.length;
+            cab.disabled = !noEnv.length;
+        }
+
+        function waDetener() {
+            waCargaVigente++;
+            waRefs.forEach(r => r.off());
+            waRefs = [];
+        }
+
+        // Lee el índice de comprobantes del punto consultado y lo deja escuchando:
+        // un comprobante que llega mientras la página está abierta aparece solo.
+        async function cargarComprobantes() {
+            waDetener();
+            const esta = waCargaVigente;
+            // La selección es de un solo punto de venta (las marcas van a su base)
+            if (selPunto !== puntoConsultado) { selPunto = puntoConsultado; selVaciar(); }
+            waApp = waAppDe(puntoConsultado);
+            waPorPedido = new Map();
+            waAsigManual = {};
+            if (!waApp) { waEstado = 'off'; pintarComprobantes(); return; }
+            waEstado = 'cargando';
+            pintarComprobantes();
+
+            const app = waApp;
+            const usuario = await usuarioDe(app);
+            if (esta !== waCargaVigente) return;
+            if (!usuario) { waEstado = 'login'; pintarComprobantes(); return; }
+
+            const db = app.database();
+            const pedidosIds = new Set();
+            transferenciasData.forEach(p => { pedidosIds.add(String(p.id)); if (p._key) pedidosIds.add(p._key); });
+            const desdeT = Date.now() - (diasVentana + WA_MARGEN_DIAS) * 86400000;
+            let rango = null, asig = null;
+            const extras = {};             // comprobantes fuera del rango de fechas
+            const pedidos = new Set();     // ids ya buscados fuera del rango
+            let fallado = false;
+
+            const fallo = error => {
+                if (esta !== waCargaVigente || fallado) return;
+                fallado = true;
+                console.error('WhatsApp: error leyendo comprobantes', error);
+                waDetener();
+                waEstado = 'error';
+                pintarComprobantes();
+            };
+
+            // Comprobantes asignados a mano a uno de estos pedidos pero fuera del
+            // rango de fechas: se buscan de a uno (son pocos).
+            const buscarFaltantes = () => {
+                const faltan = Object.entries(asig || {})
+                    .filter(([id, m]) => m && m.pedido && pedidosIds.has(m.pedido) && !rango[id] && !(id in extras) && !pedidos.has('id:' + id))
+                    .map(([id]) => id);
+                faltan.forEach(id => {
+                    pedidos.add('id:' + id);
+                    db.ref('imgsIdx/' + id).once('value').then(s => {
+                        if (esta !== waCargaVigente) return;
+                        extras[id] = s.val();
+                        if (!extras[id]) delete extras[id];
+                        armar();
+                    }).catch(fallo);
+                });
+            };
+
+            const armar = () => {
+                if (esta !== waCargaVigente || rango === null || asig === null) return;
+                waAsigManual = asig;
+                waPorPedido = waAgrupar(Object.assign({}, extras, rango));
+                waEstado = 'listo';
+                pintarComprobantes();
+                buscarFaltantes();
+            };
+
+            const refRango = db.ref('imgsIdx').orderByChild('t').startAt(desdeT);
+            const refAsig = db.ref('asigManual');
+            waRefs.push(refRango, refAsig);
+            refRango.on('value', s => { rango = s.val() || {}; armar(); }, fallo);
+            refAsig.on('value', s => { asig = s.val() || {}; armar(); }, fallo);
+
+            // Pedidos sin fecha: pueden ser más viejos que la ventana, se buscan por pedido
+            transferenciasData
+                .filter(p => !p.fecha || !String(p.fecha).trim())
+                .slice(0, WA_MAX_SIN_FECHA)
+                .forEach(p => {
+                    const id = p._key || String(p.id);
+                    if (pedidos.has(id)) return;
+                    pedidos.add(id);
+                    db.ref('imgsIdx').orderByChild('pedido').equalTo(id).once('value').then(s => {
+                        if (esta !== waCargaVigente) return;
+                        Object.assign(extras, s.val() || {});
+                        armar();
+                    }).catch(fallo);
+                });
+        }
+
+        async function waConectar() {
+            if (!waApp) return;
+            const app = waApp;
+            const usuario = firebase.auth().currentUser;
+            try {
+                await pedirLogin(app, 'WhatsApp', {
+                    texto: 'Para ver los comprobantes de WhatsApp confirmá tu usuario. Se pide una sola vez en este equipo.',
+                    email: usuario && usuario.email,
+                    error: 'Contraseña incorrecta, o tu usuario no está creado en el proyecto de WhatsApp.'
+                });
+                if (app === waApp) cargarComprobantes();
+            } catch (error) {
+                if (error.message !== LOGIN_CANCELADO) console.error('WhatsApp: error al iniciar sesión', error);
+            }
+        }
+
+        // ------------------------------------------ Imágenes de comprobantes --
+        // Cache en memoria: id -> { url, blob } | null (ya no está en Firebase).
+        // Un error de red no se guarda, para poder reintentar.
+        const waFotosPend = new Map();
+
+        // base64 -> { url, blob } (la URL blob sirve para <img>, abrir y descargar)
+        function waFoto(b64) {
+            if (typeof b64 !== 'string' || !b64 || !/^[A-Za-z0-9+/=\r\n]+$/.test(b64)) return null;
+            try {
+                const bin = atob(b64.replace(/[\r\n]/g, ''));
+                const bytes = new Uint8Array(bin.length);
+                for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
+                return { blob, url: URL.createObjectURL(blob) };
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function waCargarFoto(a, app) {
+            if (waFotos.has(a.id)) return Promise.resolve(waFotos.get(a.id));
+            if (waFotosPend.has(a.id)) return waFotosPend.get(a.id);
+            const p = app.database().ref('imgs/' + a.tel + '/' + a.id + '/d').once('value')
+                .then(snap => {
+                    const f = waFoto(snap.val());
+                    waFotos.set(a.id, f);
+                    return f;
+                })
+                .finally(() => waFotosPend.delete(a.id));
+            waFotosPend.set(a.id, p);
+            return p;
+        }
+
+        // ------------------------------------ Enviados por WhatsApp (Firebase) --
+        // Nodo 'comprobantesEnviados' de la base del punto de venta consultado:
+        // { <idComprobante>: <fecha de envío en ms> }. Se marca solo al compartir, o
+        // a mano; se desmarca a mano. Los de más de 100 días se borran al
+        // abrir la página (las imágenes se borran de Firebase a los 90).
+        const NODO_ENVIADOS = 'comprobantesEnviados';
+        const DIAS_RETENCION_ENVIADOS = 100;
+        let enviados = {};
+        let refEnviados = null;
+        let pintadoProgramado = false;
+
+        // Varias marcas llegan juntas al abrir: se repinta una sola vez por cuadro
+        function programarPintadoEnviados() {
+            if (pintadoProgramado) return;
+            pintadoProgramado = true;
+            requestAnimationFrame(() => {
+                pintadoProgramado = false;
+                pintarComprobantes();
+                if (compVisor.el && !compVisor.el.hidden) compVisorPintar();
+            });
+        }
+
+        function escucharEnviados() {
+            if (refEnviados) refEnviados.off();
+            enviados = {};
+            programarPintadoEnviados();
+            const ref = database.ref(NODO_ENVIADOS);
+            refEnviados = ref;
+            const error = err => console.error('Error leyendo comprobantes enviados (¿falta publicar las reglas?):', err);
+            const poner = snap => { enviados[snap.key] = snap.val(); programarPintadoEnviados(); };
+            ref.on('child_added', poner, error);
+            ref.on('child_changed', poner, error);
+            ref.on('child_removed', snap => { delete enviados[snap.key]; programarPintadoEnviados(); }, error);
+
+            ref.once('value').then(snap => {
+                const limite = Date.now() - DIAS_RETENCION_ENVIADOS * 24 * 60 * 60 * 1000;
+                const vencidos = {};
+                snap.forEach(child => {
+                    const fecha = child.val();
+                    if (typeof fecha !== 'number' || fecha < limite) vencidos[child.key] = null;
+                });
+                if (Object.keys(vencidos).length) return ref.update(vencidos);
+            }).catch(() => { /* ya lo avisa el listener */ });
+        }
+
+        async function marcarEnviados(items, marcar = true) {
+            if (!items.length) return true;
+            const base = items[0].base;
+            const cambios = {};
+            items.forEach(it => { cambios[it.a.id] = marcar ? firebase.database.ServerValue.TIMESTAMP : null; });
+            try {
+                await base.ref(NODO_ENVIADOS).update(cambios);
+                return true;
+            } catch (error) {
+                console.error('Error guardando la marca de enviado:', error);
+                aviso('No se pudo guardar la marca de enviado: ' + (error.code === 'PERMISSION_DENIED'
+                    ? 'faltan publicar las reglas de la base.' : error.message));
+                return false;
+            }
+        }
+
+        // ------------------------------------------------------ Aviso breve --
+        let avisoTimer = 0;
+        function aviso(texto) {
+            const el = document.getElementById('toast');
+            el.textContent = texto;
+            el.hidden = false;
+            clearTimeout(avisoTimer);
+            avisoTimer = setTimeout(() => { el.hidden = true; }, 4500);
+        }
+
+        // ---------------------------------------- Selección para enviar --
+        // Comprobantes elegidos (de uno o varios pedidos) para mandar por WhatsApp,
+        // cada uno como su propio archivo JPG. Lo que se comparte queda
+        // marcado como enviado y sale de la selección.
+        const seleccion = new Map();   // id -> { a, pedido, clave, n, base, app }
+        let selPunto = null;
+
+        const archivoDePrueba = () => new File([new Blob(['x'], { type: 'image/jpeg' })], 'x.jpg', { type: 'image/jpeg' });
+        const PUEDE_COMPARTIR = (() => {
+            try { return !!(navigator.canShare && navigator.canShare({ files: [archivoDePrueba()] })); } catch (_) { return false; }
+        })();
+
+        function limpiarNombreArchivo(s) {
+            return String(s || '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+        }
+
+        function fechaArchivo(t) {
+            const d = new Date(t);
+            const dos = n => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + dos(d.getMonth() + 1) + '-' + dos(d.getDate());
+        }
+
+        // Mismo formato que los archivos de la PC: cliente - CODIGO - fecha (n).jpg
+        function nombreArchivo(it) {
+            return [limpiarNombreArchivo(it.pedido.cliente?.nombre) || 'Cliente', codigoPedido(it.clave), fechaArchivo(it.a.t)].join(' - ') +
+                (it.n > 1 ? ' (' + it.n + ')' : '') + '.jpg';
+        }
+
+        function selItem(a, pedido, clave) {
+            const lista = waPorPedido.get(clave) || [];
+            return { a, pedido, clave, n: lista.findIndex(x => x.id === a.id) + 1, base: database, app: waApp };
+        }
+
+        function selPoner(item, on) {
+            if (!on) { seleccion.delete(item.a.id); pintarSeleccion(); return; }
+            if (seleccion.has(item.a.id)) return;
+            seleccion.set(item.a.id, item);
+            pintarSeleccion();
+            // Se baja ya: al compartir los archivos tienen que estar listos
+            waCargarFoto(item.a, item.app).then(f => {
+                if (!f && seleccion.delete(item.a.id)) aviso('Esa imagen ya no está en Firebase (90 días): no se puede enviar desde acá.');
+            }).catch(() => {
+                if (seleccion.delete(item.a.id)) aviso('No se pudo bajar la imagen. Probá de nuevo.');
+            }).finally(() => {
+                pintarSeleccion();
+                if (compVisor.el && !compVisor.el.hidden) compVisorPintar();
+            });
+        }
+
+        function selVaciar() {
+            seleccion.clear();
+            pintarSeleccion();
+        }
+
+        function selItems() {
+            return [...seleccion.values()].sort((x, y) => x.a.t - y.a.t);
+        }
+
+        function pintarSeleccion() {
+            pintarChecksFila();
+            const barra = document.getElementById('selBarra');
+            const n = seleccion.size;
+            barra.hidden = n === 0;
+            document.body.classList.toggle('con-seleccion', n > 0);
+            if (!n) return;
+            const cargando = selItems().filter(it => !waFotos.get(it.a.id)).length;
+            document.getElementById('selTexto').textContent =
+                n + (n === 1 ? ' comprobante seleccionado' : ' comprobantes seleccionados') + (cargando ? ' · cargando ' + cargando + '…' : '');
+            const compartir = document.getElementById('selCompartir');
+            compartir.hidden = !PUEDE_COMPARTIR;
+            compartir.disabled = cargando > 0;
+            document.getElementById('selDescargar').disabled = cargando > 0;
+        }
+
+        // Comparte los archivos con la hoja de compartir del sistema (WhatsApp de
+        // escritorio o del celular). Cada comprobante va como su propia imagen.
+        async function selCompartir() {
+            const items = selItems().filter(it => waFotos.get(it.a.id));
+            if (!items.length) return;
+            const files = items.map(it => new File([waFotos.get(it.a.id).blob], nombreArchivo(it), { type: 'image/jpeg' }));
+            if (!navigator.canShare({ files })) {
+                aviso('Este navegador no puede compartir estas imágenes. Usá Descargar.');
+                return;
+            }
+            try {
+                await navigator.share({ files });
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Error al compartir:', error);
+                    aviso('No se pudo compartir: ' + error.message);
+                }
+                return;
+            }
+            if (await marcarEnviados(items)) {
+                items.forEach(it => seleccion.delete(it.a.id));
+                pintarSeleccion();
+                aviso(items.length === 1 ? 'Compartido y marcado como enviado.' : items.length + ' comprobantes compartidos y marcados como enviados.');
+            }
+        }
+
+        // Descarga cada uno como archivo aparte. No marca: bajar no es enviar
+        // (después de mandarlos, usar "Marcar enviados").
+        async function selDescargar() {
+            const items = selItems().filter(it => waFotos.get(it.a.id));
+            for (const it of items) {
+                const link = document.createElement('a');
+                link.href = waFotos.get(it.a.id).url;
+                link.download = nombreArchivo(it);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                await new Promise(r => setTimeout(r, 300));
+            }
+        }
+
+        async function selMarcar() {
+            const items = selItems();
+            if (await marcarEnviados(items)) {
+                selVaciar();
+                aviso(items.length === 1 ? 'Marcado como enviado.' : items.length + ' comprobantes marcados como enviados.');
+            }
+        }
+
+        // ------------------------------------------------------ Visor --
+        const compVisor = {
+            el: null, lista: [], i: 0, pedido: null, clave: '', foco: null, app: null
+        };
+
+        function compVisorAbrir(pedido) {
+            const r = waResumen(pedido);
+            if (!r) return;
+            Object.assign(compVisor, {
+                el: document.getElementById('compVisor'), lista: r.lista.slice(), i: r.lista.length - 1,
+                pedido, clave: waClaveDe(pedido), foco: document.activeElement, app: waApp
+            });
+            document.getElementById('compVisorTitulo').textContent = pedido.cliente?.nombre || 'Comprobantes';
+            document.getElementById('compVisorSub').textContent =
+                'Pedido ' + codigoPedido(compVisor.clave) + (pedido.cliente?.telefono ? ' · ' + pedido.cliente.telefono : '');
+            const resumen = document.getElementById('compVisorResumen');
+            resumen.className = 'comp-visor-resumen is-' + r.color;
+            resumen.textContent = r.texto;
+            compVisor.el.hidden = false;
+            compVisorPintar();
+            document.getElementById('compVisorCerrar').focus();
+        }
+
+        function compVisorCerrar() {
+            if (!compVisor.el || compVisor.el.hidden) return;
+            compVisor.el.hidden = true;
+            if (compVisor.foco && compVisor.foco.isConnected && compVisor.foco.focus) compVisor.foco.focus();
+        }
+
+        function fechaCorta(t) {
+            return new Date(t).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Miniaturas: tocar una la muestra; su casilla la suma a la selección
+        function compVisorTiras() {
+            const caja = document.getElementById('compVisorTiras');
+            const { lista, i } = compVisor;
+            caja.hidden = lista.length < 2;
+            if (lista.length < 2) { caja.textContent = ''; return; }
+            caja.innerHTML = lista.map((a, k) => {
+                const f = waFotos.get(a.id);
+                const env = enviados[a.id];
+                return `<div class="comp-mini${k === i ? ' is-actual' : ''}">
+                    <button type="button" class="comp-mini-ver" data-k="${k}" aria-label="Ver comprobante ${k + 1}"${k === i ? ' aria-current="true"' : ''}>
+                        ${f ? `<img src="${f.url}" alt="">` : `<span>${k + 1}</span>`}
+                    </button>
+                    <input type="checkbox" class="comp-mini-sel" data-k="${k}" aria-label="Seleccionar comprobante ${k + 1}"${seleccion.has(a.id) ? ' checked' : ''}${f === null ? ' disabled' : ''}>
+                    ${env ? '<span class="comp-mini-env" title="Enviado ' + escHtml(fechaCorta(env)) + '">Enviado</span>' : ''}
+                </div>`;
+            }).join('');
+            lista.forEach(a => {
+                if (!waFotos.has(a.id)) waCargarFoto(a, compVisor.app).then(() => {
+                    if (!compVisor.el.hidden && compVisor.lista.includes(a)) compVisorTiras();
+                }).catch(() => {});
+            });
+        }
+
+        function compVisorPintar() {
+            const { lista, i } = compVisor;
+            const a = lista[i];
+            const caja = document.getElementById('compVisorImg');
+            const info = document.getElementById('compVisorInfo');
+            const abrir = document.getElementById('compVisorAbrir');
+            document.getElementById('compVisorAnt').disabled = lista.length < 2;
+            document.getElementById('compVisorSig').disabled = lista.length < 2;
+
+            info.textContent = (lista.length > 1 ? (i + 1) + ' de ' + lista.length + ' · ' : '') +
+                formatearFecha(a.t) + ' · ' + (a.monto ? formatearMoneda(a.monto) : 'importe no leído') +
+                (a.conf === 'manual' ? ' · asignado a mano' : '');
+            const alerta = waAlerta(a);
+            if (alerta.texto) {
+                const s = document.createElement('span');
+                s.className = 'comp-alerta is-' + (alerta.nivel || 'amarillo');
+                s.textContent = alerta.texto;
+                info.appendChild(s);
+            }
+
+            // Enviado / selección del comprobante que se está viendo
+            const env = enviados[a.id];
+            const estado = document.getElementById('compVisorEnviado');
+            estado.textContent = env ? 'Enviado ' + fechaCorta(env) : 'No enviado';
+            estado.classList.toggle('is-enviado', !!env);
+            document.getElementById('compVisorMarca').textContent = env ? 'Quitar marca' : 'Marcar enviado';
+            const sel = document.getElementById('compVisorSel');
+            sel.checked = seleccion.has(a.id);
+            sel.disabled = waFotos.get(a.id) === null;
+            const todos = document.getElementById('compVisorSelTodos');
+            todos.hidden = lista.length < 2;
+            todos.textContent = lista.every(x => seleccion.has(x.id) || waFotos.get(x.id) === null)
+                ? 'Quitar todos' : 'Seleccionar todos (' + lista.length + ')';
+
+            compVisorTiras();
+
+            const ph = texto => {
+                caja.textContent = '';
+                const s = document.createElement('span');
+                s.className = 'comp-visor-ph';
+                s.textContent = texto;
+                caja.appendChild(s);
+            };
+            const f = waFotos.get(a.id);
+            abrir.disabled = !f;
+            if (f) {
+                caja.textContent = '';
+                const img = document.createElement('img');
+                img.src = f.url;
+                img.alt = 'Comprobante del ' + formatearFecha(a.t);
+                caja.appendChild(img);
+                return;
+            }
+            if (f === null) {
+                ph('La imagen ya no está en Firebase (se borra a los 90 días). Está en la carpeta "comprobantes" de la PC del local, con el código ' + codigoPedido(compVisor.clave) + '.');
+                return;
+            }
+            ph('Cargando imagen…');
+            waCargarFoto(a, compVisor.app)
+                .then(() => {
+                    if (!compVisor.el.hidden && compVisor.lista[compVisor.i] === a) compVisorPintar();
+                })
+                .catch(error => {
+                    console.error('WhatsApp: error leyendo la imagen', error);
+                    if (compVisor.lista[compVisor.i] === a) ph('No se pudo cargar la imagen. Cerrá y volvé a abrir para reintentar.');
+                });
+        }
+
+        function compVisorMover(dir) {
+            const n = compVisor.lista.length;
+            if (n < 2) return;
+            compVisor.i = (compVisor.i + dir + n) % n;
+            compVisorPintar();
+        }
+
+        function configurarComprobantes() {
+            document.getElementById('waAvisoBtn').addEventListener('click', () => {
+                if (waEstado === 'login') waConectar(); else cargarComprobantes();
+            });
+            document.getElementById('tableBody').addEventListener('click', e => {
+                const btn = e.target.closest('.btn-comp[data-comp-pedido]');
+                if (!btn) return;
+                const pedido = transferenciasData.find(p => String(p.id) === btn.getAttribute('data-comp-pedido'));
+                if (pedido) compVisorAbrir(pedido);
+            });
+            // Casilla de la fila: todos los comprobantes de ese pedido
+            document.getElementById('tableBody').addEventListener('change', e => {
+                const cb = e.target.closest('.comp-fila-sel[data-comp-sel]');
+                if (!cb) return;
+                const pedido = transferenciasData.find(p => String(p.id) === cb.getAttribute('data-comp-sel'));
+                if (pedido) selPedido(pedido, cb.checked);
+                pintarChecksFila();
+            });
+            // Casilla de la cabecera: los no enviados de la página (o quitar todos los de la página)
+            document.getElementById('compSelPagina').addEventListener('change', e => {
+                const marcar = e.target.checked;
+                pedidosConCasilla().forEach(({ p }) => selPedido(p, marcar, marcar));
+                pintarChecksFila();
+            });
+            const visor = document.getElementById('compVisor');
+            visor.addEventListener('click', e => {
+                if (e.target === visor) { compVisorCerrar(); return; }
+                const ver = e.target.closest('.comp-mini-ver');
+                if (ver) { compVisor.i = Number(ver.dataset.k); compVisorPintar(); }
+            });
+            visor.addEventListener('change', e => {
+                const mini = e.target.closest('.comp-mini-sel');
+                if (!mini) return;
+                const a = compVisor.lista[Number(mini.dataset.k)];
+                if (a) selPoner(selItem(a, compVisor.pedido, compVisor.clave), mini.checked);
+                compVisorPintar();
+            });
+            visor.addEventListener('keydown', e => {
+                if (e.target.matches('input')) { if (e.key === 'Escape') compVisorCerrar(); return; }
+                if (e.key === 'Escape') compVisorCerrar();
+                else if (e.key === 'ArrowLeft') compVisorMover(-1);
+                else if (e.key === 'ArrowRight') compVisorMover(1);
+            });
+            document.getElementById('compVisorCerrar').addEventListener('click', compVisorCerrar);
+            document.getElementById('compVisorAnt').addEventListener('click', () => compVisorMover(-1));
+            document.getElementById('compVisorSig').addEventListener('click', () => compVisorMover(1));
+            document.getElementById('compVisorAbrir').addEventListener('click', () => {
+                const a = compVisor.lista[compVisor.i];
+                const f = a && waFotos.get(a.id);
+                if (f) window.open(f.url, '_blank', 'noopener');
+            });
+            document.getElementById('compVisorSel').addEventListener('change', e => {
+                const a = compVisor.lista[compVisor.i];
+                if (a) selPoner(selItem(a, compVisor.pedido, compVisor.clave), e.target.checked);
+                compVisorPintar();
+            });
+            document.getElementById('compVisorSelTodos').addEventListener('click', () => {
+                const disponibles = compVisor.lista.filter(x => waFotos.get(x.id) !== null);
+                const quitar = disponibles.every(x => seleccion.has(x.id));
+                disponibles.forEach(a => selPoner(selItem(a, compVisor.pedido, compVisor.clave), !quitar));
+                compVisorPintar();
+            });
+            document.getElementById('compVisorMarca').addEventListener('click', async e => {
+                const a = compVisor.lista[compVisor.i];
+                if (!a) return;
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                await marcarEnviados([selItem(a, compVisor.pedido, compVisor.clave)], !enviados[a.id]);
+                btn.disabled = false;
+            });
+
+            // Barra de selección
+            document.getElementById('selCompartir').addEventListener('click', selCompartir);
+            document.getElementById('selDescargar').addEventListener('click', selDescargar);
+            document.getElementById('selMarcar').addEventListener('click', selMarcar);
+            document.getElementById('selLimpiar').addEventListener('click', () => {
+                selVaciar();
+                if (compVisor.el && !compVisor.el.hidden) compVisorPintar();
+            });
         }
 
         // Conversaciones de WhatsApp ya abiertas (persisten entre recargas)
@@ -1453,6 +2705,7 @@
                     <td class="amount-column">${celdaImporte(pedido)}</td>
                     <td class="alias-column">${aliasBadge}</td>
                     <td>${medioBadge}</td>
+                    <td class="comp-column" data-comp-celda="${escHtml(pedido.id)}">${celdaComprobante(pedido)}</td>
                     <td class="checkbox-column">
                         <button class="btn-whatsapp${whatsappAbierto}" data-wa-url="${whatsappUrl}" data-pedido-id="${pedido.id}" ${whatsappDisabled} title="Abrir WhatsApp de ${nombreCliente}" aria-label="Abrir WhatsApp de ${nombreCliente}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -1510,6 +2763,7 @@
 
             tableBody.innerHTML = pagina.map(crearFilaTabla).join('');
             renderizarPaginacion(totalPaginas, inicio, pagina.length);
+            pintarChecksFila();   // tildes a medias (indeterminate) y cabecera de comprobantes
 
             // Agregar event listeners a los checkboxes
             tableBody.querySelectorAll('.custom-checkbox').forEach(checkbox => {
@@ -1638,7 +2892,7 @@
                 const agregarPedidos = (snap) => {
                     snap.forEach(child => {
                         const pedido = child.val();
-                        pedidosCombinados[child.key] = { ...pedido, id: pedido.id || child.key };
+                        pedidosCombinados[child.key] = { ...pedido, id: pedido.id || child.key, _key: child.key };
                     });
                 };
                 agregarPedidos(snapRecientes);
@@ -1657,6 +2911,9 @@
 
                 // Aplicar filtros (oculta HOMEPOINT/ENVIOS.HP salvo "Ver todos") y renderizar
                 aplicarFiltros();
+
+                // Comprobantes de WhatsApp: se cargan aparte y se pintan cuando llegan
+                cargarComprobantes();
 
             } catch (error) {
                 if (estaCarga !== cargaVigente) return;
@@ -1685,6 +2942,7 @@
                 document.getElementById('tableContainer').style.display = 'none';
                 document.getElementById('paginacion').style.display = 'none';
                 document.getElementById('noData').style.display = 'none';
+                waDetener();
                 cargarDatos();
             }
 
@@ -1719,6 +2977,7 @@
                     if (id === puntoEquipo) url.searchParams.delete('pv'); else url.searchParams.set('pv', id);
                     history.replaceState(null, '', url);
                     escucharVerificados();
+                    escucharEnviados();
                     actualizarEtiquetaVentana();
                     recargarDesdeServidor();
                 } catch (error) {
@@ -1800,10 +3059,12 @@
             }
             poblarSelectorPunto();
             escucharVerificados();
+            escucharEnviados();
             migrarVerificadosLocales();
             actualizarEtiquetaVentana();
             // Configurar event listeners una sola vez
             configurarFiltros();
+            configurarComprobantes();
             cargarDatos();
         }
     </script>

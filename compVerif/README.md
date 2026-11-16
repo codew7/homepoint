@@ -13,7 +13,17 @@ Programa local para detectar comprobantes de transferencia alterados (con Photos
    - **Datos**: lo que se leyó del comprobante.
 5. Opcional: marcá **Aprobado** o **Rechazado**. Con eso aprende cómo son los números de operación reales de cada banco.
 
-El ícono del reloj abre el **historial**. Para usar el `.exe`, la PC necesita Claude Code instalado y con la sesión iniciada (usa tu suscripción, sin clave de API) y Edge WebView2, que ya viene con Windows 10 y 11.
+El ícono del reloj abre el **historial**.
+
+## Comprobantes a ENVIOS.HP
+
+En **Historial** y en **Comprobantes de WhatsApp**, el filtro **Alias** separa los comprobantes pagados a **ENVIOS.HP** (**Otros** muestra el resto). Esos comprobantes llevan la etiqueta ENVIOS.HP en la lista y en el resultado. Cuentan los que muestran el alias escrito y también los que muestran solo el CVU de esa cuenta (`0000003100049179832328`, Mercado Pago), aunque esté tapado en parte con asteriscos. Los que no muestran ni alias ni CVU van a **Otros**. El alias y el CVU están en `historial.py` (`ALIAS_ENVIOS`, `CVU_ENVIOS`).
+
+## Compartir comprobantes
+
+- En el resultado, **Ver en la carpeta** abre el Explorador con el archivo ya seleccionado, y **Copiar para WhatsApp** lo copia para pegarlo en un chat con **Ctrl+V**.
+- Para mandar varios juntos: en **Historial** o en **Comprobantes de WhatsApp**, tocá **Seleccionar**, marcá los que quieras y usá **Copiar para WhatsApp** (o **Ver**, que abre la carpeta con todos seleccionados). Se pegan en el chat de una vez, sin armar un ZIP.
+- Si el comprobante llegó por WhatsApp, se usa el archivo de `WhatsAppSync\comprobantes\` (con su marca en el nombre); si lo cargaste a mano, la copia que guarda el verificador. Para usar el `.exe`, la PC necesita Claude Code instalado y con la sesión iniciada (usa tu suscripción, sin clave de API) y Edge WebView2, que ya viene con Windows 10 y 11.
 
 Para desarrollo también sigue andando **`Verificador.bat`**, que abre la misma pantalla en el navegador y usa la carpeta `datos\`.
 

@@ -4042,6 +4042,37 @@
     .nec-chk-env input { width: 16px; height: 16px; margin: 0; accent-color: var(--ok); cursor: pointer; }
     .nec-chk-env:has(input:checked) { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 
+    /* Filtro "Stock disponible": deja solo los articulos con stock > 0 en
+       Munro, en Caseros o en la suma de los dos. Arranca siempre en Munro. */
+    .nec-stock-filtro {
+      flex: none;
+      height: 40px;
+      padding: 0 4px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: var(--r1);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink-3);
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      white-space: nowrap;
+    }
+    .nec-stock-filtro select {
+      height: 30px;
+      padding: 0 6px;
+      border: none;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font: inherit;
+      cursor: pointer;
+      outline: none;
+    }
+    .nec-stock-filtro select:focus-visible { box-shadow: 0 0 0 3px var(--accent-ring); }
+
     /* Lista */
     .nec-list-wrap {
       flex: 1;
@@ -4111,6 +4142,9 @@
     .nec-cols .nc-art { flex: 1; text-align: left; }
     .nec-cols .nc-stock, .nec-cols .nc-nec { width: 52px; }
     .nec-cols .nc-ok { width: 44px; }
+    .nec-cols .nc-stock { font-size: 11.5px; letter-spacing: 0; }
+    .nec-cols .nc-nec, .nec-cols .nc-ok { display: flex; justify-content: center; }
+    .nec-cols .ic-sm { width: 15px; height: 15px; }
 
     .nec-cat {
       display: flex;
@@ -4350,6 +4384,20 @@
       border-radius: 99px;
     }
     .nec-det-row .ic-sm { width: 14px; height: 14px; color: var(--ink-4); flex: none; }
+    /* Codigo y codigos de barras completos: solo en pantallas angostas,
+       donde la fila los recorta (ver media query de 720px). */
+    .nec-det-cods {
+      display: none;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 10px 4px 2px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-2);
+      word-break: break-all;
+    }
+    .nec-det-cods .ic-sm { width: 14px; height: 14px; margin-top: 1px; color: var(--ink-4); }
 
     .nec-empty {
       padding: 56px 20px;
@@ -4671,6 +4719,7 @@
       .nec-nec { font-size: 15.5px; }
       .nec-check { width: 40px; height: 40px; }
       .nec-det { padding-left: 14px; }
+      .nec-det-cods { display: flex; }
       .nec-sub { padding: 14px; }
     }
 
@@ -6514,6 +6563,13 @@
           <button type="button" class="is-on" id="necSegFaltan" role="tab">Faltan <span class="nec-seg-n" id="necNFaltan">0</span></button>
           <button type="button" id="necSegTodos" role="tab">Todos <span class="nec-seg-n" id="necNTodos">0</span></button>
         </div>
+        <label class="nec-stock-filtro" title="Mostrar solo los artículos con stock disponible en Munro, en Caseros o en total"><span>Stock disponible</span>
+          <select id="necSelStock" aria-label="Stock disponible">
+            <option value="munro">Munro</option>
+            <option value="caseros">Caseros</option>
+            <option value="total">Total</option>
+          </select>
+        </label>
         <label class="nec-chk-env" title="Ocultar los artículos ya pedidos a Caseros: los enviados y los pendientes"><input type="checkbox" id="necChkEnviados"><span>Ocultar solicitados <span class="nec-seg-n" id="necNEnviados">0</span></span></label>
         <button type="button" class="nec-btn-pedidos" id="necBtnPedidos" title="Elegir qué pedidos entran en el cálculo"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg><span id="necBtnPedidosTxt">Pedidos</span></button>
       </div>
@@ -6541,8 +6597,9 @@
       </div>
       <div class="nec-sub-acciones">
         <!-- "Aptos" es el filtro por defecto: se aplica solo al cargar o
-             recargar la lista. Marca los pedidos con nota, salvo "No responde". -->
-        <button type="button" id="necSubConNota" title="Aptos: pedidos con nota, salvo los que dicen &quot;No responde&quot;">Aptos</button>
+             recargar la lista. Marca los pedidos con nota "Esperando cierre",
+             "Pedido Confirmado", "Pago Solicitado" o "Pago". -->
+        <button type="button" id="necSubConNota" title="Aptos: pedidos con nota Esperando cierre, Pedido Confirmado, Pago Solicitado o Pago">Aptos</button>
         <button type="button" id="necSubTodos">Todos</button>
         <button type="button" id="necSubNinguno">Ninguno</button>
       </div>
@@ -17572,6 +17629,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const IC_PERSONAS = '<svg class="ic-sm" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 19a5.5 5.5 0 0 1 11 0"></path><path d="M16 4.5a3.2 3.2 0 0 1 0 6.4"></path><path d="M20.5 19a5.5 5.5 0 0 0-3.8-5.2"></path></svg>';
       const IC_FLECHA = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>';
       const IC_LISTO = '<svg class="ic-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.6L16.5 9"></path></svg>';
+      // Cabecera de columnas: portapapeles con lista (necesarios) y circulo con tilde (OK).
+      const IC_COL_NEC = '<svg class="ic-sm" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4.5V3.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M9 10h6M9 13.5h6M9 17h4"></path></svg>';
+      const IC_COL_OK = '<svg class="ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.6L16.5 9"></path></svg>';
+      const IC_BARRAS = '<svg class="ic-sm" viewBox="0 0 24 24"><path d="M4 6v12M7 6v12M10.5 6v12M13 6v12M16.5 6v12M20 6v12"></path></svg>';
       const IC_VACIO = '<svg class="ic-lg" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
 
       // Nota que marca el pedido con tilde verde en la sub-hoja de pedidos.
@@ -17587,6 +17648,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // Ocultar los ya pedidos a Caseros, "Solicitado" o "Enviado" (se recuerda en el equipo).
       let ocultarEnviados = true;
       try { ocultarEnviados = localStorage.getItem('nec_ocultar_solicitados') !== '0'; } catch (e) { /* sin storage */ }
+      // Filtro "Stock disponible": 'munro' | 'caseros' | 'total'. No se
+      // recuerda: cada vez que se abre la seccion vuelve a Munro.
+      let filtroStock = 'munro';
       let busqueda = '';
       let abierta = null;            // codigo de la fila con el detalle desplegado
       let cargando = false;
@@ -17743,10 +17807,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let filtroRapido = 'nota';
       const normNota = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .toLowerCase().replace(/\s+/g, ' ').trim();
-      const entraPorNota = (p) => {
-        const n = normNota(p.nota);
-        return n !== '' && !n.includes('no responde');
-      };
+      // Solo estas notas, comparadas exactas (sin mayusculas, acentos ni
+      // espacios de mas). Cualquier otra nota, o sin nota, queda afuera.
+      const NOTAS_APTAS = new Set(['Esperando cierre', 'Pedido Confirmado', 'Pago Solicitado', 'Pago'].map(normNota));
+      const entraPorNota = (p) => NOTAS_APTAS.has(normNota(p.nota));
       function incluirConNota() {
         const sel = {};
         pedidos.forEach(p => { if (entraPorNota(p)) sel[p.id] = true; });
@@ -17956,6 +18020,17 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         return a.nombre.toLowerCase().includes(busqueda) || a.codigo.toLowerCase().includes(busqueda);
       }
 
+      // Sin dato de stock cuenta como 0 (no disponible).
+      function pasaStock(a) {
+        const si = sheetsData[a.codigo] || {};
+        const n = (v) => (Number.isFinite(v) && v > 0) ? v : 0;
+        const munro = n(si.stock);
+        const caseros = n(si.stockCaseros);
+        if (filtroStock === 'caseros') return caseros > 0;
+        if (filtroStock === 'total') return munro + caseros > 0;
+        return munro > 0;
+      }
+
       // ---------- Render ----------
       function render() {
         const todos = listaOrdenada();
@@ -17963,7 +18038,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         document.getElementById('necNEnviados').textContent = nEnviados;
         const visibles = todos.filter(a => pasaBusqueda(a) &&
           (!soloFaltan || !getVerificado(a.codigo)) &&
-          (!ocultarEnviados || !esEnviado(a.codigo)));
+          (!ocultarEnviados || !esEnviado(a.codigo)) &&
+          pasaStock(a));
 
         // Hay pedidos pero ninguno elegido: no es lo mismo que "no hay nada".
         if (!todos.length && pedidos.length && !pedidosEnCalculo) {
@@ -17979,9 +18055,14 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           return;
         }
         if (!visibles.length) {
-          const quedanSinEnviados = ocultarEnviados && todos.some(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)));
+          const quedanSinEnviados = ocultarEnviados && todos.some(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)) && pasaStock(a));
+          const quedanSinStock = todos.some(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)) &&
+            (!ocultarEnviados || !esEnviado(a.codigo)));
+          const lugarStock = filtroStock === 'caseros' ? 'en Caseros' : filtroStock === 'total' ? 'en ninguna sucursal' : 'en Munro';
           const html = quedanSinEnviados
             ? '<div class="nec-empty">' + IC_VACIO + '<b>Todo lo que queda ya fue solicitado a Caseros</b><span>Destildá "Ocultar solicitados" para verlos.</span></div>'
+            : quedanSinStock
+            ? '<div class="nec-empty">' + IC_VACIO + '<b>Lo que queda no tiene stock ' + lugarStock + '</b><span>Cambiá "Stock disponible" para verlos.</span></div>'
             : busqueda
             ? '<div class="nec-empty">' + IC_VACIO + '<b>Sin resultados</b><span>Ningún artículo coincide con "' + escapeHtml(busqueda) + '".</span></div>'
             : '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>Todo verificado</b><span>No queda nada por juntar. Tocá "Todos" para revisar la lista completa.</span></div>';
@@ -17990,7 +18071,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           return;
         }
 
-        let html = '<div class="nec-cols"><span class="nc-art">Artículo</span><span class="nc-stock" title="Stock total (columna R)">Munro</span><span class="nc-stock" title="Stock de la otra sucursal (columna S)">Caseros</span><span class="nc-nec">Neces.</span><span class="nc-ok">OK</span></div>';
+        // Cabecera compacta: letras para las sucursales e iconos para
+        // "Necesarios" y "OK"; el nombre completo queda en el title.
+        let html = '<div class="nec-cols"><span class="nc-art">Artículo</span>' +
+          '<span class="nc-stock" title="Stock en Munro (columna R)" aria-label="Munro">M</span>' +
+          '<span class="nc-stock" title="Stock en Caseros (columna S)" aria-label="Caseros">C</span>' +
+          '<span class="nc-nec" title="Necesarios" aria-label="Necesarios">' + IC_COL_NEC + '</span>' +
+          '<span class="nc-ok" title="OK (verificado)" aria-label="OK">' + IC_COL_OK + '</span></div>';
 
         let cat = null;
         let i = 0;
@@ -18039,7 +18126,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const barras = (si.codigoBarras && si.codigoBarras.length) ? si.codigoBarras[0] : '';
         const nPed = a.pedidos.length;
 
-        let det = '<div class="nec-det"><div class="nec-det-lbl">Lo piden ' + nPed + (nPed === 1 ? ' pedido' : ' pedidos') + '</div>';
+        // En pantallas angostas el codigo de barras queda cortado en la fila:
+        // al desplegar el articulo se ve completo (solo en esas pantallas).
+        const todasBarras = (si.codigoBarras || []).filter(Boolean);
+        let det = '<div class="nec-det">' +
+          '<div class="nec-det-cods">' + IC_BARRAS + '<span>' + codAttr +
+            (todasBarras.length ? ' · ' + todasBarras.map(escapeHtml).join(' · ') : '') + '</span></div>' +
+          '<div class="nec-det-lbl">Lo piden ' + nPed + (nPed === 1 ? ' pedido' : ' pedidos') + '</div>';
         a.pedidos.forEach(p => {
           det += '<div class="nec-det-row" data-pedido="' + escapeHtml(p.id) + '" title="Abrir el pedido">' +
             '<span class="nec-det-cli">' + escapeHtml(p.cliente) + '</span>' +
@@ -18098,6 +18191,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // ---------- Abrir / cerrar ----------
       function abrir() {
         panel.classList.add('active');
+        filtroStock = 'munro';
+        selStock.value = 'munro';
         escucharVerificados();
         escucharIncluidos();
         escucharSolicitudes();
@@ -18162,6 +18257,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         render();
       });
       segTodos.addEventListener('click', () => setSoloFaltan(false));
+      const selStock = document.getElementById('necSelStock');
+      selStock.addEventListener('change', () => {
+        filtroStock = selStock.value;
+        render();
+      });
 
       // ---------- Indicador de scroll ----------
       const scrollInd = document.getElementById('necScrollInd');

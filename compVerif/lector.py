@@ -50,7 +50,7 @@ CAMPOS = {
     "titular_destino": "nombre del destinatario",
     "cuit_destino": "CUIT/CUIL del destinatario, tal como aparece",
     "cbu_destino": "CBU/CVU de destino, tal como aparece (con asteriscos si esta enmascarado)",
-    "alias_destino": "alias de destino",
+    "alias_destino": "alias de destino, copiado exacto tal como aparece (vacio si no se ve)",
     "monto": "importe como numero, con punto decimal (ej. 25000.5)",
     "moneda": "ARS o USD",
     "fecha": "fecha de la operacion en formato YYYY-MM-DD",

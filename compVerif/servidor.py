@@ -15,11 +15,15 @@ API para la interfaz (index.html):
     GET  /api/estado                      -> Claude disponible
     POST /api/analizar?nombre=            -> cuerpo: bytes del archivo; devuelve el analisis completo
     POST /api/releer {id}                 -> vuelve a revisar el comprobante con Claude
-    GET  /api/historial?q=                -> lista liviana (busca por operacion, banco, titular)
+    GET  /api/historial?q=[&origen=][&alias=envios|otros]
+                                          -> lista liviana (busca por operacion, banco, titular, alias)
     GET  /api/analisis?id=                -> analisis completo
     GET  /api/archivo?id=[&ela=1]         -> el comprobante guardado o su mapa ELA
     POST /api/veredicto {id, veredicto: "aprobado"|"rechazado"|""}
     POST /api/borrar {id}
+    POST /api/compartir {ids: [...], accion: "mostrar"|"copiar"}
+                                          -> abre el Explorador con los archivos seleccionados, o los
+                                             copia al portapapeles para pegarlos juntos en WhatsApp
 
     GET  /api/whatsapp                    -> estado de la descarga y del analisis automatico
     POST /api/whatsapp/activar {activo}
@@ -41,6 +45,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import compartir
 import forense
 import historial
 import lector
@@ -265,6 +270,32 @@ def ruta_archivo(id_, extension):
     return historial.ARCHIVOS_DIR / f"{id_}{extension}"
 
 
+def ruta_para_compartir(reg):
+    """El archivo que se muestra o se copia: si vino de WhatsApp, el de la carpeta de
+    WhatsAppSync (con su marca en el nombre); si no, la copia que guarda el verificador."""
+    if (reg.get("origen") or {}).get("tipo") == "whatsapp" and WA.carpeta_ok():
+        nombre = historial.wa_archivo(reg["id"])
+        if nombre and (WA.comprobantes() / nombre).exists():
+            return WA.comprobantes() / nombre
+    ruta = ruta_archivo(reg["id"], reg.get("extension") or "")
+    return ruta if ruta.exists() else None
+
+
+def compartir_archivos(ids, accion):
+    rutas, faltan = [], 0
+    for id_ in dict.fromkeys(int(i) for i in ids):  # sin repetidos, en el mismo orden
+        reg = historial.obtener(id_)
+        ruta = ruta_para_compartir(reg) if reg else None
+        if ruta:
+            rutas.append(ruta)
+        else:
+            faltan += 1
+    if not rutas:
+        raise ValueError("No se encontró el archivo del comprobante.")
+    (compartir.copiar if accion == "copiar" else compartir.mostrar)(rutas)
+    return {"ok": True, "n": len(rutas), "faltan": faltan}
+
+
 def analizar(data, nombre, origen=None):
     """origen: None si se cargo a mano; {"tipo": "whatsapp", wa_id, tel, pedido, cliente,
     recibido (ms), doc} si lo bajo descargar-comprobantes.js."""
@@ -306,6 +337,7 @@ def publico(reg):
     r = json.loads(json.dumps(reg))
     r.get("forense", {}).pop("texto", None)
     r["ela"] = (historial.ARCHIVOS_DIR / f"{reg['id']}_ela.png").exists()
+    r["alias"] = historial.alias_de(reg.get("datos"))
     return r
 
 
@@ -355,7 +387,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"claude": lector.disponible(), "modelo": lector.MODELO, "ventana": ELEGIR_CARPETA is not None})
             if url.path == "/api/historial":
                 origen = q.get("origen") if q.get("origen") in ("whatsapp", "manual") else None
-                return self._json({"items": historial.listar(q.get("q", "").strip(), origen=origen)})
+                alias = q.get("alias") if q.get("alias") in ("envios", "otros") else None
+                return self._json({"items": historial.listar(q.get("q", "").strip(), origen=origen, alias=alias)})
             if url.path == "/api/whatsapp":
                 return self._json(WA.estado(limite=min(int(q.get("limite") or 40), 500)))
             if url.path == "/api/analisis":
@@ -384,6 +417,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(publico(analizar_manual(data, q.get("nombre", ""))))
 
             body = json.loads(self._cuerpo() or b"{}")
+            if url.path == "/api/compartir":
+                accion = body.get("accion")
+                if accion not in ("mostrar", "copiar") or not body.get("ids"):
+                    return self._error("Pedido inválido")
+                try:
+                    return self._json(compartir_archivos(body["ids"], accion))
+                except RuntimeError as e:
+                    return self._error(str(e))
             if url.path.startswith("/api/whatsapp/"):
                 return self._whatsapp(url.path.rsplit("/", 1)[1], body)
             reg = historial.obtener(int(body["id"]))

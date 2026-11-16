@@ -80,10 +80,14 @@ def main():
     servidor.ELEGIR_CARPETA = elegir_carpeta
     servidor.WA.iniciar()
 
+    # pywebview corre titulo() en un hilo comun (no daemon): si no termina, el programa
+    # queda abierto sin ventana al cerrarla (con la descarga de WhatsApp andando)
+    cerrada = threading.Event()
+
     def titulo():
         """La barra de tareas avisa cuando hay comprobantes de WhatsApp alterados sin decidir."""
         anterior = None
-        while True:
+        while not cerrada.is_set():
             try:
                 n = servidor.WA.estado(limite=0)["alertas"]
                 nuevo = f"{NOMBRE} ({n} {'alterado' if n == 1 else 'alterados'})" if n else NOMBRE
@@ -92,10 +96,11 @@ def main():
                     anterior = nuevo
             except Exception:
                 pass
-            threading.Event().wait(5)
+            cerrada.wait(5)
 
     webview.start(titulo, private_mode=False,
                   storage_path=str(Path(os.environ["VERIFICADOR_DATOS"]) / "ventana"), icon=str(RECURSOS / "icono.ico"))
+    cerrada.set()
     http.shutdown()
 
 
