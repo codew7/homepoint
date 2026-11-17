@@ -270,6 +270,10 @@ code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font
 .fila-check.listo { opacity: .6; }
 .fila-check.listo .caja { background: var(--ok); border-color: var(--ok); }
 .fila-check.listo .caja svg { opacity: 1; transform: none; color: #fff; }
+.prio { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; margin-left: 7px; vertical-align: -4px; color: #fff; }
+.prio svg { width: 15px; height: 15px; stroke-width: 3.6; }
+.prio-si { background: var(--ok); }
+.prio-no { background: var(--mal); }
 .cant { font: 900 24px/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; flex: none; }
 .cant small { font-size: 15px; opacity: .6; margin-right: 1px; }
 
@@ -657,8 +661,19 @@ function imgHtml(src, alt, clase) {
 function normalizarNota(n) {
   return (n == null ? '' : String(n)).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
-const NOTAS_PAGADO = new Set(['pago', 'pagado', 'abonado', 'senado']);
-function estaPagado(nota) { return NOTAS_PAGADO.has(normalizarNota(nota)); }
+// Prioridad para asignar mercaderia en "Buscar articulo", segun la nota del
+// pedido: 'si' (check verde), 'no' (cruz roja, otra nota) o '' (sin nota).
+const NOTAS_PRIORIDAD = new Set(['esperando cierre', 'pedido confirmado', 'pago solicitado', 'pago']);
+function prioridadNota(nota) {
+  const n = normalizarNota(nota).replace(/\s+/g, ' ');
+  if (!n) return '';
+  return NOTAS_PRIORIDAD.has(n) ? 'si' : 'no';
+}
+function iconoPrioridad(p) {
+  if (p === 'si') return '<span class="prio prio-si" title="Prioridad" aria-label="Prioridad"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19.5 7"/></svg></span>';
+  if (p === 'no') return '<span class="prio prio-no" title="Sin prioridad" aria-label="Sin prioridad"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></span>';
+  return '';
+}
 
 function fechaCorta(ts) {
   if (!ts) return '';
@@ -1149,7 +1164,7 @@ const articuloList = $('articuloList');
 const articuloPedidosList = $('articuloPedidosList');
 const btnArticuloConfirmar = $('btnArticuloConfirmar');
 let articuloActual = null;      // { codigo, nombre, imagen }
-let articuloResultados = [];    // [{ id, nombre, status, cantidad, yaListo, pagado, timestamp, sel }]
+let articuloResultados = [];    // [{ id, nombre, status, cantidad, yaListo, nota, prioridad, timestamp, sel }]
 let articuloCandidatos = null;
 
 function articuloMostrarPaso(n) {
@@ -1283,12 +1298,15 @@ async function articuloBuscarEnPedidos(codigo) {
       if (!it) return;
       res.push({
         id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status,
-        cantidad: it.cantidad || 1, yaListo: it.listo === 'y', pagado: estaPagado(p.nota),
-        timestamp: p.timestamp || 0, sel: it.listo !== 'y'
+        cantidad: it.cantidad || 1, yaListo: it.listo === 'y', nota: String(p.nota || '').trim(),
+        prioridad: prioridadNota(p.nota), timestamp: p.timestamp || 0, sel: it.listo !== 'y'
       });
     });
     recolectar(sA); recolectar(sC);
-    res.sort((a, b) => (a.yaListo - b.yaListo) || (b.timestamp - a.timestamp));
+    // Pendientes primero; dentro, los prioritarios (check verde) arriba y los
+    // de cruz roja al final, para saber a quien asignarle la mercaderia.
+    const pesoPrio = { si: 0, '': 1, no: 2 };
+    res.sort((a, b) => (a.yaListo - b.yaListo) || (pesoPrio[a.prioridad] - pesoPrio[b.prioridad]) || (b.timestamp - a.timestamp));
     articuloResultados = res;
     articuloRenderPedidos();
   } catch (err) {
@@ -1308,9 +1326,9 @@ function articuloRenderPedidos() {
   articuloPedidosList.innerHTML = articuloResultados.map((r, i) =>
     '<div class="fila fila-check' + (r.yaListo ? ' listo' : r.sel ? ' sel' : '') + '" data-i="' + i + '" role="checkbox" aria-checked="' + (r.sel || r.yaListo) + '">' +
       '<span class="caja">' + IC.check + '</span>' +
-      '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(r.nombre) + '</div>' +
+      '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(r.nombre) + iconoPrioridad(r.prioridad) + '</div>' +
       '<div class="fila-sub">' + (r.yaListo ? '<b style="color:var(--ok)">Ya listo</b>' : (r.status === 'CERRADO' ? 'Cerrado' : 'Abierto')) +
-        (r.pagado ? ' · Pagado' : '') + ' · ' + fechaCorta(r.timestamp) + '</div></div>' +
+        (r.nota ? ' · ' + escapeHtml(r.nota) : '') + ' · ' + fechaCorta(r.timestamp) + '</div></div>' +
       '<span class="cant"><small>×</small>' + r.cantidad + '</span>' +
     '</div>').join('');
   $('articuloPie').hidden = false;
