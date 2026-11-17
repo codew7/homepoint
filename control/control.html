@@ -802,7 +802,47 @@ function ir(nombre) {
   if (antes === 'pedidos' && nombre !== 'pedidos') ppDesuscribir();
   if (nombre === 'pedidos') ppSuscribir();
   $('inicioLector').hidden = !(nombre === 'inicio' && ES_APP);
+  avisarBarras();
 }
+
+// ---------------------------------------------------------------- barras del telefono
+// La barra de estado (arriba) y la de navegacion (abajo) las pinta Android.
+// La pagina le avisa que color tiene arriba y abajo en cada momento, asi las
+// barras se funden con la app en tema claro y oscuro, y con las capas abiertas.
+let barrasUltimo = '';
+function rgbDe(el) {
+  if (!el) return null;
+  const m = getComputedStyle(el).backgroundColor.match(/[\d.]+/g);
+  if (!m || (m.length > 3 && +m[3] === 0)) return null;
+  return m.slice(0, 3).map(Number);
+}
+function aHex(c) { return '#' + c.map(x => Math.round(x).toString(16).padStart(2, '0')).join(''); }
+function velado(c) { return c.map(x => x * .45 + 10 * .55); }   // mismo velo que .velo
+function avisarBarras() {
+  if (!window.AppControl || !window.AppControl.colorBarras) return;
+  cancelAnimationFrame(avisarBarras.raf);
+  avisarBarras.raf = requestAnimationFrame(() => {
+    const p = $(PANTALLAS[pantalla]);
+    if (!p) return;
+    const base = rgbDe(p) || rgbDe(document.body) || [18, 19, 22];
+    const barra = p.querySelector(':scope > .barra');
+    const pie = [...p.querySelectorAll(':scope > .pie')].find(x => !x.hidden);
+    let arriba = rgbDe(barra) || base;
+    let abajo = rgbDe(pie) || base;
+    const capa = document.querySelector('.velo.on');
+    if ($('fin').classList.contains('on')) { arriba = abajo = rgbDe($('fin')); }
+    else if (capa) { arriba = velado(arriba); abajo = rgbDe(capa.querySelector('.hoja')) || abajo; }
+    else if (camAbierta()) { abajo = [17, 17, 17]; }
+    const clave = aHex(arriba) + aHex(abajo);
+    if (clave === barrasUltimo) return;
+    barrasUltimo = clave;
+    try { window.AppControl.colorBarras(aHex(arriba), aHex(abajo)); } catch (_) {}
+  });
+}
+// Capas que se abren y cierran (dialogo, camara, "quien controlo", fin).
+new MutationObserver(avisarBarras).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { barrasUltimo = ''; avisarBarras(); });
+window.__puenteListo = () => { barrasUltimo = ''; avisarBarras(); };
 
 document.querySelectorAll('[data-volver]').forEach(b => b.addEventListener('click', () => volver()));
 function volver() {
@@ -1176,7 +1216,9 @@ function articuloMostrarPaso(n) {
   $('buscarCuerpo2').hidden = p1;
   $('articuloPie').hidden = true;
   $('buscarTitulo').textContent = p1 ? 'Buscar artículo' : 'En qué pedidos está';
-  $('buscarSub').textContent = p1 ? 'Escaneá o escribí nombre / código' : 'Tildá los pedidos donde ya lo pusiste';
+  $('buscarSub').textContent = p1 ? 'Escaneá o escribí nombre / código'
+    : ES_APP ? 'Reescaneá o doble gatillo = Marcar listo' : 'Volvé a escanear = Marcar listo';
+  avisarBarras();
 }
 
 async function abrirBuscar() {
@@ -1257,6 +1299,8 @@ function articuloResolverLectura(texto) {
 }
 async function lecturaArticulo(texto) {
   if (!sheetsLoaded) await cargarSheets();
+  // El mismo articulo otra vez, con sus pedidos a la vista: Marcar listo.
+  if (articuloActual && articuloBuscarCandidatos(texto).includes(articuloActual.codigo) && articuloConfirmarRapido()) return;
   if (articuloResolverLectura(texto)) return;
   // No esta en el catalogo: se deja en el buscador para ver coincidencias parciales.
   vibrar([40, 60, 40]);
@@ -1332,6 +1376,7 @@ function articuloRenderPedidos() {
       '<span class="cant"><small>×</small>' + r.cantidad + '</span>' +
     '</div>').join('');
   $('articuloPie').hidden = false;
+  avisarBarras();
   articuloActualizarConfirmar();
 }
 articuloPedidosList.addEventListener('click', (e) => {
@@ -1366,9 +1411,13 @@ function articuloVolverAPaso1() {
   articuloRenderLista('');
 }
 // Marca listo='y' solo en el item de cada pedido elegido (update granular).
-btnArticuloConfirmar.addEventListener('click', async () => {
+btnArticuloConfirmar.addEventListener('click', () => articuloMarcarListo());
+let articuloMarcando = false;
+async function articuloMarcarListo() {
+  if (articuloMarcando) return;
   const sel = articuloResultados.filter(r => r.sel && !r.yaListo);
   if (!sel.length || !articuloActual) return;
+  articuloMarcando = true;
   const codigo = articuloActual.codigo;
   btnArticuloConfirmar.disabled = true;
   btnArticuloConfirmar.textContent = 'Marcando…';
@@ -1391,8 +1440,33 @@ btnArticuloConfirmar.addEventListener('click', async () => {
   if (fail) console.error('No marcados:', rs.filter(x => x.status === 'rejected').map(x => x.reason));
   if (ok) { vibrar([35, 40, 60]); destello(true); }
   showToast(ok ? '✓ Marcado en ' + ok + ' pedido' + (ok === 1 ? '' : 's') + (fail ? ' · ' + fail + ' no se pudo' : '') : 'No se pudo marcar ningún pedido');
+  articuloMarcando = false;
   articuloVolverAPaso1();
-});
+}
+
+// Atajo para trabajar rapido: con la lista de pedidos a la vista, volver a
+// escanear el mismo articulo o apretar dos veces seguidas el gatillo del
+// colector equivale a tocar "Marcar listo".
+function articuloConfirmarRapido() {
+  if (pantalla !== 'buscar' || !articuloActual || $('articuloPie').hidden) return false;
+  if (!articuloResultados.some(r => r.sel && !r.yaListo)) {
+    vibrar([40, 60, 40]);
+    showToast('Tildá al menos un pedido para marcar listo');
+    return true;
+  }
+  vibrar(60);
+  articuloMarcarListo();
+  return true;
+}
+const DOBLE_GATILLO_MS = 450;
+let gatilloUltimo = 0;
+// La app Android avisa cada vez que se aprieta una tecla del lector.
+window.__teclaLector = function () {
+  const ahora = Date.now();
+  const doble = ahora - gatilloUltimo < DOBLE_GATILLO_MS;
+  gatilloUltimo = doble ? 0 : ahora;
+  if (doble) articuloConfirmarRapido();
+};
 
 // =========================================================================
 // LISTA DE PEDIDOS (ABIERTO / CERRADO) en vivo

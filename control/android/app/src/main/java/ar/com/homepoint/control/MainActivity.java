@@ -5,8 +5,11 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.Window;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -25,6 +28,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -64,6 +69,9 @@ public class MainActivity extends AppCompatActivity {
         panelCarga = findViewById(R.id.panelCarga);
         panelError = findViewById(R.id.panelError);
         findViewById(R.id.botonReintentar).setOnClickListener(v -> recargar());
+        // Mientras carga se ve la pantalla amarilla: barras amarillas.
+        int amarillo = ContextCompat.getColor(this, R.color.amarillo);
+        aplicarBarras(amarillo, amarillo);
 
         pedirCamara = registerForActivityResult(new ActivityResultContracts.RequestPermission(), concedido -> {
             if (permisoWebPendiente == null) return;
@@ -126,7 +134,9 @@ public class MainActivity extends AppCompatActivity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
 
-        web.setBackgroundColor(ContextCompat.getColor(this, R.color.fondo_app));
+        // Transparente: mientras la pagina pinta se ve el fondo de la ventana,
+        // que siempre tiene el color de las barras (sin destellos claros).
+        web.setBackgroundColor(Color.TRANSPARENT);
         web.addJavascriptInterface(new Puente(), "AppControl");
 
         web.setWebViewClient(new WebViewClient() {
@@ -190,6 +200,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void recargar() {
         falloLaCarga = false;
+        int amarillo = ContextCompat.getColor(this, R.color.amarillo);
+        aplicarBarras(amarillo, amarillo);
         panelError.setVisibility(View.GONE);
         panelCarga.setVisibility(View.VISIBLE);
         web.setVisibility(View.INVISIBLE);
@@ -204,6 +216,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void mostrarError() {
         falloLaCarga = true;
+        int fondo = ContextCompat.getColor(this, R.color.fondo_app);
+        aplicarBarras(fondo, fondo);
         panelCarga.setVisibility(View.GONE);
         web.setVisibility(View.INVISIBLE);
         panelError.setVisibility(View.VISIBLE);
@@ -228,10 +242,88 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
 
+        /** La pagina avisa el color que tiene arriba y abajo ("#rrggbb"). */
+        @JavascriptInterface
+        public void colorBarras(String arriba, String abajo) {
+            final int a, b;
+            try {
+                a = Color.parseColor(arriba);
+                b = Color.parseColor(abajo);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            runOnUiThread(() -> { if (!falloLaCarga) aplicarBarras(a, b); });
+        }
+
         /** True en equipos Zebra (DataWedge), donde el gatillo por software anda. */
         @JavascriptInterface
         public boolean tieneLector() {
             return lector.puedeDisparar();
+        }
+    }
+
+    // ---------------------------------------------------------------- barras del sistema
+
+    /**
+     * Pinta la barra de estado y la de navegacion con los colores de la
+     * pantalla actual y elige iconos claros u oscuros segun el fondo. El fondo
+     * de la ventana toma el color de abajo: es lo que asoma un instante cuando
+     * el teclado aparece o se va (antes asomaba en otro color: el parpadeo).
+     */
+    private void aplicarBarras(int arriba, int abajo) {
+        Window w = getWindow();
+        w.setStatusBarColor(arriba);
+        w.setNavigationBarColor(abajo);
+        w.getDecorView().setBackgroundColor(abajo);
+        View raiz = findViewById(R.id.raiz);
+        if (raiz != null) raiz.setBackgroundColor(abajo);
+        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+        c.setAppearanceLightStatusBars(esClaro(arriba));
+        c.setAppearanceLightNavigationBars(esClaro(abajo));
+    }
+
+    private static boolean esClaro(int color) {
+        double l = 0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color);
+        return l > 150;
+    }
+
+    // ---------------------------------------------------------------- gatillo del lector
+
+    /**
+     * Avisa a la pagina cada vez que se aprieta una tecla del lector (gatillo
+     * o botones laterales). La pagina toma dos toques seguidos como "Marcar
+     * listo". La tecla sigue su camino normal: el lector escanea igual.
+     */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0
+                && esTeclaLector(e) && web != null && !webMuerto) {
+            web.evaluateJavascript("window.__teclaLector && window.__teclaLector(" + e.getKeyCode() + ")", null);
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    /** Teclas que no son de escritura ni de sistema: en un colector, las del lector. */
+    private static boolean esTeclaLector(KeyEvent e) {
+        if (e.isPrintingKey()) return false;
+        switch (e.getKeyCode()) {
+            case KeyEvent.KEYCODE_BACK: case KeyEvent.KEYCODE_HOME: case KeyEvent.KEYCODE_MENU:
+            case KeyEvent.KEYCODE_APP_SWITCH: case KeyEvent.KEYCODE_POWER: case KeyEvent.KEYCODE_SLEEP:
+            case KeyEvent.KEYCODE_WAKEUP: case KeyEvent.KEYCODE_VOLUME_UP: case KeyEvent.KEYCODE_VOLUME_DOWN:
+            case KeyEvent.KEYCODE_VOLUME_MUTE: case KeyEvent.KEYCODE_SEARCH: case KeyEvent.KEYCODE_SETTINGS:
+            case KeyEvent.KEYCODE_DPAD_UP: case KeyEvent.KEYCODE_DPAD_DOWN: case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT: case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER: case KeyEvent.KEYCODE_NUMPAD_ENTER: case KeyEvent.KEYCODE_TAB:
+            case KeyEvent.KEYCODE_SPACE: case KeyEvent.KEYCODE_DEL: case KeyEvent.KEYCODE_FORWARD_DEL:
+            case KeyEvent.KEYCODE_ESCAPE: case KeyEvent.KEYCODE_SHIFT_LEFT: case KeyEvent.KEYCODE_SHIFT_RIGHT:
+            case KeyEvent.KEYCODE_CTRL_LEFT: case KeyEvent.KEYCODE_CTRL_RIGHT: case KeyEvent.KEYCODE_ALT_LEFT:
+            case KeyEvent.KEYCODE_ALT_RIGHT: case KeyEvent.KEYCODE_META_LEFT: case KeyEvent.KEYCODE_META_RIGHT:
+            case KeyEvent.KEYCODE_CAPS_LOCK: case KeyEvent.KEYCODE_NUM_LOCK: case KeyEvent.KEYCODE_SYM:
+            case KeyEvent.KEYCODE_PAGE_UP: case KeyEvent.KEYCODE_PAGE_DOWN: case KeyEvent.KEYCODE_MOVE_HOME:
+            case KeyEvent.KEYCODE_MOVE_END: case KeyEvent.KEYCODE_LANGUAGE_SWITCH:
+                return false;
+            default:
+                return true;
         }
     }
 
