@@ -3464,6 +3464,38 @@
       .pp-btn-rotulos { width: 36px; padding: 0; justify-content: center; }
     }
 
+    /* Lupa del buscador por nombre: solo icono, el campo aparece al tocarla */
+    .pp-btn-buscar {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ink-2);
+      transition: background .14s, color .14s, border-color .14s;
+    }
+    .pp-btn-buscar:hover { background: var(--surface-3); color: var(--ink); }
+    .pp-btn-buscar[aria-pressed="true"] { background: var(--graphite); border-color: transparent; color: var(--on-g); }
+    .pp-btn-buscar svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .pp-buscar { padding: 8px 16px; border-bottom: 1px solid var(--line); }
+    .pp-buscar[hidden] { display: none; }
+    .pp-buscar input {
+      width: 100%;
+      height: 36px;
+      box-sizing: border-box;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+    }
+
     /* Casilla de seleccion: solo existe en el modo rotulos */
     .pp-check {
       display: none;
@@ -4977,12 +5009,15 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .articulo-pedido-id {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      font-weight: 500;
-      color: var(--ink-4);
+    .articulo-pedido-nota {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #c62828;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+    .articulo-pedido-nota.ok { color: var(--pago); }
     .articulo-pedido-cant {
       flex: none;
       font-family: var(--font-mono);
@@ -6467,7 +6502,12 @@
           <span class="pp-resumen" id="pedidosResumen"></span>
         </div>
         <button type="button" class="pp-btn-rotulos" id="ppBtnRotulos" aria-pressed="false" title="Elegir pedidos e imprimir sus r&oacute;tulos juntos"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Imprimir</span></button>
+        <button type="button" class="pp-btn-buscar" id="ppBtnBuscar" aria-pressed="false" aria-label="Buscar por nombre" title="Buscar por nombre"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
+      </div>
+      <!-- Buscador por nombre: oculto hasta tocar la lupa -->
+      <div class="pp-buscar" id="ppBuscar" hidden>
+        <input type="search" id="ppBuscarInput" placeholder="Buscar por nombre..." autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
       <!-- Leyenda del riel: una fila por hito con sus dos estados (lleno y
            rayado), en el mismo orden vertical que los tramos de cada fila -->
@@ -10652,6 +10692,27 @@
       renderPedidosPendientes();
     });
 
+    // Buscador por nombre: la lupa muestra u oculta el campo; al cerrarlo se
+    // limpia el filtro. Solo filtra la lista; el resumen cuenta todos.
+    let ppBusqueda = '';
+    const ppBuscarEl = document.getElementById('ppBuscar');
+    const ppBuscarInput = document.getElementById('ppBuscarInput');
+    const ppBtnBuscar = document.getElementById('ppBtnBuscar');
+    function ppBuscarToggle(abrir) {
+      ppBuscarEl.hidden = !abrir;
+      ppBtnBuscar.setAttribute('aria-pressed', String(abrir));
+      if (abrir) { ppBuscarInput.focus(); return; }
+      if (ppBusqueda) { ppBusqueda = ''; ppBuscarInput.value = ''; renderPedidosPendientes(); }
+    }
+    ppBtnBuscar.addEventListener('click', () => ppBuscarToggle(ppBuscarEl.hidden));
+    ppBuscarInput.addEventListener('input', () => {
+      ppBusqueda = normalizarNota(ppBuscarInput.value);
+      renderPedidosPendientes();
+    });
+    ppBuscarInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); ppBuscarToggle(false); }
+    });
+
     function renderPedidosPendientes() {
       ppNotaCerrar();
       // Contador sobre el boton de la barra: se llena en cuanto el panel se
@@ -10725,7 +10786,10 @@
       const listos = [];
       const aPreparar = [];
       const porNota = new Map();
-      pedidosCache.forEach(p => {
+      const visibles = ppBusqueda
+        ? pedidosCache.filter(p => normalizarNota(p.nombre).indexOf(ppBusqueda) !== -1)
+        : pedidosCache;
+      visibles.forEach(p => {
         if (ppRotModo && !p.rotuloImpreso) { sinImprimir.push(p); return; }
         if (p.rank === 3) { (ppEsParaDespachar(p) ? listos : aPreparar).push(p); return; }
         const g = ppGrupoNota(p.nota);
@@ -10773,6 +10837,7 @@
       if (aPreparar.length) html += grupoHtml('Para preparar', aPreparar, ' pp-grupo--listo');
       gruposNota.forEach(g => { html += grupoHtml(g.titulo, g.pedidos); });
 
+      if (!visibles.length) html = '<div class="pedidos-panel-empty">Ning&uacute;n pedido coincide con la b&uacute;squeda</div>';
       pedidosPanelList.innerHTML = html;
     }
 
@@ -11605,6 +11670,7 @@
               cantidad: item.cantidad || 1,
               yaListo: item.listo === 'y',
               pagado: estadoPago(p.nota) === 'pagado',
+              nota: p.nota || '',
               timestamp: p.timestamp || 0,
               // Pre-marcado: el flujo normal es escanear -> "Marcar listo".
               // Se destilda solo lo que no corresponda.
@@ -11625,6 +11691,10 @@
       }
     }
 
+    // Verde: Esperando cierre, Pedido Confirmado, Pago Solicitado y Pago. Resto, rojo.
+    const ARTICULO_NOTAS_VERDES = new Set(['Esperando cierre', 'Pedido Confirmado', 'Pago Solicitado', 'Pago'].map(normalizarNota));
+    function articuloNotaVerde(nota) { return ARTICULO_NOTAS_VERDES.has(normalizarNota(nota)); }
+
     function articuloRenderPedidos() {
       if (articuloResultados.length === 0) {
         articuloPedidosList.innerHTML = '<div class="articulo-empty">Este articulo no esta en ningun pedido pendiente</div>';
@@ -11639,7 +11709,7 @@
           '<span class="articulo-pedido-nombre">' + escapeHtml(r.nombre) + '</span>' +
           (r.pagado ? '<span class="articulo-pedido-pago" title="Pagado" aria-label="Pagado">' + IC_MENU_PAGO + '</span>' : '') +
         '</div>' +
-        '<div class="articulo-pedido-id">' + escapeHtml(r.id) + '</div>' +
+        '<div class="articulo-pedido-nota' + (articuloNotaVerde(r.nota) ? ' ok' : '') + '">' + escapeHtml(r.nota || 'Sin nota') + '</div>' +
         '</div>' +
         '<span class="articulo-pedido-cant">x' + r.cantidad + '</span>' +
         (r.yaListo
