@@ -35,6 +35,14 @@
 // Excepción: "Puesto fijo", al pie del selector, deja a ese usuario en este
 // equipo sin límite de tiempo (localStorage 'hpPuestoFijo' = su nombre).
 //
+// Clave personal: cada persona puede tener una clave de 4 dígitos (nodo
+// usuariosClaves de Firebase, guardada como hash con sal, nunca el número).
+// Quien la tiene la escribe al elegir su nombre; quien todavía no la creó
+// entra como siempre y se le invita a crearla (una vez por día y equipo).
+// "Clave personal", al pie, la crea o la cambia. La clave maestra del
+// encargado (en el código sólo va su hash) permite poner una nueva o
+// quitarla cuando alguien se la olvida. WhatsApp y Offline no llevan.
+//
 // Se carga en <head>, antes del script de login: el resto del archivo sólo
 // toca el DOM cuando hace falta.
 (function() {
@@ -57,6 +65,19 @@
   // Modo WhatsApp de esta pestaña (lo lee ingresoPedidoV2.js) y su contraseña.
   const SS_MODO_WHATSAPP = 'hpModoWhatsapp';
   const CLAVE_WHATSAPP = '2381';
+  // Clave personal (ver "clave personal" más abajo). Las claves son por
+  // punto de venta, como la lista de vendedores: cada uno tiene su Firebase.
+  const RUTA_CLAVES = 'usuariosClaves';
+  const SUFIJO_PV = PUNTO_VENTA && PUNTO_VENTA !== '1' ? '_' + PUNTO_VENTA : '';
+  const LS_CLAVES = 'hpClavesCache' + SUFIJO_PV;
+  const LS_INVITACION = 'hpClaveInvitacion' + SUFIJO_PV;
+  const LARGO_CLAVE = 4;
+  const LARGO_MAESTRA = 8;
+  // SHA-256 de 'hp-maestra:' + la clave maestra. El código de la web es
+  // público: la clave en sí no puede estar escrita acá.
+  const HASH_MAESTRA = '48a082f649d5ec6a5192cb69c24fb3fc5eec88d0ad6ae7687fa7748cacdbb077';
+  const MAX_INTENTOS = 5;
+  const ESPERA_INTENTOS_MS = 30 * 1000;
 
   // Identidad de cada vendedor: un color y un animal. Se reparten por la
   // posición en la planilla, así dos personas nunca comparten color ni animal
@@ -282,6 +303,11 @@
           <span class="usr-fijo-switch" aria-hidden="true"></span>
           Puesto fijo · no volver a esta pantalla por inactividad
         </button>
+        <button type="button" class="usr-clave-pie" aria-pressed="false"
+                title="Crear o cambiar tu clave de 4 dígitos">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>
+          <span class="usr-clave-pie-texto">Clave personal</span>
+        </button>
         <div class="usr-pv" hidden>
           <span class="usr-pv-nombre"></span>
           <span aria-hidden="true">·</span>
@@ -338,9 +364,15 @@
       fijoTocado = true;
       pintarFijo(fijoBtn.getAttribute('aria-pressed') !== 'true');
     });
+    clavePieBtn = overlay.querySelector('.usr-clave-pie');
+    clavePieBtn.addEventListener('click', () => modoClave(!enModoClave));
+    tituloEl = overlay.querySelector('#usrTitulo');
+    subEl = overlay.querySelector('#usrSub');
     grilla.addEventListener('click', e => {
       const b = e.target.closest('.usr-tile');
-      if (b) elegir(b.dataset.nombre, b);
+      if (!b) return;
+      if (enModoClave) gestionarClave(b.dataset.nombre, b);
+      else elegir(b.dataset.nombre, b);
     });
     overlay.addEventListener('keydown', teclado, true);
   }
@@ -562,6 +594,582 @@
     if (cb) cb(ok);
   }
 
+  // ------------------------------------------------------ clave personal --
+  // Nodo usuariosClaves/{claveDe(nombre)} = { h, s, t }: h es SHA-256 de
+  // "sal:clave". Lo último leído de Firebase queda en localStorage para
+  // validar al instante, también si internet tarda.
+  let claves = leerCacheClaves();
+  let clavesFrescas = false;      // Firebase ya respondió con el selector abierto
+  let refClaves = null;
+  let esperandoFrescas = [];
+  const intentos = {};            // clave → { n, hasta }
+
+  const ICONO_LLAVE = '<circle cx="8" cy="15" r="4.2"/><path d="m11 12 8.5-8.5M16.5 6.5l2.5 2.5M14 9l2 2"/>';
+  const ICONO_CANDADO_ABIERTO = '<rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 7.6-1.7"/>';
+  const ICONO_BORRAR = '<path d="M20 6H9l-6 6 6 6h11a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1Z"/><path d="m16 10-4 4M12 10l4 4"/>';
+
+  function svgIcono(trazos, ancho) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (ancho || 1.8) + '" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + trazos + '</svg>';
+  }
+
+  function leerCacheClaves() {
+    try {
+      const v = JSON.parse(lsGet(LS_CLAVES) || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch (_) { return {}; }
+  }
+  function guardarCacheClaves() { lsSet(LS_CLAVES, JSON.stringify(claves)); }
+
+  function hayFirebase() { return typeof firebase !== 'undefined' && !!firebase.apps && firebase.apps.length > 0; }
+  function esPersona(nombre) { return !esWhatsapp(nombre) && !esOffline(nombre); }
+  function tieneClave(nombre) { return !!claves[claveDe(nombre)]; }
+
+  function soltarEsperas() {
+    const w = esperandoFrescas;
+    esperandoFrescas = [];
+    w.forEach(f => f());
+  }
+
+  function alCambiarClaves(snap) {
+    const v = snap.val();
+    claves = {};
+    if (v && typeof v === 'object') {
+      Object.keys(v).forEach(k => {
+        if (v[k] && typeof v[k].h === 'string' && typeof v[k].s === 'string') claves[k] = { h: v[k].h, s: v[k].s };
+      });
+    }
+    guardarCacheClaves();
+    clavesFrescas = true;
+    soltarEsperas();
+    marcarClaves();
+  }
+
+  function escucharClaves(si) {
+    if (!hayFirebase()) return;
+    if (si && !refClaves) {
+      refClaves = firebase.database().ref(RUTA_CLAVES);
+      refClaves.on('value', alCambiarClaves, err => {
+        console.warn('Claves de usuario no disponibles:', err);
+        soltarEsperas();
+      });
+    } else if (!si && refClaves) {
+      refClaves.off('value', alCambiarClaves);
+      refClaves = null;
+      clavesFrescas = false;
+    }
+  }
+
+  // Antes de dejar pasar a alguien "sin clave" se espera un momento a que
+  // responda Firebase: pudo haberla creado recién en otro equipo.
+  function esperarClaves(nombre) {
+    if (clavesFrescas || !refClaves || tieneClave(nombre)) return Promise.resolve();
+    return new Promise(res => {
+      const fin = () => { clearTimeout(t); res(); };
+      const t = setTimeout(fin, lsGet(LS_CLAVES) !== null ? 1500 : 4000);
+      esperandoFrescas.push(fin);
+    });
+  }
+
+  function hex(buf) { return Array.from(new Uint8Array(buf), x => x.toString(16).padStart(2, '0')).join(''); }
+  async function sha256(texto) {
+    return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto)));
+  }
+
+  // Tras MAX_INTENTOS errores seguidos hay que esperar ESPERA_INTENTOS_MS.
+  function esperaPendiente(id) {
+    const i = intentos[id];
+    return i && i.hasta > Date.now() ? i.hasta - Date.now() : 0;
+  }
+  function anotarError(id, texto) {
+    const i = intentos[id] || (intentos[id] = { n: 0, hasta: 0 });
+    i.n++;
+    if (i.n >= MAX_INTENTOS) {
+      i.n = 0;
+      i.hasta = Date.now() + ESPERA_INTENTOS_MS;
+      return { espera: ESPERA_INTENTOS_MS };
+    }
+    const quedan = MAX_INTENTOS - i.n;
+    return quedan <= 2 ? `${texto} · ${quedan === 1 ? 'queda 1 intento' : 'quedan ' + quedan + ' intentos'}` : texto;
+  }
+
+  async function comprobarClave(nombre, pin) {
+    const k = claveDe(nombre);
+    const espera = esperaPendiente(k);
+    if (espera) return { espera };
+    const r = claves[k];
+    if (!r) return true;   // se la quitaron mientras escribía
+    if (await sha256(r.s + ':' + pin) === r.h) {
+      delete intentos[k];
+      reg(`Clave personal correcta (${nombre})`);
+      return true;
+    }
+    reg(`Clave personal incorrecta (${nombre})`);
+    return anotarError(k, 'Clave incorrecta');
+  }
+
+  async function comprobarMaestra(pin) {
+    const espera = esperaPendiente('*maestra');
+    if (espera) return { espera };
+    if (await sha256('hp-maestra:' + pin) === HASH_MAESTRA) {
+      delete intentos['*maestra'];
+      return true;
+    }
+    reg('Clave maestra incorrecta');
+    return anotarError('*maestra', 'Clave maestra incorrecta');
+  }
+
+  // Sin conexión Firebase deja la escritura en cola y no responde: pasado un
+  // rato se avisa en vez de quedar esperando.
+  function conLimite(p, ms) {
+    let t;
+    return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error('Sin respuesta de Firebase')), ms); })])
+      .finally(() => clearTimeout(t));
+  }
+
+  async function guardarClave(nombre, pin) {
+    if (!hayFirebase()) throw new Error('Firebase no disponible');
+    const s = hex(crypto.getRandomValues(new Uint8Array(8)));
+    const h = await sha256(s + ':' + pin);
+    const k = claveDe(nombre);
+    await conLimite(firebase.database().ref(RUTA_CLAVES).child(k)
+      .set({ h, s, t: firebase.database.ServerValue.TIMESTAMP }), 8000);
+    claves[k] = { h, s };
+    guardarCacheClaves();
+    delete intentos[k];
+    marcarClaves();
+  }
+
+  async function borrarClave(nombre) {
+    if (!hayFirebase()) throw new Error('Firebase no disponible');
+    const k = claveDe(nombre);
+    await conLimite(firebase.database().ref(RUTA_CLAVES).child(k).remove(), 8000);
+    delete claves[k];
+    guardarCacheClaves();
+    delete intentos[k];
+    marcarClaves();
+  }
+
+  // Las que se adivinan mirando la mano: 1111, 1234, 9876…
+  function claveObvia(pin) {
+    if (/^(\d)\1+$/.test(pin)) return true;
+    const d = pin.split('').map(Number);
+    const paso = d[1] - d[0];
+    return Math.abs(paso) === 1 && d.every((x, i) => i === 0 || x - d[i - 1] === paso);
+  }
+
+  // Invitación a crear la clave: una vez por día, por persona y equipo.
+  function hoy() {
+    const d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function leerInvitaciones() {
+    try { const v = JSON.parse(lsGet(LS_INVITACION) || '{}'); return v && typeof v === 'object' ? v : {}; }
+    catch (_) { return {}; }
+  }
+  function invitadoHoy(nombre) { return leerInvitaciones()[claveDe(nombre)] === hoy(); }
+  function marcarInvitado(nombre) {
+    const v = leerInvitaciones();
+    v[claveDe(nombre)] = hoy();
+    lsSet(LS_INVITACION, JSON.stringify(v));
+  }
+
+  // Candado abierto en la esquina de quien todavía no creó su clave. Sólo
+  // cuando se sabe (respondió Firebase alguna vez), para no marcar de más.
+  function marcarClaves() {
+    if (!grilla) return;
+    const conocidas = clavesFrescas || lsGet(LS_CLAVES) !== null;
+    tiles().forEach(t => {
+      const sin = conocidas && esPersona(t.dataset.nombre) && !tieneClave(t.dataset.nombre);
+      let m = t.querySelector('.usr-tile-sinclave');
+      if (sin && !m) {
+        m = document.createElement('span');
+        m.className = 'usr-tile-sinclave';
+        m.title = 'Todavía no creó su clave personal';
+        m.innerHTML = svgIcono(ICONO_CANDADO_ABIERTO, 2);
+        t.appendChild(m);
+      } else if (!sin && m) {
+        m.remove();
+      }
+    });
+  }
+
+  // --- tarjeta de la clave: puntos y teclado numérico ---
+  // Fuera del overlay, como la de WhatsApp: el selector descarta las teclas
+  // imprimibles. Corta la propagación de las teclas para que la caja (Tab al
+  // buscador, captura de la pistola) no se las lleve.
+  let pinEl, pinCard, pinAvatar, pinTitulo, pinSub, pinPuntos, pinVivo, pinError, pinEnlaces, pinCancelar;
+  let pinOp = null, pinValor = '', pinOcupado = false, pinFinEspera = 0, pinTimerEspera = null, pinOcultar = null;
+
+  function construirPin() {
+    pinEl = document.createElement('div');
+    pinEl.id = 'usrPin';
+    pinEl.className = 'usr-clave usr-pin';
+    pinEl.hidden = true;
+    pinEl.setAttribute('role', 'dialog');
+    pinEl.setAttribute('aria-modal', 'true');
+    pinEl.setAttribute('aria-labelledby', 'usrPinTitulo');
+    pinEl.setAttribute('aria-describedby', 'usrPinSub');
+    const teclas = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n =>
+      `<button type="button" class="usr-pin-tecla" data-digito="${n}">${n}</button>`).join('');
+    pinEl.innerHTML = `
+      <div class="usr-clave-card usr-pin-card" tabindex="-1">
+        <span class="usr-avatar usr-clave-avatar" aria-hidden="true"></span>
+        <h2 id="usrPinTitulo" class="usr-clave-titulo"></h2>
+        <p id="usrPinSub" class="usr-clave-sub"></p>
+        <div class="usr-pin-puntos" aria-hidden="true"></div>
+        <div class="usr-pin-vivo" role="status" aria-live="polite"></div>
+        <div class="usr-clave-error usr-pin-error" role="alert"></div>
+        <div class="usr-pin-teclado">
+          ${teclas}
+          <span class="usr-pin-hueco" aria-hidden="true"></span>
+          <button type="button" class="usr-pin-tecla" data-digito="0">0</button>
+          <button type="button" class="usr-pin-tecla usr-pin-borrar" aria-label="Borrar el último número">${svgIcono(ICONO_BORRAR, 1.8)}</button>
+        </div>
+        <div class="usr-pin-enlaces"></div>
+        <button type="button" class="usr-clave-btn usr-clave-cancelar usr-pin-cancelar">Cancelar</button>
+      </div>`;
+    document.body.appendChild(pinEl);
+    pinCard = pinEl.querySelector('.usr-pin-card');
+    pinAvatar = pinEl.querySelector('.usr-clave-avatar');
+    pinTitulo = pinEl.querySelector('.usr-clave-titulo');
+    pinSub = pinEl.querySelector('.usr-clave-sub');
+    pinPuntos = pinEl.querySelector('.usr-pin-puntos');
+    pinVivo = pinEl.querySelector('.usr-pin-vivo');
+    pinError = pinEl.querySelector('.usr-pin-error');
+    pinEnlaces = pinEl.querySelector('.usr-pin-enlaces');
+    pinCancelar = pinEl.querySelector('.usr-pin-cancelar');
+
+    pinEl.querySelector('.usr-pin-teclado').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.classList.contains('usr-pin-borrar')) borrarDigito();
+      else teclear(b.dataset.digito);
+    });
+    pinEnlaces.addEventListener('click', e => {
+      const b = e.target.closest('[data-enlace]');
+      if (b && pinOp && !pinOcupado) finPin({ enlace: b.dataset.enlace });
+    });
+    pinCancelar.addEventListener('click', () => { if (!pinOcupado) finPin(null); });
+    pinEl.addEventListener('click', e => { if (e.target === pinEl && !pinOcupado) finPin(null); });
+    pinEl.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        teclear(e.key);
+        marcarTecla(e.key);
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        borrarDigito();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (!pinOcupado) finPin(null);
+      } else if (e.key === 'Tab') {
+        // Trampa de foco dentro de la tarjeta.
+        const focos = Array.from(pinCard.querySelectorAll('button:not(:disabled)'));
+        const i = focos.indexOf(document.activeElement);
+        const sig = e.shiftKey ? (i <= 0 ? focos.length - 1 : i - 1) : (i === focos.length - 1 ? 0 : i + 1);
+        e.preventDefault();
+        if (focos[sig]) focos[sig].focus();
+      }
+    });
+  }
+
+  // Con el teclado físico, la tecla en pantalla se ilumina igual que al tocarla.
+  function marcarTecla(d) {
+    const b = pinEl.querySelector(`.usr-pin-tecla[data-digito="${d}"]`);
+    if (!b) return;
+    b.classList.remove('usr-pin-tecla-pulsada');
+    void b.offsetWidth;
+    b.classList.add('usr-pin-tecla-pulsada');
+  }
+
+  // op: { avatar: { tono, svg }, titulo, sub, largo, cancelar, enlaces: [{ id, texto }],
+  //       espera (ms), validar(pin) → true | 'mensaje' | { espera } (puede ser async),
+  //       exito, exitoSub }
+  // Resuelve { pin } si validó, { enlace } si se tocó un enlace o null si se canceló.
+  function pedirPin(op) {
+    if (!pinEl) construirPin();
+    if (pinOp) finPin(null);
+    clearTimeout(pinOcultar);
+    return new Promise(res => {
+      pinOp = Object.assign({ largo: LARGO_CLAVE, cancelar: 'Cancelar', enlaces: [] }, op, { res });
+      pinValor = '';
+      pinOcupado = false;
+      pinFinEspera = 0;
+      clearInterval(pinTimerEspera);
+      pinAvatar.style.setProperty('--tono', op.avatar.tono);
+      pinAvatar.innerHTML = op.avatar.svg;
+      pinTitulo.textContent = op.titulo;
+      pinSub.textContent = op.sub || '';
+      pinPuntos.innerHTML = Array.from({ length: pinOp.largo }, () => '<span class="usr-pin-punto"></span>').join('');
+      pinPuntos.classList.toggle('usr-pin-puntos-largo', pinOp.largo > LARGO_CLAVE);
+      pinError.textContent = '';
+      pinEnlaces.innerHTML = pinOp.enlaces.map(x =>
+        `<button type="button" class="usr-pin-enlace" data-enlace="${esc(x.id)}">${esc(x.texto)}</button>`).join('');
+      pinEnlaces.hidden = !pinOp.enlaces.length;
+      pinCancelar.textContent = pinOp.cancelar;
+      pinCard.classList.remove('usr-clave-mal', 'usr-pin-ok', 'usr-pin-bloqueado', 'usr-pin-ocupado');
+      const visible = !pinEl.hidden;
+      pinEl.hidden = false;
+      // Entre un paso y el siguiente la tarjeta vuelve a entrar, sin que el
+      // velo de fondo parpadee.
+      if (visible) {
+        pinCard.style.animation = 'none';
+        void pinCard.offsetWidth;
+        pinCard.style.animation = '';
+      }
+      pintarPuntos();
+      if (pinOp.espera) iniciarEspera(pinOp.espera);
+      setTimeout(() => { if (pinOp) pinCard.focus({ preventScroll: true }); }, 60);
+    });
+  }
+
+  function finPin(resultado) {
+    if (!pinOp) return;
+    const res = pinOp.res;
+    pinOp = null;
+    pinOcupado = false;
+    clearInterval(pinTimerEspera);
+    // Se oculta en la vuelta siguiente: si sigue otro paso, la tarjeta no
+    // llega a desaparecer.
+    clearTimeout(pinOcultar);
+    pinOcultar = setTimeout(() => { if (!pinOp) pinEl.hidden = true; }, 0);
+    res(resultado);
+  }
+
+  function pintarPuntos() {
+    Array.from(pinPuntos.children).forEach((p, i) => p.classList.toggle('lleno', i < pinValor.length));
+    pinVivo.textContent = pinValor.length ? `${pinValor.length} de ${pinOp.largo} números` : '';
+  }
+
+  function pinEnEspera() { return pinFinEspera > Date.now(); }
+
+  function iniciarEspera(ms) {
+    pinFinEspera = Date.now() + ms;
+    pinCard.classList.add('usr-pin-bloqueado');
+    const tick = () => {
+      const s = Math.ceil((pinFinEspera - Date.now()) / 1000);
+      if (s <= 0) {
+        clearInterval(pinTimerEspera);
+        pinCard.classList.remove('usr-pin-bloqueado');
+        pinError.textContent = '';
+        return;
+      }
+      pinError.textContent = `Demasiados intentos. Probá de nuevo en ${s} s`;
+    };
+    clearInterval(pinTimerEspera);
+    tick();
+    pinTimerEspera = setInterval(tick, 1000);
+  }
+
+  function teclear(d) {
+    if (!pinOp || pinOcupado || pinEnEspera() || pinValor.length >= pinOp.largo) return;
+    pinValor += d;
+    pinError.textContent = '';
+    pintarPuntos();
+    if (pinValor.length === pinOp.largo) validarPin();
+  }
+
+  function borrarDigito() {
+    if (!pinOp || pinOcupado || !pinValor) return;
+    pinValor = pinValor.slice(0, -1);
+    pintarPuntos();
+  }
+
+  function sacudir() {
+    pinCard.classList.remove('usr-clave-mal');
+    void pinCard.offsetWidth;
+    pinCard.classList.add('usr-clave-mal');
+  }
+
+  async function validarPin() {
+    const op = pinOp, pin = pinValor;
+    pinOcupado = true;
+    pinCard.classList.add('usr-pin-ocupado');
+    let r;
+    try {
+      r = op.validar ? await op.validar(pin) : true;
+    } catch (err) {
+      console.warn('Clave personal:', err);
+      r = 'No se pudo completar. Revisá la conexión e intentá de nuevo.';
+    }
+    if (pinOp !== op) return;   // se cerró mientras validaba
+    pinCard.classList.remove('usr-pin-ocupado');
+    if (r === true) {
+      pinCard.classList.add('usr-pin-ok');
+      if (op.exito) {
+        pinTitulo.textContent = op.exito;
+        pinSub.textContent = op.exitoSub || '';
+      }
+      pinVivo.textContent = op.exito || 'Clave correcta';
+      const pausa = reduceMovimiento() ? 150 : (op.exito ? 1100 : 280);
+      setTimeout(() => { if (pinOp === op) finPin({ pin }); }, pausa);
+      return;
+    }
+    pinOcupado = false;
+    pinValor = '';
+    pintarPuntos();
+    sacudir();
+    if (r && r.espera) iniciarEspera(r.espera);
+    else pinError.textContent = typeof r === 'string' ? r : 'Clave incorrecta';
+  }
+
+  // --- recorridos ---
+  function avatarDe(nombre) {
+    const id = identidad(nombre);
+    return { tono: id.tono, svg: svgAvatar(id) };
+  }
+  const AVATAR_MAESTRA = { tono: '#4b2e83', svg: svgIcono(ICONO_LLAVE, 1.8) };
+
+  // Al elegir a alguien: true si puede entrar. Sin clave entra directo.
+  async function verificarEntrada(nombre) {
+    await esperarClaves(nombre);
+    if (!tieneClave(nombre)) return true;
+    for (;;) {
+      const r = await pedirPin({
+        avatar: avatarDe(nombre),
+        titulo: 'Hola, ' + nombre,
+        sub: 'Ingresá tu clave personal para continuar',
+        espera: esperaPendiente(claveDe(nombre)),
+        enlaces: [{ id: 'olvido', texto: '¿Olvidaste tu clave?' }],
+        validar: pin => comprobarClave(nombre, pin)
+      });
+      if (!r) return false;
+      if (!r.enlace) return true;
+      // Con la clave maestra se le pone una nueva (o se le quita) y entra.
+      if (await flujoMaestra(nombre)) return true;
+    }
+  }
+
+  // Sólo el encargado. true si se le puso una clave nueva o se le quitó.
+  async function flujoMaestra(nombre) {
+    const r = await pedirPin({
+      avatar: AVATAR_MAESTRA,
+      titulo: 'Clave maestra',
+      sub: `Solo para el encargado: permite ponerle una clave nueva a ${nombre} o quitarle la que tiene.`,
+      largo: LARGO_MAESTRA,
+      cancelar: 'Volver',
+      espera: esperaPendiente('*maestra'),
+      validar: comprobarMaestra
+    });
+    if (!r) return false;
+    reg(`Clave maestra correcta (para ${nombre})`);
+    return flujoCrear(nombre, { maestra: true });
+  }
+
+  // Elegir la clave y repetirla. true si quedó guardada (o quitada, con la
+  // clave maestra).
+  async function flujoCrear(nombre, o) {
+    o = o || {};
+    const teniaClave = tieneClave(nombre);
+    for (;;) {
+      const primera = await pedirPin({
+        avatar: avatarDe(nombre),
+        titulo: o.invitacion ? 'Creá tu clave personal'
+          : o.maestra ? 'Clave nueva para ' + nombre
+          : teniaClave ? 'Elegí tu clave nueva' : 'Creá tu clave personal',
+        sub: o.invitacion
+          ? 'Con 4 números, nadie más va a poder operar con tu usuario.'
+          : 'Elegí 4 números fáciles de recordar para vos y difíciles de adivinar.',
+        cancelar: o.invitacion ? 'Más tarde' : 'Cancelar',
+        enlaces: o.maestra && teniaClave ? [{ id: 'quitar', texto: 'Quitarle la clave' }] : [],
+        validar: pin => claveObvia(pin) ? 'Es muy fácil de adivinar. Probá con otra.' : true
+      });
+      if (!primera) {
+        if (o.invitacion) reg(`${nombre} dejó la clave personal para más tarde`);
+        return false;
+      }
+      if (primera.enlace === 'quitar') {
+        try {
+          await borrarClave(nombre);
+          reg(`Se quitó la clave personal de ${nombre} (clave maestra)`);
+          avisar(`${nombre} quedó sin clave personal.`);
+          return true;
+        } catch (err) {
+          console.warn('No se pudo quitar la clave:', err);
+          avisar('No se pudo quitar la clave. Revisá la conexión e intentá de nuevo.');
+          return false;
+        }
+      }
+      const segunda = await pedirPin({
+        avatar: avatarDe(nombre),
+        titulo: 'Repetila para confirmar',
+        sub: 'Escribí los mismos 4 números otra vez.',
+        cancelar: 'Volver',
+        exito: 'Clave guardada',
+        exitoSub: 'Desde ahora se te va a pedir al elegir tu usuario.',
+        validar: async pin => {
+          if (pin !== primera.pin) return 'No coincide con la anterior. Probá de nuevo.';
+          await guardarClave(nombre, pin);
+          return true;
+        }
+      });
+      if (!segunda) continue;   // "Volver": elegir otra vez
+      reg(o.maestra ? `Se le puso una clave personal nueva a ${nombre} (clave maestra)`
+        : `${nombre} ${teniaClave ? 'cambió' : 'creó'} su clave personal`);
+      avisar(`Listo: ${nombre} ya tiene su clave personal.`);
+      return true;
+    }
+  }
+
+  function avisar(texto) { if (estadoEl && abierto) estadoEl.textContent = texto; }
+
+  // "Clave personal", al pie: tocar un nombre crea o cambia su clave en vez
+  // de entrar con él.
+  let enModoClave = false, clavePieBtn = null, tituloEl = null, subEl = null;
+
+  function modoClave(si) {
+    enModoClave = !!si;
+    if (!overlay) return;
+    overlay.classList.toggle('usr-modo-clave', enModoClave);
+    clavePieBtn.setAttribute('aria-pressed', enModoClave ? 'true' : 'false');
+    clavePieBtn.querySelector('.usr-clave-pie-texto').textContent = enModoClave ? 'Volver a elegir usuario' : 'Clave personal';
+    tituloEl.textContent = enModoClave ? 'Clave personal' : 'Selecciona Usuario';
+    subEl.textContent = enModoClave ? 'Tocá tu nombre para crear o cambiar tu clave' : 'Toca tu nombre para continuar';
+    if (si) estadoEl.textContent = '';
+  }
+
+  async function gestionarClave(nombre, tile) {
+    if (!esPersona(nombre) || esperandoClave) return;
+    esperandoClave = true;
+    try {
+      await esperarClaves(nombre);
+      let listo = false;
+      if (!tieneClave(nombre)) {
+        listo = await flujoCrear(nombre);
+      } else {
+        for (;;) {
+          const r = await pedirPin({
+            avatar: avatarDe(nombre),
+            titulo: 'Cambiar la clave de ' + nombre,
+            sub: 'Primero ingresá la clave actual.',
+            espera: esperaPendiente(claveDe(nombre)),
+            enlaces: [{ id: 'olvido', texto: '¿Olvidaste tu clave?' }],
+            validar: pin => comprobarClave(nombre, pin)
+          });
+          if (!r) break;
+          if (r.enlace) {
+            if (await flujoMaestra(nombre)) { listo = true; break; }
+            continue;
+          }
+          listo = await flujoCrear(nombre);
+          break;
+        }
+      }
+      if (listo && abierto) {
+        const texto = estadoEl.textContent;
+        modoClave(false);
+        estadoEl.textContent = texto;
+      }
+    } catch (err) {
+      console.error('Clave personal:', err);
+    } finally {
+      esperandoClave = false;
+    }
+    if (tile && abierto && tile.isConnected) tile.focus({ preventScroll: true });
+  }
+
   function pintarFecha() {
     const el = overlay.querySelector('#usrFecha');
     const txt = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -602,6 +1210,7 @@
     }).join('');
     grilla.dataset.cantidad = String(nombres.length);
     marcarOcupados();
+    marcarClaves();
   }
 
   function pintarCargando() {
@@ -665,10 +1274,12 @@
       e.stopPropagation();
       return;
     }
-    // Sin salida: el selector sólo se cierra eligiendo a alguien.
+    // Sin salida: el selector sólo se cierra eligiendo a alguien. En
+    // "Clave personal", Escape vuelve a la elección normal.
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
+      if (enModoClave) modoClave(false);
       return;
     }
     if (e.key === 'Tab') {
@@ -834,6 +1445,7 @@
     fijoTocado = false;
     pintarFijo(fijoAntes);
     pintarFecha();
+    modoClave(false);
     overlay.classList.remove('usr-saliendo', 'usr-eligiendo');
     overlay.hidden = false;
     bloquearPagina(true);
@@ -842,6 +1454,7 @@
     overlay.classList.add('usr-visible');
     limpiarEstado();
     escucharPresencia(true);
+    escucharClaves(true);
     poblar();
   }
 
@@ -850,6 +1463,9 @@
     abierto = false;
     marcarActividad();
     escucharPresencia(false);
+    escucharClaves(false);
+    if (pinOp) finPin(null);
+    modoClave(false);
     overlay.classList.remove('usr-visible');
     overlay.classList.add('usr-saliendo');
     bloquearPagina(false);
@@ -915,9 +1531,22 @@
       });
       return;
     }
-    // Cualquier persona apaga el modo WhatsApp.
-    ssDel(SS_MODO_WHATSAPP);
-    confirmarEleccion(nombre, tile, forzar);
+    // Clave personal: quien la tiene la escribe antes de entrar.
+    esperandoClave = true;
+    verificarEntrada(nombre).then(ok => {
+      esperandoClave = false;
+      if (!abierto) return;
+      if (!ok) { if (tile) tile.focus({ preventScroll: true }); return; }
+      // Pudo conectarse en otro equipo mientras se escribía la clave.
+      if (estaOcupado(nombre) && !forzar) { ofrecerEntrarIgual(nombre, tile); return; }
+      // Cualquier persona apaga el modo WhatsApp.
+      ssDel(SS_MODO_WHATSAPP);
+      confirmarEleccion(nombre, tile, forzar);
+    }, err => {
+      esperandoClave = false;
+      console.error('Clave personal:', err);
+      if (abierto) estadoEl.textContent = 'No se pudo verificar la clave. Intentá de nuevo.';
+    });
   }
 
   function ofrecerEntrarIgual(nombre, tile) {
@@ -940,8 +1569,15 @@
     establecer(nombre);
     // Después de establecer: así la línea ya sale con el usuario nuevo.
     reg(`Eligió el usuario ${nombre}${forzar ? ' (entró igual: se desconectó del otro equipo)' : ''}`);
+    // Sin clave personal todavía: se le invita a crearla (una vez por día)
+    // antes de cerrar. Sólo si Firebase confirmó que no la tiene.
+    const invitar = esPersona(nombre) && clavesFrescas && !tieneClave(nombre) && !invitadoHoy(nombre);
     // Un instante para que se vea la confirmación sobre el botón tocado.
-    setTimeout(() => cerrar(), reduceMovimiento() ? 0 : 260);
+    setTimeout(() => {
+      if (!invitar) { cerrar(); return; }
+      marcarInvitado(nombre);
+      flujoCrear(nombre, { invitacion: true }).then(() => cerrar(), () => cerrar());
+    }, reduceMovimiento() ? 0 : 260);
   }
 
   // ------------------------------------------------------------- estado --
@@ -1076,8 +1712,43 @@
     abrir();
   }, 10 * 1000);
 
+  // ------------------------------------------------------ Escape → selector --
+  // Con un usuario ya elegido, Escape vuelve al selector sin confirmar. No
+  // actúa si otro elemento ya usó la tecla (cerrar un modal, ocultar
+  // resultados) ni mientras haya un modal, un diálogo de clave o el chat abiertos.
+  function hayModalAbierto() {
+    if (document.querySelector('.chat-abierto')) return true;
+    if (Array.from(document.querySelectorAll('.modal-overlay')).some(m => m.style.display && m.style.display !== 'none')) return true;
+    return Array.from(document.querySelectorAll('.usr-clave, .usr-pin')).some(el => !el.hidden);
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.repeat) return;
+    if (!actual || abierto || !pantallaEnUso() || hayModalAbierto()) return;
+    e.preventDefault();
+    reg('Presionó Escape: vuelve al selector de usuario');
+    abrir();
+  });
+
+  // Pide la clave personal de `nombre` y resuelve true si la escribió bien.
+  // Resuelve 'sinclave' si ese usuario todavía no creó una.
+  async function verificarClavePersonal(nombre) {
+    if (!nombre) return false;
+    construir();
+    await esperarClaves(nombre);
+    if (!tieneClave(nombre)) return 'sinclave';
+    const r = await pedirPin({
+      avatar: avatarDe(nombre),
+      titulo: 'Acceso Admin',
+      sub: 'Ingresá tu clave personal, ' + nombre,
+      espera: esperaPendiente(claveDe(nombre)),
+      validar: pin => comprobarClave(nombre, pin)
+    });
+    return !!r;
+  }
+
   // ---------------------------------------------------------------- API --
   window.UsuarioActivo = {
+    verificarClavePersonal,
     // La pantalla dice si se puede volver al selector por inactividad
     // (`puede`) y qué dejar en blanco antes de hacerlo (`limpiar`).
     alInactividad(gancho) { ganchoInactividad = gancho || null; },

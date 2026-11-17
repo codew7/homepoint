@@ -4936,24 +4936,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   // del modo WhatsApp la pide el selector de usuario (usuarioActivo.js), que
   // funciona igual en el historial; acá sólo se aplica el modo.
   (function() {
-    const ADMIN_PASS    = '47623212';
-    const overlay = document.getElementById('adminPassOverlay');
-    const input   = document.getElementById('adminPassInput');
-    const errDiv  = document.getElementById('adminPassError');
-    const btnConf = document.getElementById('adminPassConfirmBtn');
-    const btnCanc = document.getElementById('adminPassCancelBtn');
     const adminBtn = document.getElementById('adminModeBtn');
-
-    function abrirModal() {
-      input.value = '';
-      errDiv.style.display = 'none';
-      overlay.style.display = 'flex';
-      setTimeout(() => input.focus(), 80);
-    }
-
-    function cerrarModal() {
-      overlay.style.display = 'none';
-    }
 
     function activarModoAdmin() {
       mostrarClientesAdmin = true;
@@ -4980,19 +4963,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       try { sessionStorage.removeItem(WHATSAPP_MODE_KEY); } catch (e) {}
     }
 
-    function confirmar() {
-      if (input.value === ADMIN_PASS) {
-        reg('MODO', 'Entró al modo Admin');
-        activarModoAdmin();
-        cerrarModal();
-      } else {
-        reg('MODO', 'Contraseña de Admin incorrecta');
-        errDiv.style.display = 'block';
-        input.value = '';
-        input.focus();
-      }
-    }
-
     window.desactivarModoAdmin = function() {
       if (!mostrarClientesAdmin) return;
       mostrarClientesAdmin = false;
@@ -5009,7 +4979,38 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (guardado === '1') activarModoWhatsapp(false);
     };
 
-    adminBtn.addEventListener('click', function() { abrirModal(); });
+    // Admin sólo para Alejandro y Javier, con la clave personal de cada uno.
+    const ADMINS = ['alejandro', 'javier'];
+    function esAdmin(nombre) { return ADMINS.includes(String(nombre || '').trim().toLowerCase()); }
+    function actualizarBotonAdmin() {
+      const nombre = window.UsuarioActivo ? UsuarioActivo.actual() : '';
+      const ok = esAdmin(nombre);
+      adminBtn.style.display = ok ? '' : 'none';
+      if (!ok && window.desactivarModoAdmin) window.desactivarModoAdmin();
+    }
+    document.addEventListener('usuarioactivo:cambio', actualizarBotonAdmin);
+    actualizarBotonAdmin();
+
+    let verificandoAdmin = false;
+    adminBtn.addEventListener('click', async function() {
+      if (verificandoAdmin || !window.UsuarioActivo) return;
+      const nombre = UsuarioActivo.actual();
+      if (!esAdmin(nombre)) return;
+      verificandoAdmin = true;
+      try {
+        const r = await UsuarioActivo.verificarClavePersonal(nombre);
+        if (r === true) {
+          reg('MODO', 'Entró al modo Admin');
+          activarModoAdmin();
+        } else if (r === 'sinclave') {
+          alert('Primero creá tu clave personal (al elegir tu usuario) para usar el modo Admin.');
+        } else {
+          reg('MODO', 'Canceló el acceso Admin');
+        }
+      } finally {
+        verificandoAdmin = false;
+      }
+    });
 
     // Lo usa el aviso de cambio de usuario (más arriba): elegir "WhatsApp" en
     // el selector prende el modo; elegir a una persona lo apaga.
@@ -5019,17 +5020,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       desactivar() { if (busquedaManualPersistente) desactivarModoWhatsapp(); }
     };
 
-    btnConf.addEventListener('click', confirmar);
-    btnCanc.addEventListener('click', cerrarModal);
-
-    overlay.addEventListener('click', function(e) {
-      if (e.target === overlay) cerrarModal();
-    });
-
-    input.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
-      else if (e.key === 'Escape') cerrarModal();
-    });
   })();
 
   // === MODAL CONTRASEÑA BÚSQUEDA MANUAL ===
