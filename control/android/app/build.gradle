@@ -1,0 +1,64 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Firma opcional, igual que pedidosv2T51: firma.properties NO va al repositorio.
+// Sin ese archivo se compila la variante debug (firma de prueba de esta PC).
+def firma = new Properties()
+def archivoFirma = rootProject.file('firma.properties')
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { firma.load(it) }
+}
+def hayFirma = firma['storeFile'] != null
+
+android {
+    namespace 'ar.com.homepoint.control'
+    compileSdk 34
+
+    defaultConfig {
+        // App aparte: convive con "Pedidos Colector" y con la de tablets.
+        applicationId "ar.com.homepoint.control"
+        minSdk 23
+        targetSdk 34
+        versionCode project.hasProperty('appVersionCode') ? appVersionCode.toInteger() : 1
+        versionName project.hasProperty('appVersionName') ? appVersionName.toString() : "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (hayFirma) {
+                storeFile file(firma['storeFile'])
+                storePassword firma['storePassword']
+                keyAlias firma['keyAlias']
+                keyPassword firma['keyPassword']
+                storeType firma.getProperty('storeType', 'PKCS12')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hayFirma) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.24')
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.core:core:1.13.1'
+}

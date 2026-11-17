@@ -1,0 +1,2020 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1b1d21">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Control · HomePoint</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..900&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   TOKENS
+   Amarillo de seguridad + casi negro: se lee de lejos, con
+   guantes y con el equipo en una mano.
+   ========================================================= */
+:root {
+  --amarillo: #ffc400;
+  --amarillo-2: #ffd23f;
+  --tinta: #1b1d21;
+  --tinta-2: #2a2d33;
+  --fondo: #f2f1ec;
+  --carta: #ffffff;
+  --linea: #dedcd3;
+  --texto: #1b1d21;
+  --suave: #5f646d;
+  --ok: #1a8f4c;
+  --ok-fondo: #e3f5ea;
+  --aviso: #d9590b;
+  --aviso-fondo: #fdebdc;
+  --mal: #d0262f;
+  --mal-fondo: #fde4e5;
+  --sombra: 0 1px 0 rgba(0,0,0,.04), 0 6px 18px -10px rgba(0,0,0,.25);
+  --r: 16px;
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sat: env(safe-area-inset-top, 0px);
+  --display: 'Archivo', system-ui, sans-serif;
+  --cuerpo: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #121316;
+    --carta: #1d1f24;
+    --linea: #30333a;
+    --texto: #f1f0ea;
+    --suave: #a3a7ae;
+    --ok-fondo: #12301f;
+    --aviso-fondo: #3a230f;
+    --mal-fondo: #3d1518;
+    --ok: #3cc477;
+    --aviso: #ff8a3d;
+    --mal: #ff5a62;
+    --sombra: 0 1px 0 rgba(255,255,255,.03), 0 8px 20px -12px rgba(0,0,0,.8);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font: 400 17px/1.35 var(--cuerpo);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+}
+input { -webkit-user-select: text; user-select: text; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font-size: .86em; letter-spacing: .01em; }
+[hidden] { display: none !important; }
+
+/* =========================================================
+   PANTALLAS
+   ========================================================= */
+.pantalla {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: var(--fondo);
+  visibility: hidden; opacity: 0;
+  transform: translateX(14px);
+  transition: opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1), visibility 0s linear .22s;
+}
+.pantalla.activa { visibility: visible; opacity: 1; transform: none; transition: opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1); }
+
+.barra {
+  flex: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: calc(8px + var(--sat)) 8px 8px;
+  background: var(--tinta); color: #fff;
+  min-height: 64px;
+}
+.barra-titulo { flex: 1; min-width: 0; padding: 0 4px; }
+.barra-titulo h1 {
+  margin: 0; font: 800 22px/1.1 var(--display); font-stretch: 85%;
+  letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.barra-titulo p { margin: 2px 0 0; font-size: 14px; color: #c9ccd2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn-barra {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: grid; place-items: center; color: #fff;
+}
+.btn-barra:active { background: rgba(255,255,255,.12); }
+.btn-barra svg { width: 28px; height: 28px; }
+
+.cuerpo { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.pie {
+  flex: none;
+  display: flex; gap: 10px;
+  padding: 10px 12px calc(10px + var(--sab));
+  background: var(--carta);
+  border-top: 1px solid var(--linea);
+}
+
+/* Botones grandes */
+.btn {
+  min-height: 60px; padding: 0 18px; border-radius: 16px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  font: 800 19px/1 var(--display); font-stretch: 90%; letter-spacing: .01em;
+  transition: transform .08s ease, filter .15s;
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .4; pointer-events: none; }
+.btn-pri { background: var(--amarillo); color: var(--tinta); box-shadow: inset 0 -3px 0 rgba(0,0,0,.14); }
+.btn-osc { background: var(--tinta); color: #fff; }
+@media (prefers-color-scheme: dark) { .btn-osc { background: #2c2f36; } }
+.btn-sec { background: transparent; color: var(--texto); border: 2px solid var(--linea); }
+.btn-ok { background: var(--ok); color: #fff; }
+.btn.flex1 { flex: 1; }
+
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 4px solid var(--linea); border-top-color: var(--amarillo); animation: gira .8s linear infinite; }
+@keyframes gira { to { transform: rotate(360deg); } }
+.vacio { padding: 48px 24px; text-align: center; color: var(--suave); display: grid; justify-items: center; gap: 14px; font-size: 17px; }
+.vacio b { color: var(--texto); font: 800 20px/1.2 var(--display); }
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+#pLogin { background: var(--amarillo); color: var(--tinta); justify-content: center; padding: 24px; }
+.login-caja { width: 100%; max-width: 380px; margin: 0 auto; }
+.marca { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.marca img { width: 56px; height: 56px; }
+.marca h2 { margin: 0; font: 900 44px/0.9 var(--display); font-stretch: 78%; letter-spacing: -.02em; text-transform: uppercase; }
+.marca small { display: block; font: 700 13px/1 var(--cuerpo); letter-spacing: .14em; text-transform: uppercase; opacity: .7; margin-top: 4px; }
+.campo { display: block; margin-bottom: 12px; }
+.campo span { display: block; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+.campo input {
+  width: 100%; height: 58px; border-radius: 14px; border: 2px solid var(--tinta);
+  background: #fff; color: #1b1d21; padding: 0 16px; font: 400 18px var(--cuerpo); outline: none;
+}
+.campo input:focus { box-shadow: 0 0 0 4px rgba(27,29,33,.25); }
+#loginError { min-height: 24px; color: #8f0d14; font-weight: 700; margin: 4px 0 8px; }
+#loginBtn { width: 100%; }
+
+/* =========================================================
+   INICIO
+   ========================================================= */
+#pInicio { background: var(--tinta); color: #fff; }
+.inicio-top { display: flex; align-items: center; gap: 10px; padding: calc(16px + var(--sat)) 20px 8px; }
+.inicio-top img { width: 40px; height: 40px; }
+.inicio-top h2 { margin: 0; font: 900 30px/1 var(--display); font-stretch: 78%; letter-spacing: -.01em; text-transform: uppercase; }
+.inicio-top h2 em { font-style: normal; color: var(--amarillo); }
+.inicio-tiles { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; min-height: 0; }
+.tile {
+  flex: 1; min-height: 150px; border-radius: 24px; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  padding: 20px; text-align: left;
+  transition: transform .1s ease;
+  animation: entra .4s cubic-bezier(.2,.8,.2,1) both;
+}
+.tile:nth-child(2) { animation-delay: .06s; }
+@keyframes entra { from { opacity: 0; transform: translateY(16px); } }
+.tile:active { transform: scale(.98); }
+.tile-ic { position: absolute; top: 18px; left: 20px; width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; }
+.tile-ic svg { width: 36px; height: 36px; stroke-width: 2.4; }
+.tile-flecha { position: absolute; top: 22px; right: 20px; opacity: .7; }
+.tile-flecha svg { width: 30px; height: 30px; }
+.tile b { font: 900 34px/0.95 var(--display); font-stretch: 80%; letter-spacing: -.015em; text-transform: uppercase; }
+.tile span { margin-top: 8px; font-size: 16px; opacity: .85; }
+.tile-a { background: var(--amarillo); color: var(--tinta); }
+.tile-a .tile-ic { background: var(--tinta); color: var(--amarillo); }
+.tile-b { background: #2b2e35; color: #fff; border: 2px solid #3a3e46; }
+.tile-b .tile-ic { background: var(--amarillo); color: var(--tinta); }
+/* franja de rayas de seguridad en el tile principal */
+.tile-a::after {
+  content: ''; position: absolute; right: -40px; bottom: -40px; width: 160px; height: 160px;
+  background: repeating-linear-gradient(-45deg, rgba(27,29,33,.09) 0 14px, transparent 14px 28px);
+  border-radius: 50%;
+}
+.inicio-pie { padding: 6px 20px calc(14px + var(--sab)); display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #a9adb5; font-size: 14px; }
+.inicio-pie .email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inicio-pie button { color: #fff; font-weight: 700; padding: 12px 4px; text-decoration: underline; text-underline-offset: 3px; flex: none; }
+.lista-escanear { display: inline-flex; align-items: center; gap: 8px; margin: 0 20px; padding: 10px 14px; border-radius: 12px; background: #24272d; color: #d7dae0; font-size: 14px; }
+.lista-escanear i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px rgba(26,143,76,.25); animation: late 1.6s ease-in-out infinite; }
+@keyframes late { 50% { box-shadow: 0 0 0 7px rgba(26,143,76,0); } }
+
+/* =========================================================
+   BUSCADOR (comun a Buscar articulo y Pedidos)
+   ========================================================= */
+.busca { flex: none; display: flex; gap: 8px; padding: 12px; background: var(--fondo); }
+.busca-in { flex: 1; position: relative; }
+.busca-in svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--suave); width: 22px; height: 22px; }
+.busca input {
+  width: 100%; height: 56px; border-radius: 16px; border: 2px solid var(--linea);
+  background: var(--carta); color: var(--texto); padding: 0 14px 0 46px;
+  font: 400 18px var(--cuerpo); outline: none;
+}
+.busca input:focus { border-color: var(--tinta); }
+@media (prefers-color-scheme: dark) { .busca input:focus { border-color: var(--amarillo); } }
+.btn-scan { width: 56px; height: 56px; border-radius: 16px; background: var(--amarillo); color: var(--tinta); display: grid; place-items: center; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,.14); }
+.btn-scan:active { transform: scale(.95); }
+.btn-scan svg { width: 28px; height: 28px; }
+
+.seg { flex: none; display: flex; gap: 6px; padding: 0 12px 10px; }
+.seg button { flex: 1; height: 44px; border-radius: 12px; font: 700 16px var(--cuerpo); color: var(--suave); background: transparent; border: 2px solid var(--linea); }
+.seg button.on { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+@media (prefers-color-scheme: dark) { .seg button.on { background: var(--amarillo); color: var(--tinta); border-color: var(--amarillo); } }
+.seg button span { opacity: .7; font-weight: 400; margin-left: 4px; }
+
+/* Filas */
+.lista { padding: 0 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.fila {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  min-height: 72px; padding: 10px 12px; text-align: left;
+  background: var(--carta); border-radius: var(--r); box-shadow: var(--sombra);
+  border: 2px solid transparent;
+}
+.fila:active { border-color: var(--amarillo); }
+.miniatura { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: #fff; flex: none; border: 1px solid var(--linea); }
+.ph { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; background: var(--fondo); color: var(--suave); flex: none; }
+.fila-tx { flex: 1; min-width: 0; }
+.fila-nom { font-weight: 700; font-size: 17px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fila-sub { font-size: 14px; color: var(--suave); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chev { color: var(--suave); width: 22px; height: 22px; }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 999px; font: 700 14px/1 var(--cuerpo); white-space: nowrap; flex: none; }
+.chip svg { width: 16px; height: 16px; stroke-width: 2.8; }
+.chip-ok { background: var(--ok-fondo); color: var(--ok); }
+.chip-aviso { background: var(--aviso-fondo); color: var(--aviso); }
+.chip-neutro { background: var(--fondo); color: var(--suave); }
+.chip-amarillo { background: var(--amarillo); color: var(--tinta); }
+.chip-num { font-variant-numeric: tabular-nums; }
+
+/* Barra lateral de estado en pedidos */
+.fila-ped { position: relative; padding-left: 16px; overflow: hidden; }
+.fila-ped::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--linea); }
+.fila-ped.st-cerrado::before { background: var(--amarillo); }
+.fila-ped.st-ok::before { background: var(--ok); }
+.fila-ped .fila-nom { -webkit-line-clamp: 1; font-size: 18px; }
+
+/* Paso 2 de Buscar: articulo elegido */
+.art-card { flex: none; margin: 12px 12px 8px; padding: 12px; display: flex; gap: 12px; align-items: center; background: var(--carta); border-radius: 18px; box-shadow: var(--sombra); border-left: 6px solid var(--amarillo); }
+.art-card img, .art-card .ph { width: 72px; height: 72px; border-radius: 14px; }
+.art-card img { object-fit: cover; border: 1px solid var(--linea); background: #fff; }
+.art-card .fila-nom { font-size: 18px; -webkit-line-clamp: 3; }
+.art-titulo { flex: none; align-items: center; gap: 10px; padding: 4px 16px 8px; font: 800 15px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--suave); display: flex; justify-content: space-between; }
+
+.fila-check { cursor: pointer; }
+.caja { width: 34px; height: 34px; border-radius: 10px; border: 3px solid var(--linea); display: grid; place-items: center; flex: none; transition: background .12s, border-color .12s; }
+.caja svg { width: 22px; height: 22px; stroke-width: 3.4; color: var(--tinta); opacity: 0; transform: scale(.5); transition: .15s; }
+.fila-check.sel { border-color: var(--amarillo); }
+.fila-check.sel .caja { background: var(--amarillo); border-color: var(--amarillo); }
+.fila-check.sel .caja svg { opacity: 1; transform: none; }
+.fila-check.listo { opacity: .6; }
+.fila-check.listo .caja { background: var(--ok); border-color: var(--ok); }
+.fila-check.listo .caja svg { opacity: 1; transform: none; color: #fff; }
+.cant { font: 900 24px/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; flex: none; }
+.cant small { font-size: 15px; opacity: .6; margin-right: 1px; }
+
+.multi { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--aviso-fondo); color: var(--aviso); font-weight: 700; }
+.multi div { flex: 1; }
+.multi button { padding: 10px 12px; border-radius: 10px; border: 2px solid currentColor; font-weight: 700; }
+
+/* =========================================================
+   CONTROL
+   ========================================================= */
+.anillo { width: 54px; height: 54px; position: relative; flex: none; margin-right: 4px; }
+.anillo svg { width: 54px; height: 54px; transform: rotate(-90deg); }
+.anillo circle { stroke-width: 6; fill: none; }
+.anillo .pista { stroke: #3a3d44; }
+.anillo .relleno { stroke: var(--amarillo); transition: stroke-dashoffset .4s cubic-bezier(.2,.8,.2,1), stroke .3s; }
+.anillo.ok .relleno { stroke: #3cc477; }
+.anillo span { position: absolute; inset: 0; display: grid; place-items: center; font: 800 14px var(--display); font-variant-numeric: tabular-nums; }
+
+.hero {
+  flex: none; margin: 10px 12px 6px; border-radius: 20px; padding: 14px;
+  background: var(--carta); box-shadow: var(--sombra);
+  border: 3px solid var(--linea); position: relative;
+  transition: background .2s, border-color .2s;
+}
+.hero[data-estado="ok"], .hero[data-estado="completo"], .hero[data-estado="fin"] { border-color: var(--ok); background: var(--ok-fondo); }
+.hero[data-estado="sobra"], .hero[data-estado="elegir"] { border-color: var(--aviso); background: var(--aviso-fondo); }
+.hero[data-estado="error"] { border-color: var(--mal); background: var(--mal-fondo); }
+.hero.flash { animation: flash .45s ease; }
+@keyframes flash { 0% { transform: scale(.97); } 60% { transform: scale(1.01); } 100% { transform: none; } }
+.hero-fila { display: flex; gap: 12px; align-items: center; }
+.hero-img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #fff; flex: none; border: 1px solid var(--linea); }
+.hero-ic { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; flex: none; background: var(--fondo); color: var(--suave); }
+.hero-ic svg { width: 34px; height: 34px; }
+.hero[data-estado="ok"] .hero-ic, .hero[data-estado="completo"] .hero-ic, .hero[data-estado="fin"] .hero-ic { background: var(--ok); color: #fff; }
+.hero[data-estado="error"] .hero-ic { background: var(--mal); color: #fff; }
+.hero-tx { flex: 1; min-width: 0; }
+.hero-tag { display: inline-flex; align-items: center; gap: 5px; font: 800 13px var(--display); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 3px; }
+.hero-tag svg { width: 16px; height: 16px; stroke-width: 3; }
+.hero[data-estado="ok"] .hero-tag, .hero[data-estado="completo"] .hero-tag, .hero[data-estado="fin"] .hero-tag { color: var(--ok); }
+.hero[data-estado="sobra"] .hero-tag, .hero[data-estado="elegir"] .hero-tag { color: var(--aviso); }
+.hero[data-estado="error"] .hero-tag { color: var(--mal); }
+.hero-t { font: 800 19px/1.15 var(--display); font-stretch: 92%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hero-s { font-size: 14px; color: var(--suave); margin-top: 3px; }
+.hero-n { font: 900 44px/1 var(--display); font-stretch: 80%; font-variant-numeric: tabular-nums; flex: none; }
+.hero-n small { font-size: 22px; opacity: .55; }
+.hero-n.pop { animation: pop .35s cubic-bezier(.3,1.6,.5,1); }
+@keyframes pop { from { transform: scale(1.35); } }
+.hero-deshacer { position: absolute; right: 10px; top: -14px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--tinta); color: #fff; font: 700 14px var(--cuerpo); display: inline-flex; align-items: center; gap: 6px; }
+.hero-deshacer svg { width: 16px; height: 16px; }
+.hero-deshacer:disabled { display: none; }
+.elegir { display: grid; gap: 8px; margin-top: 12px; }
+.elegir button { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px; background: var(--carta); border: 2px solid var(--aviso); text-align: left; font-weight: 700; min-height: 64px; }
+.elegir img, .elegir .ph { width: 46px; height: 46px; }
+
+.ctl-lista { padding: 4px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.sec { display: flex; align-items: center; gap: 8px; padding: 10px 4px 2px; font: 800 14px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--suave); width: 100%; text-align: left; }
+.sec .n { min-width: 26px; height: 24px; border-radius: 999px; background: var(--linea); color: var(--texto); display: inline-grid; place-items: center; padding: 0 7px; font-size: 13px; letter-spacing: 0; }
+.sec-revisar { color: var(--aviso); }
+.sec-revisar .n { background: var(--aviso); color: #fff; }
+.sec-ok { color: var(--ok); min-height: 44px; }
+.sec-ok .n { background: var(--ok); color: #fff; }
+.sec-ok svg { margin-left: auto; transition: transform .2s; }
+.sec-ok[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.item { background: var(--carta); border-radius: var(--r); box-shadow: var(--sombra); padding: 10px 12px; border: 2px solid transparent; }
+.item-top { display: flex; align-items: center; gap: 12px; }
+.item.ok { opacity: .72; }
+.item.ok .cnt b { color: var(--ok); }
+.item.sobra { border-color: var(--aviso); }
+.item.extra { border-color: var(--mal); background: var(--mal-fondo); }
+.item.pulso { animation: pulso .9s ease; }
+@keyframes pulso { 0% { border-color: var(--amarillo); box-shadow: 0 0 0 6px rgba(255,196,0,.35); } 100% { box-shadow: var(--sombra); } }
+.item .fila-nom { font-size: 16px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag { font: 700 12px/1 var(--cuerpo); padding: 5px 7px; border-radius: 7px; background: var(--fondo); color: var(--suave); display: inline-flex; align-items: center; gap: 4px; }
+.tag svg { width: 13px; height: 13px; }
+.tag-aviso { background: var(--aviso-fondo); color: var(--aviso); }
+.tag-mal { background: var(--mal); color: #fff; }
+.cnt { text-align: right; flex: none; min-width: 64px; }
+.cnt div { font: 900 26px/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; }
+.cnt div small { font-size: 17px; opacity: .5; }
+.cnt i { display: block; height: 6px; border-radius: 3px; background: var(--linea); margin-top: 6px; overflow: hidden; }
+.cnt i b { display: block; height: 100%; background: var(--amarillo); border-radius: 3px; transition: width .3s; }
+.item.ok .cnt i b { background: var(--ok); }
+.item.sobra .cnt i b { background: var(--aviso); }
+.acc { display: flex; gap: 8px; margin-top: 10px; }
+.acc button { height: 48px; border-radius: 12px; padding: 0 14px; font: 700 16px var(--cuerpo); background: var(--fondo); border: 2px solid var(--linea); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.acc button.pri { flex: 1; background: var(--amarillo); color: var(--tinta); border-color: var(--amarillo); }
+.acc button.menos { width: 56px; font-size: 24px; padding: 0; }
+.acc button.sec2 { flex: 1; }
+.acc svg { width: 20px; height: 20px; stroke-width: 3; }
+
+.pie-ctl { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 8px; }
+.pie-ctl .btn { min-height: 64px; font-size: 18px; padding: 0 10px; }
+.pie-ctl #ctlReiniciar { padding: 0; }
+.pie-ctl #ctlFinalizar.listo { background: var(--ok); color: #fff; }
+.pie-ctl .btn svg { width: 26px; height: 26px; }
+
+/* =========================================================
+   CAPAS: camara, dialogo, quien, fin, toast, destello
+   ========================================================= */
+.velo { position: fixed; inset: 0; background: rgba(10,11,13,.55); z-index: 40; opacity: 0; visibility: hidden; transition: opacity .2s, visibility 0s .2s; display: flex; align-items: flex-end; justify-content: center; }
+.velo.on { opacity: 1; visibility: visible; transition: opacity .2s; }
+.hoja { width: 100%; max-width: 520px; background: var(--carta); border-radius: 24px 24px 0 0; padding: 10px 16px calc(16px + var(--sab)); transform: translateY(30px); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.velo.on .hoja { transform: none; }
+.agarre { width: 44px; height: 5px; border-radius: 3px; background: var(--linea); margin: 0 auto 14px; }
+.hoja h3 { margin: 0 0 6px; font: 900 26px/1.05 var(--display); font-stretch: 85%; }
+.hoja p { margin: 0 0 16px; color: var(--suave); }
+.hoja .acciones { display: grid; gap: 10px; }
+.btn-peligro { background: var(--mal); color: #fff; }
+.btn-aviso { background: var(--aviso); color: #fff; }
+
+#cam { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: #000; border-radius: 22px 22px 0 0; overflow: hidden; transform: translateY(105%); transition: transform .28s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -10px 30px rgba(0,0,0,.4); padding-bottom: var(--sab); }
+#cam.on { transform: none; }
+#camVisor { width: 100%; height: 38vh; max-height: 340px; background: #000; overflow: hidden; }
+#camVisor video { width: 100% !important; height: 100% !important; object-fit: cover; }
+#camVisor > div, #camVisor img { display: none !important; }
+.cam-mira { position: absolute; left: 10%; right: 10%; top: calc(19vh - 60px); height: 120px; border: 3px solid var(--amarillo); border-radius: 18px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,.25); }
+@media (min-height: 900px) { .cam-mira { top: 110px; } }
+.cam-mira::after { content: ''; position: absolute; left: 8px; right: 8px; top: 50%; height: 2px; background: var(--mal); opacity: .8; animation: barre 1.6s ease-in-out infinite; }
+@keyframes barre { 50% { transform: translateY(-40px); } }
+.cam-pie { display: flex; gap: 8px; padding: 10px 12px 12px; background: #111; align-items: center; color: #ddd; font-size: 15px; }
+.cam-pie span { flex: 1; }
+.cam-pie .btn { min-height: 52px; background: #fff; color: #111; }
+
+#ctlQuien .ops { display: grid; gap: 10px; }
+#ctlQuien .ops button { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 14px; border-radius: 16px; border: 2px solid var(--linea); font: 800 20px var(--display); text-align: left; }
+#ctlQuien .ops button.sel { border-color: var(--amarillo); background: rgba(255,196,0,.12); }
+#ctlQuien .av { width: 42px; height: 42px; border-radius: 50%; background: var(--tinta); color: var(--amarillo); display: grid; place-items: center; font-size: 19px; }
+#ctlQuienOtro { display: flex; gap: 8px; margin-top: 10px; }
+#ctlQuienOtro input { flex: 1; height: 56px; border-radius: 14px; border: 2px solid var(--linea); padding: 0 14px; font: 400 18px var(--cuerpo); background: var(--fondo); color: var(--texto); min-width: 0; }
+#ctlQuien .volver { margin-top: 10px; width: 100%; }
+
+#fin { position: fixed; inset: 0; z-index: 50; background: var(--ok); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; opacity: 0; visibility: hidden; transition: opacity .2s, visibility 0s .2s; }
+#fin.on { opacity: 1; visibility: visible; transition: opacity .2s; }
+#fin.dif { background: var(--aviso); }
+.sello { width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-items: center; margin-bottom: 22px; }
+.sello svg { width: 70px; height: 70px; stroke-width: 3; stroke-dasharray: 30; stroke-dashoffset: 30; }
+#fin.on .sello { animation: sello .45s cubic-bezier(.3,1.5,.5,1); }
+#fin.on .sello svg { animation: trazo .4s .15s ease forwards; }
+@keyframes sello { from { transform: scale(.4); } }
+@keyframes trazo { to { stroke-dashoffset: 0; } }
+#fin h3 { margin: 0; font: 900 38px/1 var(--display); font-stretch: 80%; text-transform: uppercase; }
+#fin p { margin: 10px 0 28px; font-size: 17px; opacity: .92; }
+#fin .btn { background: #fff; color: #111; min-width: 200px; }
+
+#toast { position: fixed; left: 12px; right: 12px; bottom: calc(96px + var(--sab)); z-index: 60; display: flex; justify-content: center; pointer-events: none; }
+#toast div { background: var(--tinta); color: #fff; padding: 14px 18px; border-radius: 14px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,.35); opacity: 0; transform: translateY(10px); transition: .2s; text-align: center; max-width: 440px; }
+@media (prefers-color-scheme: dark) { #toast div { background: #f1f0ea; color: #111; } }
+#toast.on div { opacity: 1; transform: none; }
+
+#destello { position: fixed; inset: 0; z-index: 70; pointer-events: none; border: 8px solid var(--ok); opacity: 0; }
+#destello.mal { border-color: var(--mal); }
+#destello.on { animation: destello .5s ease; }
+@keyframes destello { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+.cargando-pantalla { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 14px; color: var(--suave); background: var(--fondo); }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-height: 600px) { .tile b { font-size: 28px; } .tile-ic { width: 52px; height: 52px; } .tile { min-height: 120px; } }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<section class="pantalla" id="pLogin">
+  <div class="login-caja">
+    <div class="marca">
+      <img src="icon-192.png" alt="">
+      <div><h2>Control</h2><small>HomePoint</small></div>
+    </div>
+    <label class="campo"><span>Email</span><input type="email" id="loginEmail" autocomplete="username" inputmode="email"></label>
+    <label class="campo"><span>Contraseña</span><input type="password" id="loginPass" autocomplete="current-password"></label>
+    <div id="loginError" role="alert"></div>
+    <button class="btn btn-osc" id="loginBtn" type="button">Ingresar</button>
+  </div>
+</section>
+
+<!-- ============ INICIO ============ -->
+<section class="pantalla" id="pInicio">
+  <div class="inicio-top">
+    <img src="icon-192.png" alt="">
+    <h2>Control <em>HP</em></h2>
+  </div>
+  <div class="inicio-tiles">
+    <button class="tile tile-b" type="button" id="irBuscar">
+      <span class="tile-ic"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg></span>
+      <span class="tile-flecha"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      <b>Buscar<br>artículo</b>
+      <span>¿En qué pedidos está? Marcalo listo.</span>
+    </button>
+    <button class="tile tile-a" type="button" id="irPedidos">
+      <span class="tile-ic"><svg viewBox="0 0 24 24"><path d="M9 11.5 11.5 14 16 9.5"/><rect x="4" y="3.5" width="16" height="17" rx="3"/></svg></span>
+      <span class="tile-flecha"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      <b>Controlar<br>pedido</b>
+      <span>Escaneá el QR del rótulo o elegilo de la lista.</span>
+    </button>
+  </div>
+  <div class="lista-escanear" id="inicioLector" hidden><i></i>Listo para escanear: QR de pedido o artículo</div>
+  <div class="inicio-pie">
+    <span class="email" id="inicioEmail"></span>
+    <button type="button" id="btnSalir">Cerrar sesión</button>
+  </div>
+</section>
+
+<!-- ============ BUSCAR ARTICULO ============ -->
+<section class="pantalla" id="pBuscar">
+  <header class="barra">
+    <button class="btn-barra" type="button" data-volver aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="barra-titulo"><h1 id="buscarTitulo">Buscar artículo</h1><p id="buscarSub">Escaneá o escribí nombre / código</p></div>
+  </header>
+
+  <!-- Paso 1 -->
+  <div class="busca" id="buscarPaso1Top">
+    <label class="busca-in"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg>
+      <input type="search" id="articuloSearch" placeholder="Nombre o código…" autocomplete="off" enterkeyhint="search"></label>
+    <button class="btn-scan" type="button" data-escanear aria-label="Escanear"><svg viewBox="0 0 24 24"><path d="M3 7.5v-2a2 2 0 0 1 2-2h2.5M16.5 3.5H19a2 2 0 0 1 2 2v2M21 16.5v2a2 2 0 0 1-2 2h-2.5M7.5 20.5H5a2 2 0 0 1-2-2v-2M7.5 8v8M10.5 8v8M13.5 8v8M16.5 8v8"/></svg></button>
+  </div>
+  <div class="cuerpo" id="buscarCuerpo1"><div class="lista" id="articuloList"></div></div>
+
+  <!-- Paso 2 -->
+  <div class="art-card" id="articuloCard" hidden></div>
+  <div class="art-titulo" id="articuloPedTitulo" hidden><span>Pedidos</span><span id="articuloPedN" class="chip chip-amarillo"></span></div>
+  <div class="cuerpo" id="buscarCuerpo2" hidden><div class="lista" id="articuloPedidosList"></div></div>
+  <div class="pie" id="articuloPie" hidden>
+    <button class="btn btn-sec" type="button" id="btnArticuloTodos">Todos</button>
+    <button class="btn btn-pri flex1" type="button" id="btnArticuloConfirmar" disabled>Marcar listo</button>
+  </div>
+</section>
+
+<!-- ============ PEDIDOS ============ -->
+<section class="pantalla" id="pPedidos">
+  <header class="barra">
+    <button class="btn-barra" type="button" data-volver aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="barra-titulo"><h1>Controlar pedido</h1><p id="pedidosSub">Elegí un pedido o escaneá su QR</p></div>
+  </header>
+  <div class="busca">
+    <label class="busca-in"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg>
+      <input type="search" id="pedidosSearch" placeholder="Cliente o número…" autocomplete="off" enterkeyhint="search"></label>
+    <button class="btn-scan" type="button" data-escanear aria-label="Escanear QR del pedido"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2v2h-2zM20.5 14.5v0M14.5 20.5v0M18.5 18.5h2v2"/></svg></button>
+  </div>
+  <div class="seg" role="tablist">
+    <button type="button" class="on" data-filtro="pend">Por controlar<span id="nPend"></span></button>
+    <button type="button" data-filtro="ok">Controlados<span id="nOk"></span></button>
+  </div>
+  <div class="cuerpo"><div class="lista" id="pedidosList"></div></div>
+</section>
+
+<!-- ============ CONTROL ============ -->
+<section class="pantalla" id="pControl">
+  <header class="barra">
+    <button class="btn-barra" type="button" data-volver aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="barra-titulo"><h1 id="ctlTitulo">Pedido</h1><p id="ctlSub"></p></div>
+    <div class="anillo" id="ctlRing"><svg viewBox="0 0 54 54"><circle class="pista" cx="27" cy="27" r="22"/><circle class="relleno" id="ctlRingFill" cx="27" cy="27" r="22" stroke-dasharray="138.2" stroke-dashoffset="138.2"/></svg><span id="ctlRingTx">0%</span></div>
+  </header>
+  <div class="hero" id="ctlHero" data-estado="idle" aria-live="polite">
+    <button type="button" class="hero-deshacer" id="ctlDeshacer" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Deshacer</button>
+    <div id="ctlHeroBody"></div>
+  </div>
+  <div class="cuerpo"><div class="ctl-lista" id="ctlList"></div></div>
+  <div class="pie pie-ctl">
+    <button type="button" class="btn btn-sec" id="ctlReiniciar" aria-label="Reiniciar control"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <button type="button" class="btn btn-osc" data-escanear><svg viewBox="0 0 24 24"><path d="M3 7.5v-2a2 2 0 0 1 2-2h2.5M16.5 3.5H19a2 2 0 0 1 2 2v2M21 16.5v2a2 2 0 0 1-2 2h-2.5M7.5 20.5H5a2 2 0 0 1-2-2v-2M7.5 8v8M10.5 8v8M13.5 8v8M16.5 8v8"/></svg>Escanear</button>
+    <button type="button" class="btn btn-pri" id="ctlFinalizar">Finalizar</button>
+  </div>
+  <div class="cargando-pantalla" id="ctlCargando" hidden><div class="spinner"></div><div>Abriendo pedido…</div></div>
+</section>
+
+<!-- ============ CAPAS ============ -->
+<div id="cam" aria-hidden="true">
+  <div id="camVisor"></div>
+  <div class="cam-mira"></div>
+  <div class="cam-pie"><span id="camTexto">Apuntá al código</span><button class="btn" type="button" id="camCerrar">Cerrar</button></div>
+</div>
+
+<div class="velo" id="dlg" aria-hidden="true">
+  <div class="hoja" role="dialog" aria-modal="true">
+    <div class="agarre"></div>
+    <h3 id="dlgT"></h3>
+    <p id="dlgS"></p>
+    <div class="acciones">
+      <button type="button" class="btn" id="dlgOk"></button>
+      <button type="button" class="btn btn-sec" id="dlgNo"></button>
+    </div>
+  </div>
+</div>
+
+<div class="velo" id="ctlQuien" aria-hidden="true">
+  <div class="hoja" role="dialog" aria-modal="true">
+    <div class="agarre"></div>
+    <h3>¿Quién hizo el control?</h3>
+    <p id="ctlQuienS"></p>
+    <div class="ops">
+      <button type="button" data-quien="Gonzalo"><span class="av">G</span>Gonzalo</button>
+      <button type="button" data-quien="Alejandro"><span class="av">A</span>Alejandro</button>
+      <button type="button" data-quien="Otro"><span class="av">+</span>Otro</button>
+    </div>
+    <div id="ctlQuienOtro" hidden>
+      <input type="text" id="ctlQuienNombre" placeholder="Nombre (opcional)" maxlength="40" autocomplete="off">
+      <button type="button" class="btn btn-pri" id="ctlQuienOk">Guardar</button>
+    </div>
+    <button type="button" class="btn btn-sec volver" id="ctlQuienVolver">Volver al control</button>
+  </div>
+</div>
+
+<div id="fin" aria-hidden="true">
+  <div class="sello"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19.5 7"/></svg></div>
+  <h3 id="finT">Pedido controlado</h3>
+  <p id="finS"></p>
+  <button type="button" class="btn" id="finListo">Listo</button>
+</div>
+
+<div id="toast"><div id="toastTx"></div></div>
+<div id="destello"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="../pedidosv2/config.js"></script>
+<script>
+'use strict';
+// =========================================================================
+// App "Control" (HomePoint): Buscar articulo + Control de pedido.
+// La logica de datos es la misma de pedidosv2T51.html (mismos nodos y campos
+// de Firebase), asi que lo que se hace aca se ve igual en tablets y colector.
+// =========================================================================
+
+const ES_APP = /ControlHomePointApp/.test(navigator.userAgent);
+const $ = (id) => document.getElementById(id);
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ---------------------------------------------------------------- utilidades
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+let toastTimer = null;
+function showToast(msg, ms) {
+  $('toastTx').textContent = msg;
+  $('toast').classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('on'), ms || 2600);
+}
+function destello(ok) {
+  const d = $('destello');
+  d.classList.remove('on');
+  d.classList.toggle('mal', !ok);
+  void d.offsetWidth;
+  d.classList.add('on');
+}
+function vibrar(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (_) {} }
+
+const IC = {
+  ok: '<svg viewBox="0 0 24 24"><path d="M4.5 12.6 9.4 17.5 19.5 7.4"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M12 3.6 2.6 20h18.8L12 3.6z"/><path d="M12 10v4.4"/><path d="M12 17.4h.01"/></svg>',
+  scan: '<svg viewBox="0 0 24 24"><path d="M3 7.5v-2a2 2 0 0 1 2-2h2.5M16.5 3.5H19a2 2 0 0 1 2 2v2M21 16.5v2a2 2 0 0 1-2 2h-2.5M7.5 20.5H5a2 2 0 0 1-2-2v-2M7.5 8v8M10.5 8v8M13.5 8v8M16.5 8v8"/></svg>',
+  mano: '<svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5v-7a1.5 1.5 0 0 1 3 0V12"/><path d="M14 11.5V6a1.5 1.5 0 0 1 3 0v8.5a6.5 6.5 0 0 1-6.5 6.5h-.6a6 6 0 0 1-4.6-2.2L3.4 15.6a1.6 1.6 0 0 1 2.5-2L8 15.5"/></svg>',
+  deshacer: '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  chev: '<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>',
+  der: '<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  caja: '<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19.5 7"/></svg>',
+  pago: '<svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
+};
+
+function imgFallback(el, alt) {
+  if (alt && el.dataset.alt !== '1') { el.dataset.alt = '1'; el.src = alt; return; }
+  el.onerror = null;
+  const ph = document.createElement('div');
+  ph.className = 'ph';
+  ph.innerHTML = IC.caja;
+  ph.style.width = el.offsetWidth ? el.offsetWidth + 'px' : '';
+  ph.style.height = el.offsetHeight ? el.offsetHeight + 'px' : '';
+  el.replaceWith(ph);
+}
+function imgHtml(src, alt, clase) {
+  return src
+    ? '<img class="' + (clase || 'miniatura') + '" src="' + escapeHtml(src) + '" alt="" loading="lazy" onerror="imgFallback(this, \'' + escapeHtml(alt || '') + '\')">'
+    : '<div class="ph">' + IC.caja + '</div>';
+}
+
+// Notas que significan cobrado (mismo criterio que pedidosv2).
+function normalizarNota(n) {
+  return (n == null ? '' : String(n)).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+const NOTAS_PAGADO = new Set(['pago', 'pagado', 'abonado', 'senado']);
+function estaPagado(nota) { return NOTAS_PAGADO.has(normalizarNota(nota)); }
+
+function fechaCorta(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+}
+
+// ---------------------------------------------------------------- conexion RTDB
+// El socket de Firebase puede quedar "zombie" tras dormir la pantalla o
+// cambiar de red: once() no responde nunca. Cada consulta tiene un plazo; si
+// vence se recicla la conexion y se repite una vez.
+const RTDB_TIMEOUT_MS = 12000;
+const RTDB_SONDA_MS = 4000;
+let socketSospechoso = false;
+let rtdbConectado = false;
+let ultimaReconexion = 0;
+const esperandoConexion = new Set();
+db.ref('.info/connected').on('value', s => {
+  rtdbConectado = s.val() === true;
+  if (rtdbConectado) { esperandoConexion.forEach(f => f()); esperandoConexion.clear(); }
+});
+function esperarConexion(ms = 8000) {
+  if (rtdbConectado) return Promise.resolve(true);
+  return new Promise(res => {
+    const avisar = () => { clearTimeout(t); res(true); };
+    const t = setTimeout(() => { esperandoConexion.delete(avisar); res(false); }, ms);
+    esperandoConexion.add(avisar);
+  });
+}
+function reconectarRTDB() {
+  if (Date.now() - ultimaReconexion < 5000) return;
+  ultimaReconexion = Date.now();
+  rtdbConectado = false;
+  try { db.goOffline(); db.goOnline(); } catch (_) {}
+}
+function conPlazo(p, ms) {
+  let t;
+  const lim = new Promise((_, rej) => { t = setTimeout(() => { const e = new Error('Sin respuesta del servidor'); e.esTimeout = true; rej(e); }, ms); });
+  return Promise.race([p, lim]).finally(() => clearTimeout(t));
+}
+async function conTimeout(fabrica, ms = RTDB_TIMEOUT_MS) {
+  try {
+    const r = await conPlazo(fabrica(), socketSospechoso ? RTDB_SONDA_MS : ms);
+    socketSospechoso = false;
+    return r;
+  } catch (err) {
+    if (!err || !err.esTimeout) { socketSospechoso = false; throw err; }
+    reconectarRTDB();
+    if (!await esperarConexion()) throw err;
+    const r = await conPlazo(fabrica(), ms);
+    socketSospechoso = false;
+    return r;
+  }
+}
+let ocultoDesde = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { ocultoDesde = Date.now(); camCerrar(); return; }
+  if (ocultoDesde && Date.now() - ocultoDesde > 20000) socketSospechoso = true;
+  ocultoDesde = 0;
+});
+window.addEventListener('online', () => { socketSospechoso = true; reconectarRTDB(); });
+
+// ---------------------------------------------------------------- catalogo (Google Sheets)
+let sheetsData = {};
+let sheetsAllItems = [];
+let articuloBarcodeIndex = {};
+let sheetsLoaded = false;
+let sheetsPromesa = null;
+
+function articuloNormBarcode(v) { return String(v || '').trim().toUpperCase(); }
+
+function cargarSheets(force) {
+  if (sheetsLoaded && !force) return Promise.resolve();
+  if (sheetsPromesa && !force) return sheetsPromesa;
+  sheetsPromesa = (async () => {
+    try {
+      const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID +
+        '/values/' + GOOGLE_SHEETS_CONFIG.RANGO + '?key=' + GOOGLE_SHEETS_CONFIG.API_KEY;
+      const res = await fetch(url);
+      const data = await res.json();
+      const datos = {}, todos = [], indice = {};
+      (data.values || []).forEach(row => {
+        const codigo = (row[2] || '').trim();
+        if (!codigo) return;
+        const img = (row[1] || '').split(',').map(u => u.trim());
+        const nombre = (row[3] || '').trim();
+        const barras = (row[11] || '').split(',').map(s => s.trim()).filter(Boolean);
+        datos[codigo] = { imagen: img[0] || '', imagenAlt: img[3] || '', nombre, codigoBarras: barras };
+        todos.push({ codigo, nombre, imagen: img[0] || '', imagenAlt: img[3] || '', codigoBarras: barras });
+        barras.forEach(b => {
+          const k = articuloNormBarcode(b);
+          if (!k) return;
+          if (!indice[k]) indice[k] = [];
+          if (!indice[k].includes(codigo)) indice[k].push(codigo);
+        });
+      });
+      sheetsData = datos; sheetsAllItems = todos; articuloBarcodeIndex = indice;
+      sheetsLoaded = true;
+    } catch (err) {
+      console.error('Error cargando el catalogo:', err);
+    } finally {
+      sheetsPromesa = null;
+    }
+  })();
+  return sheetsPromesa;
+}
+
+// Todos los codigos de producto que corresponden a una lectura: primero por
+// codigo de barras (puede estar repetido) y si no, por codigo de producto.
+function articuloBuscarCandidatos(texto) {
+  const k = articuloNormBarcode(texto);
+  if (!k) return [];
+  const porBarras = (articuloBarcodeIndex[k] || []).filter(c => sheetsData[c]);
+  if (porBarras.length) return porBarras;
+  return Object.keys(sheetsData).filter(c => articuloNormBarcode(c) === k);
+}
+
+// ---------------------------------------------------------------- navegacion
+let pantalla = '';
+const PANTALLAS = { login: 'pLogin', inicio: 'pInicio', buscar: 'pBuscar', pedidos: 'pPedidos', control: 'pControl' };
+function ir(nombre) {
+  if (pantalla === nombre) return;
+  const antes = pantalla;
+  pantalla = nombre;
+  Object.entries(PANTALLAS).forEach(([k, id]) => $(id).classList.toggle('activa', k === nombre));
+  camCerrar();
+  if (antes === 'pedidos' && nombre !== 'pedidos') ppDesuscribir();
+  if (nombre === 'pedidos') ppSuscribir();
+  $('inicioLector').hidden = !(nombre === 'inicio' && ES_APP);
+}
+
+document.querySelectorAll('[data-volver]').forEach(b => b.addEventListener('click', () => volver()));
+function volver() {
+  if (dlgResolver) { dlgCerrar(false); return true; }
+  if (ctlQuienResolver) { controlQuienResolver(null); return true; }
+  if ($('fin').classList.contains('on')) { salirControl(); return true; }
+  if (camAbierta()) { camCerrar(); return true; }
+  if (pantalla === 'buscar' && articuloActual) { articuloVolverAPaso1(); return true; }
+  if (pantalla === 'control') { salirControl(); return true; }
+  if (pantalla === 'buscar' || pantalla === 'pedidos') { ir('inicio'); return true; }
+  return false;
+}
+// La app Android llama a esto con el boton "atras" del equipo.
+window.__volverControl = volver;
+
+$('irBuscar').addEventListener('click', () => abrirBuscar());
+$('irPedidos').addEventListener('click', () => ir('pedidos'));
+
+// ---------------------------------------------------------------- sesion
+function handleLogin() {
+  const email = $('loginEmail').value.trim();
+  const pass = $('loginPass').value;
+  const err = $('loginError');
+  const btn = $('loginBtn');
+  if (!email || !pass) { err.textContent = 'Completá los dos campos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…'; err.textContent = '';
+  firebase.auth().signInWithEmailAndPassword(email, pass).catch(e => {
+    let m = 'No se pudo iniciar sesión';
+    if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(e.code)) m = 'Email o contraseña incorrectos';
+    else if (e.code === 'auth/invalid-email') m = 'Email inválido';
+    else if (e.code === 'auth/too-many-requests') m = 'Demasiados intentos. Esperá un momento';
+    else if (e.code === 'auth/network-request-failed') m = 'Sin conexión a internet';
+    err.textContent = m;
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  });
+}
+$('loginBtn').addEventListener('click', handleLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+$('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+
+$('btnSalir').addEventListener('click', async () => {
+  const ok = await confirmarAccion({ titulo: '¿Cerrar sesión?', texto: 'Vas a tener que volver a ingresar con tu email y contraseña.', confirmar: 'Cerrar sesión', volver: 'Cancelar', tono: 'peligro' });
+  if (ok) firebase.auth().signOut();
+});
+
+firebase.auth().onAuthStateChanged(user => {
+  if (user) {
+    $('inicioEmail').textContent = user.email || '';
+    $('loginPass').value = '';
+    $('loginBtn').disabled = false; $('loginBtn').textContent = 'Ingresar';
+    ir('inicio');
+    cargarSheets();
+  } else {
+    salirControl(true);
+    ir('login');
+  }
+});
+
+// ---------------------------------------------------------------- dialogo de confirmacion
+let dlgResolver = null;
+function confirmarAccion({ titulo, texto, confirmar, volver: txVolver, tono }) {
+  dlgCerrar(false);
+  $('dlgT').textContent = titulo;
+  $('dlgS').textContent = texto || '';
+  const ok = $('dlgOk');
+  ok.textContent = confirmar || 'Aceptar';
+  ok.className = 'btn ' + (tono === 'peligro' ? 'btn-peligro' : tono === 'aviso' ? 'btn-aviso' : 'btn-pri');
+  $('dlgNo').textContent = txVolver || 'Volver';
+  $('dlg').classList.add('on');
+  $('dlg').setAttribute('aria-hidden', 'false');
+  return new Promise(r => { dlgResolver = r; });
+}
+function dlgCerrar(v) {
+  if (!dlgResolver) return;
+  const r = dlgResolver; dlgResolver = null;
+  $('dlg').classList.remove('on');
+  $('dlg').setAttribute('aria-hidden', 'true');
+  r(v);
+}
+$('dlgOk').addEventListener('click', () => dlgCerrar(true));
+$('dlgNo').addEventListener('click', () => dlgCerrar(false));
+$('dlg').addEventListener('click', e => { if (e.target === $('dlg')) dlgCerrar(false); });
+
+// =========================================================================
+// ESCANEO: lector del colector, pistola por teclado y camara
+// =========================================================================
+// Todas las lecturas terminan en lectura(texto), que decide segun la pantalla.
+
+// --- Lector incorporado (lo entrega la app Android) ---
+window.__lecturaColector = function (texto) {
+  texto = String(texto || '').trim();
+  if (!texto) return;
+  pistolaReset();
+  lectura(texto, texto, 'aviso');
+};
+
+// --- Boton "Escanear": gatillo del colector o, si no hay, la camara ---
+document.querySelectorAll('[data-escanear]').forEach(b => b.addEventListener('click', escanear));
+function escanear() {
+  let disparo = false;
+  try { disparo = !!(window.dispararLectorColector && window.dispararLectorColector()); } catch (_) {}
+  if (disparo) return;
+  if (camAbierta()) { camCerrar(); return; }
+  camAbrir();
+}
+
+// --- Pistola en modo teclado (USB/Bluetooth, o colector sin modo broadcast) ---
+const PISTOLA_GAP_MS = 120, PISTOLA_MIN_LEN = 3, PISTOLA_MIN_LEN_SIN_FIN = 6;
+let pistolaBuffer = '', pistolaBufferUS = '', pistolaUltimaTecla = 0, pistolaTimer = null, pistolaTragarEnterHasta = 0, pistolaTeclaSinChar = false;
+const PISTOLA_US = {
+  Minus: ['-', '_'], Equal: ['=', '+'], Period: ['.', '>'], Comma: [',', '<'], Slash: ['/', '?'], Semicolon: [';', ':'],
+  Quote: ["'", '"'], Backslash: ['\\', '|'], BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backquote: ['`', '~'],
+  NumpadSubtract: ['-', '-'], NumpadAdd: ['+', '+'], NumpadDecimal: ['.', '.'], NumpadDivide: ['/', '/'], NumpadMultiply: ['*', '*'], Space: [' ', ' ']
+};
+function pistolaCharDe(e) {
+  if (e.key && e.key.length === 1) return e.key;
+  const m = /^(?:Key([A-Z])|Digit(\d)|Numpad(\d))$/.exec(e.code || '');
+  if (!m) return '';
+  if (m[1]) return e.shiftKey ? m[1] : m[1].toLowerCase();
+  return m[2] || m[3];
+}
+function pistolaCharUS(e, ch) {
+  const code = e.code || '';
+  const m = /^(?:Key([A-Z])|Digit(\d)|Numpad(\d))$/.exec(code);
+  if (m) { if (m[1]) return e.shiftKey ? m[1] : m[1].toLowerCase(); if (m[3]) return m[3]; return e.shiftKey ? ch : m[2]; }
+  const par = PISTOLA_US[code];
+  return par ? par[e.shiftKey ? 1 : 0] : ch;
+}
+function pistolaReset() { pistolaBuffer = ''; pistolaBufferUS = ''; if (pistolaTimer) { clearTimeout(pistolaTimer); pistolaTimer = null; } }
+function pistolaLimpiarInput(texto) {
+  const el = document.activeElement;
+  if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+  if (typeof el.value !== 'string' || !el.value.endsWith(texto)) return;
+  el.value = el.value.slice(0, -texto.length);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.altKey || e.metaKey) { pistolaReset(); return; }
+  const ahora = Date.now();
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    if (ahora < pistolaTragarEnterHasta) { e.preventDefault(); e.stopPropagation(); return; }
+    const rapido = ahora - pistolaUltimaTecla <= PISTOLA_GAP_MS;
+    const t = pistolaBuffer, tUS = pistolaBufferUS;
+    pistolaReset();
+    if (!rapido || t.length < PISTOLA_MIN_LEN) return;
+    e.preventDefault(); e.stopPropagation();
+    pistolaLimpiarInput(t);
+    lectura(t, tUS, 'teclado');
+    return;
+  }
+  const ch = pistolaCharDe(e);
+  if (ch) { pistolaTeclaSinChar = false; pistolaAgregarChar(ch, ahora, pistolaCharUS(e, ch)); return; }
+  if (e.key === 'Shift') return;
+  if (e.key === 'Unidentified' || e.keyCode === 229) { pistolaTeclaSinChar = true; return; }
+  pistolaReset();
+}, true);
+document.addEventListener('input', (e) => {
+  if (!pistolaTeclaSinChar) return;
+  pistolaTeclaSinChar = false;
+  const el = e.target;
+  if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+  if (e.inputType !== 'insertText' || typeof e.data !== 'string' || e.data.length !== 1) { pistolaReset(); return; }
+  pistolaAgregarChar(e.data, Date.now());
+}, true);
+function pistolaAgregarChar(ch, ahora, chUS) {
+  if (ahora - pistolaUltimaTecla > PISTOLA_GAP_MS) { pistolaBuffer = ''; pistolaBufferUS = ''; }
+  pistolaBuffer += ch; pistolaBufferUS += chUS || ch; pistolaUltimaTecla = ahora;
+  if (pistolaTimer) clearTimeout(pistolaTimer);
+  pistolaTimer = setTimeout(() => {
+    pistolaTimer = null;
+    const t = pistolaBuffer, tUS = pistolaBufferUS;
+    pistolaBuffer = ''; pistolaBufferUS = '';
+    if (t.length < PISTOLA_MIN_LEN_SIN_FIN) return;
+    pistolaTragarEnterHasta = Date.now() + 300;
+    pistolaLimpiarInput(t);
+    lectura(t, tUS, 'teclado');
+  }, PISTOLA_GAP_MS * 2);
+}
+
+// --- Camara (html5-qrcode) ---
+const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const SCAN_FORMATS = () => [
+  Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.CODABAR, Html5QrcodeSupportedFormats.QR_CODE
+];
+function gtinCheckOk(code) {
+  if (!/^\d+$/.test(code)) return false;
+  const d = code.split('').map(Number);
+  const check = d.pop();
+  let sum = 0;
+  for (let i = d.length - 1, w = 3; i >= 0; i--, w = (w === 3 ? 1 : 3)) sum += d[i] * w;
+  return ((10 - (sum % 10)) % 10) === check;
+}
+function codigoEscaneadoValido(code, fmt) {
+  if (!code) return false;
+  switch (fmt) {
+    case 'EAN_13': return code.length === 13 && gtinCheckOk(code);
+    case 'EAN_8': return code.length === 8 && gtinCheckOk(code);
+    case 'UPC_A': return code.length === 12 && gtinCheckOk(code);
+    case 'UPC_E': return code.length === 8 && /^\d+$/.test(code);
+    case 'ITF': return /^\d+$/.test(code) && code.length >= 6 && code.length % 2 === 0 && (code.length !== 14 || gtinCheckOk(code));
+    case 'CODE_39': case 'CODABAR': return code.length >= 4;
+    default: return code.length >= 3;
+  }
+}
+let camQr = null, camScanLast = '', camScanCount = 0, camUltimo = { texto: '', ts: 0 }, camArrancando = false;
+function camAbierta() { return $('cam').classList.contains('on'); }
+async function camAbrir() {
+  if (camArrancando) return;
+  camArrancando = true;
+  $('cam').classList.add('on');
+  $('cam').setAttribute('aria-hidden', 'false');
+  $('camTexto').textContent = pantalla === 'pedidos' || pantalla === 'inicio' ? 'Apuntá al QR del pedido' : 'Apuntá al código de barras';
+  camScanLast = ''; camScanCount = 0; camUltimo = { texto: '', ts: 0 };
+  const base = { fps: 10 };
+  const ios = Object.assign({}, base, { videoConstraints: { facingMode: { ideal: 'environment' }, width: { min: 640, ideal: 1920, max: 2560 }, height: { min: 480, ideal: 1080, max: 1440 }, advanced: [{ focusMode: 'continuous' }] } });
+  try {
+    if (!camQr) camQr = new Html5Qrcode('camVisor', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+    await camQr.start({ facingMode: 'environment' }, ES_IOS ? ios : base, camOnScan, () => {});
+  } catch (err) {
+    try { if (camQr) { await camQr.stop(); } } catch (_) {}
+    try {
+      camQr = new Html5Qrcode('camVisor', { formatsToSupport: SCAN_FORMATS(), verbose: false });
+      await camQr.start({ facingMode: 'environment' }, base, camOnScan, () => {});
+    } catch (e2) {
+      console.error('Camara:', e2);
+      camCerrar();
+      showToast('No se pudo usar la cámara');
+    }
+  } finally {
+    camArrancando = false;
+    if (!camAbierta() && camQr && camQr.isScanning) camQr.stop().catch(() => {});
+  }
+}
+function camCerrar() {
+  $('cam').classList.remove('on');
+  $('cam').setAttribute('aria-hidden', 'true');
+  if (camQr && camQr.isScanning) camQr.stop().catch(() => {});
+}
+$('camCerrar').addEventListener('click', camCerrar);
+function camOnScan(decodedText, decodedResult) {
+  const texto = (decodedText || '').trim();
+  if (!texto) return;
+  const fmt = (decodedResult && decodedResult.result && decodedResult.result.format && decodedResult.result.format.formatName) || '';
+  if (!codigoEscaneadoValido(texto, fmt)) { camScanLast = ''; camScanCount = 0; return; }
+  // Dos lecturas iguales seguidas: una lectura borrosa casi nunca se repite.
+  if (texto === camScanLast) camScanCount++; else { camScanLast = texto; camScanCount = 1; }
+  if (camScanCount < 2) return;
+  camScanLast = ''; camScanCount = 0;
+  // En el control se cuentan unidades: el mismo codigo vale otra vez pasado 1,5 s.
+  const ahora = Date.now();
+  const pausa = pantalla === 'control' ? 1500 : 2500;
+  if (texto === camUltimo.texto && ahora - camUltimo.ts < pausa) return;
+  camUltimo = { texto, ts: ahora };
+  // Fuera del control alcanza con una lectura: se cierra la camara.
+  if (pantalla !== 'control') camCerrar();
+  lectura(texto, texto, 'camara');
+}
+
+// --- Enrutado de una lectura ---
+const LECTURA_ECO_MS = 500;
+let lecturaUltima = { texto: '', origen: '', ts: 0 };
+async function lectura(texto, textoUS, origen) {
+  const ahora = Date.now();
+  const eco = origen !== lecturaUltima.origen && ahora - lecturaUltima.ts < LECTURA_ECO_MS &&
+    String(texto).toUpperCase() === lecturaUltima.texto.toUpperCase();
+  lecturaUltima = { texto: String(texto), origen, ts: ahora };
+  if (eco) return;
+  if (pantalla === 'login' || pantalla === '') return;
+  if (dlgResolver || ctlQuienResolver) return;
+  if (pantalla === 'control') { if (pedidoActual && !$('fin').classList.contains('on')) controlLectura(texto); return; }
+  if (pantalla === 'buscar') { lecturaArticulo(texto); return; }
+  lecturaPedido(texto, textoUS);
+}
+
+// Id de pedido a partir del QR: el id pelado o un link con ?id= o con el id al final.
+function idPedidoDeLectura(texto) {
+  let id = String(texto || '').trim();
+  if (id.includes('id=')) {
+    const m = id.match(/id=([^&#]+)/);
+    if (m) { try { id = decodeURIComponent(m[1]); } catch (_) { id = m[1]; } }
+  } else if (id.includes('/')) {
+    id = id.split('/').filter(Boolean).pop() || '';
+  }
+  id = id.trim();
+  return id && !/[.#$\[\]\/]/.test(id) ? id : '';
+}
+function idsCandidatos(texto, textoUS) {
+  return [...new Set([texto, textoUS, String(texto || '').replace(/'/g, '-').replace(/\?/g, '_')].map(idPedidoDeLectura).filter(Boolean))];
+}
+
+// Lectores configurados en MAYUSCULAS: los ids de Firebase distinguen
+// mayusculas, pero sus 8 primeros caracteres son la fecha en base 64, asi que
+// se prueban solo las variantes con una fecha posible.
+const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+function pushIdTs(p) { let ts = 0; for (const c of p) { const i = PUSH_CHARS.indexOf(c); if (i < 0) return NaN; ts = ts * 64 + i; } return ts; }
+function prefijosPosibles(id) {
+  if (id.length !== 20) return [];
+  let combos = [''];
+  for (const c of id.slice(0, 8)) {
+    const op = /[a-z]/i.test(c) ? [c.toUpperCase(), c.toLowerCase()] : [c];
+    combos = combos.flatMap(p => op.map(o => p + o));
+  }
+  const ahora = Date.now();
+  return combos.filter(p => { const ts = pushIdTs(p); return ts >= ahora - 6 * 365 * 86400000 && ts <= ahora + 3600000; });
+}
+async function buscarSinMayusculas(id) {
+  if (!/[a-z]/i.test(id)) return '';
+  const obj = id.toLowerCase();
+  const enLista = pedidosCache.find(p => p.id.toLowerCase() === obj);
+  if (enLista) return enLista.id;
+  const pref = prefijosPosibles(id);
+  if (!pref.length || pref.length > 64) return '';
+  const snaps = await conTimeout(() => Promise.all(pref.map(p => db.ref('pedidos').orderByKey().startAt(p).endAt(p + '').limitToFirst(3).once('value'))));
+  for (const s of snaps) {
+    let hallado = '';
+    s.forEach(ch => { if (ch.key.toLowerCase() === obj) { hallado = ch.key; return true; } });
+    if (hallado) return hallado;
+  }
+  return '';
+}
+
+let lecturaPedidoEnCurso = false;
+async function lecturaPedido(texto, textoUS) {
+  if (lecturaPedidoEnCurso) return;
+  const cand = idsCandidatos(texto, textoUS);
+  let id = '';
+  if (cand.length) {
+    lecturaPedidoEnCurso = true;
+    try {
+      for (const c of cand) {
+        if (pedidosCache.some(p => p.id === c)) { id = c; break; }
+        const s = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
+        if (s.exists()) { id = c; break; }
+      }
+      if (!id) for (const c of cand) { const r = await buscarSinMayusculas(c); if (r) { id = r; break; } }
+    } catch (err) {
+      showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
+      lecturaPedidoEnCurso = false;
+      return;
+    }
+    lecturaPedidoEnCurso = false;
+  }
+  if (id) { vibrar(60); destello(true); abrirControl(id); return; }
+  // No es un pedido: si es un articulo, se abre el buscador con el.
+  if (!sheetsLoaded) await cargarSheets();
+  if (articuloBuscarCandidatos(texto).length) { abrirBuscar(); lecturaArticulo(texto); return; }
+  vibrar([40, 60, 40]); destello(false);
+  const leido = String(texto).length > 24 ? String(texto).slice(0, 23) + '…' : String(texto);
+  showToast('No hay ningún pedido con el código «' + leido + '»');
+}
+
+// =========================================================================
+// BUSCAR ARTICULO -> pedidos que lo contienen -> marcar listo
+// =========================================================================
+const articuloSearch = $('articuloSearch');
+const articuloList = $('articuloList');
+const articuloPedidosList = $('articuloPedidosList');
+const btnArticuloConfirmar = $('btnArticuloConfirmar');
+let articuloActual = null;      // { codigo, nombre, imagen }
+let articuloResultados = [];    // [{ id, nombre, status, cantidad, yaListo, pagado, timestamp, sel }]
+let articuloCandidatos = null;
+
+function articuloMostrarPaso(n) {
+  const p1 = n === 1;
+  $('buscarPaso1Top').hidden = !p1;
+  $('buscarCuerpo1').hidden = !p1;
+  $('articuloCard').hidden = p1;
+  $('articuloPedTitulo').hidden = p1;
+  $('buscarCuerpo2').hidden = p1;
+  $('articuloPie').hidden = true;
+  $('buscarTitulo').textContent = p1 ? 'Buscar artículo' : 'En qué pedidos está';
+  $('buscarSub').textContent = p1 ? 'Escaneá o escribí nombre / código' : 'Tildá los pedidos donde ya lo pusiste';
+}
+
+async function abrirBuscar() {
+  ir('buscar');
+  articuloActual = null; articuloResultados = []; articuloCandidatos = null;
+  articuloMostrarPaso(1);
+  articuloSearch.value = '';
+  if (!sheetsLoaded) articuloList.innerHTML = '<div class="vacio"><div class="spinner"></div>Cargando catálogo…</div>';
+  await cargarSheets();
+  if (!sheetsLoaded) {
+    articuloList.innerHTML = '<div class="vacio"><b>No se pudo cargar el catálogo</b><button class="btn btn-pri" type="button" onclick="abrirBuscar()">Reintentar</button></div>';
+    return;
+  }
+  if (pantalla === 'buscar' && !articuloActual && !articuloCandidatos) articuloRenderLista(articuloSearch.value.trim().toLowerCase());
+}
+
+function articuloFiltrar(f) {
+  if (!f) return [];
+  const partes = f.split(/\s+/).filter(Boolean);
+  return sheetsAllItems.filter(it => {
+    const heno = (it.nombre + ' ' + it.codigo + ' ' + (it.codigoBarras || []).join(' ')).toLowerCase();
+    return partes.every(p => heno.includes(p));
+  });
+}
+function articuloOpcionHtml(it) {
+  const src = it.imagen || it.imagenAlt || '';
+  const alt = it.imagenAlt && it.imagenAlt !== src ? it.imagenAlt : '';
+  return '<button type="button" class="fila" data-codigo="' + escapeHtml(it.codigo) + '">' + imgHtml(src, alt) +
+    '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(it.nombre || it.codigo) + '</div><div class="fila-sub mono">' + escapeHtml(it.codigo) + '</div></div>' + IC.der + '</button>';
+}
+function articuloRenderLista(f) {
+  if (!f) {
+    articuloList.innerHTML = '<div class="vacio">' + IC.scan.replace('<svg ', '<svg style="width:56px;height:56px;color:var(--suave)" ') +
+      '<b>Escaneá el artículo</b>o escribí parte del nombre o del código.</div>';
+    return;
+  }
+  const r = articuloFiltrar(f);
+  articuloList.innerHTML = r.length
+    ? r.slice(0, 60).map(articuloOpcionHtml).join('')
+    : '<div class="vacio"><b>Sin resultados</b>Probá con otra palabra.</div>';
+}
+function articuloRenderCandidatos(codigo, codigos) {
+  articuloCandidatos = { codigo, codigos };
+  articuloMostrarPaso(1);
+  articuloList.innerHTML = '<div class="multi"><div>' + codigos.length + ' artículos con este código. ¿Cuál es?</div><button type="button" data-multi-cancel>Cancelar</button></div>' +
+    codigos.map(c => { const i = sheetsData[c] || {}; return articuloOpcionHtml({ codigo: c, nombre: i.nombre || c, imagen: i.imagen, imagenAlt: i.imagenAlt }); }).join('');
+}
+articuloSearch.addEventListener('input', () => {
+  articuloCandidatos = null;
+  articuloRenderLista(articuloSearch.value.trim().toLowerCase());
+});
+articuloSearch.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const t = articuloSearch.value.trim();
+  if (!t) return;
+  if (articuloBuscarCandidatos(t).length) { articuloResolverLectura(t); return; }
+  const f = articuloFiltrar(t.toLowerCase());
+  if (f.length === 1) articuloSeleccionar(f[0].codigo);
+  else articuloSearch.blur();
+});
+articuloList.addEventListener('click', (e) => {
+  if (e.target.closest('[data-multi-cancel]')) { articuloCandidatos = null; articuloRenderLista(articuloSearch.value.trim().toLowerCase()); return; }
+  const op = e.target.closest('.fila[data-codigo]');
+  if (!op) return;
+  articuloCandidatos = null;
+  articuloSearch.blur();
+  articuloSeleccionar(op.dataset.codigo);
+});
+
+function articuloResolverLectura(texto) {
+  const c = articuloBuscarCandidatos(texto);
+  if (!c.length) return false;
+  vibrar(60);
+  if (c.length === 1) { articuloCandidatos = null; articuloSeleccionar(c[0]); }
+  else articuloRenderCandidatos(texto, c);
+  return true;
+}
+async function lecturaArticulo(texto) {
+  if (!sheetsLoaded) await cargarSheets();
+  if (articuloResolverLectura(texto)) return;
+  // No esta en el catalogo: se deja en el buscador para ver coincidencias parciales.
+  vibrar([40, 60, 40]);
+  articuloActual = null; articuloCandidatos = null;
+  articuloMostrarPaso(1);
+  articuloSearch.value = texto;
+  articuloRenderLista(texto.toLowerCase());
+  showToast('Código no encontrado en el catálogo');
+}
+
+async function articuloSeleccionar(codigo) {
+  const info = sheetsData[codigo] || {};
+  articuloActual = { codigo, nombre: info.nombre || codigo, imagen: info.imagen || info.imagenAlt || '' };
+  const alt = info.imagenAlt && info.imagenAlt !== articuloActual.imagen ? info.imagenAlt : '';
+  articuloMostrarPaso(2);
+  $('articuloCard').innerHTML = imgHtml(articuloActual.imagen, alt, '') +
+    '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(articuloActual.nombre) + '</div><div class="fila-sub mono">' + escapeHtml(codigo) + '</div></div>';
+  $('articuloPedN').textContent = '';
+  articuloPedidosList.innerHTML = '<div class="vacio"><div class="spinner"></div>Buscando pedidos…</div>';
+  await articuloBuscarEnPedidos(codigo);
+}
+function articuloReintentarBusqueda() {
+  if (!articuloActual) return;
+  articuloPedidosList.innerHTML = '<div class="vacio"><div class="spinner"></div>Buscando pedidos…</div>';
+  articuloBuscarEnPedidos(articuloActual.codigo);
+}
+async function articuloBuscarEnPedidos(codigo) {
+  try {
+    const [sA, sC] = await conTimeout(() => Promise.all([
+      db.ref('pedidos').orderByChild('status').equalTo('ABIERTO').once('value'),
+      db.ref('pedidos').orderByChild('status').equalTo('CERRADO').once('value')
+    ]));
+    if (!articuloActual || articuloActual.codigo !== codigo) return;
+    const res = [];
+    const recolectar = (snap) => snap.forEach(ch => {
+      const p = ch.val();
+      const items = p.items ? (Array.isArray(p.items) ? p.items : Object.values(p.items)) : [];
+      const it = items.find(x => x && x.codigo === codigo);
+      if (!it) return;
+      res.push({
+        id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status,
+        cantidad: it.cantidad || 1, yaListo: it.listo === 'y', pagado: estaPagado(p.nota),
+        timestamp: p.timestamp || 0, sel: it.listo !== 'y'
+      });
+    });
+    recolectar(sA); recolectar(sC);
+    res.sort((a, b) => (a.yaListo - b.yaListo) || (b.timestamp - a.timestamp));
+    articuloResultados = res;
+    articuloRenderPedidos();
+  } catch (err) {
+    console.error('Error buscando el articulo en pedidos:', err);
+    articuloPedidosList.innerHTML = '<div class="vacio"><b>' + (err && err.esTimeout ? 'Sin conexión' : 'Error al buscar') + '</b><button class="btn btn-pri" type="button" onclick="articuloReintentarBusqueda()">Reintentar</button></div>';
+  }
+}
+function articuloRenderPedidos() {
+  const pend = articuloResultados.filter(r => !r.yaListo).length;
+  $('articuloPedN').textContent = articuloResultados.length ? pend + ' por marcar' : '';
+  $('articuloPedN').hidden = !pend;
+  if (!articuloResultados.length) {
+    articuloPedidosList.innerHTML = '<div class="vacio"><b>No está en ningún pedido pendiente</b>Escaneá otro artículo.</div>';
+    $('articuloPie').hidden = true;
+    return;
+  }
+  articuloPedidosList.innerHTML = articuloResultados.map((r, i) =>
+    '<div class="fila fila-check' + (r.yaListo ? ' listo' : r.sel ? ' sel' : '') + '" data-i="' + i + '" role="checkbox" aria-checked="' + (r.sel || r.yaListo) + '">' +
+      '<span class="caja">' + IC.check + '</span>' +
+      '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(r.nombre) + '</div>' +
+      '<div class="fila-sub">' + (r.yaListo ? '<b style="color:var(--ok)">Ya listo</b>' : (r.status === 'CERRADO' ? 'Cerrado' : 'Abierto')) +
+        (r.pagado ? ' · Pagado' : '') + ' · ' + fechaCorta(r.timestamp) + '</div></div>' +
+      '<span class="cant"><small>×</small>' + r.cantidad + '</span>' +
+    '</div>').join('');
+  $('articuloPie').hidden = false;
+  articuloActualizarConfirmar();
+}
+articuloPedidosList.addEventListener('click', (e) => {
+  const row = e.target.closest('.fila-check');
+  if (!row || row.classList.contains('listo')) return;
+  const r = articuloResultados[parseInt(row.dataset.i, 10)];
+  if (!r) return;
+  r.sel = !r.sel;
+  row.classList.toggle('sel', r.sel);
+  row.setAttribute('aria-checked', r.sel);
+  articuloActualizarConfirmar();
+});
+$('btnArticuloTodos').addEventListener('click', () => {
+  const p = articuloResultados.filter(r => !r.yaListo);
+  if (!p.length) return;
+  const todos = p.some(r => !r.sel);
+  p.forEach(r => { r.sel = todos; });
+  articuloRenderPedidos();
+});
+function articuloActualizarConfirmar() {
+  const n = articuloResultados.filter(r => r.sel && !r.yaListo).length;
+  btnArticuloConfirmar.disabled = n === 0;
+  btnArticuloConfirmar.textContent = n ? 'Marcar listo (' + n + ')' : 'Marcar listo';
+  const p = articuloResultados.filter(r => !r.yaListo);
+  $('btnArticuloTodos').textContent = p.length && p.every(r => r.sel) ? 'Ninguno' : 'Todos';
+  $('btnArticuloTodos').disabled = !p.length;
+}
+function articuloVolverAPaso1() {
+  articuloActual = null; articuloResultados = []; articuloCandidatos = null;
+  articuloMostrarPaso(1);
+  articuloSearch.value = '';
+  articuloRenderLista('');
+}
+// Marca listo='y' solo en el item de cada pedido elegido (update granular).
+btnArticuloConfirmar.addEventListener('click', async () => {
+  const sel = articuloResultados.filter(r => r.sel && !r.yaListo);
+  if (!sel.length || !articuloActual) return;
+  const codigo = articuloActual.codigo;
+  btnArticuloConfirmar.disabled = true;
+  btnArticuloConfirmar.textContent = 'Marcando…';
+  const marcarUno = async (r) => {
+    const snap = await conTimeout(() => db.ref('pedidos/' + r.id).once('value'));
+    const p = snap.val();
+    if (!p || (p.status !== 'ABIERTO' && p.status !== 'CERRADO')) throw new Error('Pedido ' + r.id + ' ya no está pendiente');
+    let key = null, ya = false;
+    snap.child('items').forEach(ch => { const it = ch.val(); if (it && it.codigo === codigo) { key = ch.key; ya = it.listo === 'y'; return true; } });
+    if (key === null) throw new Error('El artículo ya no está en el pedido ' + r.id);
+    const up = {};
+    if (!ya) up['pedidos/' + r.id + '/items/' + key + '/listo'] = 'y';
+    up['pedidos/' + r.id + '/lastUpdated'] = Date.now();
+    if (p.status === 'ABIERTO' && p.enPreparacion !== 'si') up['pedidos/' + r.id + '/enPreparacion'] = 'si';
+    await db.ref().update(up);
+  };
+  const rs = await Promise.allSettled(sel.map(marcarUno));
+  const ok = rs.filter(x => x.status === 'fulfilled').length;
+  const fail = rs.length - ok;
+  if (fail) console.error('No marcados:', rs.filter(x => x.status === 'rejected').map(x => x.reason));
+  if (ok) { vibrar([35, 40, 60]); destello(true); }
+  showToast(ok ? '✓ Marcado en ' + ok + ' pedido' + (ok === 1 ? '' : 's') + (fail ? ' · ' + fail + ' no se pudo' : '') : 'No se pudo marcar ningún pedido');
+  articuloVolverAPaso1();
+});
+
+// =========================================================================
+// LISTA DE PEDIDOS (ABIERTO / CERRADO) en vivo
+// =========================================================================
+let pedidosCache = [];
+let ppVivo = null;
+let ppFiltro = 'pend';
+let ppPintarTimer = null;
+
+function ppFila(id, p) {
+  const e = controlEstado(p);
+  return {
+    id, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', telefono: (p.cliente && p.cliente.telefono) || '',
+    status: p.status, timestamp: p.timestamp || 0, items: e.lineas.length, totalU: e.totalU, contadoU: e.contadoU,
+    controlado: e.finalValido, conDif: !!(e.final && e.final.conDiferencias), iniciado: e.iniciado, desact: !!e.final && !e.finalValido
+  };
+}
+function ppSuscribir() {
+  if (ppVivo) return;
+  const vivo = { snaps: {}, subs: [], plazo: null };
+  ppVivo = vivo;
+  if (!pedidosCache.length) $('pedidosList').innerHTML = '<div class="vacio"><div class="spinner"></div>Cargando pedidos…</div>';
+  else ppPintar();
+  ['ABIERTO', 'CERRADO'].forEach(st => {
+    const q = db.ref('pedidos').orderByChild('status').equalTo(st);
+    const cb = q.on('value', snap => {
+      if (ppVivo !== vivo) return;
+      vivo.snaps[st] = snap;
+      if (!vivo.snaps.ABIERTO || !vivo.snaps.CERRADO) return;
+      clearTimeout(vivo.plazo);
+      const l = [];
+      ['ABIERTO', 'CERRADO'].forEach(s => vivo.snaps[s].forEach(ch => { const p = ch.val(); if (p) l.push(ppFila(ch.key, p)); }));
+      pedidosCache = l;
+      clearTimeout(ppPintarTimer);
+      ppPintarTimer = setTimeout(ppPintar, 90);
+    }, err => {
+      if (ppVivo !== vivo) return;
+      console.error('Error escuchando pedidos:', err);
+      ppDesuscribir();
+      ppError(err);
+    });
+    vivo.subs.push([q, cb]);
+  });
+  vivo.plazo = setTimeout(() => {
+    if (ppVivo !== vivo || (vivo.snaps.ABIERTO && vivo.snaps.CERRADO)) return;
+    reconectarRTDB();
+    if (!pedidosCache.length) ppError({ esTimeout: true });
+  }, RTDB_TIMEOUT_MS);
+}
+function ppDesuscribir() {
+  clearTimeout(ppPintarTimer);
+  if (!ppVivo) return;
+  clearTimeout(ppVivo.plazo);
+  ppVivo.subs.forEach(([q, cb]) => q.off('value', cb));
+  ppVivo = null;
+}
+function ppError(err) {
+  $('pedidosList').innerHTML = '<div class="vacio"><b>' + (err && err.esTimeout ? 'Sin conexión con el servidor' : 'Error al cargar') + '</b><button class="btn btn-pri" type="button" onclick="ppReintentar()">Reintentar</button></div>';
+}
+function ppReintentar() { ppDesuscribir(); ppSuscribir(); }
+
+function ppPintar() {
+  if (pantalla !== 'pedidos') return;
+  const f = $('pedidosSearch').value.trim().toLowerCase();
+  const nPend = pedidosCache.filter(p => !p.controlado).length;
+  $('nPend').textContent = nPend;
+  $('nOk').textContent = pedidosCache.length - nPend;
+  $('pedidosSub').textContent = pedidosCache.length + ' pedido' + (pedidosCache.length === 1 ? '' : 's') + ' pendiente' + (pedidosCache.length === 1 ? '' : 's') + ' de despacho';
+  let l = pedidosCache.filter(p => ppFiltro === 'ok' ? p.controlado : !p.controlado);
+  if (f) l = pedidosCache.filter(p => (p.nombre + ' ' + p.id + ' ' + p.telefono).toLowerCase().includes(f));
+  // Primero los que ya estan armados (CERRADO) y, dentro, los mas nuevos.
+  l.sort((a, b) => ((b.status === 'CERRADO') - (a.status === 'CERRADO')) || (b.timestamp - a.timestamp));
+  if (!l.length) {
+    $('pedidosList').innerHTML = '<div class="vacio"><b>' + (f ? 'Sin resultados' : ppFiltro === 'ok' ? 'Todavía no hay pedidos controlados' : 'No hay pedidos por controlar') + '</b>' + (f ? 'Probá con otro nombre o número.' : '') + '</div>';
+    return;
+  }
+  $('pedidosList').innerHTML = l.map(p => {
+    let chip;
+    if (p.controlado) chip = '<span class="chip ' + (p.conDif ? 'chip-aviso' : 'chip-ok') + '">' + (p.conDif ? IC.x : IC.ok) + (p.conDif ? 'Con dif.' : 'Listo') + '</span>';
+    else if (p.desact) chip = '<span class="chip chip-aviso">' + IC.x + 'Revisar</span>';
+    else if (p.iniciado) chip = '<span class="chip chip-amarillo chip-num">' + p.contadoU + '/' + p.totalU + '</span>';
+    else chip = '<span class="chip chip-neutro chip-num">' + p.totalU + ' u.</span>';
+    return '<button type="button" class="fila fila-ped ' + (p.controlado ? 'st-ok' : p.status === 'CERRADO' ? 'st-cerrado' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+      '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(p.nombre) + '</div>' +
+      '<div class="fila-sub">' + (p.status === 'CERRADO' ? 'Armado' : 'Abierto') + ' · ' + p.items + ' art. · ' + fechaCorta(p.timestamp) + ' · <span class="mono">…' + escapeHtml(p.id.slice(-5)) + '</span></div></div>' +
+      chip + '</button>';
+  }).join('');
+}
+$('pedidosSearch').addEventListener('input', ppPintar);
+$('pedidosSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('pedidosSearch').blur(); } });
+document.querySelectorAll('[data-filtro]').forEach(b => b.addEventListener('click', () => {
+  ppFiltro = b.dataset.filtro;
+  document.querySelectorAll('[data-filtro]').forEach(x => x.classList.toggle('on', x === b));
+  $('pedidosSearch').value = '';
+  ppPintar();
+}));
+$('pedidosList').addEventListener('click', e => {
+  const f = e.target.closest('.fila-ped');
+  if (f) abrirControl(f.dataset.id);
+});
+
+// =========================================================================
+// MODO CONTROL
+// =========================================================================
+// Se guarda en pedidos/<id>/control (igual que pedidosv2):
+//   conteo/<clave>: n · manual/<clave>: true · extras/<clave>: { n, texto, codigo }
+//   final: { por, controlador, ts, firma, conDiferencias }
+// El estado de cada linea se deriva de conteo contra items; `firma` congela
+// los items al finalizar.
+let pedidoActual = null;
+let pedidoId = null;
+let pedidoListener = null;
+let ctlDeshacerPila = [];
+let ctlUltimo = null;
+let ctlVerOk = false;
+let ctlPulsoClave = '';
+let ctlFinTimer = null;
+let ctlAutoFinTimer = null;
+let ctlAudio = null;
+let ctlOrigen = 'pedidos';
+const CTL_RING = 138.2;
+const CTL_AUTOFIN_MS = 650;
+const ctlList = $('ctlList');
+const ctlHero = $('ctlHero');
+
+function controlClave(v) {
+  const s = String(v == null ? '' : v).trim();
+  return s ? s.replace(/[.#$\[\]\/%]/g, ch => '%' + ch.charCodeAt(0).toString(16).toUpperCase()) : '_';
+}
+function controlItems(p) {
+  if (!p || !p.items) return [];
+  return (Array.isArray(p.items) ? p.items : Object.values(p.items)).filter(it => it && it.codigo);
+}
+function controlHuella(c) {
+  const ord = (o) => (o && typeof o === 'object') ? '{' + Object.keys(o).sort().map(k => k + '=' + ord(o[k])).join(',') + '}' : String(o == null ? '' : o);
+  c = c || {};
+  return ord({ conteo: c.conteo, manual: c.manual, extras: c.extras, final: c.final });
+}
+function controlEstado(p) {
+  const ctl = (p && p.control) || {};
+  const conteo = ctl.conteo || {};
+  const manual = ctl.manual || {};
+  const porCodigo = new Map();
+  controlItems(p).forEach(it => {
+    const cant = parseInt(it.cantidad) || 1;
+    const l = porCodigo.get(it.codigo);
+    if (l) l.cantidad += cant;
+    else porCodigo.set(it.codigo, { codigo: it.codigo, nombre: it.nombre || it.codigo, cantidad: cant });
+  });
+  const lineas = [...porCodigo.values()].map(l => {
+    const clave = controlClave(l.codigo);
+    const info = sheetsData[l.codigo] || {};
+    const imagen = info.imagen || info.imagenAlt || '';
+    return Object.assign(l, {
+      clave, contado: Math.max(0, parseInt(conteo[clave]) || 0), manual: manual[clave] === true,
+      sinCodigo: sheetsLoaded ? !(info.codigoBarras && info.codigoBarras.length) : false,
+      imagen, imagenAlt: info.imagenAlt && info.imagenAlt !== imagen ? info.imagenAlt : ''
+    });
+  });
+  const extras = Object.keys(ctl.extras || {}).map(k => Object.assign({ clave: k }, ctl.extras[k])).filter(x => (parseInt(x.n) || 0) > 0);
+  const faltantes = lineas.filter(l => l.contado < l.cantidad);
+  const sobrantes = lineas.filter(l => l.contado > l.cantidad);
+  const firma = lineas.map(l => l.codigo + ':' + l.cantidad).sort().join('|');
+  const final = ctl.final || null;
+  return {
+    lineas, extras, faltantes, sobrantes, firma, final,
+    totalU: lineas.reduce((s, l) => s + l.cantidad, 0),
+    contadoU: lineas.reduce((s, l) => s + Math.min(l.contado, l.cantidad), 0),
+    lineasOk: lineas.filter(l => l.contado === l.cantidad).length,
+    completo: lineas.length > 0 && !faltantes.length && !sobrantes.length && !extras.length,
+    iniciado: lineas.some(l => l.contado > 0) || extras.length > 0,
+    finalValido: !!(final && final.firma === firma)
+  };
+}
+
+// --- abrir / salir ---
+async function abrirControl(id) {
+  ctlOrigen = pantalla === 'inicio' ? 'inicio' : 'pedidos';
+  salirControl(true);
+  ir('control');
+  $('ctlCargando').hidden = false;
+  $('ctlTitulo').textContent = 'Pedido';
+  $('ctlSub').textContent = '';
+  try {
+    const [snap] = await Promise.all([conTimeout(() => db.ref('pedidos/' + id).once('value')), cargarSheets()]);
+    if (pantalla !== 'control') return;
+    const p = snap.val();
+    if (!p) { showToast('Pedido no encontrado'); ir(ctlOrigen); return; }
+    if (p.status === 'CANCELADO') { showToast('El pedido está cancelado'); ir(ctlOrigen); return; }
+    if (!controlItems(p).length) { showToast('El pedido no tiene artículos para controlar'); ir(ctlOrigen); return; }
+    pedidoActual = p; pedidoActual.id = id; pedidoId = id;
+    ctlUltimo = null; ctlDeshacerPila = []; ctlVerOk = false;
+    $('ctlCargando').hidden = true;
+    controlRender();
+    activarListener(id);
+  } catch (err) {
+    console.error('Error abriendo el pedido:', err);
+    showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
+    ir(ctlOrigen);
+  }
+}
+// Cambios hechos desde otro equipo (otra persona controlando o editando).
+function activarListener(id) {
+  const ref = db.ref('pedidos/' + id);
+  const cb = ref.on('value', snap => {
+    const n = snap.val();
+    if (!n || !pedidoActual || pedidoId !== id) return;
+    const cambio = controlHuella(n.control) !== controlHuella(pedidoActual.control) ||
+      JSON.stringify(n.items) !== JSON.stringify(pedidoActual.items) || n.status !== pedidoActual.status;
+    if (!cambio) return;
+    pedidoActual = n; pedidoActual.id = id;
+    if (n.status === 'CANCELADO') { showToast('El pedido fue cancelado'); salirControl(); return; }
+    controlRender();
+  });
+  pedidoListener = { ref, cb };
+}
+function salirControl(silencioso) {
+  clearTimeout(ctlFinTimer); clearTimeout(ctlAutoFinTimer);
+  controlQuienResolver(null);
+  $('fin').classList.remove('on');
+  if (pedidoListener) { pedidoListener.ref.off('value', pedidoListener.cb); pedidoListener = null; }
+  pedidoActual = null; pedidoId = null;
+  if (!silencioso && pantalla === 'control') ir(ctlOrigen);
+}
+
+// --- escritura (primero en memoria, despues update granular) ---
+function controlLocal() { if (!pedidoActual.control) pedidoActual.control = {}; return pedidoActual.control; }
+function controlGuardar(up) {
+  if (!pedidoId) return;
+  const ctl = controlLocal();
+  const TS = firebase.database.ServerValue.TIMESTAMP;
+  if (ctl.final) { delete ctl.final; up.final = null; }
+  if (!ctl.inicio) { ctl.inicio = Date.now(); up.inicio = TS; }
+  up.ultimo = TS;
+  db.ref('pedidos/' + pedidoId + '/control').update(up).catch(err => { console.error('Guardar control:', err); showToast('No se pudo guardar el control'); });
+}
+function controlSumar(clave, delta) {
+  const ctl = controlLocal();
+  ctl.conteo = ctl.conteo || {};
+  const antes = parseInt(ctl.conteo[clave]) || 0;
+  const despues = Math.max(0, antes + delta);
+  if (despues === antes) return;
+  ctl.conteo[clave] = despues;
+  controlGuardar({ ['conteo/' + clave]: firebase.database.ServerValue.increment(despues - antes) });
+}
+function controlFijar(clave, conteo, manual) {
+  const ctl = controlLocal();
+  ctl.conteo = ctl.conteo || {}; ctl.manual = ctl.manual || {};
+  ctl.conteo[clave] = conteo;
+  if (manual) ctl.manual[clave] = true; else delete ctl.manual[clave];
+  controlGuardar({ ['conteo/' + clave]: conteo, ['manual/' + clave]: manual ? true : null });
+}
+function controlSumarExtra(clave, delta, texto, codigo) {
+  const ctl = controlLocal();
+  ctl.extras = ctl.extras || {};
+  const prev = ctl.extras[clave];
+  const n = Math.max(0, (prev ? parseInt(prev.n) || 0 : 0) + delta);
+  const up = {};
+  if (n === 0) { delete ctl.extras[clave]; up['extras/' + clave] = null; }
+  else { ctl.extras[clave] = { n, texto: texto || (prev && prev.texto) || '', codigo: codigo || (prev && prev.codigo) || '' }; up['extras/' + clave] = ctl.extras[clave]; }
+  controlGuardar(up);
+}
+
+// --- lecturas ---
+async function controlLectura(texto) {
+  texto = String(texto || '').trim();
+  if (!texto || !pedidoActual || ctlQuienResolver) return;
+  if (!sheetsLoaded) await cargarSheets();
+  clearTimeout(ctlAutoFinTimer);
+  const e = controlEstado(pedidoActual);
+  const cand = articuloBuscarCandidatos(texto);
+  let del = e.lineas.filter(l => cand.includes(l.codigo));
+  if (!del.length) { const k = articuloNormBarcode(texto); del = e.lineas.filter(l => articuloNormBarcode(l.codigo) === k); }
+  if (del.length === 1) { controlContar(del[0].codigo); return; }
+  if (del.length > 1) { controlFeedback({ estado: 'elegir', texto, opciones: del.map(l => l.codigo) }); return; }
+  // El QR de otro pedido: se ofrece cambiar.
+  const idOtro = idPedidoDeLectura(texto);
+  if (idOtro && idOtro.length === 20 && idOtro !== pedidoId && !cand.length) {
+    const ir2 = await confirmarAccion({ titulo: '¿Abrir otro pedido?', texto: 'Leíste el QR de otro pedido. El avance de este queda guardado.', confirmar: 'Abrir el otro', volver: 'Seguir con este' });
+    if (ir2) abrirControl(idOtro);
+    return;
+  }
+  const codigo = cand[0] || '';
+  const clave = controlClave(articuloNormBarcode(texto));
+  controlSumarExtra(clave, 1, texto, codigo);
+  ctlDeshacerPila.push({ tipo: 'extra', clave });
+  ctlPulsoClave = 'x:' + clave;
+  controlFeedback({ estado: 'error', texto, codigo });
+}
+function controlLinea(codigo) { return controlEstado(pedidoActual).lineas.find(l => l.codigo === codigo) || null; }
+function controlContar(codigo) {
+  const l = controlLinea(codigo);
+  if (!l) return;
+  controlSumar(l.clave, 1);
+  ctlDeshacerPila.push({ tipo: 'conteo', clave: l.clave });
+  const n = l.contado + 1;
+  ctlPulsoClave = l.clave;
+  controlFeedback({ estado: n > l.cantidad ? 'sobra' : n === l.cantidad ? 'completo' : 'ok', codigo, n, cantidad: l.cantidad });
+}
+function controlCompletar(codigo) {
+  const l = controlLinea(codigo);
+  if (!l || l.contado >= l.cantidad) return;
+  ctlDeshacerPila.push({ tipo: 'fijar', clave: l.clave, conteo: l.contado, manual: l.manual });
+  controlFijar(l.clave, l.cantidad, true);
+  ctlPulsoClave = l.clave;
+  controlFeedback({ estado: 'completo', codigo, n: l.cantidad, cantidad: l.cantidad, manual: true });
+}
+function controlMas(codigo) {
+  const l = controlLinea(codigo);
+  if (!l || l.contado >= l.cantidad) return;
+  ctlDeshacerPila.push({ tipo: 'fijar', clave: l.clave, conteo: l.contado, manual: l.manual });
+  const n = l.contado + 1;
+  controlFijar(l.clave, n, true);
+  ctlPulsoClave = l.clave;
+  controlFeedback({ estado: n === l.cantidad ? 'completo' : 'ok', codigo, n, cantidad: l.cantidad, manual: true });
+}
+function controlMenos(codigo) {
+  const l = controlLinea(codigo);
+  if (!l || l.contado <= 0) return;
+  ctlDeshacerPila.push({ tipo: 'fijar', clave: l.clave, conteo: l.contado, manual: l.manual });
+  const n = l.contado - 1;
+  controlFijar(l.clave, n, l.manual && n >= l.cantidad);
+  ctlUltimo = null;
+  controlRender();
+}
+function controlDeshacer() {
+  const a = ctlDeshacerPila.pop();
+  if (!a || !pedidoActual) return;
+  if (a.tipo === 'conteo') controlSumar(a.clave, -1);
+  else if (a.tipo === 'extra') controlSumarExtra(a.clave, -1);
+  else if (a.tipo === 'fijar') controlFijar(a.clave, a.conteo, a.manual);
+  clearTimeout(ctlAutoFinTimer);
+  ctlPulsoClave = a.tipo === 'extra' ? '' : a.clave;
+  ctlUltimo = { estado: 'deshecho' };
+  controlRender();
+}
+
+// --- sonido, vibracion, tarjeta ---
+function controlBeep(tipo) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!ctlAudio) ctlAudio = new AC();
+    if (ctlAudio.state === 'suspended') ctlAudio.resume();
+    const tonos = {
+      ok: [[1568, 0, .07]], completo: [[1318, 0, .07], [1976, .085, .13]], sobra: [[740, 0, .16]],
+      error: [[196, 0, .14], [165, .17, .24]], fin: [[1046, 0, .09], [1318, .1, .09], [1568, .2, .24]]
+    }[tipo];
+    if (!tonos) return;
+    const t0 = ctlAudio.currentTime + .01;
+    const vol = tipo === 'error' ? .08 : .18;
+    tonos.forEach(([f, d, dur]) => {
+      const o = ctlAudio.createOscillator(), g = ctlAudio.createGain();
+      o.type = tipo === 'error' ? 'square' : 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t0 + d);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + d + .012);
+      g.gain.exponentialRampToValueAtTime(.0001, t0 + d + dur);
+      o.connect(g); g.connect(ctlAudio.destination);
+      o.start(t0 + d); o.stop(t0 + d + dur + .03);
+    });
+  } catch (_) {}
+}
+const CTL_VIBRA = { ok: 35, completo: [35, 40, 60], sobra: 90, elegir: 90, error: [120, 60, 120], fin: [40, 40, 40, 40, 120] };
+function controlFeedback(u) {
+  ctlUltimo = u;
+  controlBeep(u.estado === 'elegir' ? 'sobra' : u.estado);
+  vibrar(CTL_VIBRA[u.estado] || 0);
+  controlRender({ flash: true });
+  const e = controlEstado(pedidoActual);
+  if (e.completo && !e.finalValido) {
+    clearTimeout(ctlAutoFinTimer);
+    ctlAutoFinTimer = setTimeout(() => {
+      if (pantalla !== 'control' || !pedidoActual) return;
+      const a = controlEstado(pedidoActual);
+      if (a.completo && !a.finalValido) controlFinalizar();
+    }, CTL_AUTOFIN_MS);
+  }
+}
+
+function controlHeroHtml(e) {
+  const u = ctlUltimo;
+  const tag = (ic, t) => '<div class="hero-tag">' + ic + escapeHtml(t) + '</div>';
+  if (!u || u.estado === 'deshecho') {
+    if (!u && e.finalValido) {
+      const f = e.final;
+      const cuando = f.ts ? new Date(f.ts).toLocaleString('es-AR', { hour12: false, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      return '<div class="hero-fila"><div class="hero-ic">' + IC.ok + '</div><div class="hero-tx">' +
+        tag('', f.conDiferencias ? 'Controlado con diferencias' : 'Pedido controlado') +
+        '<div class="hero-t">' + escapeHtml([f.controlador || f.por, cuando].filter(Boolean).join(' · ') || 'Control finalizado') + '</div>' +
+        '<div class="hero-s">Una lectura nueva reabre el control.</div></div></div>';
+    }
+    return '<div class="hero-fila"><div class="hero-ic">' + (u ? IC.deshacer : IC.scan) + '</div><div class="hero-tx">' +
+      '<div class="hero-t">' + (u ? 'Lectura deshecha' : 'Escaneá cada unidad') + '</div>' +
+      '<div class="hero-s">' + (u ? 'Seguí escaneando cuando quieras.' : 'Lo que no tiene código se confirma a mano en la lista.') + '</div></div></div>';
+  }
+  if (u.estado === 'elegir') {
+    return '<div class="hero-fila"><div class="hero-ic">' + IC.scan + '</div><div class="hero-tx">' + tag('', 'Código compartido') +
+      '<div class="hero-t">¿Cuál de estos es?</div><div class="hero-s"><code>' + escapeHtml(u.texto) + '</code></div></div></div>' +
+      '<div class="elegir">' + u.opciones.map(c => {
+        const i = sheetsData[c] || {}; const l = controlLinea(c);
+        return '<button type="button" data-elegir="' + escapeHtml(c) + '">' + imgHtml(i.imagen || i.imagenAlt, i.imagenAlt) + '<span>' + escapeHtml((l && l.nombre) || i.nombre || c) + '</span></button>';
+      }).join('') + '</div>';
+  }
+  if (u.estado === 'error') {
+    const i = u.codigo ? (sheetsData[u.codigo] || {}) : {};
+    const src = i.imagen || i.imagenAlt || '';
+    return '<div class="hero-fila">' + (src ? imgHtml(src, i.imagenAlt, 'hero-img') : '<div class="hero-ic">' + IC.x + '</div>') +
+      '<div class="hero-tx">' + tag(IC.x, 'No es de este pedido') +
+      '<div class="hero-t">' + escapeHtml(i.nombre || 'Código desconocido') + '</div>' +
+      '<div class="hero-s"><code>' + escapeHtml(u.texto) + '</code> · Sacalo del casillero</div></div></div>';
+  }
+  const l = controlLinea(u.codigo) || { nombre: u.codigo, imagen: '', imagenAlt: '' };
+  const tx = { ok: u.manual ? 'Sumado a mano' : 'Correcto', completo: u.manual ? 'Confirmado a mano' : 'Completo', sobra: 'Sobra · ya estaba completo' };
+  const ic = u.estado === 'sobra' ? IC.x : u.manual ? IC.mano : IC.ok;
+  return '<div class="hero-fila">' + imgHtml(l.imagen, l.imagenAlt, 'hero-img') +
+    '<div class="hero-tx">' + tag(ic, tx[u.estado] || '') + '<div class="hero-t">' + escapeHtml(l.nombre) + '</div>' +
+    '<div class="hero-s"><code>' + escapeHtml(u.codigo) + '</code></div></div>' +
+    '<div class="hero-n pop">' + u.n + '<small>/' + u.cantidad + '</small></div></div>';
+}
+
+function controlFilaHtml(l) {
+  const ok = l.contado === l.cantidad, sobra = l.contado > l.cantidad;
+  const pct = Math.min(100, Math.round(l.contado / l.cantidad * 100));
+  let tags = '';
+  if (l.sinCodigo) tags += '<span class="tag">Sin código</span>';
+  if (l.manual) tags += '<span class="tag">' + IC.mano + 'a mano</span>';
+  if (sobra) tags += '<span class="tag tag-aviso">Sobra ' + (l.contado - l.cantidad) + '</span>';
+  let acc = '';
+  if (l.contado > 0) acc += '<button type="button" class="menos" data-acc="menos" aria-label="Restar una unidad">−</button>';
+  if (!ok && !sobra) {
+    if (l.sinCodigo) {
+      if (l.cantidad - l.contado > 1) acc += '<button type="button" class="sec2" data-acc="mas">+1</button>';
+      acc += '<button type="button" class="pri" data-acc="completar">' + IC.ok + 'Confirmar</button>';
+    } else {
+      acc += '<button type="button" class="sec2" data-acc="completar">Completar a mano</button>';
+    }
+  }
+  return '<div class="item' + (ok ? ' ok' : '') + (sobra ? ' sobra' : '') + '" data-k="' + escapeHtml(l.clave) + '" data-codigo="' + escapeHtml(l.codigo) + '">' +
+    '<div class="item-top">' + imgHtml(l.imagen, l.imagenAlt) +
+    '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(l.nombre) + '</div>' +
+    '<div class="fila-sub mono">' + escapeHtml(l.codigo) + '</div>' + (tags ? '<div class="tags">' + tags + '</div>' : '') + '</div>' +
+    '<div class="cnt"><div><b>' + l.contado + '</b><small>/' + l.cantidad + '</small></div><i><b style="width:' + pct + '%"></b></i></div></div>' +
+    (acc ? '<div class="acc">' + acc + '</div>' : '') +
+    '</div>';
+}
+function controlExtraHtml(x) {
+  const i = x.codigo ? (sheetsData[x.codigo] || {}) : {};
+  return '<div class="item extra" data-k="x:' + escapeHtml(x.clave) + '" data-extra="' + escapeHtml(x.clave) + '">' +
+    '<div class="item-top">' + imgHtml(i.imagen || i.imagenAlt, i.imagenAlt) +
+    '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(i.nombre || 'Código desconocido') + '</div>' +
+    '<div class="fila-sub mono">' + escapeHtml(x.texto || '') + '</div><div class="tags"><span class="tag tag-mal">No es del pedido</span></div></div>' +
+    '<div class="cnt"><div><b>' + (parseInt(x.n) || 0) + '</b><small> u.</small></div></div></div>' +
+    '<div class="acc"><button type="button" class="pri" data-acc="quitar-extra">' + IC.ok + 'Ya lo saqué</button></div></div>';
+}
+function controlListaHtml(e) {
+  if (!e.lineas.length) return '<div class="vacio">Este pedido no tiene artículos</div>';
+  const sec = (t, n, c) => '<div class="sec' + (c ? ' ' + c : '') + '">' + t + '<span class="n">' + n + '</span></div>';
+  const pend = e.lineas.filter(l => l.contado < l.cantidad && !l.sinCodigo);
+  const aMano = e.lineas.filter(l => l.contado < l.cantidad && l.sinCodigo);
+  const ok = e.lineas.filter(l => l.contado === l.cantidad);
+  let h = '';
+  const rev = e.extras.length + e.sobrantes.length;
+  if (rev) h += sec('Revisar', rev, 'sec-revisar') + e.extras.map(controlExtraHtml).join('') + e.sobrantes.map(controlFilaHtml).join('');
+  if (pend.length) h += sec('Por escanear', pend.length) + pend.map(controlFilaHtml).join('');
+  if (aMano.length) h += sec('Sin código · confirmar a mano', aMano.length) + aMano.map(controlFilaHtml).join('');
+  if (ok.length) {
+    h += '<button type="button" class="sec sec-ok" data-acc="ver-ok" aria-expanded="' + ctlVerOk + '">Controlados<span class="n">' + ok.length + '</span>' + IC.chev + '</button>';
+    if (ctlVerOk) h += ok.map(controlFilaHtml).join('');
+  }
+  return h;
+}
+function controlPintarLista(html) {
+  const reducir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const antes = new Map();
+  if (!reducir) ctlList.querySelectorAll('.item[data-k]').forEach(el => antes.set(el.dataset.k, el.getBoundingClientRect().top));
+  ctlList.innerHTML = html;
+  if (!reducir) ctlList.querySelectorAll('.item[data-k]').forEach(el => {
+    const a = antes.get(el.dataset.k);
+    if (a === undefined) return;
+    const d = a - el.getBoundingClientRect().top;
+    if (Math.abs(d) < 1) return;
+    el.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 360, easing: 'cubic-bezier(.22,1,.36,1)' });
+  });
+  if (ctlPulsoClave) {
+    const f = ctlList.querySelector('.item[data-k="' + CSS.escape(ctlPulsoClave) + '"]');
+    ctlPulsoClave = '';
+    if (f) { f.classList.add('pulso'); f.scrollIntoView({ block: 'nearest', behavior: reducir ? 'auto' : 'smooth' }); }
+  }
+}
+function controlRender(op) {
+  if (pantalla !== 'control' || !pedidoActual) return;
+  const e = controlEstado(pedidoActual);
+  const cli = pedidoActual.cliente || {};
+  $('ctlTitulo').textContent = cli.nombre || ('#' + (pedidoId || ''));
+  $('ctlSub').textContent = e.contadoU + ' de ' + e.totalU + ' u. · ' + e.lineasOk + ' de ' + e.lineas.length + ' artículos';
+  const pct = e.totalU ? e.contadoU / e.totalU : 0;
+  $('ctlRingFill').setAttribute('stroke-dashoffset', (CTL_RING * (1 - pct)).toFixed(1));
+  $('ctlRingTx').textContent = Math.round(pct * 100) + '%';
+  $('ctlRing').classList.toggle('ok', e.completo);
+  ctlHero.dataset.estado = !ctlUltimo ? (e.finalValido ? 'fin' : 'idle') : ctlUltimo.estado === 'deshecho' ? 'idle' : ctlUltimo.estado;
+  $('ctlHeroBody').innerHTML = controlHeroHtml(e);
+  if (op && op.flash) { ctlHero.classList.remove('flash'); void ctlHero.offsetWidth; ctlHero.classList.add('flash'); }
+  $('ctlDeshacer').disabled = ctlDeshacerPila.length === 0;
+  controlPintarLista(controlListaHtml(e));
+  const fin = $('ctlFinalizar');
+  fin.classList.toggle('listo', e.completo || e.finalValido);
+  fin.innerHTML = e.finalValido ? IC.ok + 'Listo' : e.completo ? IC.ok + 'Finalizar' : 'Finalizar';
+  $('ctlReiniciar').disabled = !e.iniciado && !e.final;
+}
+
+function controlNombres(l) {
+  const n = l.slice(0, 2).map(x => x.nombre.length > 28 ? x.nombre.slice(0, 27) + '…' : x.nombre);
+  return n.join(', ') + (l.length > 2 ? ' y ' + (l.length - 2) + ' más' : '');
+}
+async function controlFinalizar() {
+  if (!pedidoActual || !pedidoId) return;
+  clearTimeout(ctlAutoFinTimer);
+  const e = controlEstado(pedidoActual);
+  if (e.finalValido) { salirControl(); return; }
+  let conDiferencias = false;
+  if (!e.completo) {
+    const partes = [];
+    const faltan = e.faltantes.reduce((s, l) => s + l.cantidad - l.contado, 0);
+    const sobran = e.sobrantes.reduce((s, l) => s + l.contado - l.cantidad, 0);
+    const ajenos = e.extras.reduce((s, x) => s + (parseInt(x.n) || 0), 0);
+    if (faltan) partes.push('Faltan ' + faltan + ' u. (' + controlNombres(e.faltantes) + ')');
+    if (sobran) partes.push('Sobran ' + sobran + ' u. (' + controlNombres(e.sobrantes) + ')');
+    if (ajenos) partes.push(ajenos + (ajenos === 1 ? ' lectura que no es' : ' lecturas que no son') + ' del pedido');
+    const seguir = await confirmarAccion({ titulo: '¿Finalizar con diferencias?', texto: partes.join(' · ') + '. Queda registrado como controlado con diferencias.', confirmar: 'Finalizar igual', volver: 'Seguir controlando', tono: 'aviso' });
+    if (!seguir || pantalla !== 'control' || !pedidoActual) return;
+    conDiferencias = true;
+  }
+  const controlador = await controlPedirControlador(e, conDiferencias);
+  if (!controlador || pantalla !== 'control' || !pedidoActual) return;
+  const user = firebase.auth().currentUser;
+  const final = { por: (user && user.email) || '', controlador, ts: Date.now(), firma: e.firma, conDiferencias };
+  controlLocal().final = final;
+  // Controlado = embalado (mismo campo que la caja de Pedidos pendientes).
+  pedidoActual.embalado = true;
+  db.ref('pedidos/' + pedidoId).update({ 'control/final': final, embalado: true, embaladoFecha: final.ts, lastUpdated: final.ts })
+    .catch(err => { console.error('Finalizar control:', err); showToast('No se pudo guardar el control'); });
+  controlBeep('fin');
+  vibrar(CTL_VIBRA.fin);
+  ctlUltimo = null;
+  controlRender();
+  camCerrar();
+  $('fin').classList.toggle('dif', conDiferencias);
+  $('finT').textContent = conDiferencias ? 'Con diferencias' : 'Controlado';
+  $('finS').textContent = 'Por ' + controlador + ' · ' + e.contadoU + ' unidades · ' + e.lineas.length + ' artículos';
+  $('fin').classList.remove('on'); void $('fin').offsetWidth; $('fin').classList.add('on');
+  if (!conDiferencias) ctlFinTimer = setTimeout(() => salirControl(), 2200);
+}
+$('finListo').addEventListener('click', () => salirControl());
+
+// --- quien hizo el control ---
+const CTL_QUIEN_KEY = 'pedidosv2.controlador';
+let ctlQuienResolver = null;
+function controlPedirControlador(e, conDif) {
+  controlQuienResolver(null);
+  $('ctlQuienS').textContent = (conDif ? 'Con diferencias · ' : '') + e.contadoU + ' unidades · ' + e.lineas.length + ' artículos';
+  let ultimo = '';
+  try { ultimo = localStorage.getItem(CTL_QUIEN_KEY) || ''; } catch (_) {}
+  document.querySelectorAll('#ctlQuien [data-quien]').forEach(b => b.classList.toggle('sel', b.dataset.quien === ultimo));
+  $('ctlQuienOtro').hidden = true;
+  $('ctlQuienNombre').value = '';
+  $('ctlQuien').classList.add('on');
+  $('ctlQuien').setAttribute('aria-hidden', 'false');
+  return new Promise(r => { ctlQuienResolver = r; });
+}
+function controlQuienResolver(v) {
+  if (!ctlQuienResolver) return;
+  const r = ctlQuienResolver; ctlQuienResolver = null;
+  $('ctlQuien').classList.remove('on');
+  $('ctlQuien').setAttribute('aria-hidden', 'true');
+  $('ctlQuienNombre').blur();
+  if (v) { try { localStorage.setItem(CTL_QUIEN_KEY, v === 'Gonzalo' || v === 'Alejandro' ? v : 'Otro'); } catch (_) {} }
+  r(v);
+}
+function controlQuienOtroOk() {
+  const n = $('ctlQuienNombre').value.trim();
+  controlQuienResolver(n ? 'Otro: ' + n : 'Otro');
+}
+document.querySelectorAll('#ctlQuien [data-quien]').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.quien !== 'Otro') { controlQuienResolver(b.dataset.quien); return; }
+  document.querySelectorAll('#ctlQuien [data-quien]').forEach(x => x.classList.toggle('sel', x === b));
+  $('ctlQuienOtro').hidden = false;
+  $('ctlQuienNombre').focus();
+}));
+$('ctlQuienOk').addEventListener('click', controlQuienOtroOk);
+$('ctlQuienNombre').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); controlQuienOtroOk(); } });
+$('ctlQuienVolver').addEventListener('click', () => controlQuienResolver(null));
+$('ctlQuien').addEventListener('click', e => { if (e.target === $('ctlQuien')) controlQuienResolver(null); });
+
+async function controlReiniciar() {
+  if (!pedidoActual || !pedidoId) return;
+  const ok = await confirmarAccion({
+    titulo: '¿Reiniciar el control?',
+    texto: 'Se borran todas las lecturas de este pedido y el control empieza de cero.' + (pedidoActual.embalado === true ? ' El pedido deja de figurar como embalado.' : ''),
+    confirmar: 'Sí, reiniciar', volver: 'Volver', tono: 'peligro'
+  });
+  if (!ok || !pedidoActual || !pedidoId) return;
+  delete pedidoActual.control;
+  pedidoActual.embalado = false;
+  const ahora = Date.now();
+  db.ref('pedidos/' + pedidoId).update({ control: null, embalado: false, embaladoFecha: ahora, lastUpdated: ahora })
+    .catch(err => { console.error('Reiniciar control:', err); showToast('No se pudo reiniciar el control'); });
+  ctlUltimo = null; ctlDeshacerPila = [];
+  controlRender();
+}
+
+// --- eventos del control ---
+$('ctlFinalizar').addEventListener('click', () => controlFinalizar());
+$('ctlReiniciar').addEventListener('click', controlReiniciar);
+$('ctlDeshacer').addEventListener('click', controlDeshacer);
+$('ctlHeroBody').addEventListener('click', e => { const b = e.target.closest('[data-elegir]'); if (b) controlContar(b.dataset.elegir); });
+ctlList.addEventListener('click', e => {
+  const b = e.target.closest('[data-acc]');
+  if (!b) return;
+  const acc = b.dataset.acc;
+  if (acc === 'ver-ok') { ctlVerOk = !ctlVerOk; controlRender(); return; }
+  const fila = b.closest('.item');
+  if (!fila) return;
+  if (acc === 'quitar-extra') { controlSumarExtra(fila.dataset.extra, -Infinity); ctlUltimo = null; controlRender(); return; }
+  const c = fila.dataset.codigo;
+  if (acc === 'completar') controlCompletar(c);
+  else if (acc === 'mas') controlMas(c);
+  else if (acc === 'menos') controlMenos(c);
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') volver(); });
+
+// Fuera de la app (navegador) no hay boton atras del equipo: se usa el historial.
+if (!ES_APP) {
+  history.replaceState({ raiz: true }, '');
+  history.pushState({}, '');
+  window.addEventListener('popstate', () => {
+    if (volver()) history.pushState({}, '');
+  });
+}
+</script>
+</body>
+</html>
