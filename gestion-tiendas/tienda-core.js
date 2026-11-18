@@ -95,6 +95,7 @@
         catalogo: {
             mostrarStock: true,
             soloDisponiblesPorDefecto: true,
+            pedidosSinStock: false,   // true: se puede pedir aunque no haya stock (sin tope por disponibilidad)
             mostrarCodigo: true,
             productosPorPagina: 30,
             categoriasOcultas: [],

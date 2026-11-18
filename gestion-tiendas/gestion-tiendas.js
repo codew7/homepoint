@@ -398,7 +398,7 @@
                 <div class="avatar" data-avatar-tienda="${esc(t.id)}">${esc(nombreTienda(t.id).charAt(0).toUpperCase())}</div>
                 <div class="fila-principal">
                     <strong>${esc(nombreTienda(t.id))} ${pausada ? `<span class="pill pausa">${t.estado.pausadaPor === 'tienda' ? 'Pausada por la tienda' : 'Pausada'}</span>` : '<span class="pill ok">Activa</span>'}${t.baja ? ' <span class="pill mal" title="Su responsable pidió eliminarla">Pidió la baja</span>' : ''}</strong>
-                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.costo.modo !== 'interior' ? ` <span class="pill neutro" title="Variable de costos">${esc(T.textoReglaCosto(t.costo))}</span>` : ''}${t.pideHP ? ' <span class="pill neutro" title="Puede solicitarte la mercadería de sus pedidos"><i class="fas fa-truck-ramp-box"></i> Pide a Home Point</span>' : ''}</span>
+                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.pideHP ? ' <span class="pill neutro" title="Puede solicitarte la mercadería de sus pedidos"><i class="fas fa-truck-ramp-box"></i> Pide a Home Point</span>' : ''}</span>
                 </div>
                 <div class="fila-meta">
                     <div class="chips">${chips}</div>
