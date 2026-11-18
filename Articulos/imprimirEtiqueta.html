@@ -183,6 +183,17 @@ input[type=number]{-moz-appearance:textfield}
 .tool-btn:hover{border-color:var(--border-2)}
 .tool-btn:active{background:var(--card-2)}
 .tool-btn.danger:hover{border-color:var(--danger);color:var(--danger-600);background:var(--danger-soft)}
+/* Botones conmutables (filtro de stock / modo pistola) */
+.tool-btn.toggle.on{background:var(--lime-soft);border-color:var(--lime);color:var(--lime-600)}
+.tool-btn .pill-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0;transition:background .16s,box-shadow .16s}
+.tool-btn.toggle.on .pill-dot{background:var(--lime);box-shadow:0 0 0 3px rgba(124,179,66,.22)}
+.tool-btn:disabled{opacity:.45;cursor:not-allowed}
+.gun-hint{width:100%;display:none;align-items:center;gap:8px;font-size:.76rem;font-weight:600;color:var(--lime-600);background:var(--lime-soft);border:1px dashed var(--lime);border-radius:10px;padding:8px 12px}
+.gun-hint.show{display:flex}
+.gun-hint b{font-family:var(--mono)}
+table.art td.stockcol{font-family:var(--mono);font-weight:700;white-space:nowrap;text-align:right;color:var(--text-2)}
+table.art td.stockcol.pos{color:var(--success-600)}
+table.art td.stockcol.zero{color:var(--faint);font-weight:400}
 
 /* ====== TABLE ====== */
 .tabla-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh);-webkit-overflow-scrolling:touch}
@@ -428,6 +439,21 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
       Escanear
     </button>
+    <button class="tool-btn toggle" id="gunBtn" type="button" title="Usar una pistola lectora de códigos de barras (USB o Bluetooth)">
+      <span class="pill-dot"></span>
+      Pistola lectora
+    </button>
+    <button class="tool-btn toggle" id="stockFilterBtn" type="button" title="Mostrar solo artículos con stock de 1 o más">
+      <span class="pill-dot"></span>
+      Solo con stock
+    </button>
+    <button class="tool-btn" id="selFilteredBtn" type="button" title="Selecciona todos los artículos que se ven con el filtro actual (todas las páginas)">
+      Seleccionar todos (<span id="selFilteredNum">0</span>)
+    </button>
+    <div class="gun-hint" id="gunHint">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+      <span>Pistola activa: escaneá los artículos y se van agregando a la selección. <span id="gunLast"></span></span>
+    </div>
   </div>
 
   <!-- ===== TABLE ===== -->
@@ -444,6 +470,7 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
           <th>Código</th>
           <th>Foto</th>
           <th>Nombre</th>
+          <th style="text-align:right">Stock</th>
           <th style="text-align:right">Precio</th>
         </tr>
       </thead>
@@ -596,6 +623,10 @@ async function loadSheets(){
     const imgRaw = (row[1] || '').trim();
     const precioRaw = (row[6] || '').trim();   // Column G = index 6
     const cbRaw = (row[11] || '').trim();       // Column L = index 11 (barcodes)
+    // Column K = index 10 (stock, misma columna que usa articulos.html). Viene formateado:
+    // se quitan separadores de miles y se acepta coma decimal.
+    const stockRaw = String(row[10] || '').trim().replace(/\./g, '').replace(',', '.');
+    const stock = Number(stockRaw) || 0;
     // La columna B trae hasta 4 URLs separadas por coma. Si la primera no existe (404),
     // se reintenta con la cuarta (variante "C") antes de caer al placeholder.
     const imgs = imgRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -606,7 +637,8 @@ async function loadSheets(){
       codigo: (row[2] || '').trim(),            // Column C
       nombre: (row[3] || '').trim(),            // Column D
       precio: precioRaw,
-      codigoBarras: cbRaw
+      codigoBarras: cbRaw,
+      stock: stock
     };
   }).filter(a => a.codigo && a.nombre);
   // orden por código (descendente / invertido)
@@ -619,12 +651,14 @@ async function loadSheets(){
 const PAGE_SIZE = 50;
 let page = 0;
 let filtered = [];
+let soloConStock = false;   // filtro "Solo con stock" (stock >= 1); se recuerda en localStorage
 
 const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect fill='%23f1f3f9' width='40' height='40'/%3E%3Cpath d='M13 26l4-5 3 4 4-6 5 7z' fill='%23c4cad6'/%3E%3Ccircle cx='15' cy='15' r='2.5' fill='%23c4cad6'/%3E%3C/svg%3E";
 
 function recomputeFiltered(){
   const q = $('tablaSearch').value.trim().toLowerCase();
   filtered = articulos.filter(a => {
+    if(soloConStock && !(a.stock >= 1)) return false;
     if(!q) return true;
     const hay = [a.codigo, a.nombre, a.codigoBarras].map(v => String(v || '').toLowerCase()).join(' ');
     return hay.includes(q);
@@ -681,12 +715,21 @@ function renderPage(){
       <td class="codcol">#${escapeHtml(a.codigo)}</td>
       <td><img class="thumb" src="${foto}" data-alt="${escapeAttr(alt)}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
       <td class="namecol">${escapeHtml(a.nombre)}</td>
+      <td class="stockcol ${a.stock >= 1 ? 'pos' : 'zero'}">${escapeHtml(String(a.stock))}</td>
       <td class="pricecol">$${formatPriceDisplay(a.precio)}</td>`;
     tbody.appendChild(tr);
   });
 
   renderPager(totalPages);
   syncHeadCheck();
+  syncSelFilteredBtn();
+}
+
+// Botón "Seleccionar todos (N)": cuenta los filtrados que todavía no están seleccionados
+function syncSelFilteredBtn(){
+  const pendientes = filtered.filter(a => !selected.has(a.codigo)).length;
+  $('selFilteredNum').textContent = pendientes;
+  $('selFilteredBtn').disabled = pendientes === 0;
 }
 
 function renderPager(totalPages){
@@ -761,6 +804,7 @@ function updateActionBar(){
   $('generateBtn').disabled = n === 0;
   $('posBtn').disabled = n === 0;
   $('actionBar').classList.toggle('show', n > 0);
+  syncSelFilteredBtn();
 }
 
 // ============================================================
@@ -1255,6 +1299,29 @@ $('clearSelBtn').addEventListener('click', () => {
   updateActionBar();
 });
 
+// Filtro "Solo con stock" (stock >= 1)
+$('stockFilterBtn').addEventListener('click', function(){
+  soloConStock = !soloConStock;
+  this.classList.toggle('on', soloConStock);
+  try{ localStorage.setItem('etiquetaSoloConStock', soloConStock ? '1' : '0'); }catch(_){}
+  renderTable();
+  this.blur();
+});
+
+// Seleccionar todos los artículos filtrados (todas las páginas, no solo la visible)
+$('selFilteredBtn').addEventListener('click', function(){
+  const nuevos = filtered.filter(a => !selected.has(a.codigo));
+  if(!nuevos.length) return;
+  nuevos.forEach(a => selected.set(a.codigo, a));
+  const ultimo = nuevos[nuevos.length - 1];
+  lastPreviewCodigo = ultimo.codigo;
+  updatePreview(ultimo);
+  renderPage();
+  updateActionBar();
+  showToast(nuevos.length + ' artículo(s) agregados a la selección', 'ok');
+  this.blur();
+});
+
 // Generar PDF
 $('generateBtn').addEventListener('click', generatePDF);
 
@@ -1456,10 +1523,101 @@ $('scanDoneBtn').addEventListener('click', closeScanner);
 $('torchBtn').addEventListener('click', toggleTorch);
 
 // ============================================================
+//  Pistola lectora de códigos de barras (USB / Bluetooth)
+// ============================================================
+// La pistola se comporta como un teclado: "tipea" el código muy rápido y termina con
+// Enter (algunas con Tab). Con el modo activo se escuchan las teclas en toda la página
+// y una ráfaga rápida terminada en Enter/Tab se toma como escaneo, sin necesidad de
+// hacer clic en ningún campo. Lo tipeado a mano (lento) no se toma como escaneo.
+const GUN_MAX_GAP_MS = 60;    // pausa máxima entre teclas de un mismo escaneo
+const GUN_MIN_LEN = 3;        // largo mínimo de un código válido
+let gunOn = false;
+let gunBuf = '';
+let gunLastKey = 0;
+let gunSearchBefore = null;   // valor del buscador antes de la ráfaga (para restaurarlo)
+
+function setGunMode(on){
+  gunOn = !!on;
+  gunBuf = '';
+  $('gunBtn').classList.toggle('on', gunOn);
+  $('gunHint').classList.toggle('show', gunOn);
+  $('gunLast').textContent = '';
+  try{ localStorage.setItem('etiquetaPistola', gunOn ? '1' : '0'); }catch(_){}
+}
+
+function procesarCodigoPistola(code){
+  const art = findByBarcode(code);
+  if(!art){
+    showToast('Sin coincidencia para el código ' + code, 'err');
+    $('gunLast').textContent = 'Último: ' + code + ' (no encontrado)';
+    buzz(false);
+    return;
+  }
+  if(selected.has(art.codigo)){
+    showToast('Ya estaba seleccionado: ' + art.nombre);
+    $('gunLast').textContent = 'Último: ' + art.nombre + ' (ya estaba)';
+    buzz(true);
+    return;
+  }
+  addToSelection(art);
+  showToast('Agregado: ' + art.nombre + ' · $' + formatPriceDisplay(art.precio), 'ok');
+  $('gunLast').textContent = 'Último: ' + art.nombre;
+  buzz(true);
+}
+
+document.addEventListener('keydown', e => {
+  if(!gunOn) return;
+  if($('scannerOverlay').classList.contains('active')) return;  // la cámara está abierta
+  if(e.ctrlKey || e.altKey || e.metaKey) return;
+  const t = e.target;
+  const enBuscador = t === $('tablaSearch');
+  // Otros campos (medidas de la etiqueta, etc.): no interferir
+  if(!enBuscador && t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+
+  const now = Date.now();
+  if(e.key === 'Enter' || e.key === 'Tab'){
+    const esEscaneo = gunBuf.length >= GUN_MIN_LEN && now - gunLastKey <= GUN_MAX_GAP_MS * 3;
+    if(esEscaneo){
+      e.preventDefault();
+      e.stopPropagation();
+      // Si la ráfaga cayó en el buscador, se deja como estaba antes del escaneo
+      if(enBuscador && gunSearchBefore !== null && $('tablaSearch').value !== gunSearchBefore){
+        $('tablaSearch').value = gunSearchBefore;
+        clearTimeout(searchTimer);
+        renderTable();
+      }
+      procesarCodigoPistola(gunBuf);
+    }
+    gunBuf = '';
+    gunSearchBefore = null;
+    return;
+  }
+  if(e.key.length !== 1) return;   // Shift, flechas, etc.
+  if(now - gunLastKey > GUN_MAX_GAP_MS){
+    // empieza una ráfaga nueva
+    gunBuf = '';
+    gunSearchBefore = enBuscador ? $('tablaSearch').value : null;
+  }
+  gunBuf += e.key;
+  gunLastKey = now;
+}, true);
+
+$('gunBtn').addEventListener('click', function(){
+  setGunMode(!gunOn);
+  if(gunOn) showToast('Pistola activa: escaneá los artículos', 'ok');
+  this.blur();   // que el Enter de la pistola no vuelva a "apretar" este botón
+});
+
+// ============================================================
 //  Init
 // ============================================================
 async function init(){
   loadSettings();
+  try{
+    soloConStock = localStorage.getItem('etiquetaSoloConStock') === '1';
+    $('stockFilterBtn').classList.toggle('on', soloConStock);
+    if(localStorage.getItem('etiquetaPistola') === '1') setGunMode(true);
+  }catch(_){}
   showBlock('Cargando artículos…');
   try{
     await loadSheets();

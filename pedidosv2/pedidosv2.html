@@ -3483,7 +3483,8 @@
     .pp-btn-buscar svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .pp-buscar { padding: 8px 16px; border-bottom: 1px solid var(--line); }
     .pp-buscar[hidden] { display: none; }
-    .pp-buscar input {
+    .pp-buscar input,
+    .pp-buscar select {
       width: 100%;
       height: 36px;
       box-sizing: border-box;
@@ -6503,11 +6504,16 @@
         </div>
         <button type="button" class="pp-btn-rotulos" id="ppBtnRotulos" aria-pressed="false" title="Elegir pedidos e imprimir sus r&oacute;tulos juntos"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Imprimir</span></button>
         <button type="button" class="pp-btn-buscar" id="ppBtnBuscar" aria-pressed="false" aria-label="Buscar por nombre" title="Buscar por nombre"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
+        <button type="button" class="pp-btn-buscar" id="ppBtnFiltroNota" aria-pressed="false" aria-label="Filtrar por nota" title="Filtrar por nota"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg></button>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
       </div>
       <!-- Buscador por nombre: oculto hasta tocar la lupa -->
       <div class="pp-buscar" id="ppBuscar" hidden>
         <input type="search" id="ppBuscarInput" placeholder="Buscar por nombre..." autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <!-- Filtro por nota: chequeo rapido, se borra al cerrar el panel -->
+      <div class="pp-buscar" id="ppFiltroNota" hidden>
+        <select id="ppFiltroNotaSel" aria-label="Nota a mostrar"></select>
       </div>
       <!-- Leyenda del riel: una fila por hito con sus dos estados (lleno y
            rayado), en el mismo orden vertical que los tramos de cada fila -->
@@ -9752,6 +9758,7 @@
       ppNotaCerrar();
       ppRotSalir();
       ppDesuscribir();
+      ppFiltroNotaToggle(false);
     }
 
     document.getElementById('pedidosPanelClose').addEventListener('click', cerrarPanelPedidos);
@@ -10713,8 +10720,43 @@
       if (e.key === 'Escape') { e.stopPropagation(); ppBuscarToggle(false); }
     });
 
+    // Filtro por nota: el embudo muestra un desplegable con las notas que hay
+    // en los pendientes (las de pago unificadas, igual que los grupos). Es un
+    // chequeo rapido: no se recuerda y se borra al ocultarlo o cerrar el panel.
+    let ppFiltroNota = null;   // clave de ppGrupoNota; null = todas
+    const ppFiltroNotaEl = document.getElementById('ppFiltroNota');
+    const ppFiltroNotaSel = document.getElementById('ppFiltroNotaSel');
+    const ppBtnFiltroNota = document.getElementById('ppBtnFiltroNota');
+    function ppFiltroNotaOpciones() {
+      const grupos = new Map();
+      pedidosCache.forEach(p => {
+        const g = ppGrupoNota(p.nota);
+        if (!grupos.has(g.clave)) grupos.set(g.clave, { titulo: g.clave === '' ? 'Sin nota' : g.titulo, n: 0 });
+        grupos.get(g.clave).n++;
+      });
+      if (ppFiltroNota !== null && !grupos.has(ppFiltroNota)) ppFiltroNota = null;
+      const orden = Array.from(grupos.entries())
+        .sort((a, b) => a[1].titulo.localeCompare(b[1].titulo, 'es', { sensitivity: 'base' }));
+      ppFiltroNotaSel.innerHTML = '<option value="*">Todas las notas</option>' +
+        orden.map(([clave, g]) =>
+          '<option value="' + escapeHtml(clave) + '">' + escapeHtml(g.titulo) + ' (' + g.n + ')</option>').join('');
+      ppFiltroNotaSel.value = ppFiltroNota === null ? '*' : ppFiltroNota;
+    }
+    function ppFiltroNotaToggle(abrir) {
+      ppFiltroNotaEl.hidden = !abrir;
+      ppBtnFiltroNota.setAttribute('aria-pressed', String(abrir));
+      if (abrir) { ppFiltroNotaOpciones(); ppFiltroNotaSel.focus(); return; }
+      if (ppFiltroNota !== null) { ppFiltroNota = null; renderPedidosPendientes(); }
+    }
+    ppBtnFiltroNota.addEventListener('click', () => ppFiltroNotaToggle(ppFiltroNotaEl.hidden));
+    ppFiltroNotaSel.addEventListener('change', () => {
+      ppFiltroNota = ppFiltroNotaSel.value === '*' ? null : ppFiltroNotaSel.value;
+      renderPedidosPendientes();
+    });
+
     function renderPedidosPendientes() {
       ppNotaCerrar();
+      if (!ppFiltroNotaEl.hidden) ppFiltroNotaOpciones();
       // Contador sobre el boton de la barra: se llena en cuanto el panel se
       // abre por primera vez y se refresca en cada carga posterior.
       const badge = document.getElementById('pedidosBadge');
@@ -10786,9 +10828,9 @@
       const listos = [];
       const aPreparar = [];
       const porNota = new Map();
-      const visibles = ppBusqueda
-        ? pedidosCache.filter(p => normalizarNota(p.nombre).indexOf(ppBusqueda) !== -1)
-        : pedidosCache;
+      const visibles = pedidosCache.filter(p =>
+        (!ppBusqueda || normalizarNota(p.nombre).indexOf(ppBusqueda) !== -1) &&
+        (ppFiltroNota === null || ppGrupoNota(p.nota).clave === ppFiltroNota));
       visibles.forEach(p => {
         if (ppRotModo && !p.rotuloImpreso) { sinImprimir.push(p); return; }
         if (p.rank === 3) { (ppEsParaDespachar(p) ? listos : aPreparar).push(p); return; }
@@ -10811,15 +10853,35 @@
       // mayusculas ni acentos); a igual nombre, el mas viejo arriba.
       const porNombre = (a, b) =>
         a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }) || (a.timestamp - b.timestamp);
-      const grupoHtml = (titulo, pedidos, claseExtra) =>
+      const grupoHtml = (titulo, pedidos, claseExtra, orden) =>
         '<div class="pp-grupo' + (claseExtra || '') + '">' +
           '<span>' + escapeHtml(titulo) + '</span>' +
           '<span class="pp-grupo-count">' + pedidos.length + '</span>' +
         '</div>' +
-        pedidos.slice().sort(porNombre).map(ppFilaHtml).join('');
+        pedidos.slice().sort(orden || porNombre).map(ppFilaHtml).join('');
+
+      // En "Sin imprimir" bajan al final los que todavia no estan para
+      // rotular: sin nota, "No responde" o "Esperando respuesta". Dentro de
+      // cada mitad se agrupan por nota, en el mismo orden que los grupos de
+      // la lista (Pagado, Pago solicitado, Pedido Confirmado, resto
+      // alfabetico, sin nota al final), y luego alfabetico por titular.
+      const sinImpAbajo = (p) => {
+        const n = normalizarNota(p.nota);
+        return !n || n.indexOf('no responde') !== -1 || n.indexOf('esperando respuesta') !== -1;
+      };
+      const posNota = (g) => g.clave === '' ? Infinity
+        : PP_GRUPOS_PRIMEROS.has(g.clave) ? PP_GRUPOS_PRIMEROS.get(g.clave)
+        : PP_GRUPOS_PRIMEROS.size;
+      const ordenSinImp = (a, b) => {
+        const ga = ppGrupoNota(a.nota), gb = ppGrupoNota(b.nota);
+        return (sinImpAbajo(a) - sinImpAbajo(b)) ||
+          (posNota(ga) - posNota(gb) || 0) ||
+          ga.titulo.localeCompare(gb.titulo, 'es', { sensitivity: 'base' }) ||
+          porNombre(a, b);
+      };
 
       let html = '';
-      if (sinImprimir.length) html += grupoHtml('Sin imprimir', sinImprimir, ' pp-grupo--sinimp');
+      if (sinImprimir.length) html += grupoHtml('Sin imprimir', sinImprimir, ' pp-grupo--sinimp', ordenSinImp);
       // Con "Ocultar listos" queda solo la cabecera del grupo, con su numero,
       // para no perder de vista cuantos hay. En el modo rotulos se muestran
       // siempre: son justamente los que se rotulan.
