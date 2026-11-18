@@ -49,6 +49,8 @@
   --amber-soft:#FDF1D6;
   --red:#E5484D;
   --red-soft:#FCE5E6;
+  --ok:#2F9E44;
+  --ok-soft:#E3F4E6;
   --mine:var(--ink);       /* color de la sucursal destino elegida en Pedir (lo pisa JS) */
   --other:var(--ink-2);
 
@@ -391,8 +393,53 @@ img{display:block}
 .pick-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .back{width:42px;height:42px;border-radius:50%;background:var(--paper);box-shadow:var(--sh);display:grid;place-items:center;flex-shrink:0}
 .back svg{width:20px;height:20px}
-.pick-bar .remito-num{margin-left:auto}
-.pick-route{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);padding:16px}
+.pick-id{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.pick-tools{margin-left:auto;display:flex;gap:8px;flex-shrink:0}
+.tool{width:42px;height:42px;border-radius:50%;background:var(--paper);box-shadow:var(--sh);display:grid;place-items:center;color:var(--ink);transition:transform .1s,opacity .2s}
+.tool svg{width:20px;height:20px}
+.tool:active:not(:disabled){transform:scale(.92)}
+.tool:disabled{opacity:.35;cursor:not-allowed}
+.tool.ink{background:var(--ink);color:#fff}
+.tool[aria-pressed="false"]{color:var(--faint)}
+.pick-route{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--sh);padding:16px;margin-top:4px}
+
+/* Tarjeta de lectura (pistola / cámara): el color dice si la lectura está bien */
+.hs{--tono:var(--muted);--fondo:var(--paper);--aro:transparent;background:var(--fondo);color:var(--ink);border-radius:var(--r-lg);box-shadow:inset 0 0 0 2px var(--aro),var(--sh);padding:12px 14px 12px 12px;transition:background .3s,box-shadow .3s,color .3s}
+.hs[data-estado="ok"]{--tono:var(--ok);--fondo:var(--ok-soft);--aro:color-mix(in srgb,var(--ok) 50%,transparent)}
+.hs[data-estado="completo"],.hs[data-estado="fin"]{--tono:#fff;--fondo:var(--ok);color:#fff}
+.hs[data-estado="sobra"],.hs[data-estado="quitado"],.hs[data-estado="elegir"]{--tono:#8A5A00;--fondo:var(--amber-soft);--aro:var(--amber)}
+.hs[data-estado="ajeno"],.hs[data-estado="desconocido"]{--tono:#fff;--fondo:var(--red);color:#fff}
+.hs.flash{animation:hsFlash .45s var(--ease)}
+.hs.shake{animation:hsShake .42s var(--ease)}
+@keyframes hsFlash{0%{transform:scale(.97)}45%{transform:scale(1.012)}100%{transform:none}}
+@keyframes hsShake{20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
+.hs-main{display:flex;align-items:center;gap:12px;min-height:56px}
+.hs-ic{width:52px;height:52px;flex-shrink:0;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 10%,transparent)}
+.hs-ic svg{width:26px;height:26px}
+.hs .thumb{box-shadow:0 0 0 2px color-mix(in srgb,currentColor 14%,transparent)}
+.hs-tx{flex:1;min-width:0}
+.hs-tag{display:flex;align-items:center;gap:5px;font-family:var(--f-display);font-stretch:112%;font-size:.66rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--tono)}
+.hs-tag svg{width:13px;height:13px}
+.hs-t{margin-top:3px;font-weight:700;font-size:.95rem;line-height:1.22;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hs-s{margin-top:3px;font-size:.76rem;line-height:1.35;opacity:.8}
+.hs-s code{font-family:var(--f-mono);font-size:.72rem}
+.hs-n{flex-shrink:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:2.1rem;font-weight:600;letter-spacing:-.05em;line-height:1}
+.hs-n small{font-size:.95rem;font-weight:500;opacity:.6;letter-spacing:0}
+.hs-n.pop{animation:pop .38s var(--ease)}
+.hs-prog{display:flex;align-items:center;gap:10px;margin-top:11px}
+.hs-prog .progress-bar{background:color-mix(in srgb,currentColor 12%,transparent)}
+.hs-prog .progress-bar i{background:var(--ok)}
+.hs[data-estado="completo"] .hs-prog .progress-bar i,.hs[data-estado="fin"] .hs-prog .progress-bar i,.hs[data-estado="ajeno"] .hs-prog .progress-bar i,.hs[data-estado="desconocido"] .hs-prog .progress-bar i{background:#fff}
+.hs-prog span{font-family:var(--f-mono);font-size:.72rem;font-weight:600;white-space:nowrap;opacity:.85}
+.hs-elegir{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.hs-elegir button{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:var(--paper);box-shadow:var(--sh);text-align:left;font-weight:700;font-size:.84rem}
+.hs-elegir .thumb{width:40px;height:40px;border-radius:9px}
+/* destello de toda la pantalla, visible de lejos */
+.pk-flash{position:fixed;inset:0;z-index:85;pointer-events:none;opacity:0;--c:var(--ok);box-shadow:inset 0 0 0 9px var(--c),inset 0 0 110px color-mix(in srgb,var(--c) 55%,transparent)}
+.pk-flash[data-c="warn"]{--c:var(--amber)}
+.pk-flash[data-c="err"]{--c:var(--red)}
+.pk-flash.on{animation:pkFlash .65s ease-out}
+@keyframes pkFlash{0%{opacity:1}100%{opacity:0}}
 .pick-who{margin-top:12px;font-size:.78rem;color:var(--muted);font-weight:500}
 .pick-who b{color:var(--ink-2);font-weight:700}
 .pick-edit{margin-top:12px}
@@ -413,8 +460,26 @@ img{display:block}
 .progress-bar i{display:block;height:100%;background:var(--ink);border-radius:6px;transition:width .35s var(--ease)}
 .progress span{font-family:var(--f-mono);font-size:.74rem;font-weight:600;color:var(--ink-2);white-space:nowrap}
 .pick-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
-.pk{background:var(--paper);border-radius:var(--r);box-shadow:var(--sh);padding:12px;transition:box-shadow .2s,opacity .2s}
-.pk.ok{box-shadow:inset 4px 0 0 var(--ink),var(--sh)}
+.pk{background:var(--paper);border-radius:var(--r);box-shadow:var(--sh);padding:12px;transition:box-shadow .2s,opacity .2s;scroll-margin-top:var(--pk-top,220px);scroll-margin-bottom:100px}
+.pk.ok{box-shadow:inset 4px 0 0 var(--ok),var(--sh)}
+.pk.pulso{animation:pkPulso 1s var(--ease)}
+@keyframes pkPulso{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 70%,transparent),var(--sh)}35%{box-shadow:0 0 0 6px color-mix(in srgb,var(--ok) 35%,transparent),var(--sh)}}
+.pk-sec{display:flex;align-items:center;justify-content:space-between;margin:12px 2px 0;font-family:var(--f-display);font-stretch:112%;font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.pk-sec b{min-width:24px;height:22px;padding:0 7px;border-radius:999px;background:var(--fog-2);color:var(--ink-2);display:grid;place-items:center;font-family:var(--f-mono);font-size:.72rem;letter-spacing:0}
+.pk-sec.bad{color:#A3262B}
+.pk-sec.bad b{background:var(--red);color:#fff}
+.pk-sec.ok b{background:var(--ok-soft);color:var(--ok)}
+.pk-esc{margin-top:10px;display:flex;align-items:center;gap:10px;font-size:.74rem;font-weight:600;color:var(--ink-2)}
+.pk-esc b{font-family:var(--f-mono)}
+.pk-esc i{flex:1;height:6px;border-radius:6px;background:var(--fog-2);overflow:hidden}
+.pk-esc i em{display:block;height:100%;background:var(--ok);border-radius:6px;transition:width .3s var(--ease)}
+.pk.ajeno{display:flex;align-items:center;gap:12px;background:var(--red-soft);box-shadow:inset 0 0 0 2px var(--red),var(--sh)}
+.pk.ajeno .art-name{color:#7A1C20}
+.pk.ajeno .pk-req{color:#A3262B}
+.pk.ajeno .pk-act{flex-shrink:0;background:var(--paper);color:#A3262B}
+.cta.bad{background:var(--red)}
+.cta.listo{background:var(--ok);animation:ctaListo 1.8s var(--ease) infinite}
+@keyframes ctaListo{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent),var(--sh-lg)}50%{box-shadow:0 0 0 8px transparent,var(--sh-lg)}}
 .pk.cero.ok{box-shadow:inset 4px 0 0 var(--red),var(--sh)}
 .pk-head{display:flex;gap:12px;align-items:flex-start}
 .pk-head .thumb{width:56px;height:56px}
@@ -422,7 +487,7 @@ img{display:block}
 .pk-req b{font-family:var(--f-mono);color:var(--ink);font-size:.84rem}
 .pk-check{width:46px;height:46px;flex-shrink:0;border-radius:14px;border:2px solid var(--line-2);display:grid;place-items:center;color:transparent;transition:all .18s}
 .pk-check svg{width:22px;height:22px}
-.pk.ok .pk-check{background:var(--ink);border-color:var(--ink);color:#fff}
+.pk.ok .pk-check{background:var(--ok);border-color:var(--ok);color:#fff}
 .pk.cero.ok .pk-check{background:var(--red);border-color:var(--red)}
 .pk-ctrl{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap}
 .pk-acts{display:flex;gap:6px}
@@ -493,6 +558,22 @@ img{display:block}
 .scan-last b{font-family:var(--f-mono);color:var(--munro)}
 .scan-last.err b{color:var(--red)}
 .scan-last span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Preparar con cámara: el mismo código de colores que la tarjeta de lectura */
+.scan-last.ok{background:rgba(47,158,68,.28)}
+.scan-last.ok b{color:#8BE29C}
+.scan-last.warn{background:rgba(242,160,7,.24)}
+.scan-last.warn b{color:var(--amber)}
+.scan-last.err{background:rgba(229,72,77,.3)}
+.scan-last .scan-tx{display:flex;flex-direction:column;align-items:flex-start;min-width:0;text-align:left}
+.scan-last .scan-tx small{font-size:.66rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+.scan-last .scan-tx em{font-style:normal;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scan-last .scan-n{font-size:1.25rem;flex-shrink:0}
+#reader.f-ok{animation:readerOk .5s ease-out}
+#reader.f-warn{animation:readerWarn .5s ease-out}
+#reader.f-err{animation:readerErr .5s ease-out}
+@keyframes readerOk{0%{box-shadow:0 0 0 6px #2F9E44}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes readerWarn{0%{box-shadow:0 0 0 6px #F2A007}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes readerErr{0%{box-shadow:0 0 0 6px #E5484D}100%{box-shadow:0 0 0 0 transparent}}
 .scan-count{font-family:var(--f-mono);font-size:.76rem;color:rgba(255,255,255,.55)}
 
 /* ====== BLOQUEO + TOAST ====== */
@@ -732,6 +813,7 @@ img{display:block}
 <div class="screen" id="pickScreen" role="dialog" aria-modal="true" aria-label="Preparar pedido">
   <div class="screen-inner" id="pickInner"></div>
   <div class="dock pick-dock" id="pickDock" hidden><button type="button" class="cta" id="pickCta"></button></div>
+  <div class="pk-flash" id="pkFlash" aria-hidden="true"></div>
 </div>
 
 <!-- Pantalla de éxito -->
@@ -846,7 +928,13 @@ const ICON = {
   alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
   local: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5 5 4.5h14l1.5 5"/><path d="M3.5 9.5a2.8 2.8 0 0 0 5.6 0 2.9 2.9 0 0 0 5.8 0 2.8 2.8 0 0 0 5.6 0"/><path d="M5 12v7.5h14V12"/><path d="M10 19.5v-4.5h4v4.5"/></svg>',
   box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>',
-  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M8 9v6M11 9v6M14 9v6M17 9v6"/></svg>',
+  camara: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  deshacer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  sonido: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+  mudo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 10 5 5M21 10l-5 5"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>'
 };
 document.querySelectorAll('.brand-mark').forEach(el => { el.innerHTML = ICON.logo; });
 
@@ -1862,7 +1950,7 @@ async function sumarAPedido(id){
     if (!res.committed || v.estado !== 'PENDIENTE') throw new Error(`ya empezaron a preparar ${v.numero || 'ese pedido'}. Podés hacer uno nuevo.`);
 
     // El avance de preparación guardado en este teléfono era sobre los items de antes.
-    lsDel(LS_PICK + id);
+    borrarPick(id);
     const unidades = items.reduce((s, c) => s + c.cant, 0);
     const tot = totalesTraspaso(v);
     carrito = {}; $('cartNota').value = ''; guardarCarrito();
@@ -1981,7 +2069,7 @@ async function guardarEdicion(){
     if (!v) throw new Error('el pedido ya no existe.');
     if (!res.committed || v.estado !== 'PENDIENTE') throw new Error('ya empezaron a prepararlo.');
     // El avance de preparación guardado en este teléfono era sobre los items viejos.
-    lsDel(LS_PICK + id);
+    borrarPick(id);
     hideBlock();
     procesoCritico = false;
     salirEdicion();
@@ -2548,7 +2636,7 @@ async function eliminarPedido(id){
     // El TR- vuelve a estar disponible, como si el pedido nunca hubiese existido. Si falla, el
     // pedido ya está borrado y solo queda un número salteado.
     try { await liberarNumero(numero); } catch (e){ console.warn('No se liberó el número', numero, e); }
-    lsDel(LS_PICK + id);
+    borrarPick(id);
     // Sin pick, un eco tardío del listener no vuelve a cerrar la pantalla.
     if (pick && pick.id === id) pick = null;
     toast('Pedido eliminado');
@@ -2608,26 +2696,44 @@ async function liberarNumero(numero){
 //  PREPARAR (picking)
 // ============================================================
 function pickItem(cod){ return pick && pick.items[cod]; }
-function guardarPick(){ if (pick) lsSet(LS_PICK + pick.id, JSON.stringify(pick.items)); }
+// pick.items[k] = { enviar, ok, quitado, esc }: `esc` son las unidades leídas con la pistola o la cámara.
+// Lo leído que no es del pedido queda en pick.ajenos ([{code, n, nombre, codigo, foto}]) hasta que se
+// confirma que se sacó de la caja: mientras haya algo ahí no se puede despachar.
+function guardarPick(){
+  if (!pick) return;
+  lsSet(LS_PICK + pick.id, JSON.stringify(pick.items));
+  if (pick.ajenos.length) lsSet(LS_PICK + pick.id + '_x', JSON.stringify(pick.ajenos));
+  else lsDel(LS_PICK + pick.id + '_x');
+}
+function borrarPick(id){ lsDel(LS_PICK + id); lsDel(LS_PICK + id + '_x'); }
 
 function abrirPick(id){
   const t = traspasos[id];
   if (!t) return;
-  let guardado = null;
+  audioDesbloquear();   // dentro del toque: el navegador deja sonar después
+  let guardado = null, ajenos = [];
   try { guardado = JSON.parse(lsGet(LS_PICK + id) || 'null'); } catch(_){}
+  try { ajenos = JSON.parse(lsGet(LS_PICK + id + '_x') || '[]') || []; } catch(_){}
   const items = {};
   Object.entries(t.items || {}).forEach(([k, i]) => {
     const sol = Number(i.solicitada) || 0;
     const g = guardado && guardado[k];
-    items[k] = g ? { enviar: Math.min(sol, Math.max(0, Number(g.enviar) || 0)), ok: !!g.ok, quitado: !!g.quitado }
-                 : { enviar: sol, ok: false, quitado: false };
+    items[k] = g ? { enviar: Math.min(sol, Math.max(0, Number(g.enviar) || 0)), ok: !!g.ok, quitado: !!g.quitado, esc: Math.min(sol, Math.max(0, Number(g.esc) || 0)) }
+                 : { enviar: sol, ok: false, quitado: false, esc: 0 };
   });
-  pick = { id, items };
+  pick = { id, items, ajenos: Array.isArray(ajenos) ? ajenos : [], deshacer: [], ultimo: null, pulso: '', seq: 0, finAvisado: false };
+  const st = estadoPick(t);
+  pick.finAvisado = st.total > 0 && st.faltan === 0 && !pick.ajenos.length;   // ya estaba listo: no festejar al abrir
   renderPick();
   abrirCapa($('pickScreen'));
   $('pickScreen').scrollTop = 0;
 }
-function alCerrarPick(){ guardarCantidadesYa(); pick = null; $('pickDock').hidden = true; }
+function alCerrarPick(){
+  guardarCantidadesYa();
+  if (scanModo === 'pick' && $('scan').classList.contains('on')) cerrarScanner();
+  pick = null;
+  $('pickDock').hidden = true;
+}
 
 // Si el pedido cambia mientras está abierto (lo despacharon desde otro teléfono, se canceló), se refleja.
 function sincronizarPickAbierto(){
@@ -2636,7 +2742,7 @@ function sincronizarPickAbierto(){
   if (!t || !['PENDIENTE', 'PREPARANDO'].includes(t.estado)){
     if (!procesoCritico){
       toast(!t ? 'El pedido fue eliminado' : t.estado === 'CANCELADO' ? 'El pedido fue cancelado' : 'Este pedido ya fue despachado', 'aviso');
-      lsDel(LS_PICK + pick.id);
+      borrarPick(pick.id);
       cerrarCapa();
     }
     return;
@@ -2648,8 +2754,10 @@ function sincronizarPickAbierto(){
   // Lo editaron antes de que se empezara a preparar: los items cambiaron.
   Object.entries(t.items || {}).forEach(([k, i]) => {
     const sol = Number(i.solicitada) || 0, p = pick.items[k];
-    if (!p) pick.items[k] = { enviar: sol, ok: false, quitado: false };
-    else if (!p.ok && !p.quitado) p.enviar = sol;
+    if (!p){ pick.items[k] = { enviar: sol, ok: false, quitado: false, esc: 0 }; return; }
+    p.esc = Math.min(sol, p.esc || 0);
+    // Sin revisar: se envía lo pedido, salvo que ya se hayan escaneado unidades (eso es lo que hay).
+    if (!p.ok && !p.quitado) p.enviar = p.esc ? p.esc : sol;
     else p.enviar = Math.min(sol, p.enviar);
   });
   Object.keys(pick.items).forEach(k => { if (!t.items || !t.items[k]) delete pick.items[k]; });
@@ -2720,79 +2828,416 @@ function estadoPick(t){
   const unidades = keys.reduce((s, k) => s + (pick.items[k].quitado ? 0 : pick.items[k].enviar), 0);
   const costo = round2(keys.reduce((s, k) => s + (pick.items[k].quitado ? 0 : (costoItem(t.items[k]) || 0) * pick.items[k].enviar), 0));
   const sinCosto = keys.filter(k => costoItem(t.items[k]) == null).length;
-  return { total: keys.length, revisados, unidades, faltan: keys.length - revisados, costo, sinCosto };
+  // Unidades listas (revisadas o escaneadas) sobre las que se van a enviar: es lo que mueve la barra.
+  const vivos = keys.filter(k => !pick.items[k].quitado);
+  const totalU = vivos.reduce((s, k) => s + (pick.items[k].ok ? pick.items[k].enviar : (Number(t.items[k].solicitada) || 0)), 0);
+  const listasU = vivos.reduce((s, k) => s + (pick.items[k].ok ? pick.items[k].enviar : Math.min(pick.items[k].esc || 0, Number(t.items[k].solicitada) || 0)), 0);
+  return { total: keys.length, revisados, unidades, faltan: keys.length - revisados, costo, sinCosto, totalU, listasU };
 }
 
-function renderPick(){
+// ---- Tarjeta de lectura: qué pasó con lo último que se escaneó ----
+function pickHeroHtml(t, st){
+  const u = pick.ultimo;
+  const listo = st.total > 0 && st.faltan === 0 && !pick.ajenos.length;
+  const icono = svg => `<span class="hs-ic">${svg}</span>`;
+  const tag = (txt, svg) => `<div class="hs-tag">${svg || ''}${txt}</div>`;
+  let estado = 'idle', media = '', tx = '', n = '', extra = '';
+  const item = u && u.k ? t.items[u.k] : null;
+  if (!u || u.estado === 'deshecho' || u.estado === 'fin'){
+    if (listo){
+      estado = 'fin'; media = icono(ICON.check);
+      tx = tag('Todo revisado') + `<div class="hs-t">Listo para despachar</div><div class="hs-s">${st.unidades ? `${unid(st.unidades)} hacia ${escapeHtml(suc(t.destino).nombre)}. Tocá el botón de abajo.` : 'No hay unidades para enviar.'}</div>`;
+    } else if (u && u.estado === 'deshecho'){
+      media = icono(ICON.deshacer);
+      tx = tag('Deshecho') + `<div class="hs-t">Se deshizo la última acción</div><div class="hs-s">Seguí escaneando cuando quieras.</div>`;
+    } else {
+      media = icono(ICON.scan);
+      tx = `<div class="hs-t">Escaneá cada unidad</div><div class="hs-s">Con la pistola o con la cámara. Cada lectura cuenta una unidad; lo que no tiene código se confirma con ✓.</div>`;
+    }
+  } else if (u.estado === 'elegir'){
+    estado = 'elegir'; media = icono(ICON.scan);
+    tx = tag('Código compartido', ICON.alert) + `<div class="hs-t">¿Cuál de estos artículos es?</div><div class="hs-s"><code>${escapeHtml(u.code)}</code></div>`;
+    extra = `<div class="hs-elegir">${u.opciones.map(k => { const i = t.items[k]; return `<button type="button" data-elegir="${escapeHtml(k)}">${thumbHtml(i.foto, i.nombre, i.codigo)}<span>${escapeHtml(i.nombre)}</span></button>`; }).join('')}</div>`;
+  } else if (u.estado === 'ajeno' || u.estado === 'desconocido'){
+    estado = u.estado;
+    media = u.foto || u.codigo ? thumbHtml(u.foto, u.nombre, u.codigo) : icono(ICON.x);
+    tx = tag(u.estado === 'ajeno' ? 'No es de este pedido' : 'Código desconocido', ICON.x)
+      + `<div class="hs-t">${escapeHtml(u.nombre || 'Ningún artículo tiene este código')}</div><div class="hs-s"><code>${escapeHtml(u.code)}</code> · No lo pongas en la caja</div>`;
+  } else if (item){
+    estado = u.estado;
+    media = thumbHtml(item.foto, item.nombre, item.codigo);
+    const txt = {
+      ok: [`Correcto · faltan ${u.sol - u.n}`, ICON.check],
+      completo: ['Completo', ICON.check],
+      sobra: ['Ya está completo · sobra', ICON.alert],
+      quitado: ['Lo quitaste del pedido', ICON.alert]
+    }[u.estado] || [''];
+    const sub = u.estado === 'sobra' ? 'Esta unidad no va: dejala afuera de la caja.'
+      : u.estado === 'quitado' ? 'Si va, tocá Deshacer en su fila y volvé a escanear.'
+      : '#' + escapeHtml(item.codigo);
+    tx = tag(txt[0], txt[1]) + `<div class="hs-t">${escapeHtml(item.nombre)}</div><div class="hs-s">${sub}</div>`;
+    if (u.n != null) n = `<div class="hs-n pop">${u.n}<small>/${u.sol}</small></div>`;
+  }
+  const pct = st.totalU ? st.listasU / st.totalU * 100 : (st.total ? st.revisados / st.total * 100 : 0);
+  const prog = `<div class="hs-prog"><div class="progress-bar"><i style="width:${pct}%"></i></div><span>${st.revisados}/${st.total} art. · ${st.listasU}/${st.totalU} u.</span></div>`;
+  return { estado, html: `<div class="hs-main">${media}<div class="hs-tx">${tx}</div>${n}</div>${extra}${prog}` };
+}
+
+function pickFilaHtml(t, k, editable){
+  const i = t.items[k], p = pick.items[k], sol = Number(i.solicitada) || 0;
+  if (p.quitado){
+    return `<div class="pk quitado" data-k="${escapeHtml(k)}"><div class="art-name">${escapeHtml(i.nombre)}</div><button type="button" class="pk-act" data-act="restaurar">Deshacer</button></div>`;
+  }
+  const cero = p.enviar === 0;
+  const dif = p.enviar < sol;
+  const esc = p.esc || 0;
+  const a = articulosPorCodigo.get(String(i.codigo));
+  const sinCod = articulos.length > 0 && !(a && a.barras.length);
+  // Escaneado a medias: se muestra cuánto falta en lugar del aviso de envío parcial.
+  const aMedias = !p.ok && esc > 0;
+  const aviso = aMedias
+    ? `<div class="pk-esc"><span>Escaneadas <b>${esc}</b> de ${sol}</span><i><em style="width:${esc / sol * 100}%"></em></i></div><div class="pk-diff">Faltan ${sol - esc}. Si no hay más, tocá ✓ y se envían ${esc}.</div>`
+    : dif ? `<div class="pk-diff${cero ? ' red' : ''}">${cero ? 'No se envía' : `Se envían ${p.enviar} de ${sol}`}</div>` : '';
+  return `<div class="pk${p.ok ? ' ok' : ''}${cero ? ' cero' : ''}" data-k="${escapeHtml(k)}">
+    <div class="pk-head">
+      ${thumbHtml(i.foto, i.nombre, i.codigo)}
+      <div class="art-info">
+        <div class="art-name">${escapeHtml(i.nombre)}</div>
+        <div class="pk-req">#${escapeHtml(i.codigo)} · Pedido <b>${sol}</b>${sinCod ? ' <span class="tag">Sin código · confirmá con ✓</span>' : ''}</div>
+        <div class="art-costo">${costoLineaHtml(i, p.enviar)}</div>
+      </div>
+      <button type="button" class="pk-check" data-act="ok" aria-pressed="${p.ok}" aria-label="Marcar como revisado">${ICON.check}</button>
+    </div>
+    <div class="pk-ctrl">
+      ${editable ? stepperHtml('pick', k, p.enviar, 1) : stepperHtml('pick', k, p.enviar, 0, sol)}
+      <div class="pk-acts">
+        <button type="button" class="pk-act${cero ? ' on' : ''}" data-act="sinstock" aria-pressed="${cero}">Sin stock</button>
+        <button type="button" class="pk-act" data-act="quitar" aria-label="Quitar del pedido">${ICON.trash}</button>
+      </div>
+    </div>
+    ${aviso}
+  </div>`;
+}
+
+function pickAjenoHtml(x){
+  return `<div class="pk ajeno" data-k="x:${escapeHtml(x.code)}">
+    ${thumbHtml(x.foto, x.nombre || '?', x.codigo || x.code)}
+    <div class="art-info"><div class="art-name">${escapeHtml(x.nombre || 'Código desconocido')}</div><div class="pk-req">${escapeHtml(x.code)} · ${plural(x.n, 'lectura', 'lecturas')} · no va</div></div>
+    <button type="button" class="pk-act" data-ajeno="${escapeHtml(x.code)}">Ya lo saqué</button>
+  </div>`;
+}
+
+// opciones.flash: la tarjeta de lectura hace su animación (cada lectura nueva).
+function renderPick(opciones){
   const t = traspasos[pick.id];
   if (!t) return;
   // Sin paso de "tomar": al abrir el pedido ya se puede preparar.
   const st = estadoPick(t);
+  const editable = pedidoEditable(t);
   const keys = Object.keys(t.items || {}).sort((a, b) => String(t.items[a].nombre).localeCompare(String(t.items[b].nombre), 'es'));
+  // Lo que falta arriba y lo revisado abajo: el operario siempre ve primero lo que le queda.
+  const pend = keys.filter(k => !pick.items[k].ok && !pick.items[k].quitado);
+  const listos = keys.filter(k => pick.items[k].ok || pick.items[k].quitado);
+  const sec = (txt, n, cls) => `<div class="pk-sec${cls ? ' ' + cls : ''}"><span>${txt}</span><b>${n}</b></div>`;
+  let lista = '';
+  if (pick.ajenos.length) lista += sec('Sacar de la caja · no van', pick.ajenos.reduce((s, x) => s + x.n, 0), 'bad') + pick.ajenos.map(pickAjenoHtml).join('');
+  if (pend.length) lista += sec('Por preparar', pend.length) + pend.map(k => pickFilaHtml(t, k, editable)).join('');
+  if (listos.length) lista += sec('Listos', listos.length, 'ok') + listos.map(k => pickFilaHtml(t, k, editable)).join('');
 
-  const lista = keys.map(k => {
-    const i = t.items[k], p = pick.items[k], sol = Number(i.solicitada) || 0;
-    if (p.quitado){
-      return `<div class="pk quitado" data-k="${escapeHtml(k)}"><div class="art-name">${escapeHtml(i.nombre)}</div><button type="button" class="pk-act" data-act="restaurar">Deshacer</button></div>`;
-    }
-    const cero = p.enviar === 0;
-    const dif = p.enviar < sol;
-    return `<div class="pk${p.ok ? ' ok' : ''}${cero ? ' cero' : ''}" data-k="${escapeHtml(k)}">
-      <div class="pk-head">
-        ${thumbHtml(i.foto, i.nombre, i.codigo)}
-        <div class="art-info">
-          <div class="art-name">${escapeHtml(i.nombre)}</div>
-          <div class="pk-req">#${escapeHtml(i.codigo)} · Pedido <b>${sol}</b></div>
-          <div class="art-costo">${costoLineaHtml(i, p.enviar)}</div>
-        </div>
-        <button type="button" class="pk-check" data-act="ok" aria-pressed="${p.ok}" aria-label="Marcar como revisado">${ICON.check}</button>
-      </div>
-      <div class="pk-ctrl">
-        ${pedidoEditable(t) ? stepperHtml('pick', k, p.enviar, 1) : stepperHtml('pick', k, p.enviar, 0, sol)}
-        <div class="pk-acts">
-          <button type="button" class="pk-act${cero ? ' on' : ''}" data-act="sinstock" aria-pressed="${cero}">Sin stock</button>
-          <button type="button" class="pk-act" data-act="quitar" aria-label="Quitar del pedido">${ICON.trash}</button>
-        </div>
-      </div>
-      ${dif ? `<div class="pk-diff${cero ? ' red' : ''}">${cero ? 'No se envía' : `Se envían ${p.enviar} de ${sol}`}</div>` : ''}
-    </div>`;
-  }).join('');
+  const hero = pickHeroHtml(t, st);
+  const flash = opciones && opciones.flash ? (hero.estado === 'ajeno' || hero.estado === 'desconocido' ? ' shake' : ' flash') : '';
+
+  // FLIP: al revisarse, un artículo se desliza a "Listos" en lugar de saltar.
+  const reducir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const antes = new Map();
+  if (!reducir) $('pickInner').querySelectorAll('.pk[data-k]').forEach(el => antes.set(el.dataset.k, el.getBoundingClientRect().top));
 
   $('pickInner').innerHTML = `
-    <div class="pick-top">
+    <div class="pick-top" id="pickTop">
       <div class="pick-bar">
         <button type="button" class="back" data-close aria-label="Volver">${ICON.back}</button>
-        <span class="chip ${t.estado}">${ESTADO_TXT[t.estado]}</span>
-        <span class="remito-num">${escapeHtml(t.numero || '')}</span>
+        <div class="pick-id"><span class="remito-num">${escapeHtml(t.numero || '')}</span><span class="chip ${t.estado}">${ESTADO_TXT[t.estado]}</span></div>
+        <div class="pick-tools">
+          <button type="button" class="tool" data-tool="sonido" aria-pressed="${sonidoOn}" aria-label="${sonidoOn ? 'Silenciar sonidos' : 'Activar sonidos'}">${sonidoOn ? ICON.sonido : ICON.mudo}</button>
+          <button type="button" class="tool" data-tool="deshacer" aria-label="Deshacer la última acción" ${pick.deshacer.length ? '' : 'disabled'}>${ICON.deshacer}</button>
+          <button type="button" class="tool ink" data-tool="camara" aria-label="Escanear con la cámara">${ICON.camara}</button>
+        </div>
       </div>
-      <div class="pick-route">
-        ${rutaHtml(t.origen, t.destino, 'md')}
-        <div class="pick-who">Pidió <b>${escapeHtml(quien(t.creadoPor))}</b> · ${fmtHace(t.creadoEn)}</div>
-        <div class="progress"><div class="progress-bar"><i style="width:${st.total ? st.revisados / st.total * 100 : 0}%"></i></div><span>${st.revisados} de ${st.total} revisados</span></div>
-      </div>
+      <div class="hs${flash}" data-estado="${hero.estado}" role="status" aria-live="polite">${hero.html}</div>
     </div>
-    ${pedidoEditable(t) ? `<div class="pick-edit"><button type="button" class="btn btn-ghost" id="editarBtn">Editar pedido</button><p>Sin empezar a preparar, subir o bajar una cantidad cambia lo pedido. Para enviar menos de lo pedido, tocá primero el ✓ del artículo.</p></div>` : ''}
+    <div class="pick-route">
+      ${rutaHtml(t.origen, t.destino, 'md')}
+      <div class="pick-who">Pidió <b>${escapeHtml(quien(t.creadoPor))}</b> · ${fmtHace(t.creadoEn)}</div>
+    </div>
+    ${editable ? `<div class="pick-edit"><button type="button" class="btn btn-ghost" id="editarBtn">Editar pedido</button><p>Sin empezar a preparar, subir o bajar una cantidad cambia lo pedido. Para enviar menos de lo pedido, tocá primero el ✓ del artículo.</p></div>` : ''}
     ${t.nota ? `<div class="det-nota" style="margin-top:12px"><b>Nota del pedido</b>${escapeHtml(t.nota)}</div>` : ''}
-    <div class="pick-list" style="margin-top:12px">${lista}</div>
+    <div class="pick-list" style="margin-top:4px">${lista}</div>
     ${costoTotalHtml(st.costo, st.sinCosto, 'Costo total a enviar')}
     ${esRoot ? `<div style="margin-top:18px">${eliminarBtnHtml()}</div>` : ''}`;
 
   if (esRoot) $('eliminarBtn').addEventListener('click', () => eliminarPedido(t.id));
-  if (pedidoEditable(t)) $('editarBtn').addEventListener('click', () => editarPedido(t.id));
+  if (editable) $('editarBtn').addEventListener('click', () => editarPedido(t.id));
+
+  // La parte fija de arriba tapa las filas: el scroll a una fila deja ese margen.
+  $('pickScreen').style.setProperty('--pk-top', ($('pickTop').offsetHeight + 10) + 'px');
+  if (!reducir){
+    $('pickInner').querySelectorAll('.pk[data-k]').forEach(el => {
+      const a = antes.get(el.dataset.k);
+      if (a === undefined) return;
+      const d = a - el.getBoundingClientRect().top;
+      if (Math.abs(d) >= 1) el.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: 360, easing: 'cubic-bezier(.22,1,.36,1)' });
+    });
+  }
+  if (pick.pulso){
+    const el = $('pickInner').querySelector(`.pk[data-k="${CSS.escape(pick.pulso)}"]`);
+    pick.pulso = '';
+    if (el){ el.classList.add('pulso'); el.scrollIntoView({ block: 'nearest', behavior: reducir ? 'auto' : 'smooth' }); }
+  }
 
   const dock = $('pickDock'), cta = $('pickCta');
   dock.hidden = false;
   cta.className = 'cta';
-  if (st.faltan > 0){
+  if (pick.ajenos.length){
+    cta.classList.add('bad');
+    cta.innerHTML = `<span>Sacá lo que no va en el pedido</span><span class="cta-k">${pick.ajenos.reduce((s, x) => s + x.n, 0)}</span>`;
+  } else if (st.faltan > 0){
     cta.classList.add('warn');
     cta.innerHTML = `<span>Revisá cada artículo</span><span class="cta-k">faltan ${st.faltan}</span>`;
   } else if (st.unidades > 0){
+    cta.classList.add('listo');
     cta.innerHTML = `<span>Despachar a ${escapeHtml(suc(t.destino).nombre)}</span><span class="cta-k">${unid(st.unidades)}</span>`;
   } else {
     cta.classList.add('danger', 'center');
     cta.innerHTML = `<span>Cerrar sin envío</span>`;
   }
+  revisarFinPick(st);
 }
+
+// Todo revisado y nada ajeno en la caja: sonido de cierre y la tarjeta pasa a "Listo para despachar".
+// No despacha solo: despachar mueve stock y se confirma a mano.
+function revisarFinPick(st){
+  const listo = st.total > 0 && st.faltan === 0 && !pick.ajenos.length;
+  if (!listo){ pick.finAvisado = false; return; }
+  if (pick.finAvisado) return;
+  pick.finAvisado = true;
+  const seq = pick.seq, id = pick.id;
+  setTimeout(() => {
+    if (!pick || pick.id !== id || pick.seq !== seq || !pick.finAvisado) return;
+    sonar('fin');
+    vibrar([40, 40, 40, 40, 120]);
+    pick.ultimo = { estado: 'fin' };
+    renderPick({ flash: true });
+    flashPantalla('ok');
+  }, 700);
+}
+
+// ---- Lecturas (pistola o cámara) ----
+function pickActivo(){ return !!pick && capas[capas.length - 1] === $('pickScreen') && !$('block').classList.contains('on'); }
+
+function pickSnapshot(k){
+  pick.deshacer.push({ k, prev: k ? Object.assign({}, pick.items[k]) : null, aj: JSON.stringify(pick.ajenos) });
+  if (pick.deshacer.length > 60) pick.deshacer.shift();
+}
+function pickDeshacer(){
+  const a = pick && pick.deshacer.pop();
+  if (!a) return;
+  if (a.k && a.prev && pick.items[a.k]) pick.items[a.k] = a.prev;
+  pick.ajenos = JSON.parse(a.aj);
+  pick.seq++;
+  pick.ultimo = { estado: 'deshecho' };
+  pick.pulso = a.k || '';
+  guardarPick();
+  vibrar(15);
+  renderPick({ flash: true });
+}
+
+// Artículos del pedido que corresponden a lo leído: por código de barras del catálogo o por código de producto.
+function pickBuscar(t, code){
+  return Object.keys(t.items || {}).filter(k => {
+    const i = t.items[k];
+    if (normCod(i.codigo) === code) return true;
+    const a = articulosPorCodigo.get(String(i.codigo));
+    return !!(a && a.barras.some(b => normCod(b) === code));
+  });
+}
+
+function pickLectura(texto){
+  const code = normCod(texto);
+  const t = pick && traspasos[pick.id];
+  if (!code || !t) return;
+  if (!articulos.length){ sonar('sobra'); toast('Esperá a que cargue el catálogo y volvé a escanear', 'aviso'); return; }
+  const delPedido = pickBuscar(t, code);
+  if (delPedido.length === 1){ pickContar(delPedido[0]); return; }
+  if (delPedido.length > 1){ pickFeedback({ estado: 'elegir', code, opciones: delPedido }); return; }
+  // No es del pedido: queda anotado para sacarlo de la caja antes de despachar.
+  const a = articulos.find(x => normCod(x.codigo) === code || x.barras.some(b => normCod(b) === code));
+  pickSnapshot(null);
+  const ya = pick.ajenos.find(x => x.code === code);
+  if (ya) ya.n++;
+  else pick.ajenos.unshift({ code, n: 1, nombre: a ? a.nombre : '', codigo: a ? a.codigo : '', foto: a ? a.foto : '' });
+  guardarPick();
+  pick.pulso = 'x:' + code;
+  pickFeedback({ estado: a ? 'ajeno' : 'desconocido', code, nombre: a ? a.nombre : '', codigo: a ? a.codigo : '', foto: a ? a.foto : '' });
+}
+
+// Una unidad leída de un artículo del pedido. Sigue contando desde lo ya confirmado a mano.
+function pickContar(k){
+  const t = traspasos[pick.id], p = pick.items[k];
+  if (!t || !p) return;
+  const sol = Number(t.items[k].solicitada) || 0;
+  if (p.quitado){ pick.pulso = k; pickFeedback({ estado: 'quitado', k }); return; }
+  const base = Math.max(p.esc || 0, p.ok ? p.enviar : 0);
+  // Nunca se envía más de lo pedido: la unidad de más se avisa y no se cuenta.
+  if (base >= sol){ pick.pulso = k; pickFeedback({ estado: 'sobra', k, n: sol, sol }); return; }
+  pickSnapshot(k);
+  const n = base + 1;
+  p.esc = n;
+  p.enviar = n;
+  p.ok = n >= sol;
+  marcarPreparando(pick.id);
+  guardarPick();
+  pick.pulso = k;
+  pickFeedback({ estado: n >= sol ? 'completo' : 'ok', k, n, sol });
+}
+
+const TONO_DE = { ok: 'ok', completo: 'completo', sobra: 'sobra', quitado: 'sobra', elegir: 'sobra', ajeno: 'error', desconocido: 'error' };
+const COLOR_DE = { ok: 'ok', completo: 'ok', sobra: 'warn', quitado: 'warn', elegir: 'warn', ajeno: 'err', desconocido: 'err' };
+const VIBRA_DE = { ok: 35, completo: [35, 40, 70], sobra: 90, quitado: 90, elegir: 90, ajeno: [140, 60, 140], desconocido: [140, 60, 140] };
+
+function pickFeedback(u){
+  pick.seq++;
+  pick.ultimo = u;
+  sonar(TONO_DE[u.estado]);
+  vibrar(VIBRA_DE[u.estado] || 30);
+  flashPantalla(COLOR_DE[u.estado]);
+  renderPick({ flash: true });
+  scanFeedPick(u);
+}
+
+function flashPantalla(c){
+  const f = $('pkFlash');
+  if (!f || !c) return;
+  f.dataset.c = c;
+  f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+}
+
+// ---- Sonidos (WebAudio, sin archivos): agudo = bien, doble = completo, grave = no va ----
+const LS_SONIDO = 'hpTraspasoSonido';
+let sonidoOn = lsGet(LS_SONIDO) !== '0';
+let audioCtx = null;
+function audioDesbloquear(){
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch(_){}
+}
+function sonar(tipo){
+  if (!sonidoOn) return;
+  try {
+    audioDesbloquear();
+    if (!audioCtx) return;
+    const tonos = {
+      ok:       [[1568, 0, .07]],
+      completo: [[1318, 0, .07], [1976, .085, .14]],
+      sobra:    [[740, 0, .18]],
+      error:    [[196, 0, .15], [165, .18, .26]],
+      fin:      [[1046, 0, .09], [1318, .1, .09], [1568, .2, .26]]
+    }[tipo];
+    if (!tonos) return;
+    const t0 = audioCtx.currentTime + .01;
+    const vol = tipo === 'error' ? .09 : .2;
+    tonos.forEach(([f, d, dur]) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = tipo === 'error' ? 'square' : 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t0 + d);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + d + .012);
+      g.gain.exponentialRampToValueAtTime(.0001, t0 + d + dur);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t0 + d); o.stop(t0 + d + dur + .03);
+    });
+  } catch(_){}
+}
+
+// ---- Pistola lectora (USB / Bluetooth en modo teclado), igual que en pedidosv2 ----
+// "Tipea" el código en pocos milisegundos y cierra con Enter o Tab. Se distingue de una persona por
+// el ritmo. Solo se escucha con la pantalla de preparación al frente; en el resto de la app el
+// teclado se comporta normal.
+const PISTOLA_GAP_MS = 120;          // separación máxima entre teclas (Bluetooth en Android es irregular)
+const PISTOLA_MIN_LEN = 3;           // largo mínimo con sufijo Enter/Tab
+const PISTOLA_MIN_LEN_SIN_FIN = 6;   // largo mínimo si la pistola no manda sufijo (cierre por silencio)
+let pistolaBuf = '', pistolaUlt = 0, pistolaTimer = null, pistolaTragarHasta = 0, pistolaSinChar = false;
+
+function pistolaCharDe(e){
+  if (e.key && e.key.length === 1) return e.key;
+  const m = /^(?:Key([A-Z])|Digit(\d)|Numpad(\d))$/.exec(e.code || '');
+  if (!m) return '';
+  if (m[1]) return e.shiftKey ? m[1] : m[1].toLowerCase();
+  return m[2] || m[3];
+}
+function pistolaReset(){ pistolaBuf = ''; if (pistolaTimer){ clearTimeout(pistolaTimer); pistolaTimer = null; } }
+// Si la lectura cayó en un campo (ej. la cantidad de un artículo), se deja el campo como estaba.
+function pistolaLimpiarInput(texto){
+  const el = document.activeElement;
+  if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+  if (el.classList.contains('stp-val')){ el.value = el.getAttribute('value'); el.blur(); return; }
+  if (typeof el.value === 'string' && el.value.endsWith(texto)){
+    el.value = el.value.slice(0, -texto.length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+function pistolaLeer(texto){
+  if (!pickActivo()) return;
+  audioDesbloquear();
+  pickLectura(texto);
+}
+function pistolaAgregar(ch, ahora){
+  if (ahora - pistolaUlt > PISTOLA_GAP_MS) pistolaBuf = '';   // tecla lenta: secuencia nueva
+  pistolaBuf += ch;
+  pistolaUlt = ahora;
+  // Pistolas sin sufijo: la lectura se cierra al primer silencio.
+  if (pistolaTimer) clearTimeout(pistolaTimer);
+  pistolaTimer = setTimeout(() => {
+    pistolaTimer = null;
+    const texto = pistolaBuf;
+    pistolaBuf = '';
+    if (texto.length < PISTOLA_MIN_LEN_SIN_FIN) return;
+    pistolaTragarHasta = Date.now() + 300;
+    pistolaLimpiarInput(texto);
+    pistolaLeer(texto);
+  }, PISTOLA_GAP_MS * 2);
+}
+document.addEventListener('keydown', e => {
+  if (!pickActivo() || e.ctrlKey || e.altKey || e.metaKey){ pistolaReset(); return; }
+  const ahora = Date.now();
+  if (e.key === 'Enter' || e.key === 'Tab'){
+    if (ahora < pistolaTragarHasta){ e.preventDefault(); e.stopPropagation(); return; }
+    const rapido = ahora - pistolaUlt <= PISTOLA_GAP_MS;
+    const texto = pistolaBuf;
+    pistolaReset();
+    if (!rapido || texto.length < PISTOLA_MIN_LEN) return;   // Enter de una persona: sigue su curso
+    e.preventDefault(); e.stopPropagation();                  // que no toque botones
+    pistolaLimpiarInput(texto);
+    pistolaLeer(texto);
+    return;
+  }
+  const ch = pistolaCharDe(e);
+  if (ch){ pistolaSinChar = false; pistolaAgregar(ch, ahora); return; }
+  if (e.key === 'Shift') return;
+  // Android con un campo enfocado: la tecla llega como 'Unidentified' y el carácter, por `input`.
+  if (e.key === 'Unidentified' || e.keyCode === 229){ pistolaSinChar = true; return; }
+  pistolaReset();
+}, true);
+document.addEventListener('input', e => {
+  if (!pistolaSinChar) return;
+  pistolaSinChar = false;
+  const el = e.target;
+  if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+  if (e.inputType !== 'insertText' || typeof e.data !== 'string' || e.data.length !== 1){ pistolaReset(); return; }
+  pistolaAgregar(e.data, Date.now());
+}, true);
 
 function setEnviar(k, n){
   const p = pickItem(k);
@@ -2809,25 +3254,58 @@ function setEnviar(k, n){
     return;
   }
   const sol = Number(t.items[k].solicitada) || 0;
+  pickSnapshot(k);
   // Preparando: se puede bajar hasta 0, nunca enviar más de lo pedido.
   p.enviar = Math.min(sol, Math.max(0, Math.floor(Number(n) || 0)));
+  p.esc = p.enviar;   // la cantidad a mano pasa a ser el conteo: el próximo escaneo sigue desde ahí
   p.ok = true;
   marcarPreparando(pick.id);
   guardarPick();
   renderPick();
 }
 
+$('pickScreen').addEventListener('pointerdown', audioDesbloquear);
 $('pickInner').addEventListener('click', e => {
+  if (!pick) return;
+  const tool = e.target.closest('[data-tool]');
+  if (tool && !tool.disabled){
+    const x = tool.dataset.tool;
+    if (x === 'camara') abrirScanner('pick');
+    else if (x === 'deshacer') pickDeshacer();
+    else if (x === 'sonido'){
+      sonidoOn = !sonidoOn;
+      lsSet(LS_SONIDO, sonidoOn ? '1' : '0');
+      sonar('ok');
+      toast(sonidoOn ? 'Sonidos activados' : 'Sonidos silenciados');
+      renderPick();
+    }
+    return;
+  }
+  const el = e.target.closest('[data-elegir]');
+  if (el){ pickContar(el.dataset.elegir); return; }
+  const aj = e.target.closest('[data-ajeno]');
+  if (aj){
+    const code = aj.dataset.ajeno;
+    pickSnapshot(null);
+    pick.ajenos = pick.ajenos.filter(x => x.code !== code);
+    if (pick.ultimo && pick.ultimo.code === code) pick.ultimo = null;
+    guardarPick();
+    vibrar(12);
+    renderPick();
+    return;
+  }
   const b = e.target.closest('[data-act]');
-  if (!b || b.disabled || !pick) return;
+  if (!b || b.disabled) return;
   const k = b.closest('[data-k]').dataset.k;
   const p = pickItem(k), t = traspasos[pick.id];
   const sol = Number(t.items[k].solicitada) || 0;
+  pickSnapshot(k);
   switch (b.dataset.act){
-    case 'ok': p.ok = !p.ok; vibrar(p.ok ? 12 : 0); break;
-    case 'sinstock': if (p.enviar === 0) { p.enviar = sol; } else { p.enviar = 0; } p.ok = true; break;
+    // Sacar el ✓ es "volver a contar": el conteo escaneado arranca de cero.
+    case 'ok': p.ok = !p.ok; if (!p.ok) p.esc = 0; vibrar(p.ok ? 12 : 0); if (p.ok) sonar('ok'); break;
+    case 'sinstock': p.enviar = p.enviar === 0 ? sol : 0; p.esc = p.enviar; p.ok = true; break;
     case 'quitar': p.quitado = true; p.ok = true; toast('Artículo quitado del pedido'); break;
-    case 'restaurar': p.quitado = false; p.ok = false; p.enviar = sol; break;
+    case 'restaurar': p.quitado = false; p.ok = false; p.enviar = sol; p.esc = 0; break;
   }
   marcarPreparando(pick.id);
   guardarPick();
@@ -2838,6 +3316,13 @@ $('pickCta').addEventListener('click', () => {
   const t = pick && traspasos[pick.id];
   if (!t) return;
   const st = estadoPick(t);
+  if (pick.ajenos.length){
+    const el = $('pickInner').querySelector('.pk.ajeno');
+    sonar('error');
+    if (el){ el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }], { duration: 300 }); }
+    toast('Primero sacá de la caja lo que no va y tocá "Ya lo saqué"', 'aviso');
+    return;
+  }
   if (st.faltan > 0){
     // Lleva al primer artículo sin revisar.
     const k = Object.keys(t.items).sort((a, b) => String(t.items[a].nombre).localeCompare(String(t.items[b].nombre), 'es'))
@@ -3004,7 +3489,7 @@ async function despachar(){
       if (!m.exists()) throw new Error(`La verificación de los movimientos de ${suc(sId).nombre} falló.`);
     }
 
-    lsDel(LS_PICK + id);
+    borrarPick(id);
     // Sin pick, el eco del listener (estado ENVIADO) no dispara el aviso de "ya fue despachado".
     pick = null;
     hideBlock();
@@ -3061,6 +3546,7 @@ const SCAN_CONSENSO = 2;       // lecturas idénticas seguidas para aceptar
 const SCAN_REPETIR_MS = 1800;  // el mismo código vuelve a sumar recién si se dejó de ver este tiempo
 const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let html5Qr = null, scanLast = '', scanCount = 0, scanVisto = {}, scanSumados = 0;
+let scanModo = 'pedir';   // 'pedir': suma al carrito · 'pick': cuenta unidades del pedido que se prepara
 
 function gtinCheckOk(code){
   if (!/^\d+$/.test(code)) return false;
@@ -3091,15 +3577,35 @@ const SCAN_FORMATS = () => [
 ];
 function scanQrbox(vw){ const w = Math.min(vw.width, vw.height); return { width: Math.floor(w * 0.8), height: Math.floor(w * 0.5) }; }
 
-$('scanBtn').addEventListener('click', abrirScanner);
+$('scanBtn').addEventListener('click', () => abrirScanner('pedir'));
 $('scanDone').addEventListener('click', cerrarScanner);
 
-async function abrirScanner(){
+// Lo que muestra la cámara después de cada lectura en Preparar: mismo código de colores que la tarjeta.
+function scanFeedPick(u){
+  if (scanModo !== 'pick' || !$('scan').classList.contains('on') || !pick) return;
+  const t = traspasos[pick.id];
+  if (!t) return;
+  // Código compartido: se elige en la pantalla, la cámara se cierra.
+  if (u.estado === 'elegir'){ cerrarScanner(); return; }
+  const c = COLOR_DE[u.estado] || '';
+  const i = u.k ? t.items[u.k] : null;
+  const txt = { ok: `Correcto · faltan ${u.sol - u.n}`, completo: 'Completo', sobra: 'Ya está completo · sobra', quitado: 'Quitado del pedido', ajeno: 'No es de este pedido', desconocido: 'Código desconocido' }[u.estado] || '';
+  const big = u.n != null ? `${u.n}/${u.sol}` : c === 'err' ? '✕' : '!';
+  const st = estadoPick(t);
+  $('scanFeed').innerHTML = `<div class="scan-last ${c}"><b class="scan-n">${big}</b><span class="scan-tx"><small>${escapeHtml(txt)}</small><em>${escapeHtml(i ? i.nombre : (u.nombre || u.code))}</em></span></div>
+    <div class="scan-count">${st.revisados} de ${st.total} artículos listos · ${st.listasU}/${st.totalU} u.</div>`;
+  const r = $('reader');
+  r.classList.remove('f-ok', 'f-warn', 'f-err'); void r.offsetWidth; if (c) r.classList.add('f-' + c);
+}
+
+async function abrirScanner(modo){
   if (typeof Html5Qrcode === 'undefined'){ toast('El escáner no está disponible', 'err'); return; }
   if (!articulos.length){ toast('Esperá a que cargue el catálogo', 'err'); return; }
+  scanModo = modo === 'pick' ? 'pick' : 'pedir';
+  audioDesbloquear();
   $('scan').classList.add('on');
   scanLast = ''; scanCount = 0; scanVisto = {}; scanSumados = 0;
-  $('scanFeed').innerHTML = '<div class="scan-hint">Apuntá al código de barras. Cada lectura suma una unidad.</div>';
+  $('scanFeed').innerHTML = `<div class="scan-hint">${scanModo === 'pick' ? 'Apuntá al código de cada unidad que ponés en la caja. Para contar otra igual, sacala del cuadro y volvé a apuntar.' : 'Apuntá al código de barras. Cada lectura suma una unidad.'}</div>`;
   const baseConfig = { fps: 10, qrbox: scanQrbox };
   // iOS necesita alta resolución + enfoque continuo para leer códigos 1D (ver articulos.html).
   const iosConfig = Object.assign({}, baseConfig, { videoConstraints: {
@@ -3138,12 +3644,15 @@ function onScan(text, result){
   if (scanCount < SCAN_CONSENSO){ scanVisto[code] = ultimaVez; return; }
   scanLast = ''; scanCount = 0;
 
+  if (scanModo === 'pick'){ if (pick) pickLectura(code); return; }
+
   const matches = articulos.filter(a => a.barras.includes(code) || a.codigo === code);
   const feed = $('scanFeed');
   if (matches.length === 1){
     agregarAlCarrito(matches[0].codigo, 1);
     scanSumados++;
     vibrar(50);
+    sonar('ok');
     const c = carrito[matches[0].codigo];
     feed.innerHTML = `<div class="scan-last"><b>+1</b><span>${escapeHtml(matches[0].nombre)}</span><b>${c ? c.cant : 1}</b></div><div class="scan-count">${plural(scanSumados, 'lectura', 'lecturas')} en esta tanda</div>`;
   } else if (matches.length > 1){
@@ -3155,13 +3664,15 @@ function onScan(text, result){
     });
   } else {
     vibrar([30, 40, 30]);
+    sonar('error');
     feed.innerHTML = `<div class="scan-last err"><b>?</b><span>Ningún artículo tiene el código ${escapeHtml(code)}</span></div><div class="scan-count">${plural(scanSumados, 'lectura', 'lecturas')} en esta tanda</div>`;
   }
 }
 
 function cerrarScanner(){
   $('scan').classList.remove('on');
-  if (scanSumados){ toast(plural(scanSumados, 'unidad sumada', 'unidades sumadas') + ' al pedido'); scanSumados = 0; }
+  if (scanSumados && scanModo === 'pedir'){ toast(plural(scanSumados, 'unidad sumada', 'unidades sumadas') + ' al pedido'); }
+  scanSumados = 0;
   if (html5Qr){
     const q = html5Qr; html5Qr = null;
     return q.stop().then(() => q.clear()).catch(() => {});
