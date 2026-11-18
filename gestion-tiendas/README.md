@@ -98,7 +98,7 @@ Se usa la variable de costos **actual** de cada tienda. La hoja se lee con la ll
 
 ## Solicitar a Home Point
 
-En el detalle de cada pedido, el vendedor tiene el botón **Solicitar a Home Point**. Le pide la mercadería de ese pedido a Home Point como si la hubiera cargado en el catálogo del interior (`CatalogoWeb/catalogoInterior.html`):
+Sólo para las tiendas que **vos habilitás**: menú de la tienda → **Habilitar "Solicitar a Home Point"** (guarda `tiendas/<id>/interior/habilitado: true`; deshabilitar borra ese dato). En las demás el botón no aparece y las reglas rechazan la marca. En el detalle de cada pedido, el vendedor tiene el botón **Solicitar a Home Point**. Le pide la mercadería de ese pedido a Home Point como si la hubiera cargado en el catálogo del interior (`CatalogoWeb/catalogoInterior.html`):
 
 - Escribe en la base de pedidos de Home Point (`pedidos-87064`, configurada en `FIREBASE_HOME_POINT` del `config.js` del catálogo) con **el mismo formato** que el catálogo del interior: `cat: 'int'`, `createdby: 'web'`, `valorUSD` = columna E, sin transporte ("Lo decido después").
 - El cliente es el dueño de la tienda, identificado por **el email con el que entra a su panel**. Si no está en `clientes`, el panel le pide los datos una sola vez y lo registra.
@@ -119,7 +119,7 @@ tiendas/<id>/
                      si la pausaste vos ('admin'), sólo vos la reactivás (lo exigen las reglas)
   baja/              { fecha, uid, email, borrarUsuario, motivo? } ← el responsable pide eliminar la tienda (y opcionalmente su usuario)
   costo/             { modo: 'costo' | 'costoPct' | 'lista', pct? } ← público, sólo lo escribe el admin global. Sin nodo = columna E
-  interior/          { pedido } ← último pedido que la tienda le solicitó a Home Point (base pedidos-87064). Lo escribe el panel del vendedor
+  interior/          { habilitado? (sólo lo escribe el admin global), pedido } ← último pedido que la tienda le solicitó a Home Point (base pedidos-87064). Lo escribe el panel del vendedor
   pedidos/<clave>/   { numero, fecha, status, entregado?, solicitado? (fecha en que se pidió la mercadería a Home Point), total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, dni? (7-8 dígitos), entrega?, direccion?, notas?},
                        items[{nombre, cantidad, precio, costo?, codigo?}] }
                      ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.

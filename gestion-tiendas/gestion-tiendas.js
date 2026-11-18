@@ -204,11 +204,12 @@
         const nuevas = {};
         await Promise.all(ids.map(async id => {
             const base = 'tiendas/' + id + '/';
-            const [meta, estado, admins, identidad, apariencia, actualizado, costo, baja] = await Promise.all([
+            const [meta, estado, admins, identidad, apariencia, actualizado, costo, baja, pideHP] = await Promise.all([
                 leer(base + 'meta'), leer(base + 'estado'), leer(base + 'admins'),
-                leer(base + 'config/identidad'), leer(base + 'config/apariencia'), leer(base + 'config/actualizado'), leer(base + 'costo'), leer(base + 'baja')
+                leer(base + 'config/identidad'), leer(base + 'config/apariencia'), leer(base + 'config/actualizado'), leer(base + 'costo'), leer(base + 'baja'),
+                leer(base + 'interior/habilitado')
             ].map(p => p.catch(() => null)));
-            nuevas[id] = { id, meta: meta || {}, estado: estado || { activa: true }, admins: admins || {}, identidad: identidad || {}, apariencia: apariencia || null, actualizado: actualizado || 0, costo: T.normalizarReglaCosto(costo), baja: baja || null };
+            nuevas[id] = { id, meta: meta || {}, estado: estado || { activa: true }, admins: admins || {}, identidad: identidad || {}, apariencia: apariencia || null, actualizado: actualizado || 0, costo: T.normalizarReglaCosto(costo), baja: baja || null, pideHP: pideHP === true };
         }));
         datos.tiendas = nuevas;
         datos.cargadas = true;
@@ -397,7 +398,7 @@
                 <div class="avatar" data-avatar-tienda="${esc(t.id)}">${esc(nombreTienda(t.id).charAt(0).toUpperCase())}</div>
                 <div class="fila-principal">
                     <strong>${esc(nombreTienda(t.id))} ${pausada ? `<span class="pill pausa">${t.estado.pausadaPor === 'tienda' ? 'Pausada por la tienda' : 'Pausada'}</span>` : '<span class="pill ok">Activa</span>'}${t.baja ? ' <span class="pill mal" title="Su responsable pidió eliminarla">Pidió la baja</span>' : ''}</strong>
-                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.costo.modo !== 'interior' ? ` <span class="pill neutro" title="Variable de costos">${esc(T.textoReglaCosto(t.costo))}</span>` : ''}</span>
+                    <span class="sub"><span class="chip-tienda">${esc(t.id)}</span> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(sinProtocolo(url))}</a>${t.meta.url ? ' <span class="pill neutro" title="Dominio propio">dominio propio</span>' : ''}${t.costo.modo !== 'interior' ? ` <span class="pill neutro" title="Variable de costos">${esc(T.textoReglaCosto(t.costo))}</span>` : ''}${t.pideHP ? ' <span class="pill neutro" title="Puede solicitarte la mercadería de sus pedidos"><i class="fas fa-truck-ramp-box"></i> Pide a Home Point</span>' : ''}</span>
                 </div>
                 <div class="fila-meta">
                     <div class="chips">${chips}</div>
@@ -560,6 +561,24 @@
     // ======================================================================
     function cerrarMenus() { document.querySelectorAll('.menu-lista').forEach(m => m.remove()); }
 
+    // El menú se ubica junto al botón pero siempre dentro de la pantalla: en
+    // celulares angostos se corre hacia adentro en vez de salirse por un
+    // costado, y si no entra abajo se abre hacia arriba.
+    function ubicarMenu(boton, m) {
+        const g = 8;
+        const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+        const r = boton.getBoundingClientRect();
+        const w = m.offsetWidth, h = m.offsetHeight;
+        const left = Math.max(g, Math.min(r.right - w, vw - g - w));
+        let top = r.bottom + 6;
+        if (top + h > vh - g && r.top - 6 - h >= g) top = r.top - 6 - h;
+        m.style.left = left + 'px';
+        m.style.top = Math.max(g, top) + 'px';
+    }
+    // Como queda fijo en la pantalla, se cierra al desplazar o girar el celular
+    window.addEventListener('scroll', e => { if (!(e.target.closest && e.target.closest('.menu-lista'))) cerrarMenus(); }, { passive: true, capture: true });
+    window.addEventListener('resize', cerrarMenus);
+
     function abrirMenu(boton) {
         const yaAbierto = boton.parentElement.querySelector('.menu-lista');
         cerrarMenus();
@@ -573,6 +592,7 @@
                 <a href="${esc(urlCatalogo(t))}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Ver catálogo</a>
                 <button type="button" data-accion="editar-tienda" data-id="${esc(id)}"><i class="fas fa-pen"></i>Editar datos y responsables</button>
                 <button type="button" data-accion="variable-costos" data-id="${esc(id)}"><i class="fas fa-percent"></i>Variable de costos</button>
+                <button type="button" data-accion="solicitar-hp" data-id="${esc(id)}"><i class="fas fa-truck-ramp-box"></i>${t.pideHP ? 'Deshabilitar' : 'Habilitar'} "Solicitar a Home Point"</button>
                 <button type="button" data-accion="copiar-catalogo" data-id="${esc(id)}"><i class="fas fa-link"></i>Copiar enlace del catálogo</button>
                 <button type="button" data-accion="copiar-panel" data-id="${esc(id)}"><i class="fas fa-sliders"></i>Copiar enlace del panel</button>
                 <button type="button" data-accion="pagina-dominio" data-id="${esc(id)}"><i class="fas fa-globe"></i>Página para dominio propio</button>
@@ -595,6 +615,7 @@
         m.setAttribute('role', 'menu');
         m.innerHTML = html;
         boton.parentElement.appendChild(m);
+        ubicarMenu(boton, m);
     }
 
     // ======================================================================
@@ -1264,6 +1285,14 @@
             case 'nueva-tienda': modalNuevaTienda(); break;
             case 'editar-tienda': modalEditarTienda(id); break;
             case 'variable-costos': modalVariableCostos(id); break;
+            // Botón "Solicitar a Home Point" del panel del vendedor. Sin nodo =
+            // deshabilitado. Al deshabilitar se conserva interior/pedido.
+            case 'solicitar-hp': {
+                const si = !datos.tiendas[id].pideHP;
+                actualizar({ [`tiendas/${id}/interior/habilitado`]: si || null },
+                    si ? `${nombreTienda(id)} ya puede solicitarte la mercadería de sus pedidos.` : `${nombreTienda(id)} ya no puede solicitarte mercadería.`).catch(error);
+                break;
+            }
             case 'pagina-dominio': modalDominioPropio(id); break;
             case 'copiar-catalogo': copiar(urlCatalogo(datos.tiendas[id])); break;
             case 'copiar-panel': copiar(urlPanel(datos.tiendas[id])); break;
