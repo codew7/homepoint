@@ -1331,6 +1331,15 @@
                         <option value="">Todas las entregas</option>
                     </select>
                 </div>
+                <div class="filter-group" id="filtroCompGrupo" hidden>
+                    <label class="filter-label" for="filtroComp">Comprobantes</label>
+                    <select id="filtroComp" class="filter-input">
+                        <option value="">Todos los pedidos</option>
+                        <option value="con">Con comprobantes</option>
+                        <option value="pendientes">Con comprobantes sin enviar</option>
+                        <option value="enviados">Con comprobantes ya enviados</option>
+                    </select>
+                </div>
                 <div class="toolbar-actions">
                     <button type="button" id="limpiarFiltros" class="clear-filters">Limpiar Filtros</button>
                     <button type="button" id="verTodosBtn" class="clear-filters is-accent">Ver todos</button>
@@ -1830,6 +1839,7 @@
         // Repinta solo las celdas de comprobante y el aviso (sin rearmar la tabla)
         function pintarComprobantes() {
             document.getElementById('tableContainer').classList.toggle('sin-wa', !waApp);
+            document.getElementById('filtroCompGrupo').hidden = !waApp;
             const aviso = document.getElementById('waAviso');
             const avisoTexto = document.getElementById('waAvisoTexto');
             const avisoBtn = document.getElementById('waAvisoBtn');
@@ -1965,6 +1975,7 @@
                 waPorPedido = waAgrupar(Object.assign({}, extras, rango));
                 waEstado = 'listo';
                 pintarComprobantes();
+                refiltrarPorComprobantes();
                 buscarFaltantes();
             };
 
@@ -2056,7 +2067,8 @@
             pintadoProgramado = true;
             requestAnimationFrame(() => {
                 pintadoProgramado = false;
-                pintarComprobantes();
+                if (document.getElementById('filtroComp').value) refiltrarPorComprobantes();
+                else pintarComprobantes();
                 if (compVisor.el && !compVisor.el.hidden) compVisorPintar();
             });
         }
@@ -2575,11 +2587,30 @@
         }
 
         // Función para aplicar filtros
-        function aplicarFiltros() {
+        // Filtro por comprobantes de WhatsApp: "pendientes" = al menos uno sin enviar,
+        // "enviados" = todos enviados. Mientras no cargaron, no filtra.
+        function pasaFiltroComp(pedido, modo) {
+            if (!modo || waEstado !== 'listo') return true;
+            const lista = waListaDe(pedido);
+            if (!lista.length) return false;
+            const nEnv = lista.filter(a => enviados[a.id]).length;
+            if (modo === 'pendientes') return nEnv < lista.length;
+            if (modo === 'enviados') return nEnv === lista.length;
+            return true;
+        }
+
+        // Si el filtro de comprobantes está activo, lo recalcula cuando llegan
+        // comprobantes o marcas de enviado, sin volver a la primera página.
+        function refiltrarPorComprobantes() {
+            if (document.getElementById('filtroComp').value) aplicarFiltros(true);
+        }
+
+        function aplicarFiltros(mantenerPagina = false) {
             const fechaDesde = document.getElementById('fechaDesde').value;
             const fechaHasta = document.getElementById('fechaHasta').value;
             const filtroAlias = document.getElementById('filtroAlias').value;
             const filtroEntrega = document.getElementById('filtroEntrega').value;
+            const filtroComp = document.getElementById('filtroComp').value;
             filteredData = transferenciasData.filter(pedido => {
                 // Ocultar alias HOMEPOINT, ENVIOS.HP y HOMEPOINT.CASEROS por defecto
                 if (!mostrarTodos) {
@@ -2593,9 +2624,11 @@
                 if (filtroAlias && (pedido.pagos?.alias || '').toUpperCase() !== filtroAlias.toUpperCase()) return false;
                 // Filtrar por entrega
                 if (filtroEntrega && pedido.entrega !== filtroEntrega) return false;
+                // Filtrar por comprobantes enviados / sin enviar
+                if (!pasaFiltroComp(pedido, filtroComp)) return false;
                 return true; // Mostrar todos los registros con alias, sin importar status
             });
-            paginaActual = 1; // Cualquier cambio de filtro vuelve a la primera página
+            if (mantenerPagina !== true) paginaActual = 1; // Cualquier cambio de filtro vuelve a la primera página
             renderizarTabla();
         }
 
@@ -2605,6 +2638,7 @@
             document.getElementById('fechaHasta').value = '';
             document.getElementById('filtroAlias').value = '';
             document.getElementById('filtroEntrega').value = '';
+            document.getElementById('filtroComp').value = '';
             mostrarTodos = false;
             aplicarFiltros();
         }
@@ -2951,6 +2985,7 @@
             fechaHasta.addEventListener('change', aplicarFiltros);
             filtroAlias.addEventListener('change', aplicarFiltros);
             filtroEntrega.addEventListener('change', aplicarFiltros);
+            document.getElementById('filtroComp').addEventListener('change', aplicarFiltros);
             limpiarBtn.addEventListener('click', limpiarFiltros);
             verTodosBtn.addEventListener('click', function() {
                 mostrarTodos = !mostrarTodos;

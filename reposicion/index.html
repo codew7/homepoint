@@ -168,6 +168,9 @@ body[data-puesto="salon"] .quien-ic { background: var(--blu-s); color: var(--blu
 .aviso svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .aviso-son { background: var(--ink); color: #fff; }
 .aviso-red { background: var(--red-s); color: var(--red); }
+.aviso-ver { background: var(--blu); color: #fff; box-shadow: var(--sh-2); }
+.aviso-ver span { margin-left: auto; background: rgba(255,255,255,.18); padding: 5px 10px; border-radius: 9px; font-size: 13.5px; }
+.ins-apk { display: flex; width: 100%; margin-top: 14px; text-decoration: none; }
 
 /* ---------- Vistas ---------- */
 .vista { padding: 4px max(14px, env(safe-area-inset-right)) calc(var(--bar) + var(--sab) + 24px) max(14px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 22px; }
@@ -458,21 +461,43 @@ body[data-puesto="salon"] .quien-ic { background: var(--blu-s); color: var(--blu
 @keyframes gira { to { transform: rotate(360deg); } }
 
 /* ---------- Etiqueta (vista previa e impresión) ---------- */
-.lbl { background: #fff; color: #000; display: flex; align-items: stretch; overflow: hidden; font-family: 'Figtree', Arial, sans-serif; }
-.lbl-qr { flex: none; align-self: center; }
-.lbl-qr svg { width: 100%; height: 100%; }
-.lbl-t { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-.lbl-n { font-weight: 800; line-height: 1.08; overflow: hidden; overflow-wrap: anywhere; text-transform: uppercase; letter-spacing: -.005em; }
-.lbl-c { font-family: ui-monospace, Consolas, monospace; font-weight: 700; flex: none; letter-spacing: .02em; }
-.prev-wrap .lbl { box-shadow: 0 0 0 1px var(--line-2), var(--sh-2); border-radius: 2px; }
+/* La etiqueta se dibuja en un canvas a la resolución de la térmica (8 puntos
+   por mm): la vista previa muestra exactamente lo que sale impreso. */
+.prev-cv { display: block; max-width: 100%; height: auto; background: #fff; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line-2), var(--sh-2); border-radius: 2px; }
 #imprimir { position: absolute; left: -10000px; top: 0; }
+#imprimir img { display: block; image-rendering: pixelated; }
+
+/* Impresora */
+.imp-est { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; color: var(--muted); }
+.imp-est .dot { box-shadow: none; }
+.imp-est .dot.gris { background: var(--faint); }
+.cfg-f .btn { min-height: 40px; padding: 0 14px; border-radius: 11px; font-size: 14.5px; }
+.imp-op { display: grid; grid-template-columns: 44px 1fr 18px; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 10px; border-radius: 16px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); margin-bottom: 8px; }
+.imp-op:active { transform: scale(.985); }
+.imp-op.on { box-shadow: inset 0 0 0 2px var(--ink); background: #fff; }
+.imp-op .mi { width: 44px; height: 44px; border-radius: 12px; background: var(--surface); display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--line); }
+.imp-op .mi svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.imp-op b { display: block; font-weight: 800; font-size: 16px; }
+.imp-op small { display: block; color: var(--muted); font-size: 13px; font-weight: 600; line-height: 1.35; }
+.imp-op > svg { width: 18px; height: 18px; fill: none; stroke: var(--faint); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Pistola lectora detectada (depósito) */
+.pistola { margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; gap: 8px; width: max-content; max-width: calc(100% - 28px);
+  padding: 6px 12px; border-radius: 99px; background: var(--grn-s); color: var(--grn); font-weight: 750; font-size: 13px; }
+.pistola .dot { background: var(--grn); box-shadow: 0 0 0 3px rgba(21,122,60,.15); }
+.pistola.leyo { animation: leyo .5s var(--ease-out); }
+@keyframes leyo { 0% { transform: scale(1.06); } 100% { transform: none; } }
+
+/* Historial */
+.hist-chips { margin-bottom: -8px; }
+.hist-nota { color: var(--faint); font-size: 12.5px; font-weight: 600; text-align: center; }
 
 @media print {
   body > *:not(#imprimir) { display: none !important; }
   html, body { background: #fff !important; height: auto; }
   #imprimir { position: static; left: auto; }
-  #imprimir .lbl { break-after: page; page-break-after: always; }
-  #imprimir .lbl:last-child { break-after: auto; page-break-after: auto; }
+  #imprimir img { break-after: page; page-break-after: always; }
+  #imprimir img:last-child { break-after: auto; page-break-after: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -538,13 +563,15 @@ body[data-puesto="salon"] .quien-ic { background: var(--blu-s); color: var(--blu
     </button>
     <div class="seg" id="seg" role="tablist">
       <button type="button" class="on" data-v="ahora" role="tab">Ahora<span class="bdg" id="bdgAhora" hidden></span></button>
-      <button type="button" data-v="hoy" role="tab">Hoy</button>
+      <button type="button" data-v="hoy" role="tab">Historial</button>
     </div>
     <button class="ibtn" type="button" id="btnMenu" aria-label="Más opciones"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
   </header>
 
+  <button class="aviso aviso-ver" type="button" id="avisoVersion" hidden><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>Hay una versión nueva<span>Actualizar</span></button>
   <button class="aviso aviso-son" type="button" id="avisoSonido" hidden><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>Tocá para activar el sonido de avisos</button>
   <div class="aviso aviso-red" id="avisoRed" hidden><svg viewBox="0 0 24 24"><path d="M12 3.6 2.6 20h18.8L12 3.6z"/><path d="M12 10v4.4"/><path d="M12 17.4h.01"/></svg>Sin conexión. Lo que hagas se envía al volver.</div>
+  <div class="pistola" id="pistola" hidden><span class="dot"></span>Pistola lista · escaneá cuando quieras</div>
 
   <main id="vAhora" class="vista"></main>
   <main id="vHoy" class="vista" hidden></main>
@@ -611,9 +638,15 @@ body[data-puesto="salon"] .quien-ic { background: var(--blu-s); color: var(--blu
   <div class="hoja-c">
     <div class="ins-app"><img src="icon-192.png" alt=""><div><b>Reposición</b><span>HomePoint · Showroom</span></div></div>
     <ol class="pasos-ins" id="insPasos"></ol>
+    <a class="btn btn-ink ins-apk" id="insApk" href="#" hidden>Descargar la app</a>
     <p class="ins-nota" id="insNota"></p>
     <div class="ins-otro"><div class="qr-box" id="insQr"></div><div><b>¿Otro celular?</b><p>Escaneá este código con la cámara y seguí los mismos pasos.</p><code id="insUrl"></code></div></div>
   </div>
+</section>
+
+<section class="hoja" id="hImpresora" aria-hidden="true">
+  <div class="hoja-h"><h3>¿Cómo imprimís?</h3><button class="ibtn" type="button" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="hoja-c" id="impOps"></div>
 </section>
 
 <section class="hoja" id="hConfig" aria-hidden="true">
@@ -665,6 +698,10 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
 };
+// Dentro de la app Android (reposicion/android) existe window.AppRepo: imprime
+// por Bluetooth nativo y se actualiza sola desde GitHub.
+const APP = window.AppRepo || null;
+const URL_APK = 'https://github.com/codew7/homepoint/releases/download/reposicion-apk/Reposicion.apk';
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function vibrar(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (_) {} }
@@ -693,13 +730,23 @@ const IC = {
   ios: '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>',
   sumar: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg>',
   puntos: '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>',
-  recarga: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>'
+  recarga: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
+  bt: '<svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>',
+  usb: '<svg viewBox="0 0 24 24"><circle cx="12" cy="20" r="1.6"/><path d="M12 18.4V3M12 3l-2.5 3M12 3l2.5 3"/><path d="M12 14 7.5 11.5V9"/><circle cx="7.5" cy="8" r="1.2"/><path d="m12 12 4.5-2.5V7.5"/><rect x="15.3" y="5.3" width="2.4" height="2.2"/></svg>',
+  pc: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+  impresora: '<svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>'
 };
 document.querySelectorAll('[data-ic]').forEach(el => { el.innerHTML = IC[el.dataset.ic]; });
 
 // ---------------------------------------------------------------- configuración
-const CFG_DEF = { ancho: 50, alto: 30, qr: 20, margen: 2, letra: 11, verCodigo: true, sonido: true, sucursal: 'auto' };
-let CFG = Object.assign({}, CFG_DEF, LS.get('repoConfig', {}));
+// impresora: '' (se pregunta al imprimir por primera vez), 'bt', 'usb' o 'sistema'.
+const CFG_V = 2;
+const CFG_DEF = { v: CFG_V, ancho: 70, alto: 30, qr: 26, margen: 2, letra: 11, verCodigo: true, sonido: true, sucursal: 'auto',
+  impresora: '', oscuridad: 8, separacion: 2, girar: false };
+const cfgGuardada = LS.get('repoConfig', {}) || {};
+// Equipos con la configuración vieja (50 mm / QR 20 mm): pasan a los valores nuevos.
+if ((cfgGuardada.v || 1) < 2) { delete cfgGuardada.ancho; delete cfgGuardada.qr; }
+let CFG = Object.assign({}, CFG_DEF, cfgGuardada, { v: CFG_V });
 function guardarCfg() { LS.set('repoConfig', CFG); }
 
 let PUESTO = LS.get('repoPuesto', '');
@@ -958,8 +1005,9 @@ $('toastBtn').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------- items en vivo
-// Dos escuchas: lo abierto (de cualquier día, para que nada quede olvidado
-// entre turnos) y lo de hoy (para el historial). Se unen por id.
+// Dos escuchas: lo abierto (para que nada quede olvidado entre turnos) y lo
+// de hoy y ayer (para el historial). Se unen por id. Lo anterior a ayer se
+// borra de la base: no se guarda historial más viejo.
 const ITEMS = {};
 let abiertos = {}, deHoy = {}, diaEscucha = '', yaCargado = { a: false, h: false };
 const propios = new Map(); // ids que cambió este equipo hace instantes: no se avisa de lo propio
@@ -973,15 +1021,16 @@ function escucharItems() {
     refAbiertos.on('value', s => { abiertos = s.val() || {}; yaCargado.a = true; fusionar(); }, err => console.error(err));
   }
   escucharHoy();
-  limpiarViejos();
 }
+function ayer() { return diaDe(ahora() - 864e5); }
 function escucharHoy() {
   const d = hoy();
   if (d === diaEscucha) return;
   if (refHoy) refHoy.off();
   diaEscucha = d; yaCargado.h = false;
-  refHoy = R_ITEMS.orderByChild('dia').equalTo(d);
+  refHoy = R_ITEMS.orderByChild('dia').startAt(ayer());
   refHoy.on('value', s => { deHoy = s.val() || {}; yaCargado.h = true; fusionar(); }, err => console.error(err));
+  limpiarViejos();
 }
 setInterval(() => { escucharHoy(); refrescarTiempos(); }, 30000);
 
@@ -1017,16 +1066,23 @@ function avisarCambios(antes) {
 }
 let pulsar = '';
 
-// Limpieza: lo cerrado de hace más de 30 días se borra (una vez por día y equipo).
-function limpiarViejos() {
+// Limpieza: sólo se guarda hoy y ayer. Todo lo de anteayer para atrás se
+// borra, de a tandas (una vez por día y equipo, y al cambiar el día).
+async function limpiarViejos() {
   const h = hoy();
   if (LS.get('repoLimpieza', '') === h) return;
-  const limite = diaDe(ahora() - 30 * 864e5);
-  R_ITEMS.orderByChild('dia').endAt(limite).limitToFirst(300).once('value').then(s => {
-    const up = {};
-    s.forEach(c => { const v = c.val(); if (v && !v.abierto && v.dia < limite) up[c.key] = null; });
-    if (Object.keys(up).length) return R_ITEMS.update(up);
-  }).then(() => LS.set('repoLimpieza', h)).catch(err => console.warn('Limpieza:', err));
+  const anteayer = diaDe(ahora() - 2 * 864e5);
+  try {
+    for (let vuelta = 0; vuelta < 20; vuelta++) {
+      const s = await R_ITEMS.orderByChild('dia').endAt(anteayer).limitToFirst(500).once('value');
+      const up = {};
+      s.forEach(c => { up[c.key] = null; });
+      const n = Object.keys(up).length;
+      if (n) await R_ITEMS.update(up);
+      if (n < 500) break;
+    }
+    LS.set('repoLimpieza', h);
+  } catch (err) { console.warn('Limpieza:', err); }
 }
 
 // ---------------------------------------------------------------- acciones
@@ -1142,6 +1198,7 @@ function irVista(v) {
   } else {
     $('quienIc').innerHTML = IC[PUESTO]; $('quienPuesto').textContent = PUESTO === 'salon' ? 'Salón' : 'Depósito'; $('quienNombre').textContent = NOMBRE;
   }
+  pintarPistola();
   window.scrollTo(0, 0);
   pintar();
 }
@@ -1269,17 +1326,24 @@ function htmlSalon() {
   return h;
 }
 
-// --- Hoy (los dos puestos) ---
+// --- Historial: hoy o ayer (los dos puestos) ---
+let diaHist = 'hoy';
 function htmlHoy() {
-  const lista = Object.values(ITEMS).filter(it => it.dia === hoy()).sort((a, b) => b.creado - a.creado);
+  const dia = diaHist === 'ayer' ? ayer() : hoy();
+  const lista = Object.values(ITEMS).filter(it => it.dia === dia).sort((a, b) => b.creado - a.creado);
   const c = e => lista.filter(it => it.estado === e).length;
   const unidades = lista.filter(it => it.estado === 'confirmado').reduce((s, it) => s + (it.cant || 0), 0);
-  let h = '<section class="resumen">' +
+  let h = '<div class="chips hist-chips">' + [['hoy', 'Hoy'], ['ayer', 'Ayer']].map(([k, t]) =>
+    '<button class="chip' + (diaHist === k ? ' on' : '') + '" type="button" data-hist="' + k + '">' + t + '</button>').join('') + '</div>' +
+    '<section class="resumen">' +
     '<div class="res r-grn"><b>' + c('confirmado') + '</b><span>Confirmados · ' + unidades + ' u.</span></div>' +
     '<div class="res r-red"><b>' + c('rechazado') + '</b><span>Sin stock</span></div>' +
     '<div class="res r-gry"><b>' + c('no') + '</b><span>No hacían falta</span></div></section>';
-  if (!lista.length) return h + vacioHtml(IC.reloj, 'Todavía nada hoy', 'Acá queda todo lo que se escaneó y se pidió en el día, con quién respondió y a qué hora.');
-  h += '<section><div class="sec-h"><h2>Movimientos de hoy</h2><span>' + lista.length + '</span></div><div class="lista">';
+  const nota = '<p class="hist-nota">Se guarda sólo hoy y ayer. Lo anterior se borra solo.</p>';
+  if (!lista.length) return h + (diaHist === 'ayer'
+    ? vacioHtml(IC.reloj, 'Nada ayer', 'Ayer no hubo movimientos de reposición.')
+    : vacioHtml(IC.reloj, 'Todavía nada hoy', 'Acá queda todo lo que se escaneó y se pidió en el día, con quién respondió y a qué hora.')) + nota;
+  h += '<section><div class="sec-h"><h2>Movimientos de ' + (diaHist === 'ayer' ? 'ayer' : 'hoy') + '</h2><span>' + lista.length + '</span></div><div class="lista">';
   lista.forEach(it => {
     const a = art(it.codigo);
     const pasos = [];
@@ -1292,8 +1356,12 @@ function htmlHoy() {
     h += '<div class="fila">' + foto(a) + '<div class="fila-t"><div class="fila-n">' + esc(a.n) + '</div><div class="fila-m">' + pill(it.estado) + '</div><div class="linea">' + pasos.join('<br>') + '</div></div>' +
       (it.cant ? '<div class="cant"><small>×</small>' + it.cant + '</div>' : '<span></span>') + '</div>';
   });
-  return h + '</div></section>';
+  return h + '</div></section>' + nota;
 }
+$('vHoy').addEventListener('click', e => {
+  const b = e.target.closest('[data-hist]'); if (!b) return;
+  diaHist = b.dataset.hist; pintar();
+});
 
 // Acciones de las tarjetas (un solo escuchador para toda la vista).
 $('vAhora').addEventListener('click', e => {
@@ -1403,7 +1471,7 @@ function abrirMenu() {
     it('persona', 'Cambiar de nombre', 'Si cambia quien usa este equipo', 'nombre') +
     it('cambiar', PUESTO === 'salon' ? 'Usar como Depósito' : 'Usar como Salón', 'Cambia el puesto de este equipo', 'puesto') +
     it('recarga', 'Actualizar catálogo', CAT.lista.length ? CAT.lista.length.toLocaleString('es-AR') + ' artículos cargados' : 'Cargando…', 'catalogo') +
-    it('cfg', 'Configuración', 'Etiqueta, sonido y lista de nombres', 'cfg') +
+    it('cfg', 'Configuración', 'Etiqueta, impresora, sonido y nombres', 'cfg') +
     (instalada() ? '' : it('bajar', 'Instalar en este celular', 'Queda como una app en la pantalla de inicio', 'instalar')) +
     it('compartir', 'Instalar en otro celular', 'Muestra un código QR para escanear', 'otro');
   abrirHoja('hMenu');
@@ -1431,13 +1499,29 @@ const PASOS = [
   { k: 'margen', t: 'Margen', u: 'mm', min: 0, max: 8, p: 0.5 },
   { k: 'letra', t: 'Letra máxima', u: 'pt', min: 6, max: 20, p: 0.5, s: 'Se achica sola si el nombre es largo' }
 ];
+const PASOS_IMP = [
+  { k: 'oscuridad', t: 'Oscuridad', u: '', min: 1, max: 15, p: 1, s: 'Más alto, más negro' },
+  { k: 'separacion', t: 'Espacio entre etiquetas', u: 'mm', min: 0, max: 6, p: 0.5, s: 'El hueco entre una y otra en el rollo' }
+];
+const TODOS_PASOS = PASOS.concat(PASOS_IMP);
+function fmtPaso(p) { return fmtNum(CFG[p.k]) + (p.u ? ' ' + p.u : ''); }
+function filaPaso(p) {
+  return '<div class="cfg-f"><label>' + p.t + (p.s ? '<small>' + p.s + '</small>' : '') + '</label><div class="paso" data-k="' + p.k + '"><button type="button" data-d="-1" aria-label="Menos">−</button><output>' + fmtPaso(p) + '</output><button type="button" data-d="1" aria-label="Más">+</button></div></div>';
+}
+const MODO_IMP = { bt: 'Térmica por Bluetooth', usb: 'Térmica por cable USB', sistema: 'Ventana de impresión', '': 'Impresora sin elegir' };
 function pintarConfig() {
-  let h = '<div class="cfg-g"><h4>Etiqueta</h4>' + PASOS.map(p =>
-    '<div class="cfg-f"><label>' + p.t + (p.s ? '<small>' + p.s + '</small>' : '') + '</label><div class="paso" data-k="' + p.k + '"><button type="button" data-d="-1" aria-label="Menos">−</button><output>' + fmtNum(CFG[p.k]) + ' ' + p.u + '</output><button type="button" data-d="1" aria-label="Más">+</button></div></div>').join('') +
+  const directa = !!APP || CFG.impresora === 'bt' || CFG.impresora === 'usb';
+  const modoTx = APP ? 'Térmica por Bluetooth' : MODO_IMP[CFG.impresora || ''];
+  let h = '<div class="cfg-g"><h4>Etiqueta</h4>' + PASOS.map(filaPaso).join('') +
     '<div class="cfg-f"><label for="cfgCod">Mostrar el código<small>Debajo del nombre</small></label><span class="sw"><input type="checkbox" id="cfgCod"' + (CFG.verCodigo ? ' checked' : '') + '><span></span></span></div>' +
     '</div>' +
-    '<div class="prev-cap">Vista previa a tamaño real (aprox.)</div><div class="prev-wrap" id="cfgPrev"></div>' +
+    '<div class="prev-cap">Vista previa: así sale impresa</div><div class="prev-wrap" id="cfgPrev"></div>' +
     '<div style="display:flex;gap:8px;margin:8px 0 18px"><button class="btn btn-soft" type="button" id="cfgProbar" style="flex:1">Imprimir prueba</button><button class="btn btn-soft" type="button" id="cfgReset" style="flex:1">Valores de fábrica</button></div>' +
+    '<div class="cfg-g"><h4>Impresora</h4>' +
+    '<div class="cfg-f"><label>' + modoTx + '<small class="imp-est" id="impEst"></small></label><button class="btn btn-soft" type="button" id="cfgImp">' + (CFG.impresora || APP ? 'Cambiar' : 'Elegir') + '</button></div>' +
+    (directa ? PASOS_IMP.map(filaPaso).join('') +
+      '<div class="cfg-f"><label for="cfgGirar">Imprimir dado vuelta<small>Si el texto sale al revés</small></label><span class="sw"><input type="checkbox" id="cfgGirar"' + (CFG.girar ? ' checked' : '') + '><span></span></span></div>' : '') +
+    '</div>' +
     '<div class="cfg-g"><h4>Equipo</h4>' +
     '<div class="cfg-f"><label for="cfgSon">Sonido de avisos</label><span class="sw"><input type="checkbox" id="cfgSon"' + (CFG.sonido ? ' checked' : '') + '><span></span></span></div>' +
     '<div class="cfg-f"><label for="cfgSuc">Nombres de<small>Qué sucursal mostrar al elegir nombre</small></label><select id="cfgSuc">' +
@@ -1445,34 +1529,50 @@ function pintarConfig() {
     '</div>';
   $('cfgCont').innerHTML = h;
   pintarPrevia();
+  pintarEstadoImp();
 }
 function fmtNum(v) { return String(v).replace('.', ','); }
-function pintarPrevia() {
-  const p = $('cfgPrev'); if (!p) return;
+let previaN = 0;
+async function pintarPrevia() {
+  if (!$('cfgPrev')) return;
+  const yo = ++previaN;
+  await cargarFuentes();
+  const p = $('cfgPrev');
+  if (yo !== previaN || !p) return;
   const ejemplo = CAT.lista.find(a => a.n.length > 30) || { c: 'A1043', n: 'SET 6 VASOS DE VIDRIO TALLADO 350 ML TRANSPARENTE' };
-  p.innerHTML = htmlEtiqueta(ejemplo);
-  ajustarTextos(p);
+  const cv = dibujarEtiqueta(ejemplo);
+  cv.className = 'prev-cv';
+  cv.style.width = CFG.ancho + 'mm';
+  p.replaceChildren(cv);
 }
 $('cfgCont').addEventListener('click', e => {
   const b = e.target.closest('.paso button');
   if (b) {
-    const k = b.parentElement.dataset.k, def = PASOS.find(x => x.k === k);
+    const k = b.parentElement.dataset.k, def = TODOS_PASOS.find(x => x.k === k);
     let v = Math.round((CFG[k] + def.p * +b.dataset.d) * 10) / 10;
     v = Math.min(def.max, Math.max(def.min, v));
     if (k === 'qr') v = Math.min(v, CFG.alto - 2 * CFG.margen);
     CFG[k] = v;
     if (CFG.qr > CFG.alto - 2 * CFG.margen) CFG.qr = Math.max(8, CFG.alto - 2 * CFG.margen);
     guardarCfg();
-    b.parentElement.querySelector('output').textContent = fmtNum(CFG[k]) + ' ' + def.u;
+    b.parentElement.querySelector('output').textContent = fmtPaso(def);
     const qrOut = document.querySelector('.paso[data-k="qr"] output'); if (qrOut) qrOut.textContent = fmtNum(CFG.qr) + ' mm';
     pintarPrevia();
     return;
   }
   if (e.target.id === 'cfgProbar') { imprimir([{ a: CAT.lista.find(x => x.n.length > 30) || { c: 'PRUEBA', n: 'ETIQUETA DE PRUEBA HOMEPOINT' }, q: 1 }], false); }
-  if (e.target.id === 'cfgReset') { const s = CFG.sonido, su = CFG.sucursal; CFG = Object.assign({}, CFG_DEF, { sonido: s, sucursal: su }); guardarCfg(); pintarConfig(); }
+  if (e.target.id === 'cfgImp') {
+    if (APP) { try { APP.elegirImpresora(); } catch (_) {} return; }
+    abrirElegirImpresora(() => { pintarConfig(); abrirHoja('hConfig'); });
+  }
+  if (e.target.id === 'cfgReset') {
+    const { sonido, sucursal, impresora } = CFG;
+    CFG = Object.assign({}, CFG_DEF, { sonido, sucursal, impresora }); guardarCfg(); pintarConfig();
+  }
 });
 $('cfgCont').addEventListener('change', e => {
   if (e.target.id === 'cfgCod') { CFG.verCodigo = e.target.checked; guardarCfg(); pintarPrevia(); }
+  if (e.target.id === 'cfgGirar') { CFG.girar = e.target.checked; guardarCfg(); }
   if (e.target.id === 'cfgSon') { CFG.sonido = e.target.checked; guardarCfg(); revisarAudio(); if (CFG.sonido) { activarAudio(); sonar('ok'); } }
   if (e.target.id === 'cfgSuc') { CFG.sucursal = e.target.value; guardarCfg(); LS.set('repoUsuarios', []); }
 });
@@ -1551,47 +1651,355 @@ function qrSvg(texto) {
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += 'M' + (c + m) + ' ' + (r + m) + 'h1v1h-1z';
   return '<svg viewBox="0 0 ' + (n + 2 * m) + ' ' + (n + 2 * m) + '" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><path d="' + d + '" fill="#000"/></svg>';
 }
-function htmlEtiqueta(a) {
-  const W = CFG.ancho, H = CFG.alto, M = CFG.margen, Q = Math.min(CFG.qr, H - 2 * M);
-  return '<div class="lbl" style="width:' + W + 'mm;height:' + H + 'mm;padding:' + M + 'mm;gap:' + Math.max(1, M * 0.75) + 'mm">' +
-    '<div class="lbl-qr" style="width:' + Q + 'mm;height:' + Q + 'mm">' + qrSvg(a.c) + '</div>' +
-    '<div class="lbl-t"><div class="lbl-n" data-max="' + CFG.letra + '">' + esc(a.n) + '</div>' +
-    (CFG.verCodigo ? '<div class="lbl-c" style="font-size:' + Math.max(6, CFG.letra * 0.62) + 'pt;margin-top:' + (H > 20 ? 1 : 0.5) + 'mm">' + esc(a.c) + '</div>' : '') + '</div></div>';
+// ---------------------------------------------------------------- etiqueta: dibujo
+// La etiqueta se dibuja una sola vez, en un canvas a 8 puntos por mm (203 dpi,
+// la resolución de la térmica). De ese mismo dibujo salen la vista previa, la
+// impresión directa y la de la ventana de impresión: se imprime lo que se ve.
+const PPMM = 8;
+const PT = PPMM * 25.4 / 72; // puntos de impresora por punto tipográfico
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+let fuentesListas = null;
+function cargarFuentes() {
+  if (!fuentesListas) {
+    fuentesListas = (document.fonts && document.fonts.load
+      ? Promise.all([document.fonts.load('800 40px Figtree'), document.fonts.load('700 40px Figtree')])
+      : Promise.resolve()).catch(() => {});
+  }
+  return fuentesListas;
 }
-// Achica la letra del nombre hasta que entre entero en la etiqueta.
-function ajustarTextos(cont) {
-  cont.querySelectorAll('.lbl').forEach(l => {
-    const n = l.querySelector('.lbl-n'), t = l.querySelector('.lbl-t');
-    let pt = +n.dataset.max;
-    n.style.fontSize = pt + 'pt';
-    const libre = () => t.clientHeight - (l.querySelector('.lbl-c') ? l.querySelector('.lbl-c').offsetHeight + 4 : 0);
-    // Primero sin cortar palabras: así achica hasta que la palabra más larga entre.
-    // Sólo si ni con la letra mínima entra, se permite partirla.
-    n.style.overflowWrap = 'normal';
-    let vueltas = 0;
-    while ((n.scrollHeight > libre() + 0.5 || n.scrollWidth > n.clientWidth + 0.5) && pt > 5 && vueltas++ < 60) { pt -= 0.25; n.style.fontSize = pt + 'pt'; }
-    if (n.scrollWidth > n.clientWidth + 0.5) n.style.overflowWrap = 'anywhere';
-    n.style.maxHeight = Math.max(0, libre()) + 'px';
+// Corta el texto en renglones que entren en maxW. Sin "cortar", devuelve null
+// si una palabra sola no entra (así se achica la letra antes de partirla).
+function envolver(g, texto, maxW, cortar) {
+  const lineas = [];
+  let act = '';
+  for (const p of texto.split(/\s+/).filter(Boolean)) {
+    if (g.measureText(p).width > maxW) {
+      if (!cortar) return null;
+      if (act) { lineas.push(act); act = ''; }
+      for (const ch of p) {
+        if (act && g.measureText(act + ch).width > maxW) { lineas.push(act); act = ch; } else act += ch;
+      }
+      continue;
+    }
+    const prueba = act ? act + ' ' + p : p;
+    if (g.measureText(prueba).width <= maxW) act = prueba; else { lineas.push(act); act = p; }
+  }
+  if (act) lineas.push(act);
+  return lineas;
+}
+// Blanco o negro puro: la térmica no tiene grises.
+function umbral(g, W, H) {
+  const im = g.getImageData(0, 0, W, H), d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10 < 150 ? 0 : 255;
+    d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  }
+  g.putImageData(im, 0, 0);
+}
+function dibujarEtiqueta(a) {
+  const W = Math.max(8, Math.round(CFG.ancho * PPMM / 8) * 8), H = Math.round(CFG.alto * PPMM), M = Math.round(CFG.margen * PPMM);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.fillStyle = '#000';
+
+  // QR: cada módulo mide un número entero de puntos, así sale nítido.
+  const qr = qrcode(0, 'M'); qr.addData(String(a.c)); qr.make();
+  const n = qr.getModuleCount();
+  const caja = Math.max(0, Math.min(Math.round(CFG.qr * PPMM), H - 2 * M));
+  const mod = Math.max(1, Math.floor(caja / (n + 2)));
+  const ox = M + Math.floor((caja - mod * n) / 2), oy = Math.floor((H - mod * n) / 2);
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect(ox + c * mod, oy + r * mod, mod, mod);
+
+  // Nombre y código a la derecha del QR.
+  const tx = M + caja + Math.round(Math.max(1, CFG.margen * 0.75) * PPMM), tw = W - M - tx, th = H - 2 * M;
+  if (tw >= PPMM * 4) {
+    const fuente = v => '800 ' + v.toFixed(2) + 'px Figtree, Arial, sans-serif';
+    let codPx = 0, codSep = 0;
+    if (CFG.verCodigo) {
+      codPx = Math.max(6, CFG.letra * 0.62) * PT;
+      codSep = (CFG.alto > 20 ? 1 : 0.5) * PPMM;
+      g.font = '700 ' + codPx.toFixed(2) + 'px ui-monospace, Consolas, monospace';
+      while (codPx > 4 * PT && g.measureText(String(a.c)).width > tw) { codPx -= 0.5; g.font = '700 ' + codPx.toFixed(2) + 'px ui-monospace, Consolas, monospace'; }
+    }
+    const codAlto = codPx ? codPx * 1.15 + codSep : 0;
+    const libre = th - codAlto;
+    const nombre = String(a.n || a.c).toUpperCase();
+    const minPx = 5 * PT;
+    let px = CFG.letra * PT, lineas = null;
+    // Achica la letra hasta que el nombre entre entero sin partir palabras.
+    for (; px >= minPx; px -= 0.25 * PT) {
+      g.font = fuente(px);
+      const l = envolver(g, nombre, tw, false);
+      if (l && l.length * px * 1.08 <= libre) { lineas = l; break; }
+    }
+    // Ni con la letra mínima: se parten palabras y, si sobra, se corta con "…".
+    if (!lineas) {
+      px = minPx; g.font = fuente(px);
+      lineas = envolver(g, nombre, tw, true);
+      const max = Math.max(1, Math.floor(libre / (px * 1.08)));
+      if (lineas.length > max) { lineas = lineas.slice(0, max); lineas[max - 1] = lineas[max - 1].slice(0, -1) + '…'; }
+    }
+    const lh = px * 1.08;
+    let y = M + Math.max(0, (th - (lineas.length * lh + codAlto)) / 2);
+    g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = fuente(px);
+    lineas.forEach(l => { g.fillText(l, tx, y + lh / 2); y += lh; });
+    if (codPx) {
+      g.font = '700 ' + codPx.toFixed(2) + 'px ui-monospace, Consolas, monospace';
+      g.fillText(String(a.c), tx, y + codSep + codPx * 1.15 / 2);
+    }
+  }
+  umbral(g, W, H);
+  return cv;
+}
+
+// ---------------------------------------------------------------- impresora térmica
+// La impresora (Nexus Z-NX 461 UB, de fábrica Zijiang) entiende TSPL: se le
+// manda la etiqueta como imagen (BITMAP) y la imprime sin programas extra.
+// Desde Chrome hay dos caminos directos: Bluetooth y cable USB. En la PC con
+// el driver de Windows instalado, el cable queda tomado por el driver: ahí se
+// usa la ventana de impresión del navegador.
+function tsplEtiqueta(cv, copias) {
+  const W = cv.width, H = cv.height, wb = W >> 3;
+  const px = cv.getContext('2d').getImageData(0, 0, W, H).data;
+  const bits = new Uint8Array(wb * H).fill(0xff); // en TSPL el bit en 1 es blanco
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (px[(y * W + x) * 4] < 128) bits[y * wb + (x >> 3)] &= ~(0x80 >> (x & 7));
+  }
+  const enc = s => new TextEncoder().encode(s);
+  const cab = enc('SIZE ' + CFG.ancho + ' mm,' + CFG.alto + ' mm\r\nGAP ' + CFG.separacion + ' mm,0 mm\r\nDIRECTION ' + (CFG.girar ? 0 : 1) + ',0\r\n' +
+    'REFERENCE 0,0\r\nDENSITY ' + CFG.oscuridad + '\r\nCLS\r\nBITMAP 0,0,' + wb + ',' + H + ',0,');
+  const pie = enc('\r\nPRINT 1,' + copias + '\r\n');
+  const out = new Uint8Array(cab.length + bits.length + pie.length);
+  out.set(cab); out.set(bits, cab.length); out.set(pie, cab.length + bits.length);
+  return out;
+}
+
+let IMP = null; // impresora conectada: { tipo, nombre, enviar(datos), cerrar() }
+function conTiempo(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo')), ms))]); }
+
+async function conectarUSB(pedir) {
+  let d;
+  if (pedir) d = await navigator.usb.requestDevice({ filters: [] });
+  else { d = (await navigator.usb.getDevices())[0]; if (!d) return null; }
+  if (!d.opened) await d.open();
+  if (!d.configuration) await d.selectConfiguration(1);
+  let num = -1, ep = null;
+  d.configuration.interfaces.forEach(i => i.alternates.forEach(alt => {
+    const e = alt.endpoints.find(x => x.direction === 'out' && x.type === 'bulk');
+    if (e && (!ep || alt.interfaceClass === 7)) { num = i.interfaceNumber; ep = e; }
+  }));
+  if (!ep) throw new Error('usb-sin-salida');
+  await d.claimInterface(num);
+  return {
+    tipo: 'usb', nombre: d.productName || 'Impresora USB',
+    enviar: async datos => { for (let i = 0; i < datos.length; i += 16384) await d.transferOut(ep.endpointNumber, datos.subarray(i, i + 16384)); },
+    cerrar: () => { d.close().catch(() => {}); }
+  };
+}
+if (navigator.usb) navigator.usb.addEventListener('disconnect', () => { if (IMP && IMP.tipo === 'usb') { IMP = null; pintarEstadoImp(); } });
+
+// Servicios Bluetooth que usan las impresoras térmicas chinas más comunes.
+const BT_SERV = ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+  '0000ff00-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000fee7-0000-1000-8000-00805f9b34fb',
+  '0000ae30-0000-1000-8000-00805f9b34fb', '0000ae3a-0000-1000-8000-00805f9b34fb', '0000fff0-0000-1000-8000-00805f9b34fb', '0000ff80-0000-1000-8000-00805f9b34fb'];
+async function conectarBT(pedir) {
+  let d = null;
+  if (pedir) d = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BT_SERV });
+  else {
+    if (!navigator.bluetooth.getDevices) return null;
+    d = (await navigator.bluetooth.getDevices()).find(x => x.id === LS.get('repoImpBT', '')) || null;
+    if (!d) return null;
+  }
+  const srv = await conTiempo(d.gatt.connect(), 12000);
+  let car = null;
+  for (const s of await srv.getPrimaryServices()) {
+    let cs = [];
+    try { cs = await s.getCharacteristics(); } catch (_) {}
+    car = cs.find(c => c.properties.writeWithoutResponse) || cs.find(c => c.properties.write);
+    if (car) break;
+  }
+  if (!car) { try { d.gatt.disconnect(); } catch (_) {} throw new Error('bt-sin-canal'); }
+  LS.set('repoImpBT', d.id);
+  const sinResp = car.properties.writeWithoutResponse;
+  let trozo = 180; // si el equipo no acepta paquetes grandes, baja a 20
+  const imp = {
+    tipo: 'bt', nombre: d.name || 'Impresora Bluetooth',
+    enviar: async datos => {
+      for (let i = 0; i < datos.length;) {
+        const parte = datos.slice(i, i + trozo);
+        try { if (sinResp) await car.writeValueWithoutResponse(parte); else await car.writeValueWithResponse(parte); }
+        catch (err) { if (trozo > 20) { trozo = 20; continue; } throw err; }
+        i += parte.length;
+        if (sinResp) await esperar(trozo > 20 ? 15 : 5); // no desbordar la memoria de la impresora
+      }
+    },
+    cerrar: () => { try { d.gatt.disconnect(); } catch (_) {} }
+  };
+  d.addEventListener('gattserverdisconnected', () => { if (IMP === imp) { IMP = null; pintarEstadoImp(); } });
+  return imp;
+}
+
+function mensajeErrorImp(modo, err) {
+  const m = String((err && (err.message || err.name)) || '');
+  if (modo === 'usb' && (/claim|access|denied|SecurityError|NetworkError/i.test(m + ' ' + (err && err.name))))
+    return 'La PC tiene la impresora tomada por el driver. En la PC elegí “Ventana de impresión”.';
+  if (m === 'usb-sin-salida') return 'Ese equipo USB no es una impresora.';
+  if (m === 'bt-sin-canal') return 'Esa impresora no acepta impresión por Bluetooth desde el navegador. Probá con el cable USB.';
+  return 'No se pudo conectar con la impresora. Revisá que esté prendida y cerca.';
+}
+// Sin "pedir" sólo intenta reconectar en silencio la impresora ya elegida.
+async function conectarImpresora(modo, pedir) {
+  if (IMP && IMP.tipo === modo) return true;
+  if (IMP) { try { IMP.cerrar(); } catch (_) {} IMP = null; }
+  try {
+    IMP = modo === 'usb' ? await conectarUSB(pedir) : await conectarBT(pedir);
+  } catch (err) {
+    IMP = null;
+    if (pedir) {
+      if (err && err.name === 'NotFoundError') toast('No se eligió ninguna impresora', 'info');
+      else { console.error('Impresora:', err); toast(mensajeErrorImp(modo, err), 'mal', null, 6500); }
+    }
+  }
+  pintarEstadoImp();
+  return !!IMP;
+}
+function pintarEstadoImp() {
+  const el = $('impEst'); if (!el) return;
+  let tx, on = false;
+  if (APP) tx = 'La emparejada en este celular. La primera vez se elige de la lista';
+  else if (!CFG.impresora) tx = 'Se pregunta al imprimir la primera vez';
+  else if (CFG.impresora === 'sistema') tx = 'Elegís la impresora en la ventana del navegador';
+  else if (IMP && IMP.tipo === CFG.impresora) { tx = 'Conectada · ' + IMP.nombre; on = true; }
+  else tx = 'Se conecta sola al imprimir';
+  el.innerHTML = '<span class="dot' + (on ? '' : ' gris') + '"></span>' + esc(tx);
+}
+
+let impCb = null;
+function abrirElegirImpresora(cb) {
+  impCb = cb;
+  const op = (k, ic, t, s) => '<button class="imp-op' + (CFG.impresora === k ? ' on' : '') + '" type="button" data-imp="' + k + '"><span class="mi">' + IC[ic] + '</span><span><b>' + t + '</b><small>' + s + '</small></span>' + IC.chev + '</button>';
+  $('impOps').innerHTML =
+    (navigator.bluetooth ? op('bt', 'bt', 'Térmica por Bluetooth', 'Directo desde este equipo, sin cables. La impresora tiene que estar prendida y cerca.') : '') +
+    (navigator.usb ? op('usb', 'usb', 'Térmica por cable USB', 'Enchufada a este equipo (en el celular, con un adaptador OTG).') : '') +
+    op('sistema', 'pc', 'Ventana de impresión', 'Para la PC con el driver instalado: elegís la impresora en la ventana del navegador.') +
+    (!navigator.bluetooth && !navigator.usb ? '<p class="ayuda">Este navegador no puede imprimir directo. Para eso abrí la app en Google Chrome (Android o PC).</p>' : '');
+  abrirHoja('hImpresora');
+}
+$('impOps').addEventListener('click', async e => {
+  const b = e.target.closest('[data-imp]'); if (!b) return;
+  const modo = b.dataset.imp;
+  // El selector de dispositivos se abre directo desde el toque (el navegador lo exige).
+  if (modo !== 'sistema' && !(await conectarImpresora(modo, true))) return;
+  if (modo === 'sistema' && IMP) { try { IMP.cerrar(); } catch (_) {} IMP = null; }
+  CFG.impresora = modo; guardarCfg();
+  if (IMP) toast('Impresora conectada: ' + IMP.nombre, 'ok');
+  const cb = impCb; impCb = null;
+  cerrarHoja();
+  if (cb) setTimeout(cb, 60);
+});
+
+// ---------------------------------------------------------------- imprimir
+let imprimiendo = false;
+async function imprimir(items, marcar) {
+  items = items.filter(x => x.q > 0);
+  if (!items.length || imprimiendo) return;
+  if (APP) { await imprimirApp(items, marcar); return; }
+  if (!CFG.impresora) { abrirElegirImpresora(() => imprimir(items, marcar)); return; }
+  if (CFG.impresora === 'sistema') {
+    await imprimirSistema(items);
+    if (marcar) { marcarImpresas(items); toast(items.length === 1 ? 'Marcado como etiquetado' : items.length + ' artículos marcados como etiquetados', 'ok'); }
+    return;
+  }
+  imprimiendo = true; $('btnImprimir').disabled = true;
+  try {
+    // Primero se conecta (antes de cualquier espera), así el selector de la
+    // impresora todavía cuenta como respuesta al toque.
+    if (!(await conectarImpresora(CFG.impresora, false)) && !(await conectarImpresora(CFG.impresora, true))) return;
+    await cargarFuentes();
+    const total = items.reduce((s, x) => s + x.q, 0);
+    for (let i = 0; i < items.length; i++) {
+      if (items.length > 1) toast('Imprimiendo ' + (i + 1) + ' de ' + items.length + ' artículos…', 'info', null, 60000);
+      else toast('Imprimiendo…', 'info', null, 60000);
+      await IMP.enviar(tsplEtiqueta(dibujarEtiqueta(items[i].a), items[i].q));
+    }
+    toast(total === 1 ? 'Etiqueta enviada a la impresora' : total + ' etiquetas enviadas a la impresora', 'ok');
+    if (marcar) marcarImpresas(items);
+  } catch (err) {
+    console.error('Imprimir:', err);
+    if (IMP) { try { IMP.cerrar(); } catch (_) {} IMP = null; pintarEstadoImp(); }
+    toast('Se cortó la impresión. Revisá que la impresora esté prendida y probá de nuevo.', 'mal', null, 6500);
+  } finally {
+    imprimiendo = false;
+    pintarTotalEt();
+  }
+}
+// Dentro de la app Android: Bluetooth clásico nativo (sirve aunque la
+// impresora no tenga Bluetooth de bajo consumo). La app responde por
+// window.__repoImpreso(id, ok, mensaje).
+const pendientesApp = {};
+window.__repoImpreso = (id, ok, msg) => {
+  const p = pendientesApp[id]; if (!p) return;
+  delete pendientesApp[id];
+  if (ok) p.ok(); else p.mal(new Error(msg || 'No se pudo imprimir'));
+};
+function enviarApp(datos) {
+  return new Promise((ok, mal) => {
+    const id = 'i' + Date.now() + Math.random().toString(36).slice(2, 7);
+    pendientesApp[id] = { ok, mal };
+    let bin = '';
+    for (let i = 0; i < datos.length; i += 0x8000) bin += String.fromCharCode.apply(null, datos.subarray(i, i + 0x8000));
+    try { APP.imprimirTspl(id, btoa(bin)); } catch (err) { delete pendientesApp[id]; mal(err); }
   });
 }
-function imprimir(items, marcar) {
-  const cont = $('imprimir');
-  const html = [];
-  items.forEach(({ a, q }) => { for (let i = 0; i < q; i++) html.push(htmlEtiqueta(a)); });
-  if (!html.length) return;
-  cont.innerHTML = html.join('');
+async function imprimirApp(items, marcar) {
+  imprimiendo = true; $('btnImprimir').disabled = true;
+  try {
+    await cargarFuentes();
+    // Se juntan varias etiquetas por envío (cada envío abre la conexión una vez).
+    const tandas = [];
+    let tanda = [], peso = 0;
+    items.forEach(({ a, q }) => {
+      const d = tsplEtiqueta(dibujarEtiqueta(a), q);
+      if (tanda.length && peso + d.length > 100000) { tandas.push(tanda); tanda = []; peso = 0; }
+      tanda.push(d); peso += d.length;
+    });
+    if (tanda.length) tandas.push(tanda);
+    const total = items.reduce((s, x) => s + x.q, 0);
+    for (let i = 0; i < tandas.length; i++) {
+      toast(tandas.length > 1 ? 'Imprimiendo ' + (i + 1) + ' de ' + tandas.length + '…' : 'Imprimiendo…', 'info', null, 60000);
+      const partes = tandas[i], datos = new Uint8Array(partes.reduce((s, p) => s + p.length, 0));
+      let o = 0; partes.forEach(p => { datos.set(p, o); o += p.length; });
+      await enviarApp(datos);
+    }
+    toast(total === 1 ? 'Etiqueta enviada a la impresora' : total + ' etiquetas enviadas a la impresora', 'ok');
+    if (marcar) marcarImpresas(items);
+  } catch (err) {
+    console.error('Imprimir (app):', err);
+    toast(String(err.message || 'No se pudo imprimir').split('\n')[0], 'mal', null, 7000);
+  } finally {
+    imprimiendo = false;
+    pintarTotalEt();
+  }
+}
+// Ventana de impresión del navegador (PC con el driver de Windows).
+async function imprimirSistema(items) {
+  await cargarFuentes();
+  const partes = [];
+  items.forEach(({ a, q }) => {
+    const url = dibujarEtiqueta(a).toDataURL('image/png');
+    for (let i = 0; i < q; i++) partes.push('<img src="' + url + '" style="width:' + CFG.ancho + 'mm;height:' + CFG.alto + 'mm" alt="">');
+  });
+  $('imprimir').innerHTML = partes.join('');
   $('estiloPagina').textContent = '@page { size: ' + CFG.ancho + 'mm ' + CFG.alto + 'mm; margin: 0; }';
-  ajustarTextos(cont);
-  setTimeout(() => {
-    window.print();
-    if (!marcar) return;
-    const up = {}, t = ahora();
-    items.forEach(({ a }) => { up[claveFB(a.c)] = t; });
-    R_ETIQ.update(up).catch(err => console.error(err));
-    etSel.clear();
-    pintarEtiquetas();
-    toast(items.length === 1 ? 'Marcado como etiquetado' : items.length + ' artículos marcados como etiquetados', 'ok');
-  }, 80);
+  await esperar(80);
+  window.print();
+}
+function marcarImpresas(items) {
+  const up = {}, t = ahora();
+  items.forEach(({ a }) => { up[claveFB(a.c)] = t; });
+  R_ETIQ.update(up).catch(err => console.error(err));
+  etSel.clear();
+  pintarEtiquetas();
 }
 
 // ---------------------------------------------------------------- escaneo: pistola y cámara
@@ -1624,7 +2032,18 @@ function lectura(texto, desdeCam) {
 }
 window.__lecturaColector = t => lectura(t, false); // por si se abre dentro de la app Control
 
-// Pistola en modo teclado: escribe muy rápido y termina con Enter.
+// Pistola en modo teclado (USB o Bluetooth): escribe muy rápido y termina con
+// Enter. Funciona sola apenas se conecta, sin tocar nada. El navegador no
+// avisa cuándo hay una pistola conectada: se la da por disponible desde la
+// primera lectura y desde ahí se muestra "Pistola lista" en el depósito.
+let pistolaActiva = LS.get('repoPistola', 0) > Date.now() - 12 * 3600e3;
+function pistolaLeyo() {
+  LS.set('repoPistola', Date.now());
+  pistolaActiva = true;
+  pintarPistola();
+  const el = $('pistola'); el.classList.remove('leyo'); void el.offsetWidth; el.classList.add('leyo');
+}
+function pintarPistola() { $('pistola').hidden = !(pistolaActiva && PUESTO === 'deposito' && vista !== 'etiq'); }
 const P_GAP = 120, P_MIN = 3, P_MIN_SIN_FIN = 6;
 let pBuf = '', pUlt = 0, pTimer = null, pTragarEnter = 0;
 function pReset() { pBuf = ''; clearTimeout(pTimer); pTimer = null; }
@@ -1643,7 +2062,7 @@ document.addEventListener('keydown', e => {
     pReset();
     if (!rapido || t.length < P_MIN) return;
     e.preventDefault(); e.stopPropagation();
-    pLimpiarInput(t); lectura(t, false);
+    pLimpiarInput(t); pistolaLeyo(); lectura(t, false);
     return;
   }
   if (e.key && e.key.length === 1) {
@@ -1654,7 +2073,7 @@ document.addEventListener('keydown', e => {
       const t = pBuf; pReset();
       if (t.length < P_MIN_SIN_FIN) return;
       pTragarEnter = Date.now() + 300;
-      pLimpiarInput(t); lectura(t, false);
+      pLimpiarInput(t); pistolaLeyo(); lectura(t, false);
     }, P_GAP * 2);
     return;
   }
@@ -1757,11 +2176,13 @@ $('btnBuscar').addEventListener('click', () => {
 let avisoInstalar = null;
 const ES_IPHONE = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const ES_ANDROID = /Android/i.test(navigator.userAgent);
-function instalada() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+function instalada() { return !!APP || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
 function mostrarBotonInstalar() { $('btnInstalar').hidden = instalada() || !(avisoInstalar || ES_IPHONE || ES_ANDROID); }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); avisoInstalar = e; mostrarBotonInstalar(); });
 window.addEventListener('appinstalled', () => { avisoInstalar = null; mostrarBotonInstalar(); cerrarHoja(); toast('App instalada. Ya está en la pantalla de inicio.', 'ok'); });
 async function instalar() {
+  // En Android se instala la app (APK): imprime por Bluetooth y se actualiza sola.
+  if (ES_ANDROID) { abrirInstrucciones(false); return; }
   if (avisoInstalar) {
     cerrarHoja();
     const ev = avisoInstalar; avisoInstalar = null;
@@ -1773,7 +2194,7 @@ async function instalar() {
 }
 function abrirInstrucciones(soloOtro) {
   const k = (ic, t) => '<span class="kbd">' + IC[ic] + t + '</span>';
-  let pasos, nota = '';
+  let pasos, nota = '', apk = false;
   if (soloOtro) {
     pasos = ['Abrí la cámara del otro celular y apuntá al código de abajo.', 'Tocá el enlace que aparece.', 'Tocá ' + k('bajar', 'Instalar en este celular') + ' y seguí los pasos.'];
   } else if (ES_IPHONE) {
@@ -1784,6 +2205,14 @@ function abrirInstrucciones(soloOtro) {
       'Tocá <b>Agregar</b>, arriba a la derecha.'
     ];
     nota = 'Después abrila siempre desde el ícono. La primera vez se elige de nuevo el puesto y el nombre.';
+  } else if (ES_ANDROID) {
+    apk = true;
+    pasos = [
+      'Tocá <b>Descargar la app</b>, acá abajo.',
+      'Cuando termine, abrí <b>Reposicion.apk</b> desde la notificación o desde Descargas.',
+      'Si Android pregunta, permití <b>instalar apps de esta fuente</b> y tocá <b>Instalar</b>.'
+    ];
+    nota = 'Las actualizaciones las ofrece la propia app con un cartel: un toque y listo. La primera vez se elige de nuevo el puesto y el nombre.';
   } else {
     pasos = [
       'Tocá ' + k('puntos', 'Menú') + ' del navegador, arriba a la derecha.',
@@ -1795,12 +2224,56 @@ function abrirInstrucciones(soloOtro) {
   $('insPasos').innerHTML = pasos.map(t => '<li><span>' + t + '</span></li>').join('');
   $('insNota').textContent = nota;
   $('insNota').hidden = !nota;
+  $('insApk').hidden = !apk;
+  $('insApk').href = URL_APK;
   const url = location.href.split('#')[0].split('?')[0];
   $('insUrl').textContent = url.replace(/^https?:\/\//, '');
   try { $('insQr').innerHTML = qrSvg(url); } catch (_) {}
   abrirHoja('hInstalar');
 }
 $('btnInstalar').addEventListener('click', instalar);
+
+// Botón atrás de Android (lo llama la app): cierra lo que esté abierto antes
+// de salir. Devuelve true si hizo algo.
+window.__repoAtras = () => {
+  if (camAbierta()) { camCerrar(); return true; }
+  if (hojaAbierta) { cerrarHoja(); return true; }
+  if (!$('app').hidden && vista !== 'ahora') { irVista('ahora'); return true; }
+  return false;
+};
+
+// ---------------------------------------------------------------- aviso de versión nueva
+// Cada 3 minutos se pregunta al sitio si la página cambió: primero sólo la
+// fecha de modificación (casi sin gastar datos) y, si cambió, se baja y se
+// compara el contenido, porque al publicar se renuevan las fechas de todos
+// los archivos aunque esta página no haya cambiado. Si cambió de verdad,
+// aparece un cartel para actualizar con un toque. No se recarga sola para no
+// cortar a nadie a mitad de algo.
+let huellaPagina = '', fechaVista = '';
+async function huellaPublicada(url) {
+  const t = await (await fetch(url, { cache: 'no-store' })).text();
+  let h = 0; for (let i = 0; i < t.length; i++) h = (Math.imul(h, 31) + t.charCodeAt(i)) | 0;
+  return String(h);
+}
+async function revisarVersion() {
+  if (navigator.onLine === false || !$('avisoVersion').hidden) return;
+  const url = location.pathname + '?v=' + Date.now();
+  try {
+    if (!huellaPagina) { huellaPagina = await huellaPublicada(url); return; }
+    const r = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    const fecha = r.ok ? (r.headers.get('last-modified') || r.headers.get('etag') || '') : '';
+    if (fecha && fecha === fechaVista) return;
+    fechaVista = fecha;
+    if (await huellaPublicada(url) !== huellaPagina) $('avisoVersion').hidden = false;
+  } catch (_) {}
+}
+$('avisoVersion').addEventListener('click', () => {
+  if (APP && APP.recargar) { try { APP.recargar(); return; } catch (_) {} }
+  location.reload();
+});
+setInterval(revisarVersion, 3 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarVersion(); });
+revisarVersion();
 mostrarBotonInstalar();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW:', err));

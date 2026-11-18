@@ -1,0 +1,127 @@
+name: APK Reposicion
+
+# Compila la app Android de Reposicion (reposicion/android), que muestra
+# reposicion/index.html desde el sitio e imprime etiquetas por Bluetooth.
+# Sale sola cuando se toca algo dentro de reposicion/android, o a mano desde
+# la pestana Actions.
+#
+# Todos los APK quedan en UN solo release fijo, "reposicion-apk", marcado como
+# pre-release: asi nunca figura como "latest" y el actualizador de la app de
+# Pedidos (que mira releases/latest) no lo confunde con una version suya.
+# Ahi quedan dos archivos:
+#   Reposicion-<n>.apk  -> lo lee el actualizador de la app (n = versionCode)
+#   Reposicion.apk      -> link fijo para instalar por primera vez
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'reposicion/android/**'
+      - '.github/workflows/apk-reposicion.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-reposicion
+  cancel-in-progress: false
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Bajar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar el SDK de Android
+        uses: android-actions/setup-android@v3
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # Misma clave que la app de Pedidos (secrets ya cargados). Sin ella no se
+      # publica nada: un APK debug no se puede instalar encima del firmado.
+      - name: Preparar la firma
+        id: firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "variante=debug" >> "$GITHUB_OUTPUT"
+            echo "Sin secrets de firma: se compila la variante debug."
+            exit 0
+          fi
+          almacen="$GITHUB_WORKSPACE/reposicion/android/firma.p12"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$almacen"
+          if ! keytool -list -keystore "$almacen" -storepass "$KEYSTORE_PASSWORD" -storetype PKCS12 > /tmp/aliases.txt 2>&1; then
+            echo "No se pudo abrir el keystore. Revisa el secret ANDROID_KEYSTORE_PASSWORD."
+            exit 1
+          fi
+          alias_detectado=$(grep -i 'PrivateKeyEntry' /tmp/aliases.txt | head -n1 | cut -d, -f1)
+          [ -z "$alias_detectado" ] && alias_detectado="$KEY_ALIAS"
+          {
+            echo "storeFile=$almacen"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$alias_detectado"
+            echo "keyPassword=$KEYSTORE_PASSWORD"
+            echo "storeType=PKCS12"
+          } > "$GITHUB_WORKSPACE/reposicion/android/firma.properties"
+          echo "variante=release" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar APK firmado
+        if: steps.firma.outputs.variante == 'release'
+        working-directory: reposicion/android
+        run: gradle assembleRelease --no-daemon -PappVersionCode=${{ github.run_number }} -PappVersionName=1.${{ github.run_number }}
+
+      - name: Compilar APK de prueba
+        if: steps.firma.outputs.variante == 'debug'
+        working-directory: reposicion/android
+        run: gradle assembleDebug --no-daemon -PappVersionCode=${{ github.run_number }} -PappVersionName=1.${{ github.run_number }}
+
+      - name: Juntar el APK
+        run: |
+          mkdir -p salida
+          archivo=$(find reposicion/android/app/build/outputs/apk -name '*.apk' | head -n1)
+          if [ -z "$archivo" ]; then echo "No se genero ningun APK"; exit 1; fi
+          cp "$archivo" "salida/Reposicion-${{ github.run_number }}.apk"
+          cp "$archivo" "salida/Reposicion.apk"
+          ls -lh salida
+
+      - name: Guardar el APK como archivo descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reposicion-apk
+          path: salida/Reposicion-*.apk
+          retention-days: 30
+
+      - name: Publicar en el release fijo
+        if: steps.firma.outputs.variante == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=reposicion-apk
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            gh release create "$tag" --prerelease --latest=false \
+              --title "Reposición (app Android)" \
+              --notes "App Android de Reposición del showroom. Para instalar: abrí Reposicion.apk desde el celular. Las actualizaciones las ofrece la propia app."
+          fi
+          # Primero el nuevo, despues se borran los viejos: nunca queda vacio.
+          gh release upload "$tag" "salida/Reposicion-${{ github.run_number }}.apk" "salida/Reposicion.apk" --clobber
+          for a in $(gh release view "$tag" --json assets -q '.assets[].name'); do
+            case "$a" in
+              "Reposicion.apk"|"Reposicion-${{ github.run_number }}.apk") ;;
+              *) gh release delete-asset "$tag" "$a" -y ;;
+            esac
+          done
