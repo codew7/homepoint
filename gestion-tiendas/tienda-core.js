@@ -417,11 +417,12 @@
     // (tiendas/<id>/costo; el vendedor no la puede cambiar):
     //   · sin nodo / 'interior' → columna E (Descuento Interior), por defecto
     //   · 'costo'               → columna H (Valor Costo)
-    //   · 'costoPct'            → columna H + un % (Costo %)
+    //   · 'costoPct'            → columna H + un % (Costo %; 0 % = Valor Costo)
+    //   · 'lista'               → columna G (Precio de Lista)
     // Ese costo es la base de las escalas y el que queda en cada pedido.
     // ---------------------------------------------------------------------
-    const COLUMNA_COSTO = { E: 4, H: 7 };   // índices base 0 en la fila de la hoja
-    const MODOS_COSTO = ['interior', 'costo', 'costoPct'];
+    const COLUMNA_COSTO = { E: 4, G: 6, H: 7 };   // índices base 0 en la fila de la hoja
+    const MODOS_COSTO = ['interior', 'costo', 'costoPct', 'lista'];
 
     function normalizarReglaCosto(r) {
         const modo = r && MODOS_COSTO.includes(r.modo) ? r.modo : 'interior';
@@ -432,6 +433,7 @@
     function costoDeFila(fila, regla) {
         const r = normalizarReglaCosto(regla);
         if (r.modo === 'interior') return parsearMonto(fila && fila[COLUMNA_COSTO.E]);
+        if (r.modo === 'lista') return parsearMonto(fila && fila[COLUMNA_COSTO.G]);
         const h = parsearMonto(fila && fila[COLUMNA_COSTO.H]);
         if (!isFinite(h)) return NaN;
         return r.modo === 'costoPct' ? Math.round(h * (1 + r.pct / 100) * 100) / 100 : h;
@@ -440,6 +442,7 @@
     function textoReglaCosto(regla) {
         const r = normalizarReglaCosto(regla);
         if (r.modo === 'costo') return 'Valor Costo';
+        if (r.modo === 'lista') return 'Precio de Lista';
         if (r.modo === 'costoPct') return `Costo % ${r.pct >= 0 ? '+' : '−'}${Math.abs(r.pct)}%`;
         return 'Descuento Interior';
     }

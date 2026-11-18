@@ -108,7 +108,7 @@ tiendas/<id>/
                      pausadaPor 'tienda' = la pausó su responsable (Panel → Tienda → Estado) y la puede reactivar;
                      si la pausaste vos ('admin'), sólo vos la reactivás (lo exigen las reglas)
   baja/              { fecha, uid, email, borrarUsuario, motivo? } ← el responsable pide eliminar la tienda (y opcionalmente su usuario)
-  costo/             { modo: 'costo' | 'costoPct', pct? } ← público, sólo lo escribe el admin global. Sin nodo = columna E
+  costo/             { modo: 'costo' | 'costoPct' | 'lista', pct? } ← público, sólo lo escribe el admin global. Sin nodo = columna E
   pedidos/<clave>/   { numero, fecha, status, entregado?, total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, dni? (7-8 dígitos), entrega?, direccion?, notas?},
                        items[{nombre, cantidad, precio, costo?, codigo?}] }
                      ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.

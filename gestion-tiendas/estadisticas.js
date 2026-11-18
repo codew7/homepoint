@@ -15,6 +15,7 @@
    Cómo se obtiene el costo real según la variable de costos de la tienda:
      · Valor Costo (H):        real = costo → no te deja ganancia.
      · Costo % (H + %):        real = costo / (1 + %). Exacto.
+     · Precio de Lista (G):    igual que Descuento Interior, con H / G.
      · Descuento Interior (E): real = costo × H / E de la fila actual de la hoja.
                                Se usa la proporción y no H directo, así un
                                aumento de precios en la hoja no distorsiona
@@ -35,7 +36,7 @@
     const pct = (a, b) => (b > 0 ? Math.round(a / b * 1000) / 10 : 0);
     const fmPct = (n) => (Math.round(n * 10) / 10).toLocaleString('es-AR') + '%';
     const reducirMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const NOMBRE_MODO = { interior: 'Descuento Interior', costo: 'Valor Costo', costoPct: 'Costo %' };
+    const NOMBRE_MODO = { interior: 'Descuento Interior', costo: 'Valor Costo', costoPct: 'Costo %', lista: 'Precio de Lista' };
 
     const est = {
         ctx: null,
@@ -43,8 +44,8 @@
         cargando: null,
         error: '',
         pedidos: {},          // id de tienda → [pedido]
-        hoja: null,           // Map código → { e, h } · null si no se pudo leer
-        ratioPromedio: null,  // H/E promedio de la hoja (respaldo)
+        hoja: null,           // Map código → { e, g, h } · null si no se pudo leer
+        ratioPromedio: null,  // { interior: H/E, lista: H/G } promedio de la hoja (respaldo)
         periodo: '30',
         orden: { col: 'ganancia', desc: true },
         ultimo: null          // último cálculo (para el CSV)
@@ -84,9 +85,11 @@
         const r = T.normalizarReglaCosto(regla);
         if (r.modo === 'costo') return { real: costo, estimado: false };
         if (r.modo === 'costoPct') return { real: costo / (1 + r.pct / 100), estimado: false };
+        const base = r.modo === 'lista' ? 'g' : 'e';   // columna de la que salió el costo
         const fila = hoja && codigo ? hoja.get(String(codigo).trim()) : null;
-        if (fila && fila.e > 0 && fila.h > 0) return { real: costo * fila.h / fila.e, estimado: false };
-        if (ratioPromedio) return { real: costo * ratioPromedio, estimado: true };
+        if (fila && fila[base] > 0 && fila.h > 0) return { real: costo * fila.h / fila[base], estimado: false };
+        const ratio = ratioPromedio && ratioPromedio[r.modo];
+        if (ratio) return { real: costo * ratio, estimado: true };
         return { real: null, estimado: true };
     }
 
@@ -127,7 +130,7 @@
     function calcular(pedidosPorTienda, tiendas, hoja, ratio, desde, hasta) {
         const total = nuevoAcum();
         const porTienda = {};
-        const porModo = { interior: nuevoAcum(), costo: nuevoAcum(), costoPct: nuevoAcum() };
+        const porModo = { interior: nuevoAcum(), costo: nuevoAcum(), costoPct: nuevoAcum(), lista: nuevoAcum() };
         const productos = new Map();
         const entregados = [];      // { fecha, compro, ganancia, facturado } para el gráfico
         const pendiente = nuevoAcum();
@@ -162,20 +165,22 @@
         return { total, porTienda, porModo, productos, entregados, pendiente };
     }
 
-    // Filas de la hoja → Map(código → { e, h }) y la proporción H/E promedio
+    // Filas de la hoja → Map(código → { e, g, h }) y las proporciones H/E y H/G promedio
     function leerHoja(filas) {
         const mapa = new Map();
-        let sumaE = 0, sumaH = 0;
+        let sumaE = 0, sumaHE = 0, sumaG = 0, sumaHG = 0;
         (filas || []).forEach(f => {
             const codigo = String((f && f[2]) || '').trim();
             if (!codigo) return;
             const e = T.costoDeFila(f, { modo: 'interior' });
+            const g = T.costoDeFila(f, { modo: 'lista' });
             const h = T.costoDeFila(f, { modo: 'costo' });
-            if (!(e > 0) || !(h > 0)) return;
-            mapa.set(codigo, { e, h });
-            sumaE += e; sumaH += h;
+            if (!(h > 0) || (!(e > 0) && !(g > 0))) return;
+            mapa.set(codigo, { e, g, h });
+            if (e > 0) { sumaE += e; sumaHE += h; }
+            if (g > 0) { sumaG += g; sumaHG += h; }
         });
-        return { mapa, ratio: sumaE > 0 ? sumaH / sumaE : null };
+        return { mapa, ratio: { interior: sumaE > 0 ? sumaHE / sumaE : null, lista: sumaG > 0 ? sumaHG / sumaG : null } };
     }
 
     // ======================================================================
@@ -437,9 +442,9 @@
 
     function pintarModos(r) {
         const total = r.total.compro - r.total.real;
-        const tiendasPorModo = { interior: 0, costo: 0, costoPct: 0 };
+        const tiendasPorModo = { interior: 0, costo: 0, costoPct: 0, lista: 0 };
         Object.values(r.porTienda).forEach(a => { tiendasPorModo[a.modo]++; });
-        $('estModos').innerHTML = `<ul class="est-modos">${['interior', 'costoPct', 'costo'].map(m => {
+        $('estModos').innerHTML = `<ul class="est-modos">${['interior', 'lista', 'costoPct', 'costo'].map(m => {
             const a = r.porModo[m];
             const g = a.compro - a.real;
             const parte = total > 0 ? Math.max(0, g / total * 100) : 0;
@@ -463,7 +468,7 @@
         const mejor = filas.filter(f => f.pedidos).sort((a, b) => b.ganancia - a.ganancia)[0];
         const totalGan = r.total.compro - r.total.real;
         if (mejor && totalGan > 0 && filas.filter(f => f.pedidos).length > 1) items.push(['fa-trophy', `<strong>${esc(mejor.nombre)}</strong> es la que más te dejó: ${fm(mejor.ganancia)} (${fmPct(pct(mejor.ganancia, totalGan))} de tu ganancia).`]);
-        if (r.total.estimados) items.push(['fa-circle-info', `${r.total.estimados} ${r.total.estimados === 1 ? 'unidad vendida' : 'unidades vendidas'} con Descuento Interior ya no ${r.total.estimados === 1 ? 'está' : 'están'} en la hoja: su costo real se estimó con la proporción promedio.`]);
+        if (r.total.estimados) items.push(['fa-circle-info', `${r.total.estimados} ${r.total.estimados === 1 ? 'unidad vendida' : 'unidades vendidas'} con Descuento Interior o Precio de Lista ya no ${r.total.estimados === 1 ? 'está' : 'están'} en la hoja: su costo real se estimó con la proporción promedio.`]);
         if (r.total.sinCosto) items.push(['fa-circle-question', `${r.total.sinCosto} ${r.total.sinCosto === 1 ? 'unidad no tiene' : 'unidades no tienen'} costo guardado (pedidos viejos o artículos sin costo en la hoja): no suman a tus cifras.`]);
         $('estAlertasTarjeta').hidden = !items.length;
         $('estAlertas').innerHTML = items.map(([i, t]) => `<li><i class="fas ${i}"></i><span>${t}</span></li>`).join('');

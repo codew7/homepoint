@@ -773,11 +773,12 @@
                 <div style="display:grid;gap:8px">
                     ${opcion('interior', 'Descuento Interior', 'Opción por defecto.')}
                     ${opcion('costo', 'Valor Costo', '')}
-                    ${opcion('costoPct', 'Costo %', 'Valor Costo más un porcentaje.')}
+                    ${opcion('costoPct', 'Costo %', 'Valor Costo más un porcentaje (0 % = mismo Valor Costo).')}
+                    ${opcion('lista', 'Precio de Lista', 'Columna G de la hoja.')}
                 </div>
                 <div class="campo" id="vcPctCampo" style="margin-top:12px" ${t.costo.modo === 'costoPct' ? '' : 'hidden'}>
                     <label for="vcPct">Porcentaje sobre el Valor Costo</label>
-                    <div class="con-sufijo"><input type="number" id="vcPct" min="-90" max="500" step="0.5" value="${esc(t.costo.modo === 'costoPct' ? t.costo.pct : '')}" placeholder="15"><span>%</span></div>
+                    <div class="con-sufijo"><input type="number" id="vcPct" min="-90" max="500" step="0.5" value="${esc(t.costo.modo === 'costoPct' ? t.costo.pct : '')}" placeholder="0"><span>%</span></div>
                     <small id="vcEj"></small>
                 </div>
                 <p class="ayuda">Los catálogos que ya estén abiertos toman el cambio al recargar la página.</p>`,
@@ -801,9 +802,9 @@
         m.form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const md = modo();
-            const txt = m.q('#vcPct').value, pct = Number(txt);
-            if (md === 'costoPct' && (txt === '' || !isFinite(pct) || pct < -90 || pct > 500)) {
-                avisoModal(m, 'Indicá el porcentaje sobre el Valor Costo (entre -90 y 500).'); m.q('#vcPct').focus(); return;
+            const txt = m.q('#vcPct').value.trim(), pct = txt === '' ? 0 : Number(txt);   // vacío = 0 %
+            if (md === 'costoPct' && (!isFinite(pct) || pct < -90 || pct > 500)) {
+                avisoModal(m, 'El porcentaje sobre el Valor Costo tiene que estar entre -90 y 500 (0 = sin recargo).'); m.q('#vcPct').focus(); return;
             }
             // Descuento Interior = sin nodo (lo mínimo en la base)
             const valor = md === 'interior' ? null : (md === 'costoPct' ? { modo: md, pct } : { modo: md });
