@@ -96,6 +96,16 @@ Lee los pedidos **entregados** de todas las tiendas (últimos 90 días, por el d
 
 Se usa la variable de costos **actual** de cada tienda. La hoja se lee con la llave de `HOJA_COSTOS`, que sólo funciona desde homepoint-admin.dev.ar. Incluye comparación con el período anterior, gráfico, tabla por tienda (ordenable y descargable en CSV), productos que más ganancia dejan, ganancia por variable de costos y avisos.
 
+## Solicitar a Home Point
+
+En el detalle de cada pedido, el vendedor tiene el botón **Solicitar a Home Point**. Le pide la mercadería de ese pedido a Home Point como si la hubiera cargado en el catálogo del interior (`CatalogoWeb/catalogoInterior.html`):
+
+- Escribe en la base de pedidos de Home Point (`pedidos-87064`, configurada en `FIREBASE_HOME_POINT` del `config.js` del catálogo) con **el mismo formato** que el catálogo del interior: `cat: 'int'`, `createdby: 'web'`, `valorUSD` = columna E, sin transporte ("Lo decido después").
+- El cliente es el dueño de la tienda, identificado por **el email con el que entra a su panel**. Si no está en `clientes`, el panel le pide los datos una sola vez y lo registra.
+- Si ya tiene un pedido `ABIERTO` y sin bloquear (`locked: false`), **se suma a ése**: une por nombre y suma cantidades, igual que el modo edición del interior. Si no, crea uno nuevo y manda el email con el enlace.
+- Aplica la misma regla de stock que el interior (columna K): ajusta cantidades y deja afuera lo que no tiene stock.
+- Marca el pedido de la tienda con `solicitado` para no pedirlo dos veces, y guarda en `tiendas/<id>/interior/pedido` el pedido de Home Point para encontrarlo después sin recorrer el historial.
+
 ## Datos en la base
 
 ```
@@ -109,7 +119,8 @@ tiendas/<id>/
                      si la pausaste vos ('admin'), sólo vos la reactivás (lo exigen las reglas)
   baja/              { fecha, uid, email, borrarUsuario, motivo? } ← el responsable pide eliminar la tienda (y opcionalmente su usuario)
   costo/             { modo: 'costo' | 'costoPct' | 'lista', pct? } ← público, sólo lo escribe el admin global. Sin nodo = columna E
-  pedidos/<clave>/   { numero, fecha, status, entregado?, total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, dni? (7-8 dígitos), entrega?, direccion?, notas?},
+  interior/          { pedido } ← último pedido que la tienda le solicitó a Home Point (base pedidos-87064). Lo escribe el panel del vendedor
+  pedidos/<clave>/   { numero, fecha, status, entregado?, solicitado? (fecha en que se pidió la mercadería a Home Point), total, cliente{nombre, telefono (sólo dígitos), email, provincia, localidad, dni? (7-8 dígitos), entrega?, direccion?, notas?},
                        items[{nombre, cantidad, precio, costo?, codigo?}] }
                      ← el cliente sólo puede crear (status ABIERTO); el responsable lee, marca ENTREGADO o borra.
                        Unidades, subtotal, descuento y costo total NO se guardan: el panel los calcula de los artículos.
