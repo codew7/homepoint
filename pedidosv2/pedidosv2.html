@@ -2268,6 +2268,23 @@
 
     /* Variante formulario: campos alineados a la izquierda y titulo propio */
     .modal-box--form { max-width: 400px; text-align: left; }
+    /* ubicaciones-ar.css (del catalogo) usa los tokens del catalogo: se
+       traducen a los de esta pagina, asi sigue el modo oscuro. */
+    .ubic-edit {
+      --superficie: var(--surface);
+      --borde: var(--line-2);
+      --borde-fuerte: var(--line);
+      --radio-sm: var(--r1);
+      --sombra-3: var(--sh2);
+      --verde-050: var(--surface-3);
+      --verde-800: var(--accent);
+      --tinta-900: var(--ink);
+      --tinta-600: var(--ink-2);
+      --tinta-400: var(--ink-3);
+      --ambar-700: var(--warn);
+      --rojo: var(--bad);
+    }
+    .ubic-edit .ubic-error { margin: -4px 0 9px; }
     .modal-titulo {
       font-size: 15px;
       font-weight: 800;
@@ -6410,7 +6427,11 @@
       <p class="modal-titulo">Editar datos del cliente</p>
       <input class="edit-client-field" id="editNombre" type="text" placeholder="Nombre y Apellido">
       <input class="edit-client-field" id="editDireccion" type="text" placeholder="Direccion Completa">
-      <input class="edit-client-field" id="editLocalidad" type="text" placeholder="Localidad">
+      <!-- Localidad: combobox de ubicaciones-ar.js (lista y error cuelgan del
+           .form-group). Provincias con los mismos valores que el catalogo. -->
+      <div class="form-group ubic-edit">
+        <input class="edit-client-field" id="editLocalidad" type="text" placeholder="Localidad">
+      </div>
       <select class="edit-client-field" id="editProvincia">
         <option value="">Seleccione Provincia</option>
         <option value="CABA">CABA</option>
@@ -6419,17 +6440,17 @@
         <option value="Catamarca">Catamarca</option>
         <option value="Chaco">Chaco</option>
         <option value="Chubut">Chubut</option>
-        <option value="Cordoba">Cordoba</option>
+        <option value="Córdoba">Córdoba</option>
         <option value="Corrientes">Corrientes</option>
-        <option value="Entre Rios">Entre Rios</option>
+        <option value="Entre Ríos">Entre Ríos</option>
         <option value="Formosa">Formosa</option>
         <option value="Jujuy">Jujuy</option>
         <option value="La Pampa">La Pampa</option>
         <option value="La Rioja">La Rioja</option>
         <option value="Mendoza">Mendoza</option>
         <option value="Misiones">Misiones</option>
-        <option value="Neuquen">Neuquen</option>
-        <option value="Rio Negro">Rio Negro</option>
+        <option value="Neuquén">Neuquén</option>
+        <option value="Río Negro">Río Negro</option>
         <option value="Salta">Salta</option>
         <option value="San Juan">San Juan</option>
         <option value="San Luis">San Luis</option>
@@ -6437,7 +6458,7 @@
         <option value="Santa Fe">Santa Fe</option>
         <option value="Santiago del Estero">Santiago del Estero</option>
         <option value="Tierra del Fuego">Tierra del Fuego</option>
-        <option value="Tucuman">Tucuman</option>
+        <option value="Tucumán">Tucumán</option>
       </select>
       <input class="edit-client-field" id="editDni" type="text" placeholder="DNI">
       <input class="edit-client-field" id="editTelefono" type="text" placeholder="Telefono">
@@ -6999,6 +7020,10 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- QZ Tray: puente local para impresion ESC-POS (fuente nativa de la 3nStar RPT008) -->
   <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
+  <!-- Autocompletado de localidad/provincia del modal de editar cliente: el
+       mismo modulo y listado que usan los catalogos (CatalogoWeb). -->
+  <link rel="stylesheet" href="https://home-point.com.ar/ubicaciones-ar.css">
+  <script src="https://home-point.com.ar/ubicaciones-ar.js" defer></script>
   <script src="config.js"></script>
   <!-- Conversaciones de WhatsApp: proyecto Firebase aparte (carpeta WhatsAppSync) -->
   <script src="config-whatsapp.js"></script>
@@ -17590,11 +17615,36 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       document.getElementById('editNombre').value = c.nombre || '';
       document.getElementById('editDireccion').value = c.direccion || '';
       document.getElementById('editLocalidad').value = c.localidad || '';
-      document.getElementById('editProvincia').value = c.provincia || '';
+      editProvinciaCargar(c.provincia);
       document.getElementById('editDni').value = c.dni || '';
       document.getElementById('editTelefono').value = c.telefono || '';
       document.getElementById('editEmail').value = c.email || '';
+      const ubic = editUbicacion();
+      if (ubic) ubic.sincronizar();
       document.getElementById('editClientModal').classList.add('active');
+    }
+
+    // Autocompletado de localidad del catalogo (ubicaciones-ar.js). Se monta
+    // la primera vez que se abre el modal; si el script no cargo, el campo
+    // sigue siendo texto libre.
+    function editUbicacion() {
+      if (!window.UbicacionesAR) return null;
+      return UbicacionesAR.montar(document.getElementById('editLocalidad'), document.getElementById('editProvincia'));
+    }
+
+    // Los pedidos viejos guardan la provincia sin tildes ("Cordoba"): se
+    // reconoce contra las opciones del catalogo ignorando tildes. Si no
+    // coincide con ninguna se agrega tal cual, para no perder el dato.
+    function editProvinciaCargar(valor) {
+      const sel = document.getElementById('editProvincia');
+      const v = String(valor || '').trim();
+      const op = v && Array.from(sel.options).find(o => normalizarNota(o.value) === normalizarNota(v));
+      if (v && !op) {
+        const nueva = document.createElement('option');
+        nueva.value = nueva.textContent = v;
+        sel.appendChild(nueva);
+      }
+      sel.value = op ? op.value : v;
     }
 
     document.getElementById('editClientCancel').addEventListener('click', () => {
@@ -17607,6 +17657,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const nombre = document.getElementById('editNombre').value.trim();
       const email = document.getElementById('editEmail').value.trim();
       if (!nombre) { showToast('El nombre es obligatorio'); return; }
+      // Igual que en el catalogo, la localidad tiene que salir de la lista.
+      // Vacia se permite (p. ej. retiro en el local).
+      const ubic = editUbicacion();
+      if (ubic && document.getElementById('editLocalidad').value.trim() && !ubic.validar()) return;
 
       const clienteUpdate = {
         'cliente/nombre': nombre,
