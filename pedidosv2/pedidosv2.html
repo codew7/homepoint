@@ -9898,6 +9898,7 @@
       ppRotSalir();
       ppDesuscribir();
       ppFiltroNotaToggle(false);
+      ppBuscarToggle(false);
     }
 
     document.getElementById('pedidosPanelClose').addEventListener('click', cerrarPanelPedidos);
@@ -10390,7 +10391,7 @@
 
     function waComprobantesFirma(p) {
       const c = waComprobantesDe(p);
-      return c ? [c.docs, c.fotos, c.ultimo, c.suma, c.estado, c.alerta].join('/') : '';
+      return c ? [c.docs, c.fotos, c.ultimo, c.suma, c.estado, c.alerta, c.total].join('/') : '';
     }
 
     function waComprobantesHtml(p) {
@@ -10398,19 +10399,22 @@
       if (!c) return '';
       const n = c.docs + c.fotos;
       return '<span class="pp-comprobante wa-tag' + (c.alerta ? ' is-alerta-' + c.alerta : '') + '"' +
-        waTagAtributos('pago', p.id, p.telefono, p.nombre, waAdjPorPedido.get(p.id)) + '>' +
+        waTagAtributos('pago', p.id, p.telefono, p.nombre, waAdjPorPedido.get(p.id), p.total) + '>' +
         IC_COMPROBANTE + (n > 1 ? '<b>' + n + '</b>' : '') + '</span>';
     }
 
     // ---------- Etiquetas de comprobante (pendientes e historial) ----------
-    // Cursor encima: solo la fecha (title). Un toque o clic: la fecha en un
+    // Cursor encima: la fecha (y en pendientes, el total del pedido) en el title. Un toque o clic: la fecha en un
     // globito. Doble clic o doble toque: abre el visor de comprobantes.
     function waFechaComprobante(t) {
       return new Date(t).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     }
 
-    function waTagAtributos(cat, pedido, telefono, nombre, lista) {
-      const fechas = (lista || []).map(a => waFechaComprobante(a.t)).join('\n');
+    // `total` (opcional): el total final del pedido; si viene, se suma como
+    // ultima linea debajo de las fechas (en el title y en el globito).
+    function waTagAtributos(cat, pedido, telefono, nombre, lista, total) {
+      let fechas = (lista || []).map(a => waFechaComprobante(a.t)).join('\n');
+      if (total) fechas += '\nTotal: $ ' + Math.round(total).toLocaleString('es-AR');
       const etiqueta = (cat === 'remito' ? 'Remito' : 'Comprobante de pago') + ': ' + fechas.replace(/\n/g, ', ');
       return ' role="button" tabindex="0" data-cat="' + cat + '" data-pedido="' + escapeHtml(pedido) + '"' +
         ' data-tel="' + escapeHtml(waClaveTelefono(telefono)) + '" data-nombre="' + escapeHtml(nombre || '') + '"' +
@@ -10856,7 +10860,17 @@
       renderPedidosPendientes();
     });
     ppBuscarInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); ppBuscarToggle(false); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); ppBuscarToggle(false); return; }
+      // Enter abre el primer pedido que quedo en la lista filtrada (como
+      // tocar su fila). En el modo "Imprimir rotulos" no hace nada.
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        if (ppRotModo || !ppBusqueda) return;
+        const fila = pedidosPanelList.querySelector('.pedidos-panel-item[data-id]');
+        if (!fila) return;
+        cerrarPanelPedidos();
+        cargarPedido(fila.dataset.id);
+      }
     });
 
     // En escritorio, con la lista de pendientes abierta, empezar a escribir
@@ -10867,6 +10881,12 @@
     document.addEventListener('keydown', (e) => {
       if (!ppEscritorio.matches || !pedidosPanel.classList.contains('active')) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      // Escape con el foco fuera del campo tambien limpia la busqueda.
+      if (e.key === 'Escape' && !ppBuscarEl.hidden && !document.querySelector('.modal-backdrop.active')) {
+        e.preventDefault();
+        ppBuscarToggle(false);
+        return;
+      }
       if (e.key.length !== 1 || e.key === ' ' && ppBuscarEl.hidden) return;
       const t = e.target;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
