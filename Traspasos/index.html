@@ -434,6 +434,10 @@ img{display:block}
 .hs-elegir{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .hs-elegir button{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:var(--paper);box-shadow:var(--sh);text-align:left;font-weight:700;font-size:.84rem}
 .hs-elegir .thumb{width:40px;height:40px;border-radius:9px}
+.hs-elegir button span{display:flex;flex-direction:column;min-width:0}
+.hs-elegir button small,.scan-elegir button small{font-family:var(--f-mono);font-size:.7rem;font-weight:600;opacity:.7}
+.hs-elegir button.fuera{opacity:.82}
+.hs-elegir button.fuera small,.scan-elegir button.fuera small{color:var(--red);opacity:1;font-family:inherit;font-weight:800}
 /* destello de toda la pantalla, visible de lejos */
 .pk-flash{position:fixed;inset:0;z-index:85;pointer-events:none;opacity:0;--c:var(--ok);box-shadow:inset 0 0 0 9px var(--c),inset 0 0 110px color-mix(in srgb,var(--c) 55%,transparent)}
 .pk-flash[data-c="warn"]{--c:var(--amber)}
@@ -588,6 +592,17 @@ img{display:block}
 @keyframes readerWarn{0%{box-shadow:0 0 0 6px #F2A007}100%{box-shadow:0 0 0 0 transparent}}
 @keyframes readerErr{0%{box-shadow:0 0 0 6px #E5484D}100%{box-shadow:0 0 0 0 transparent}}
 .scan-count{font-family:var(--f-mono);font-size:.76rem;color:rgba(255,255,255,.55)}
+/* Código compartido: se elige el artículo sin salir de la cámara */
+.scan-elegir{width:100%;display:flex;flex-direction:column;gap:6px;animation:entra .25s var(--ease)}
+.scan-elegir .se-t{color:#fff;font-weight:800;font-size:.9rem;text-align:center}
+.scan-elegir .se-t code{font-family:var(--f-mono);font-weight:600;color:var(--amber)}
+.scan-elegir .se-l{display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow:auto}
+.scan-elegir button{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;text-align:left;font-weight:700;font-size:.84rem}
+.scan-elegir button:active{background:rgba(255,255,255,.22)}
+.scan-elegir button span{display:flex;flex-direction:column;min-width:0}
+.scan-elegir .thumb{width:40px;height:40px;border-radius:9px;flex-shrink:0}
+.scan-elegir .se-no{justify-content:center;background:transparent;color:rgba(255,255,255,.7);font-weight:600}
+.scan-elegir button.fuera small{color:#FF9A9D}
 
 /* ====== BLOQUEO + TOAST ====== */
 .block{position:fixed;inset:0;z-index:400;background:rgba(238,241,244,.82);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
@@ -1667,6 +1682,13 @@ let stockCargadoEn = 0;
 let stockCargando = false;
 
 function normCod(c){ return String(c || '').trim().toUpperCase(); }
+// Todos los artículos del catálogo que responden a una lectura (código de barras o código de producto).
+// Puede haber más de uno: hay artículos distintos que comparten el mismo código de barras.
+function catalogoPorLectura(code){
+  code = normCod(code);
+  if (!code) return [];
+  return articulos.filter(a => normCod(a.codigo) === code || a.barras.some(b => normCod(b) === code));
+}
 // Respaldo de imágenes: 4to link de la columna B de la hoja `Lista` (4 links separados por coma).
 // Se usa cuando el artículo no tiene foto o su link no carga: el 1er link siempre está escrito,
 // aunque la imagen no exista en el servidor.
@@ -2973,7 +2995,7 @@ function pickHeroHtml(t, st){
   } else if (u.estado === 'elegir'){
     estado = 'elegir'; media = icono(ICON.scan);
     tx = tag('Código compartido', ICON.alert) + `<div class="hs-t">¿Cuál de estos artículos es?</div><div class="hs-s"><code>${escapeHtml(u.code)}</code></div>`;
-    extra = `<div class="hs-elegir">${u.opciones.map(k => { const i = t.items[k]; return `<button type="button" data-elegir="${escapeHtml(k)}">${thumbHtml(i.foto, i.nombre, i.codigo)}<span>${escapeHtml(i.nombre)}</span></button>`; }).join('')}</div>`;
+    extra = `<div class="hs-elegir">${elegirOpcionesHtml(t, u)}</div>`;
   } else if (u.estado === 'ajeno' || u.estado === 'desconocido'){
     estado = u.estado;
     media = u.foto || u.codigo ? thumbHtml(u.foto, u.nombre, u.codigo) : icono(ICON.x);
@@ -3147,6 +3169,26 @@ function revisarFinPick(st){
   }, 700);
 }
 
+// Opciones de "¿cuál de estos?": primero los del pedido, después los que comparten el código pero no van.
+function elegirOpcionesHtml(t, u){
+  const delPedido = u.opciones.filter(k => t.items[k]).map(k => { const i = t.items[k];
+    return `<button type="button" data-elegir="${escapeHtml(k)}">${thumbHtml(i.foto, i.nombre, i.codigo)}<span>${escapeHtml(i.nombre)}<small>#${escapeHtml(i.codigo)}</small></span></button>`; });
+  const fuera = (u.fuera || []).map(c => articulosPorCodigo.get(c)).filter(Boolean).map(a =>
+    `<button type="button" class="fuera" data-elegir-fuera="${escapeHtml(a.codigo)}">${thumbHtml(a.foto, a.nombre, a.codigo)}<span>${escapeHtml(a.nombre)}<small>No está en este pedido</small></span></button>`);
+  return delPedido.concat(fuera).join('');
+}
+function pickElegido(el){
+  if (!el || !pick) return false;
+  const u = pick.ultimo;
+  if (el.dataset.elegir != null){ pickContar(el.dataset.elegir); return true; }
+  if (el.dataset.elegirFuera != null){
+    const a = articulosPorCodigo.get(el.dataset.elegirFuera);
+    pickAjeno(u && u.code ? u.code : el.dataset.elegirFuera, a || null);
+    return true;
+  }
+  return false;
+}
+
 // ---- Lecturas (pistola o cámara) ----
 function pickActivo(){ return !!pick && capas[capas.length - 1] === $('pickScreen') && !$('block').classList.contains('on'); }
 
@@ -3183,10 +3225,19 @@ function pickLectura(texto){
   if (!code || !t) return;
   if (!articulos.length){ sonar('sobra'); toast('Esperá a que cargue el catálogo y volvé a escanear', 'aviso'); return; }
   const delPedido = pickBuscar(t, code);
-  if (delPedido.length === 1){ pickContar(delPedido[0]); return; }
-  if (delPedido.length > 1){ pickFeedback({ estado: 'elegir', code, opciones: delPedido }); return; }
+  // Artículos del catálogo con el mismo código que no están en el pedido: también se ofrecen,
+  // así no se cuenta como del pedido algo que en realidad es otro artículo.
+  const enPedido = new Set(delPedido.map(k => normCod(t.items[k].codigo)));
+  const fuera = catalogoPorLectura(code).filter(a => !enPedido.has(normCod(a.codigo)));
+  if (delPedido.length === 1 && !fuera.length){ pickContar(delPedido[0]); return; }
+  if (delPedido.length){ pickFeedback({ estado: 'elegir', code, opciones: delPedido, fuera: fuera.map(a => a.codigo) }); return; }
   // No es del pedido: queda anotado para sacarlo de la caja antes de despachar.
-  const a = articulos.find(x => normCod(x.codigo) === code || x.barras.some(b => normCod(b) === code));
+  pickAjeno(code, fuera.length === 1 ? fuera[0] : null, fuera);
+}
+
+// Unidad que no va en este pedido. a: el artículo (si se sabe cuál es); varios: todos los que comparten el código.
+function pickAjeno(code, a, varios){
+  if (!a && varios && varios.length > 1) a = { nombre: varios.map(x => x.nombre).join(' o '), codigo: '', foto: '' };
   pickSnapshot(null);
   const ya = pick.ajenos.find(x => x.code === code);
   if (ya) ya.n++;
@@ -3397,8 +3448,8 @@ $('pickInner').addEventListener('click', e => {
     }
     return;
   }
-  const el = e.target.closest('[data-elegir]');
-  if (el){ pickContar(el.dataset.elegir); return; }
+  const el = e.target.closest('[data-elegir],[data-elegir-fuera]');
+  if (el){ pickElegido(el); return; }
   const aj = e.target.closest('[data-ajeno]');
   if (aj){
     const code = aj.dataset.ajeno;
@@ -3663,6 +3714,38 @@ const SCAN_REPETIR_MS = 1800;  // el mismo código vuelve a sumar recién si se 
 const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let html5Qr = null, scanLast = '', scanCount = 0, scanVisto = {}, scanSumados = 0;
 let scanModo = 'pedir';   // 'pedir': suma al carrito · 'pick': cuenta unidades del pedido que se prepara
+let scanEligiendo = false; // hay un "¿cuál de estos?" abierto: la cámara no cuenta lecturas hasta que se elija
+
+// Varios artículos comparten el código leído: se muestran para elegir sin salir de la cámara.
+function scanElegir(code, opcionesHtml){
+  scanEligiendo = true;
+  $('scanFeed').innerHTML = `<div class="scan-elegir"><div class="se-t">¿Cuál de estos es? <code>${escapeHtml(code)}</code></div>
+    <div class="se-l">${opcionesHtml}</div><button type="button" class="se-no" data-elegir-no>Ninguno · seguir escaneando</button></div>`;
+  const r = $('reader');
+  r.classList.remove('f-ok', 'f-warn', 'f-err'); void r.offsetWidth; r.classList.add('f-warn');
+}
+$('scanFeed').addEventListener('click', e => {
+  const b = e.target.closest('[data-elegir],[data-elegir-fuera],[data-elegir-no],[data-elegir-cart]');
+  if (!b || !scanEligiendo) return;
+  scanEligiendo = false;
+  scanVisto = {};   // la próxima unidad igual se puede leer enseguida
+  if (b.dataset.elegirNo != null){
+    if (scanModo === 'pick' && pick){ pick.ultimo = null; renderPick(); }
+    $('scanFeed').innerHTML = `<div class="scan-hint">No se contó nada. Seguí escaneando.</div>`;
+    return;
+  }
+  if (b.dataset.elegirCart != null){ scanSumarCarrito(articulosPorCodigo.get(b.dataset.elegirCart)); return; }
+  pickElegido(b);
+});
+
+function scanSumarCarrito(a){
+  if (!a || !agregarAlCarrito(a.codigo, 1)) return;
+  scanSumados++;
+  vibrar(50);
+  sonar('ok');
+  const c = carrito[a.codigo];
+  $('scanFeed').innerHTML = `<div class="scan-last"><b>+1</b><span>${escapeHtml(a.nombre)}</span><b>${c ? c.cant : 1}</b></div><div class="scan-count">${plural(scanSumados, 'lectura', 'lecturas')} en esta tanda</div>`;
+}
 
 function gtinCheckOk(code){
   if (!/^\d+$/.test(code)) return false;
@@ -3701,8 +3784,9 @@ function scanFeedPick(u){
   if (scanModo !== 'pick' || !$('scan').classList.contains('on') || !pick) return;
   const t = traspasos[pick.id];
   if (!t) return;
-  // Código compartido: se elige en la pantalla, la cámara se cierra.
-  if (u.estado === 'elegir'){ cerrarScanner(); return; }
+  // Código compartido: se elige ahí mismo, sin cerrar la cámara.
+  if (u.estado === 'elegir'){ scanElegir(u.code, elegirOpcionesHtml(t, u)); return; }
+  scanEligiendo = false;
   const c = COLOR_DE[u.estado] || '';
   const i = u.k ? t.items[u.k] : null;
   const txt = { ok: `Correcto · faltan ${u.sol - u.n}`, completo: 'Completo', sobra: 'Ya está completo · sobra', quitado: 'Quitado del pedido', ajeno: 'No es de este pedido', desconocido: 'Código desconocido' }[u.estado] || '';
@@ -3720,7 +3804,7 @@ async function abrirScanner(modo){
   scanModo = modo === 'pick' ? 'pick' : 'pedir';
   audioDesbloquear();
   $('scan').classList.add('on');
-  scanLast = ''; scanCount = 0; scanVisto = {}; scanSumados = 0;
+  scanLast = ''; scanCount = 0; scanVisto = {}; scanSumados = 0; scanEligiendo = false;
   $('scanFeed').innerHTML = `<div class="scan-hint">${scanModo === 'pick' ? 'Apuntá al código de cada unidad que ponés en la caja. Para contar otra igual, sacala del cuadro y volvé a apuntar.' : 'Apuntá al código de barras. Cada lectura suma una unidad.'}</div>`;
   const baseConfig = { fps: 10, qrbox: scanQrbox };
   // iOS necesita alta resolución + enfoque continuo para leer códigos 1D (ver articulos.html).
@@ -3748,6 +3832,7 @@ async function abrirScanner(modo){
 }
 
 function onScan(text, result){
+  if (scanEligiendo) return;   // primero hay que elegir cuál era el anterior
   const code = String(text).trim();
   const fmt = (result && result.result && result.result.format && result.result.format.formatName) || '';
   if (!codigoEscaneadoValido(code, fmt)){ scanLast = ''; scanCount = 0; return; }
@@ -3762,22 +3847,16 @@ function onScan(text, result){
 
   if (scanModo === 'pick'){ if (pick) pickLectura(code); return; }
 
-  const matches = articulos.filter(a => a.barras.includes(code) || a.codigo === code);
+  const matches = catalogoPorLectura(code);
   const feed = $('scanFeed');
   if (matches.length === 1){
-    agregarAlCarrito(matches[0].codigo, 1);
-    scanSumados++;
-    vibrar(50);
-    sonar('ok');
-    const c = carrito[matches[0].codigo];
-    feed.innerHTML = `<div class="scan-last"><b>+1</b><span>${escapeHtml(matches[0].nombre)}</span><b>${c ? c.cant : 1}</b></div><div class="scan-count">${plural(scanSumados, 'lectura', 'lecturas')} en esta tanda</div>`;
+    scanSumarCarrito(matches[0]);
   } else if (matches.length > 1){
-    // Código compartido por varios artículos: se elige en la lista.
-    vibrar(30);
-    cerrarScanner().then(() => {
-      $('q').value = code; $('qClear').hidden = false; renderResultados();
-      toast('Ese código está en ' + matches.length + ' artículos. Elegí cuál.', 'aviso');
-    });
+    // Código compartido por varios artículos: se elige cuál sin cerrar la cámara.
+    vibrar(90);
+    sonar('sobra');
+    scanElegir(code, matches.map(a => { const c = carrito[a.codigo];
+      return `<button type="button" data-elegir-cart="${escapeHtml(a.codigo)}">${thumbHtml(a.foto, a.nombre, a.codigo)}<span>${escapeHtml(a.nombre)}<small>#${escapeHtml(a.codigo)}${c ? ' · ya pedís ' + c.cant : ''}</small></span></button>`; }).join(''));
   } else {
     vibrar([30, 40, 30]);
     sonar('error');
@@ -3787,6 +3866,7 @@ function onScan(text, result){
 
 function cerrarScanner(){
   $('scan').classList.remove('on');
+  scanEligiendo = false;
   if (scanSumados && scanModo === 'pedir'){ toast(plural(scanSumados, 'unidad sumada', 'unidades sumadas') + ' al pedido'); }
   scanSumados = 0;
   if (html5Qr){
