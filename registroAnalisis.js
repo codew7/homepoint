@@ -89,7 +89,7 @@ function nombreDia(dia, largo) {
 const PESO = { alta: 3, media: 2, baja: 1 };
 const NOMBRE_SEV = { alta: 'GRAVE', media: 'MEDIA', baja: 'LEVE' };
 const CATS_PEDIDO = new Set(['ARTÍCULO', 'ESCANEO', 'COBRO', 'CLIENTE', 'PEDIDO', 'IMPRESIÓN', 'CAMBIOS', 'MODO', 'AVISO']);
-const CONF_DEFECTO = { monto: 100000, descuento: 15, descartes: 3 };
+const CONF_DEFECTO = { monto: 100000, descuento: 20, descartes: 3 };
 
 function plataANum(s) {
   const m = /(-?)\$ ?([\d.]+)/.exec(String(s || ''));

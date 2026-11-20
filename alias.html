@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- Fuera de los buscadores (ver index.html) -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Alias del día</title>
+  <link rel="icon" href="faviconnegro.png" type="image/png">
+  <meta name="theme-color" content="#f6f5fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f0d17" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Alias">
+  <link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <!--
+    Alias del día
+    -------------
+    Un administrador elige, desde el celular, qué alias se usa hoy en cada
+    sucursal: tres rangos de monto (cortes configurables) y Envíos (sólo
+    Munro, donde está Gestión de envíos). Se guarda en el nodo "aliasDelDia"
+    de la base de cada sucursal y lo toman solos:
+      - historialRecientes.html (modal de WhatsApp: según el monto),
+      - pedidosv2 (alias de envíos como sugerencia principal).
+    Cada confirmación queda también en aliasDelDiaHistorial/<fecha>, que usa
+    la hoja de Totales para saber qué alias tenía cada sección ese día.
+
+    Cada sucursal es un proyecto de Firebase con sus propios usuarios: la app
+    abre los dos (como Traspasos/index.html) y pide ingresar en cada uno la
+    primera vez; después el teléfono recuerda las dos sesiones.
+
+    Hoja 1: alias por sección. Hoja 2 (deslizar de derecha a izquierda):
+    totales transferidos hoy y ayer a los alias de cada sección.
+  -->
+
+  <style>
+    :root {
+      --bg: #f6f5fb;
+      --surface: #ffffff;
+      --surface-2: #f1eff8;
+      --line: #e6e3f0;
+      --text: #17141f;
+      --text-2: #5d5870;
+      --text-3: #8f8aa1;
+      --primary: #6c4eb6;
+      --primary-2: #8b6bc7;
+      --primary-soft: rgba(108, 78, 182, 0.10);
+      --ok: #15803d;
+      --ok-soft: #e8f6ee;
+      --warn: #b45309;
+      --warn-soft: #fdf3e2;
+      --danger: #c2410c;
+      --shadow: 0 1px 2px rgba(23, 20, 31, 0.04), 0 8px 24px -12px rgba(23, 20, 31, 0.14);
+      --shadow-lg: 0 24px 48px -16px rgba(23, 20, 31, 0.30);
+      --radius: 20px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --tono-bajo: #0f9d76;
+      --tono-medio: #3b74e0;
+      --tono-alto: #6c4eb6;
+      --tono-envios: #d9822b;
+      --tono-otros: #8f8aa1;
+      color-scheme: light;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f0d17;
+        --surface: #1a1724;
+        --surface-2: #231f30;
+        --line: #2e2a3d;
+        --text: #f3f1f8;
+        --text-2: #b4aec6;
+        --text-3: #7f7993;
+        --primary: #9d82e6;
+        --primary-2: #b59ef0;
+        --primary-soft: rgba(157, 130, 230, 0.16);
+        --ok: #4ade80;
+        --ok-soft: rgba(74, 222, 128, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb923c;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+        --shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+        --tono-bajo: #34d3a2;
+        --tono-medio: #6f9dff;
+        --tono-alto: #a98cf0;
+        --tono-envios: #f2a65a;
+        --tono-otros: #7f7993;
+        color-scheme: dark;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0f0d17;
+      --surface: #1a1724;
+      --surface-2: #231f30;
+      --line: #2e2a3d;
+      --text: #f3f1f8;
+      --text-2: #b4aec6;
+      --text-3: #7f7993;
+      --primary: #9d82e6;
+      --primary-2: #b59ef0;
+      --primary-soft: rgba(157, 130, 230, 0.16);
+      --ok: #4ade80;
+      --ok-soft: rgba(74, 222, 128, 0.12);
+      --warn: #fbbf24;
+      --warn-soft: rgba(251, 191, 36, 0.12);
+      --danger: #fb923c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+      --shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+      --tono-bajo: #34d3a2;
+      --tono-medio: #6f9dff;
+      --tono-alto: #a98cf0;
+      --tono-envios: #f2a65a;
+      --tono-otros: #7f7993;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overflow: hidden;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; border: none; background: none; }
+    [hidden] { display: none !important; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* ---------- Estructura: cabecera + dos hojas que se deslizan ---------- */
+    .app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .cab {
+      flex-shrink: 0;
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: calc(env(safe-area-inset-top) + 14px) 16px 10px;
+    }
+    .cab-fila {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .sucursal-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 12px 0 10px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      font-size: 0.85rem;
+      font-weight: 700;
+      max-width: 72%;
+      box-shadow: var(--shadow);
+      transition: transform 0.15s ease;
+    }
+    .sucursal-btn:active { transform: scale(0.97); }
+    .sucursal-btn .punto {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+    .sucursal-btn .nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sucursal-btn .bi-chevron-down { color: var(--text-3); font-size: 0.75rem; }
+    .cab-acciones { display: flex; gap: 8px; }
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      color: var(--text-2);
+      font-size: 1.05rem;
+      transition: transform 0.15s ease, background 0.2s ease;
+    }
+    .icon-btn:active { transform: scale(0.94); }
+    .icon-btn:focus-visible, .card:focus-visible, .btn:focus-visible, .op:focus-visible,
+    .sucursal-btn:focus-visible, .pestana:focus-visible, .seg button:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* Pestañas: muestran en qué hoja se está y permiten saltar sin deslizar */
+    .pestanas {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-top: 14px;
+      padding: 4px;
+      border-radius: 14px;
+      background: var(--surface-2);
+    }
+    .pestanas-marca {
+      position: absolute;
+      top: 4px; bottom: 4px; left: 4px;
+      width: calc(50% - 4px);
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      transform: translateX(calc(var(--prog, 0) * 100%));
+    }
+    .pestana {
+      position: relative;
+      z-index: 1;
+      height: 36px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: color 0.2s ease;
+    }
+    .pestana[aria-selected="true"] { color: var(--text); }
+
+    .visor {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .pista {
+      height: 100%;
+      display: flex;
+      width: 200%;
+      transform: translateX(calc(var(--prog, 0) * -50%));
+      touch-action: pan-y;
+      will-change: transform;
+    }
+    .pista.animar { transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
+    .pestanas-marca.animar { transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
+    .hoja-pag {
+      width: 50%;
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+    .pag {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 8px 16px calc(env(safe-area-inset-bottom) + 120px);
+    }
+    #pagTotales .pag { padding-bottom: calc(env(safe-area-inset-bottom) + 32px); }
+
+    .hero { margin: 6px 0 20px; }
+    .hero-dia {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-3);
+      letter-spacing: 0.01em;
+    }
+    .hero-dia::first-letter { text-transform: uppercase; }
+    .hero-titulo {
+      font-size: 1.9rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin: 2px 0 12px;
+    }
+    .estado {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .estado.ok { background: var(--ok-soft); color: var(--ok); }
+    .estado.warn { background: var(--warn-soft); color: var(--warn); }
+    .estado.vacio { background: var(--surface-2); color: var(--text-2); }
+
+    /* ---------- Tarjetas de alias ---------- */
+    .cards { display: flex; flex-direction: column; gap: 12px; }
+    .seccion {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 10px 4px 2px;
+    }
+    [data-rango] { --tono: var(--primary); }
+    [data-rango="bajo"] { --tono: var(--tono-bajo); }
+    [data-rango="medio"] { --tono: var(--tono-medio); }
+    [data-rango="alto"] { --tono: var(--tono-alto); }
+    [data-rango="envios"] { --tono: var(--tono-envios); }
+    [data-rango="otros"] { --tono: var(--tono-otros); }
+    .card {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      min-height: 84px;
+      text-align: left;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      transition: transform 0.15s ease, border-color 0.2s ease;
+    }
+    .card:active { transform: scale(0.985); }
+    .icono {
+      width: 46px;
+      height: 46px;
+      flex-shrink: 0;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      color: var(--tono);
+      background: color-mix(in srgb, var(--tono) 13%, transparent);
+    }
+    .card-cuerpo { flex: 1; min-width: 0; }
+    .card-rango {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-2);
+      margin-bottom: 2px;
+    }
+    .card-alias {
+      display: block;
+      font-size: 1.12rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-alias.vacio { color: var(--text-3); font-weight: 500; font-size: 1rem; }
+    .card-cambio {
+      display: none;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 2px;
+    }
+    .card.cambiada { border-color: color-mix(in srgb, var(--primary) 55%, var(--line)); }
+    .card.cambiada .card-cambio { display: block; }
+    .card-flecha { color: var(--text-3); font-size: 1rem; }
+
+    .nota {
+      font-size: 0.78rem;
+      color: var(--text-3);
+      line-height: 1.55;
+      margin: 18px 4px 0;
+    }
+    .pista-desliza {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 22px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-3);
+    }
+    .pista-desliza i { animation: empujar 1.8s ease-in-out infinite; }
+    @keyframes empujar { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-5px); } }
+
+    /* ---------- Totales ---------- */
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 14px;
+      background: var(--surface-2);
+      margin-bottom: 14px;
+    }
+    .seg button {
+      min-height: 44px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.2;
+    }
+    .seg button small { font-size: 0.7rem; font-weight: 500; color: var(--text-3); }
+    .seg button[aria-pressed="true"] {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .total-card {
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+      border-radius: 24px;
+      color: #fff;
+      background: linear-gradient(140deg, #4b3291 0%, #6c4eb6 55%, #8b6bc7 100%);
+      box-shadow: 0 18px 36px -18px rgba(76, 50, 145, 0.75);
+      margin-bottom: 18px;
+    }
+    .total-card::after {
+      content: '';
+      position: absolute;
+      right: -60px; top: -60px;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
+    }
+    .total-etq { font-size: 0.8rem; font-weight: 600; opacity: 0.8; }
+    .total-monto {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin: 4px 0 6px;
+    }
+    .total-sub { font-size: 0.82rem; opacity: 0.85; }
+    .total-comp {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 12px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .filas { display: flex; flex-direction: column; gap: 10px; }
+    .fila {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+    .fila .icono { width: 40px; height: 40px; border-radius: 12px; font-size: 1.05rem; }
+    .fila-cuerpo { flex: 1; min-width: 0; }
+    .fila-arriba {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .fila-alias {
+      font-size: 0.95rem;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fila-monto { font-size: 1rem; font-weight: 700; white-space: nowrap; }
+    .fila-abajo {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 2px;
+      font-size: 0.76rem;
+      color: var(--text-2);
+    }
+    .fila-abajo span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barra-prog {
+      height: 5px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .barra-prog i {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--tono);
+      transition: width 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .vacio-totales {
+      text-align: center;
+      padding: 28px 16px;
+      color: var(--text-3);
+      font-size: 0.88rem;
+      background: var(--surface);
+      border: 1px dashed var(--line);
+      border-radius: 18px;
+    }
+    .vacio-totales i { display: block; font-size: 1.6rem; margin-bottom: 6px; }
+
+    /* ---------- Barra inferior ---------- */
+    .barra {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+      background: linear-gradient(to top, var(--bg) 70%, transparent);
+      z-index: 20;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .barra.oculta { transform: translateY(110%); opacity: 0; pointer-events: none; }
+    .barra-in { max-width: 520px; margin: 0 auto; }
+    .btn {
+      width: 100%;
+      min-height: 56px;
+      border-radius: 18px;
+      font-size: 1rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.15s ease, opacity 0.2s ease, background 0.2s ease;
+    }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn-primario {
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      color: #fff;
+      box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--primary) 70%, transparent);
+    }
+    .btn-primario:disabled {
+      background: var(--surface-2);
+      color: var(--text-3);
+      box-shadow: none;
+      cursor: default;
+    }
+    .btn-primario.listo:disabled { background: var(--ok-soft); color: var(--ok); }
+    .btn-secundario { background: var(--surface-2); color: var(--text); }
+    .btn-texto { min-height: 44px; color: var(--text-2); font-weight: 600; font-size: 0.9rem; }
+
+    /* ---------- Hojas inferiores ---------- */
+    .velo {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 8, 16, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 40;
+    }
+    .velo.abierto { opacity: 1; pointer-events: auto; }
+    .hoja {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      max-width: 520px;
+      margin: 0 auto;
+      max-height: 88dvh;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-radius: 26px 26px 0 0;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(105%);
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      z-index: 50;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .hoja.abierta { transform: translateY(0); }
+    .hoja-asa {
+      width: 40px; height: 5px;
+      border-radius: 999px;
+      background: var(--line);
+      margin: 10px auto 4px;
+      flex-shrink: 0;
+    }
+    .hoja-cab {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 20px 12px;
+      flex-shrink: 0;
+    }
+    .hoja-titulo { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+    .hoja-sub { font-size: 0.8rem; color: var(--text-2); margin-top: 1px; }
+    .buscador {
+      position: relative;
+      margin: 0 20px 10px;
+      flex-shrink: 0;
+    }
+    .buscador i {
+      position: absolute;
+      left: 14px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-3);
+    }
+    .campo {
+      width: 100%;
+      height: 50px;
+      border-radius: 14px;
+      border: 1.5px solid var(--line);
+      background: var(--surface-2);
+      padding: 0 14px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .campo:focus { border-color: var(--primary); background: var(--surface); }
+    .buscador .campo { padding-left: 40px; text-transform: uppercase; }
+    .buscador .campo::placeholder { text-transform: none; }
+    .lista {
+      list-style: none;
+      overflow-y: auto;
+      padding: 0 12px 16px;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+    .op {
+      width: 100%;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.98rem;
+    }
+    .op:active { background: var(--surface-2); }
+    .op-texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .op-sub { display: block; font-size: 0.76rem; font-weight: 500; color: var(--text-3); margin-top: 1px; }
+    .op-check { color: var(--primary); font-size: 1.2rem; opacity: 0; }
+    .op.elegida { background: var(--primary-soft); color: var(--primary); }
+    .op.elegida .op-check { opacity: 1; }
+    .op-nuevo { color: var(--primary); }
+    .op-nuevo i { font-size: 1.1rem; }
+    .op .icono { width: 40px; height: 40px; border-radius: 12px; font-size: 1rem; }
+    .lista-vacia {
+      text-align: center;
+      color: var(--text-3);
+      font-size: 0.88rem;
+      padding: 24px 16px;
+    }
+
+    .hoja-cuerpo { padding: 4px 20px 16px; overflow-y: auto; }
+    .fila-campo { margin-bottom: 16px; }
+    .fila-campo label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-2);
+      margin-bottom: 6px;
+    }
+    .prefijo { position: relative; }
+    .prefijo span {
+      position: absolute;
+      left: 14px; top: 50%;
+      transform: translateY(-50%);
+      font-weight: 600;
+      color: var(--text-3);
+    }
+    .prefijo .campo { padding-left: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .resumen-rangos {
+      background: var(--surface-2);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      line-height: 1.8;
+      color: var(--text-2);
+      margin-bottom: 14px;
+    }
+    .resumen-rangos b { color: var(--text); font-weight: 600; }
+    .error-campo { color: var(--danger); font-size: 0.82rem; font-weight: 600; min-height: 1.2em; margin-bottom: 10px; }
+    .hoja-acciones { display: flex; gap: 10px; }
+
+    /* ---------- Login / estados ---------- */
+    .pantalla {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: var(--bg);
+      overflow-y: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .login {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      padding: 32px 22px 22px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .login-marca {
+      width: 60px; height: 60px;
+      margin: 0 auto 16px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    }
+    .login h1 { font-size: 1.4rem; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .login p { font-size: 0.88rem; color: var(--text-2); margin-bottom: 18px; line-height: 1.5; }
+    .login-suc {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+    .login .campo { margin-bottom: 10px; }
+    .login-error {
+      color: var(--danger);
+      font-size: 0.85rem;
+      font-weight: 600;
+      min-height: 1.3em;
+      margin: 2px 0 10px;
+    }
+    .login .btn-texto { margin-top: 8px; width: 100%; }
+    .cargando {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      color: var(--text-3);
+      font-size: 0.9rem;
+    }
+    .spinner {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 3px solid var(--line);
+      border-top-color: var(--primary);
+      animation: girar 0.8s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    /* ---------- Aviso ---------- */
+    .aviso {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom) + 92px);
+      transform: translate(-50%, 16px);
+      max-width: calc(100% - 32px);
+      background: var(--text);
+      color: var(--bg);
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .aviso.visible { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="aliasDelDia.js"></script>
+</head>
+<body>
+
+  <div class="app" id="app" hidden>
+    <header class="cab">
+      <div class="cab-fila">
+        <button class="sucursal-btn" type="button" id="btnSucursal" aria-haspopup="dialog">
+          <span class="punto"><i class="bi bi-shop"></i></span>
+          <span class="nombre" id="sucursalNombre"></span>
+          <i class="bi bi-chevron-down"></i>
+        </button>
+        <div class="cab-acciones">
+          <button class="icon-btn" type="button" id="btnCortes" title="Cortes de monto" aria-label="Cambiar los cortes de monto"><i class="bi bi-sliders"></i></button>
+          <button class="icon-btn" type="button" id="btnSalir" title="Cerrar sesión" aria-label="Cerrar sesión en esta sucursal"><i class="bi bi-box-arrow-right"></i></button>
+        </div>
+      </div>
+      <div class="pestanas" role="tablist" aria-label="Hojas">
+        <span class="pestanas-marca" id="pestanasMarca"></span>
+        <button class="pestana" type="button" role="tab" id="tabAlias" aria-controls="pagAlias" aria-selected="true"><i class="bi bi-at"></i> Alias</button>
+        <button class="pestana" type="button" role="tab" id="tabTotales" aria-controls="pagTotales" aria-selected="false"><i class="bi bi-bar-chart"></i> Totales</button>
+      </div>
+    </header>
+
+    <div class="visor" id="visor">
+      <div class="pista" id="pista">
+
+        <!-- Hoja 1: alias por sección -->
+        <section class="hoja-pag" id="pagAlias" role="tabpanel" aria-labelledby="tabAlias">
+          <div class="pag">
+            <div class="hero">
+              <div class="hero-dia" id="heroDia"></div>
+              <h1 class="hero-titulo">Alias del día</h1>
+              <div class="estado vacio" id="estado"></div>
+            </div>
+
+            <div class="cards" aria-label="Alias por sección">
+              <div class="seccion">Por monto de la venta</div>
+              <button class="card" type="button" data-rango="bajo">
+                <span class="icono"><i class="bi bi-cash"></i></span>
+                <span class="card-cuerpo">
+                  <span class="card-rango"></span>
+                  <span class="card-alias"></span>
+                  <span class="card-cambio">Sin guardar</span>
+                </span>
+                <i class="bi bi-chevron-right card-flecha"></i>
+              </button>
+              <button class="card" type="button" data-rango="medio">
+                <span class="icono"><i class="bi bi-cash-stack"></i></span>
+                <span class="card-cuerpo">
+                  <span class="card-rango"></span>
+                  <span class="card-alias"></span>
+                  <span class="card-cambio">Sin guardar</span>
+                </span>
+                <i class="bi bi-chevron-right card-flecha"></i>
+              </button>
+              <button class="card" type="button" data-rango="alto">
+                <span class="icono"><i class="bi bi-gem"></i></span>
+                <span class="card-cuerpo">
+                  <span class="card-rango"></span>
+                  <span class="card-alias"></span>
+                  <span class="card-cambio">Sin guardar</span>
+                </span>
+                <i class="bi bi-chevron-right card-flecha"></i>
+              </button>
+
+              <div class="seccion" data-solo-envios>Gestión de envíos</div>
+              <button class="card" type="button" data-rango="envios" data-solo-envios>
+                <span class="icono"><i class="bi bi-truck"></i></span>
+                <span class="card-cuerpo">
+                  <span class="card-rango"></span>
+                  <span class="card-alias"></span>
+                  <span class="card-cambio">Sin guardar</span>
+                </span>
+                <i class="bi bi-chevron-right card-flecha"></i>
+              </button>
+            </div>
+
+            <p class="nota">Lo que confirmes acá aparece solo al mandar el alias por WhatsApp desde el historial de la caja<span data-solo-envios> y en Gestión de envíos</span>. Si un día no se confirma, se siguen usando los últimos.</p>
+            <div class="pista-desliza" aria-hidden="true"><i class="bi bi-arrow-left"></i> Deslizá para ver los totales</div>
+          </div>
+        </section>
+
+        <!-- Hoja 2: totales transferidos -->
+        <section class="hoja-pag" id="pagTotales" role="tabpanel" aria-labelledby="tabTotales">
+          <div class="pag">
+            <div class="hero">
+              <div class="hero-dia" id="totDia"></div>
+              <h1 class="hero-titulo">Transferencias</h1>
+            </div>
+
+            <div class="seg" role="group" aria-label="Día">
+              <button type="button" data-dia="0" aria-pressed="true">Hoy<small id="segHoy"></small></button>
+              <button type="button" data-dia="1" aria-pressed="false">Ayer<small id="segAyer"></small></button>
+            </div>
+
+            <div class="total-card">
+              <div class="total-etq">Total a los alias del día</div>
+              <div class="total-monto num" id="totMonto">$0</div>
+              <div class="total-sub" id="totSub"></div>
+              <div class="total-comp" id="totComp" hidden></div>
+            </div>
+
+            <div class="seccion">Por sección</div>
+            <div class="filas" id="filasSecciones"></div>
+
+            <div id="bloqueOtros" hidden>
+              <div class="seccion" style="margin-top:18px">Otros alias</div>
+              <div class="filas" id="filasOtros"></div>
+            </div>
+
+            <p class="nota" id="totNota"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="barra oculta" id="barra">
+    <div class="barra-in">
+      <button class="btn btn-primario" type="button" id="btnConfirmar"></button>
+    </div>
+  </div>
+
+  <!-- Cargando -->
+  <div id="vCargando" class="pantalla">
+    <div class="cargando"><div class="spinner"></div><span id="cargandoTexto">Cargando…</span></div>
+  </div>
+
+  <!-- Login (uno por sucursal: cada una tiene sus propios usuarios) -->
+  <div id="vLogin" class="pantalla" hidden>
+    <form class="login" id="formLogin" novalidate>
+      <div class="login-marca"><i class="bi bi-at"></i></div>
+      <h1>Alias del día</h1>
+      <p>Iniciá sesión con tu cuenta de administrador de esta sucursal.</p>
+      <div class="login-suc"><i class="bi bi-shop"></i><span id="loginSuc"></span></div>
+      <input class="campo" type="email" id="loginEmail" placeholder="Correo electrónico" autocomplete="email" inputmode="email" required>
+      <input class="campo" type="password" id="loginClave" placeholder="Contraseña" autocomplete="current-password" required>
+      <div class="login-error" id="loginError" role="alert"></div>
+      <button class="btn btn-primario" type="submit" id="loginBtn">Ingresar</button>
+      <button class="btn btn-texto" type="button" id="loginOtra"><i class="bi bi-arrow-left-right"></i> Cambiar de sucursal</button>
+    </form>
+  </div>
+
+  <!-- Sin acceso -->
+  <div id="vSinAcceso" class="pantalla" hidden>
+    <div class="login">
+      <div class="login-marca"><i class="bi bi-shield-lock"></i></div>
+      <h1>Sin acceso</h1>
+      <p>Esta cuenta no es de administrador en <b id="sinAccesoSuc"></b>. Pedile acceso a quien administra el sistema.</p>
+      <button class="btn btn-secundario" type="button" id="btnSalirSinAcceso">Usar otra cuenta</button>
+      <button class="btn btn-texto" type="button" id="sinAccesoOtra"><i class="bi bi-arrow-left-right"></i> Cambiar de sucursal</button>
+    </div>
+  </div>
+
+  <div class="velo" id="velo"></div>
+
+  <!-- Hoja: elegir sucursal -->
+  <div class="hoja" id="hojaSucursal" role="dialog" aria-modal="true" aria-labelledby="hojaSucTitulo">
+    <div class="hoja-asa"></div>
+    <div class="hoja-cab">
+      <div>
+        <div class="hoja-titulo" id="hojaSucTitulo">Sucursal</div>
+        <div class="hoja-sub">Cada una tiene sus propios alias</div>
+      </div>
+      <button class="icon-btn" type="button" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <ul class="lista" id="listaSucursales"></ul>
+  </div>
+
+  <!-- Hoja: elegir alias -->
+  <div class="hoja" id="hojaAlias" role="dialog" aria-modal="true" aria-labelledby="hojaAliasTitulo">
+    <div class="hoja-asa"></div>
+    <div class="hoja-cab">
+      <div>
+        <div class="hoja-titulo" id="hojaAliasTitulo">Elegir alias</div>
+        <div class="hoja-sub" id="hojaAliasSub"></div>
+      </div>
+      <button class="icon-btn" type="button" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="buscador">
+      <i class="bi bi-search"></i>
+      <input class="campo" type="text" id="buscar" placeholder="Buscar o escribir un alias nuevo" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="60" enterkeyhint="done">
+    </div>
+    <ul class="lista" id="lista"></ul>
+  </div>
+
+  <!-- Hoja: cortes de monto -->
+  <div class="hoja" id="hojaCortes" role="dialog" aria-modal="true" aria-labelledby="hojaCortesTitulo">
+    <div class="hoja-asa"></div>
+    <div class="hoja-cab">
+      <div>
+        <div class="hoja-titulo" id="hojaCortesTitulo">Cortes de monto</div>
+        <div class="hoja-sub" id="hojaCortesSub"></div>
+      </div>
+      <button class="icon-btn" type="button" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="hoja-cuerpo">
+      <div class="fila-campo">
+        <label for="corteBajo">Primer corte</label>
+        <div class="prefijo"><span>$</span><input class="campo" type="text" id="corteBajo" inputmode="numeric" autocomplete="off"></div>
+      </div>
+      <div class="fila-campo">
+        <label for="corteAlto">Segundo corte</label>
+        <div class="prefijo"><span>$</span><input class="campo" type="text" id="corteAlto" inputmode="numeric" autocomplete="off"></div>
+      </div>
+      <div class="resumen-rangos" id="resumenRangos"></div>
+      <div class="error-campo" id="errorCortes" role="alert"></div>
+      <div class="hoja-acciones">
+        <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
+        <button class="btn btn-primario" type="button" id="btnAplicarCortes">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" role="status"><i class="bi bi-check-circle-fill"></i><span></span></div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // Mismos ids, nombres y config que puntoVenta.js. Gestión de envíos es
+    // sólo de la Sucursal 1 (igual que tieneGestionEnvios() en index.html).
+    const SUCURSALES = [
+      { id: '1', nombre: 'Sucursal 1 Munro', corto: 'Munro', config: 'config.js', envios: true },
+      { id: '2', nombre: 'Sucursal 2 Caseros', corto: 'Caseros', config: 'config2.js', envios: false }
+    ];
+    const LS_SUC = 'aliasDelDia.sucursal';
+    const LS_PV = 'hpPuntoVenta';          // punto de venta del equipo (puntoVenta.js)
+
+    const RANGOS = ['bajo', 'medio', 'alto', 'envios'];
+    const TITULO_RANGO = { bajo: 'Monto chico', medio: 'Monto medio', alto: 'Monto grande', envios: 'Envíos' };
+    const ICONO_RANGO = { bajo: 'bi-cash', medio: 'bi-cash-stack', alto: 'bi-gem', envios: 'bi-truck', otros: 'bi-three-dots' };
+
+    // Las claves de /admins y de /alias siguen el mismo criterio que el resto
+    // del sistema (index.html, historialRecientes.html).
+    const claveAdmin = email => (email || '').replace('.', ',');
+    const aliasAClave = alias => alias.replace(/[.#$/\[\]]/g, c => '~' + c.charCodeAt(0) + '~');
+    const limpiar = s => String(s || '').trim().toUpperCase();
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const $ = id => document.getElementById(id);
+
+    const leerLS = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const guardarLS = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+    // ================= Conexión a cada sucursal =================
+    // Cada sucursal es otro proyecto de Firebase. Su config declara
+    // `const firebaseConfig`: se evalúa aislado y se abre como app con nombre
+    // (mismo método que Traspasos/index.html).
+    const conexiones = {};
+    function conectar(s) {
+      if (!conexiones[s.id]) {
+        conexiones[s.id] = (async () => {
+          const nombreApp = 'suc' + s.id;
+          let app = firebase.apps.find(a => a.name === nombreApp);
+          if (!app) {
+            const res = await fetch(s.config, { cache: 'no-store' });
+            if (!res.ok) throw new Error('No se pudo leer la configuración de ' + s.nombre);
+            const cfg = new Function(await res.text() + '\n;return firebaseConfig;')();
+            app = firebase.initializeApp(cfg, nombreApp);
+          }
+          const auth = app.auth();
+          await new Promise(r => { const off = auth.onAuthStateChanged(() => { off(); r(); }); });
+          return { s, app, auth, db: app.database() };
+        })().catch(e => { delete conexiones[s.id]; throw e; });
+      }
+      return conexiones[s.id];
+    }
+
+    // ================= Estado de la sucursal activa =================
+    let suc = null;            // sucursal activa
+    let con = null;            // { auth, db }
+    let A = null;              // instancia de AliasDelDia para esta base
+    let refs = [];             // listeners para soltar al cambiar
+    let listaAlias = [];
+    let usoAlias = {};
+    let historial = {};        // aliasDelDiaHistorial: fecha -> { rangos, cortes }
+    let pedidos = {};          // pedidos de ayer y hoy
+    let pedidosListos = false;
+    let borrador = null;
+    let guardando = false;
+    let rangoAbierto = null;
+    let diaTotales = 0;        // 0 = hoy, 1 = ayer
+    let generacion = 0;        // descarta respuestas de una sucursal anterior
+
+    const rangosDe = s => RANGOS.filter(r => r !== 'envios' || s.envios);
+
+    function escucharRef(ref, evento, fn, err) {
+      const cb = ref.on(evento, fn, err || (e => console.warn('Firebase:', e && e.code)));
+      refs.push(() => ref.off(evento, cb));
+    }
+
+    let offAuth = null;        // listener de sesión de la sucursal activa
+
+    // Suelta los datos de la sucursal (al cerrar sesión o al cambiar)
+    function soltar() {
+      refs.forEach(off => { try { off(); } catch (e) {} });
+      refs = [];
+      if (A) A.dejar();
+      A = null;
+      listaAlias = []; usoAlias = {}; historial = {}; pedidos = {};
+      pedidosListos = false;
+      borrador = null;
+    }
+
+    // ================= Vistas =================
+    const pantallas = ['vCargando', 'vLogin', 'vSinAcceso'];
+    function mostrarPantalla(id) {
+      pantallas.forEach(v => { $(v).hidden = v !== id; });
+      $('app').hidden = id !== null;
+      actualizarBarra();
+    }
+
+    async function abrirSucursal(id) {
+      const s = SUCURSALES.find(x => x.id === id) || SUCURSALES[0];
+      const gen = ++generacion;
+      if (offAuth) { offAuth(); offAuth = null; }
+      soltar();
+      suc = s;
+      guardarLS(LS_SUC, s.id);
+      renderSucursal();
+      $('cargandoTexto').textContent = 'Conectando con ' + s.corto + '…';
+      mostrarPantalla('vCargando');
+      try {
+        con = await conectar(s);
+      } catch (e) {
+        if (gen !== generacion) return;
+        console.error(e);
+        $('cargandoTexto').textContent = 'No se pudo conectar con ' + s.corto + '. Revisá internet.';
+        return;
+      }
+      if (gen !== generacion) return;
+      // Cambios de sesión de esta base (login / logout)
+      offAuth = con.auth.onAuthStateChanged(u => { if (gen === generacion) alCambiarSesion(u, gen); });
+    }
+
+    async function alCambiarSesion(user, gen) {
+      soltar();
+      if (!user) {
+        $('loginSuc').textContent = suc.nombre;
+        $('loginBtn').disabled = false;
+        $('loginBtn').textContent = 'Ingresar';
+        $('loginClave').value = '';
+        $('loginError').textContent = '';
+        mostrarPantalla('vLogin');
+        return;
+      }
+      $('cargandoTexto').textContent = 'Cargando ' + suc.corto + '…';
+      mostrarPantalla('vCargando');
+      let esAdmin = false;
+      try {
+        esAdmin = (await con.db.ref('admins/' + claveAdmin(user.email)).once('value')).exists();
+      } catch (e) { esAdmin = false; }
+      if (gen !== generacion) return;
+      if (!esAdmin) {
+        $('sinAccesoSuc').textContent = suc.nombre;
+        mostrarPantalla('vSinAcceso');
+        return;
+      }
+      iniciarDatos(gen);
+      borrador = guardado();
+      renderDia();
+      render();
+      mostrarPantalla(null);
+    }
+
+    function iniciarDatos(gen) {
+      A = AliasDelDia.crear();
+      A.escuchar(con.db, () => {
+        if (gen !== generacion) return;
+        // Sin cambios a medio hacer se toma lo que llegó (otro equipo pudo
+        // haberlo cambiado). Con cambios pendientes se respetan.
+        if (!borrador || !hayCambios() || guardando) borrador = guardado();
+        render();
+      });
+      escucharRef(con.db.ref('alias'), 'value', snap => {
+        listaAlias = Object.values(snap.val() || {}).map(limpiar).filter(Boolean);
+        if (rangoAbierto) renderLista();
+      });
+      escucharRef(con.db.ref('aliasUso'), 'value', snap => {
+        usoAlias = {};
+        Object.values(snap.val() || {}).forEach(v => {
+          if (v && v.alias && typeof v.ts === 'number') usoAlias[limpiar(v.alias)] = v.ts;
+        });
+        if (rangoAbierto) renderLista();
+      }, () => {});
+      // Los últimos días confirmados: alcanza para saber qué alias tenía
+      // cada sección ayer (si ayer no se confirmó, valía el anterior).
+      escucharRef(con.db.ref('aliasDelDiaHistorial').orderByKey().limitToLast(10), 'value', snap => {
+        historial = snap.val() || {};
+        renderTotales();
+      }, () => {});
+      // Pedidos de ayer y hoy: mismo índice "fecha" que historialRecientes.html
+      escucharRef(con.db.ref('pedidos').orderByChild('fecha')
+        .startAt(A.fechaDe(1)).endAt(A.fechaHoy() + ''), 'value', snap => {
+        pedidos = snap.val() || {};
+        pedidosListos = true;
+        renderTotales();
+      }, e => {
+        console.warn('No se pudieron leer los pedidos:', e && e.code);
+        pedidosListos = true;
+        renderTotales();
+      });
+    }
+
+    // ================= Borrador =================
+    function guardado() {
+      const d = (A && A.datos()) || {};
+      return {
+        rangos: Object.assign({ bajo: '', medio: '', alto: '', envios: '' }, d.rangos || {}),
+        cortes: A ? A.cortes() : { bajo: 20000, alto: 100000 }
+      };
+    }
+
+    function hayCambios() {
+      if (!borrador || !A) return false;
+      const g = guardado();
+      return rangosDe(suc).some(r => limpiar(borrador.rangos[r]) !== limpiar(g.rangos[r])) ||
+        borrador.cortes.bajo !== g.cortes.bajo || borrador.cortes.alto !== g.cortes.alto;
+    }
+
+    // ================= Render hoja 1 =================
+    function renderSucursal() {
+      $('sucursalNombre').textContent = suc.nombre;
+      $('btnSucursal').setAttribute('aria-label', 'Sucursal: ' + suc.nombre + '. Cambiar');
+      document.querySelectorAll('[data-solo-envios]').forEach(el => { el.hidden = !suc.envios; });
+    }
+
+    function fechaLarga(dias) {
+      const d = new Date();
+      d.setDate(d.getDate() - dias);
+      return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+    const fechaCorta = f => f ? f.split('-').reverse().slice(0, 2).join('/') : '';
+
+    function renderDia() {
+      $('heroDia').textContent = fechaLarga(0) + ' · ' + suc.corto;
+      $('segHoy').textContent = fechaCorta(A ? A.fechaHoy() : '');
+      $('segAyer').textContent = fechaCorta(A ? A.fechaDe(1) : '');
+    }
+
+    function renderEstado() {
+      const el = $('estado');
+      const d = A && A.datos();
+      if (!d || !d.rangos) {
+        el.className = 'estado vacio';
+        el.innerHTML = '<i class="bi bi-info-circle"></i> Todavía no hay alias elegidos';
+      } else if (A.confirmadoHoy()) {
+        const hora = d.ts ? new Date(d.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+        el.className = 'estado ok';
+        el.innerHTML = '<i class="bi bi-check-circle-fill"></i> Confirmado hoy' + (hora ? ' a las ' + hora : '');
+      } else {
+        el.className = 'estado warn';
+        el.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Sin confirmar hoy' + (d.fecha ? ' · son los del ' + fechaCorta(d.fecha) : '');
+      }
+    }
+
+    function renderTarjetas() {
+      if (!borrador) return;
+      const g = guardado();
+      const et = AliasDelDia.etiquetas(borrador.cortes);
+      document.querySelectorAll('.card').forEach(card => {
+        const r = card.dataset.rango;
+        const alias = limpiar(borrador.rangos[r]);
+        card.querySelector('.card-rango').textContent = et[r];
+        const a = card.querySelector('.card-alias');
+        a.textContent = alias || 'Elegir alias';
+        a.classList.toggle('vacio', !alias);
+        card.classList.toggle('cambiada', alias !== limpiar(g.rangos[r]));
+        card.setAttribute('aria-label', et[r] + ': ' + (alias || 'sin alias') + '. Cambiar');
+      });
+    }
+
+    function renderBoton() {
+      const btn = $('btnConfirmar');
+      if (!borrador) return;
+      const completos = rangosDe(suc).every(r => limpiar(borrador.rangos[r]));
+      btn.classList.remove('listo');
+      if (guardando) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-width:2px"></span> Guardando…';
+      } else if (!completos) {
+        btn.disabled = true;
+        btn.textContent = 'Elegí los ' + rangosDe(suc).length + ' alias para confirmar';
+      } else if (hayCambios()) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Confirmar alias de hoy';
+      } else if (A.confirmadoHoy()) {
+        btn.disabled = true;
+        btn.classList.add('listo');
+        btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Confirmados para hoy';
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Usar los mismos hoy';
+      }
+    }
+
+    function render() {
+      renderEstado();
+      renderTarjetas();
+      renderBoton();
+      renderTotales();
+    }
+
+    // ================= Totales (hoja 2) =================
+    function slug(s) {
+      return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+    }
+    // totalFinal puede venir number o string en formato es-AR (como en historialRecientes.html)
+    function aNumeroPesos(v) {
+      if (typeof v === 'number') return v;
+      const n = parseFloat(String(v || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    }
+
+    // Lo transferido en un pedido: total si fue por Transferencia; en un
+    // Parcial, la parte en Transferencia del desglose. Caja usa
+    // pagos.medioPago y Gestión de envíos usa tipoPago.
+    function transferencia(p) {
+      if (!p || slug(p.status) === 'cancelado') return null;
+      const pagos = p.pagos || {};
+      const alias = limpiar(pagos.alias);
+      if (!alias) return null;
+      const medio = slug(pagos.medioPago || p.tipoPago);
+      let monto = 0;
+      if (medio === 'transferencia') {
+        monto = aNumeroPesos(pagos.totalFinal);
+      } else if (medio === 'parcial') {
+        const t = Array.isArray(pagos.desglose) ? pagos.desglose.find(x => x && x.medio === 'Transferencia') : null;
+        monto = t ? (Number(t.monto) || 0) : aNumeroPesos(pagos.totalFinal);
+      } else {
+        return null;
+      }
+      return monto > 0 ? { alias, monto } : null;
+    }
+
+    // Alias de cada sección en una fecha: lo confirmado ese día o, si no se
+    // confirmó, lo último confirmado antes. Sin historial, los actuales.
+    function configDelDia(fecha) {
+      const fechas = Object.keys(historial).filter(f => f <= fecha).sort();
+      const h = fechas.length ? historial[fechas[fechas.length - 1]] : null;
+      if (h && h.rangos) return { rangos: h.rangos, cortes: h.cortes, fecha: fechas[fechas.length - 1], aproximado: false };
+      const d = (A && A.datos()) || {};
+      return { rangos: d.rangos || {}, cortes: d.cortes, fecha: d.fecha, aproximado: fecha !== (A && A.fechaHoy()) };
+    }
+
+    function sumarDia(fecha) {
+      const porAlias = {};
+      let total = 0, cantidad = 0;
+      Object.values(pedidos).forEach(p => {
+        if (String(p && p.fecha || '').slice(0, 10) !== fecha) return;
+        const t = transferencia(p);
+        if (!t) return;
+        if (!porAlias[t.alias]) porAlias[t.alias] = { monto: 0, cantidad: 0 };
+        porAlias[t.alias].monto += t.monto;
+        porAlias[t.alias].cantidad++;
+        total += t.monto;
+        cantidad++;
+      });
+      return { porAlias, total, cantidad };
+    }
+
+    const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+
+    function filaHtml(tono, titulo, sub, monto, cantidad, share) {
+      return '<div class="fila" data-rango="' + tono + '">' +
+        '<span class="icono"><i class="bi ' + ICONO_RANGO[tono] + '"></i></span>' +
+        '<div class="fila-cuerpo">' +
+          '<div class="fila-arriba"><span class="fila-alias">' + esc(titulo) + '</span>' +
+          '<span class="fila-monto num">' + AliasDelDia.pesos(monto) + '</span></div>' +
+          '<div class="fila-abajo"><span>' + esc(sub) + '</span><span class="num">' + plural(cantidad, 'transferencia', 'transferencias') + '</span></div>' +
+          '<div class="barra-prog"><i style="width:' + Math.round(share * 100) + '%"></i></div>' +
+        '</div></div>';
+    }
+
+    function renderTotales() {
+      if (!A || !suc) return;
+      const fecha = A.fechaDe(diaTotales);
+      $('totDia').textContent = fechaLarga(diaTotales) + ' · ' + suc.corto;
+      document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.dia) === diaTotales)));
+
+      if (!pedidosListos) {
+        $('totMonto').textContent = '…';
+        $('totSub').textContent = 'Cargando pedidos';
+        $('filasSecciones').innerHTML = '';
+        $('bloqueOtros').hidden = true;
+        $('totComp').hidden = true;
+        $('totNota').textContent = '';
+        return;
+      }
+
+      const cfg = configDelDia(fecha);
+      const et = AliasDelDia.etiquetas(cfg.cortes);
+      const suma = sumarDia(fecha);
+
+      // Secciones del día. Un mismo alias en dos secciones se muestra una vez.
+      const secciones = [];
+      const usados = new Set();
+      rangosDe(suc).forEach(r => {
+        const alias = limpiar(cfg.rangos[r]);
+        if (!alias) return;
+        const ya = secciones.find(x => x.alias === alias);
+        if (ya) { ya.etiquetas.push(et[r]); return; }
+        secciones.push({ rango: r, alias, etiquetas: [et[r]] });
+        usados.add(alias);
+      });
+
+      let totalSecciones = 0, cantSecciones = 0;
+      secciones.forEach(x => {
+        const v = suma.porAlias[x.alias] || { monto: 0, cantidad: 0 };
+        x.monto = v.monto; x.cantidad = v.cantidad;
+        totalSecciones += v.monto; cantSecciones += v.cantidad;
+      });
+
+      $('totMonto').textContent = AliasDelDia.pesos(totalSecciones);
+      $('totSub').textContent = plural(cantSecciones, 'transferencia', 'transferencias') +
+        (suma.total > totalSecciones ? ' · ' + AliasDelDia.pesos(suma.total) + ' con otros alias' : '');
+
+      // Comparación con el día anterior (sólo en Hoy)
+      const comp = $('totComp');
+      if (diaTotales === 0) {
+        const cfgAyer = configDelDia(A.fechaDe(1));
+        const sumaAyer = sumarDia(A.fechaDe(1));
+        const aliasAyer = new Set(rangosDe(suc).map(r => limpiar(cfgAyer.rangos[r])).filter(Boolean));
+        let totalAyer = 0;
+        aliasAyer.forEach(a => { totalAyer += (sumaAyer.porAlias[a] || {}).monto || 0; });
+        if (totalAyer > 0) {
+          const pct = Math.round((totalSecciones / totalAyer) * 100);
+          comp.innerHTML = '<i class="bi bi-clock-history"></i> ' + pct + '% de lo de ayer (' + AliasDelDia.pesos(totalAyer) + ')';
+          comp.hidden = false;
+        } else {
+          comp.hidden = true;
+        }
+      } else {
+        comp.hidden = true;
+      }
+
+      const maxMonto = Math.max(1, ...secciones.map(x => x.monto));
+      $('filasSecciones').innerHTML = secciones.length
+        ? secciones.map(x => filaHtml(x.rango, x.alias, x.etiquetas.join(' · '), x.monto, x.cantidad, x.monto / maxMonto)).join('')
+        : '<div class="vacio-totales"><i class="bi bi-at"></i>No hay alias asignados para ese día.</div>';
+
+      const otros = Object.keys(suma.porAlias).filter(a => !usados.has(a))
+        .map(a => Object.assign({ alias: a }, suma.porAlias[a]))
+        .sort((x, y) => y.monto - x.monto);
+      $('bloqueOtros').hidden = !otros.length;
+      const maxOtros = Math.max(1, ...otros.map(x => x.monto));
+      $('filasOtros').innerHTML = otros.map(x => filaHtml('otros', x.alias, 'Sin sección asignada', x.monto, x.cantidad, x.monto / maxOtros)).join('');
+
+      let nota = 'Cuenta los pedidos con alias pagados por transferencia (en los parciales, sólo la parte transferida). Los cancelados no suman.';
+      if (suc.envios) nota += ' Los envíos cuentan el día en que se despachan.';
+      if (cfg.aproximado) nota += ' No hay registro de los alias de ese día: se muestran con los alias actuales.';
+      else if (cfg.fecha && cfg.fecha !== fecha) nota += ' Ese día no se confirmó: valen los alias del ' + fechaCorta(cfg.fecha) + '.';
+      $('totNota').textContent = nota;
+    }
+
+    document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+      diaTotales = Number(b.dataset.dia);
+      renderTotales();
+    }));
+
+    // ================= Hojas inferiores =================
+    let hojaActual = null;
+    let focoPrevio = null;
+    function abrirHoja(id) {
+      focoPrevio = document.activeElement;
+      hojaActual = $(id);
+      $('velo').classList.add('abierto');
+      hojaActual.classList.add('abierta');
+    }
+    function cerrarHoja() {
+      if (!hojaActual) return;
+      hojaActual.classList.remove('abierta');
+      $('velo').classList.remove('abierto');
+      hojaActual = null;
+      rangoAbierto = null;
+      if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+    }
+    $('velo').addEventListener('click', cerrarHoja);
+    document.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrarHoja));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarHoja(); });
+
+    // ================= Cambiar de sucursal =================
+    function abrirSucursales() {
+      const ul = $('listaSucursales');
+      ul.innerHTML = '';
+      SUCURSALES.forEach(s => {
+        const li = document.createElement('li');
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'op' + (suc && s.id === suc.id ? ' elegida' : '');
+        b.innerHTML = '<span class="icono" data-rango="alto"><i class="bi bi-shop"></i></span>' +
+          '<span class="op-texto">' + esc(s.nombre) + '<span class="op-sub">' +
+          (s.envios ? '3 rangos + envíos' : '3 rangos') + '</span></span><i class="bi bi-check-lg op-check"></i>';
+        b.addEventListener('click', () => {
+          cerrarHoja();
+          if (suc && s.id === suc.id) return;
+          if (hayCambios() && !confirm('Hay cambios sin confirmar en ' + suc.corto + '. ¿Cambiar de sucursal igual?')) return;
+          irAPagina(0, false);
+          abrirSucursal(s.id);
+        });
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+      abrirHoja('hojaSucursal');
+    }
+    $('btnSucursal').addEventListener('click', abrirSucursales);
+    $('loginOtra').addEventListener('click', abrirSucursales);
+    $('sinAccesoOtra').addEventListener('click', abrirSucursales);
+
+    // ================= Elegir alias =================
+    function aliasOrdenados() {
+      const vistos = new Set();
+      const todos = [];
+      const g = guardado();
+      listaAlias.concat(RANGOS.map(r => g.rangos[r])).forEach(a => {
+        a = limpiar(a);
+        if (a && !vistos.has(a)) { vistos.add(a); todos.push(a); }
+      });
+      return todos.sort((x, y) => (usoAlias[y] || 0) - (usoAlias[x] || 0) || x.localeCompare(y, 'es'));
+    }
+
+    function renderLista() {
+      const ul = $('lista');
+      const texto = limpiar($('buscar').value);
+      const actual = limpiar(borrador.rangos[rangoAbierto]);
+      const todos = aliasOrdenados();
+      const filtrados = todos.filter(a => a.includes(texto));
+      ul.innerHTML = '';
+
+      const agregar = (clase, html, texto, accion) => {
+        const li = document.createElement('li');
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'op ' + clase;
+        b.innerHTML = html;
+        b.querySelector('.op-texto').textContent = texto;
+        b.addEventListener('click', accion);
+        li.appendChild(b);
+        ul.appendChild(li);
+      };
+
+      if (texto && !todos.includes(texto)) {
+        agregar('op-nuevo', '<i class="bi bi-plus-circle-fill"></i><span class="op-texto"></span>', 'Usar «' + texto + '» (nuevo)', () => elegir(texto));
+      }
+      filtrados.forEach(a => {
+        agregar(a === actual ? 'elegida' : '', '<span class="op-texto"></span><i class="bi bi-check-lg op-check"></i>', a, () => elegir(a));
+      });
+      if (!filtrados.length && !texto) {
+        const li = document.createElement('li');
+        li.className = 'lista-vacia';
+        li.textContent = 'No hay alias cargados. Escribí uno arriba.';
+        ul.appendChild(li);
+      }
+    }
+
+    function abrirElegir(rango) {
+      if (!borrador) return;
+      rangoAbierto = rango;
+      $('hojaAliasTitulo').textContent = TITULO_RANGO[rango];
+      $('hojaAliasSub').textContent = AliasDelDia.etiquetas(borrador.cortes)[rango] + ' · ' + suc.corto;
+      $('buscar').value = '';
+      renderLista();
+      abrirHoja('hojaAlias');
+      $('lista').scrollTop = 0;
+      // En el celular el teclado tapa media lista: se enfoca solo con teclado físico
+      if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        setTimeout(() => $('buscar').focus(), 250);
+      }
+    }
+
+    function elegir(alias) {
+      if (!rangoAbierto) return;
+      borrador.rangos[rangoAbierto] = limpiar(alias);
+      cerrarHoja();
+      render();
+    }
+
+    document.querySelectorAll('.card').forEach(card => {
+      card.addEventListener('click', () => {
+        if (arrastroReciente) return;
+        abrirElegir(card.dataset.rango);
+      });
+    });
+    $('buscar').addEventListener('input', renderLista);
+    $('buscar').addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const t = limpiar($('buscar').value);
+      if (t) elegir(t);
+    });
+
+    // ================= Cortes =================
+    const aNumero = s => parseInt(String(s || '').replace(/\D/g, ''), 10) || 0;
+    const formatear = n => n ? n.toLocaleString('es-AR') : '';
+    const leerCortes = () => ({ bajo: aNumero($('corteBajo').value), alto: aNumero($('corteAlto').value) });
+
+    function renderCortes() {
+      const c = leerCortes();
+      const ok = c.bajo > 0 && c.alto > c.bajo;
+      $('errorCortes').textContent = ok ? '' : (c.bajo <= 0 ? 'Ingresá el primer corte.' : 'El segundo corte tiene que ser mayor que el primero.');
+      $('btnAplicarCortes').disabled = !ok;
+      if (ok) {
+        const et = AliasDelDia.etiquetas(c);
+        $('resumenRangos').innerHTML = '<b>' + et.bajo + '</b><br><b>' + et.medio + '</b><br><b>' + et.alto + '</b>';
+      } else {
+        $('resumenRangos').innerHTML = '&nbsp;';
+      }
+    }
+    ['corteBajo', 'corteAlto'].forEach(id => {
+      $(id).addEventListener('input', e => {
+        e.target.value = formatear(aNumero(e.target.value));
+        renderCortes();
+      });
+    });
+    $('btnCortes').addEventListener('click', () => {
+      if (!borrador) return;
+      $('hojaCortesSub').textContent = 'Dónde termina cada rango · ' + suc.corto;
+      $('corteBajo').value = formatear(borrador.cortes.bajo);
+      $('corteAlto').value = formatear(borrador.cortes.alto);
+      renderCortes();
+      abrirHoja('hojaCortes');
+    });
+    $('btnAplicarCortes').addEventListener('click', () => {
+      const c = leerCortes();
+      if (!(c.bajo > 0 && c.alto > c.bajo)) return;
+      borrador.cortes = c;
+      cerrarHoja();
+      render();
+      avisar('Cortes listos. Confirmá para guardarlos.');
+    });
+
+    // ================= Guardar =================
+    $('btnConfirmar').addEventListener('click', async () => {
+      if (guardando || !borrador || !con) return;
+      const rangos = {};
+      rangosDe(suc).forEach(r => { rangos[r] = limpiar(borrador.rangos[r]); });
+      if (Object.values(rangos).some(a => !a)) return;
+      // El de envíos de otra sucursal se conserva tal cual (no se muestra)
+      if (!suc.envios && limpiar(borrador.rangos.envios)) rangos.envios = limpiar(borrador.rangos.envios);
+
+      guardando = true;
+      renderBoton();
+      const hoy = A.fechaHoy();
+      const cortes = { bajo: borrador.cortes.bajo, alto: borrador.cortes.alto };
+      const updates = {
+        aliasDelDia: {
+          cortes, rangos, fecha: hoy,
+          por: (con.auth.currentUser && con.auth.currentUser.email) || '',
+          ts: firebase.database.ServerValue.TIMESTAMP
+        }
+      };
+      // Registro del día: lo usa la hoja de Totales para ayer
+      updates['aliasDelDiaHistorial/' + hoy] = { cortes, rangos };
+      const db = con.db;
+      try {
+        await db.ref().update(updates);
+        // Los alias nuevos se suman a la lista compartida. Va aparte: si esa
+        // base no deja escribir en "alias", el alias del día queda guardado igual.
+        Object.values(rangos).forEach(a => {
+          if (a && !listaAlias.includes(a)) {
+            db.ref('alias/' + aliasAClave(a)).set(a).catch(e => console.warn('No se pudo sumar el alias a la lista:', e && e.code));
+          }
+        });
+        if (navigator.vibrate) navigator.vibrate(15);
+        avisar('Alias de hoy confirmados en ' + suc.corto);
+      } catch (e) {
+        console.error('Error guardando el alias del día:', e);
+        avisar(e && e.code === 'PERMISSION_DENIED'
+          ? 'No tenés permiso para guardar. Revisá las reglas de Firebase.'
+          : 'No se pudo guardar. Revisá la conexión.', true);
+      } finally {
+        guardando = false;
+        render();
+      }
+    });
+
+    let avisoTimer = null;
+    function avisar(texto, error) {
+      const el = $('aviso');
+      el.querySelector('span').textContent = texto;
+      el.querySelector('i').className = error ? 'bi bi-exclamation-circle-fill' : 'bi bi-check-circle-fill';
+      el.classList.add('visible');
+      clearTimeout(avisoTimer);
+      avisoTimer = setTimeout(() => el.classList.remove('visible'), 3200);
+    }
+
+    // ================= Deslizar entre hojas =================
+    // La pista mide dos pantallas: --prog va de 0 (Alias) a 1 (Totales) y
+    // sigue al dedo mientras se arrastra. touch-action: pan-y deja el scroll
+    // vertical al navegador; el gesto horizontal lo maneja este código.
+    const pista = $('pista');
+    const marca = $('pestanasMarca');
+    let pagina = 0;
+    let arrastroReciente = false;
+
+    function ponerProg(v, animar) {
+      [pista, marca].forEach(el => el.classList.toggle('animar', !!animar));
+      document.documentElement.style.setProperty('--prog', v);
+    }
+
+    function irAPagina(n, animar) {
+      pagina = n;
+      ponerProg(n, animar !== false);
+      $('tabAlias').setAttribute('aria-selected', String(n === 0));
+      $('tabTotales').setAttribute('aria-selected', String(n === 1));
+      $('pagAlias').inert = n !== 0;
+      $('pagTotales').inert = n !== 1;
+      actualizarBarra();
+      if (n === 1) renderTotales();
+    }
+
+    function actualizarBarra() {
+      const enApp = !$('app').hidden;
+      $('barra').classList.toggle('oculta', !enApp || pagina !== 0);
+    }
+
+    $('tabAlias').addEventListener('click', () => irAPagina(0));
+    $('tabTotales').addEventListener('click', () => irAPagina(1));
+
+    let gesto = null;
+    const visor = $('visor');
+    visor.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (hojaActual) return;
+      gesto = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), modo: null, ancho: visor.clientWidth };
+    });
+    visor.addEventListener('pointermove', e => {
+      if (!gesto || e.pointerId !== gesto.id) return;
+      const dx = e.clientX - gesto.x;
+      const dy = e.clientY - gesto.y;
+      if (!gesto.modo) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        gesto.modo = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
+        if (gesto.modo === 'h') { try { visor.setPointerCapture(e.pointerId); } catch (_) {} }
+      }
+      if (gesto.modo !== 'h') return;
+      // Resistencia en los bordes: más allá de la primera o la última hoja
+      let prog = pagina - dx / gesto.ancho;
+      if (prog < 0) prog = prog / 3;
+      if (prog > 1) prog = 1 + (prog - 1) / 3;
+      ponerProg(prog, false);
+    });
+    function terminarGesto(e) {
+      if (!gesto || e.pointerId !== gesto.id) return;
+      const g = gesto;
+      gesto = null;
+      if (g.modo !== 'h') return;
+      const dx = e.clientX - g.x;
+      const vel = dx / Math.max(1, performance.now() - g.t);   // px por ms
+      let destino = pagina;
+      if ((dx < -g.ancho * 0.25 || vel < -0.45) && pagina === 0) destino = 1;
+      if ((dx > g.ancho * 0.25 || vel > 0.45) && pagina === 1) destino = 0;
+      irAPagina(destino);
+      // Que soltar el dedo sobre una tarjeta no la abra
+      arrastroReciente = true;
+      setTimeout(() => { arrastroReciente = false; }, 80);
+    }
+    visor.addEventListener('pointerup', terminarGesto);
+    visor.addEventListener('pointercancel', e => {
+      if (!gesto || e.pointerId !== gesto.id) return;
+      gesto = null;
+      irAPagina(pagina);
+    });
+    // Teclado: flechas laterales cambian de hoja (sin foco en un campo)
+    document.addEventListener('keydown', e => {
+      if (hojaActual || $('app').hidden || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+      if (e.key === 'ArrowRight' && pagina === 0) irAPagina(1);
+      if (e.key === 'ArrowLeft' && pagina === 1) irAPagina(0);
+    });
+
+    // ================= Sesión =================
+    $('formLogin').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!con) return;
+      const email = $('loginEmail').value.trim();
+      const clave = $('loginClave').value;
+      const err = $('loginError');
+      if (!email || !clave) { err.textContent = 'Completá correo y contraseña.'; return; }
+      err.textContent = '';
+      $('loginBtn').disabled = true;
+      $('loginBtn').textContent = 'Ingresando…';
+      try {
+        await con.auth.signInWithEmailAndPassword(email, clave);
+      } catch (error) {
+        const c = error && error.code;
+        err.textContent = ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(c)
+          ? 'Correo o contraseña incorrectos.'
+          : c === 'auth/too-many-requests' ? 'Demasiados intentos. Probá más tarde.'
+          : c === 'auth/invalid-email' ? 'Correo inválido.'
+          : c === 'auth/network-request-failed' ? 'Sin conexión. Revisá internet.'
+          : 'No se pudo iniciar sesión.';
+        $('loginBtn').disabled = false;
+        $('loginBtn').textContent = 'Ingresar';
+      }
+    });
+
+    const salir = () => { if (con) con.auth.signOut(); };
+    $('btnSalir').addEventListener('click', () => {
+      if (confirm('¿Cerrar sesión en ' + suc.corto + '?')) salir();
+    });
+    $('btnSalirSinAcceso').addEventListener('click', salir);
+
+    // Al volver a la app (otro día, o tras un rato) se refrescan las fechas.
+    // Si cambió el día, se rearma la consulta de pedidos con el nuevo rango.
+    let diaCargado = AliasDelDia.fechaHoy();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' || !suc) return;
+      if (AliasDelDia.fechaHoy() !== diaCargado) {
+        diaCargado = AliasDelDia.fechaHoy();
+        abrirSucursal(suc.id);
+        return;
+      }
+      if (borrador) { renderDia(); render(); }
+    });
+
+    // ================= Arranque =================
+    // Primero la última sucursal vista en esta app; si no, la del equipo.
+    irAPagina(0, false);
+    abrirSucursal(leerLS(LS_SUC) || leerLS(LS_PV) || '1');
+  })();
+  </script>
+</body>
+</html>

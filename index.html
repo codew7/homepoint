@@ -1475,6 +1475,13 @@
                     <span class="admin-submenu-btn-title">Actividad de Cajas</span>
                 </a>
 
+                <!-- Alias del día: qué alias se manda por WhatsApp según el monto
+                     y para envíos (lo leen historialRecientes y pedidosv2) -->
+                <a href="alias.html" class="admin-submenu-btn" target="_blank">
+                    <span class="admin-submenu-btn-icon"><i class="bi bi-at"></i></span>
+                    <span class="admin-submenu-btn-title">Alias del Día</span>
+                </a>
+
                 <!-- Búsqueda de Personal (panel de selección de postulantes) -->
                 <a href="BusquedaPersonal/panel/index.html" class="admin-submenu-btn" target="_blank">
                     <span class="admin-submenu-btn-icon"><i class="bi bi-person-badge"></i></span>
@@ -1779,8 +1786,61 @@
             }
         }
 
+        // Orden automático de los botones de Administración según el uso en ESTE
+        // equipo (localStorage). Cada botón tiene un puntaje que suma 1 por uso y
+        // se va reduciendo a la mitad cada 14 días sin usarlo: así pesan tanto los
+        // más usados como los usados recientemente. Sin datos, queda el orden del HTML.
+        const USO_ADMIN_KEY = 'homepoint.usoAdministracion';
+        const USO_ADMIN_VIDA_MEDIA = 14 * 24 * 60 * 60 * 1000;
+
+        function leerUsoAdmin() {
+            try {
+                const datos = JSON.parse(localStorage.getItem(USO_ADMIN_KEY));
+                return (datos && typeof datos === 'object') ? datos : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function puntajeUsoAdmin(registro, ahora) {
+            if (!registro || !registro.p) return 0;
+            return registro.p * Math.pow(0.5, (ahora - (registro.t || 0)) / USO_ADMIN_VIDA_MEDIA);
+        }
+
+        function registrarUsoAdmin(clave) {
+            if (!clave) return;
+            const uso = leerUsoAdmin();
+            const ahora = Date.now();
+            uso[clave] = { p: puntajeUsoAdmin(uso[clave], ahora) + 1, t: ahora };
+            try {
+                localStorage.setItem(USO_ADMIN_KEY, JSON.stringify(uso));
+            } catch (e) {
+                // Sin almacenamiento (modo privado, etc.): se mantiene el orden fijo
+            }
+        }
+
+        function ordenarBotonesAdmin() {
+            const grid = document.querySelector('#adminModal .admin-submenu-grid');
+            if (!grid) return;
+            const botones = Array.from(grid.querySelectorAll('.admin-submenu-btn'));
+            botones.forEach((btn, i) => {
+                if (!btn.dataset.ordenOriginal) btn.dataset.ordenOriginal = i;
+            });
+            const uso = leerUsoAdmin();
+            const ahora = Date.now();
+            botones
+                .map(btn => ({
+                    btn,
+                    puntaje: puntajeUsoAdmin(uso[btn.getAttribute('href')], ahora),
+                    orden: Number(btn.dataset.ordenOriginal)
+                }))
+                .sort((a, b) => (b.puntaje - a.puntaje) || (a.orden - b.orden))
+                .forEach(item => grid.appendChild(item.btn));
+        }
+
         function abrirModalAdministracion() {
             const adminModal = document.getElementById('adminModal');
+            ordenarBotonesAdmin();
             adminModal.classList.add('show');
             if (adminModalTimer) clearTimeout(adminModalTimer);
             adminModalTimer = setTimeout(cerrarModalAdministracion, 120000);
@@ -1834,6 +1894,16 @@
                 }
             });
             
+            // Registrar cada uso de un botón de Administración (clic normal o con
+            // la rueda del mouse) para el orden automático
+            ['click', 'auxclick'].forEach(tipo => {
+                adminModal.addEventListener(tipo, function(e) {
+                    if (tipo === 'auxclick' && e.button !== 1) return;
+                    const btn = e.target.closest('.admin-submenu-btn');
+                    if (btn) registrarUsoAdmin(btn.getAttribute('href'));
+                });
+            });
+
             // Cerrar modal de administración al hacer clic fuera
             adminModal.addEventListener('click', function(e) {
                 if (e.target === adminModal) {

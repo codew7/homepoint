@@ -1753,6 +1753,13 @@
     }
     .pv-alias-item.marcado { background: var(--accent-soft); }
     .pv-alias-item-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Alias de envíos del día (../alias.html) */
+    .pv-alias-item-dia {
+      margin-left: 8px; padding: 1px 6px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent);
+      font-family: var(--font-ui); font-size: 10.5px; font-weight: 700;
+      vertical-align: 1px;
+    }
     .pv-alias-item-borrar {
       flex: none;
       width: 22px; height: 22px; padding: 0;
@@ -2732,30 +2739,11 @@
     }
     .pedidos-panel-close:hover, .faltantes-panel-close:hover { background: var(--surface-3); color: var(--ink); }
 
-    /* Leyenda del riel */
-    .pp-leyenda {
-      flex: none;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px 22px;
-      padding: 0 20px 14px;
-      border-bottom: 1px solid var(--line);
-    }
-    .pp-leyenda-fila { display: flex; gap: 22px; }
-    .pp-leyenda-fila > span {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      color: var(--ink-4);
-    }
-    .pp-leyenda-fila .pp-seg { flex: none; width: 5px; height: 15px; }
-    /* Interruptor "Ocultar listos": mismo control que "Pedido int", en tono
-       neutro y a la derecha de la leyenda. */
-    .pp-leyenda .pp-ocultar { margin: 0 0 0 auto; align-self: center; font-size: 10.5px; }
+    /* Sin la leyenda fija (paso al menu > Leyendas): la linea que separaba
+       la cabecera de la lista la pone ahora la lista. */
+    #pedidosPanelList { border-top: 1px solid var(--line); }
+    /* Interruptores del menu de filtros: mismo control que "Pedido int",
+       en tono neutro. */
     .pp-ocultar[aria-checked="true"] { color: var(--ink-2); }
     .pp-ocultar[aria-checked="true"] .int-toggle-pista { background: var(--ink-2); }
     /* Va despues de la linea divisoria de la cabecera (order 3). */
@@ -3471,7 +3459,120 @@
     .pp-btn-buscar:hover { background: var(--surface-3); color: var(--ink); }
     .pp-btn-buscar[aria-pressed="true"] { background: var(--graphite); border-color: transparent; color: var(--on-g); }
     .pp-btn-buscar svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .pp-buscar { padding: 8px 16px; border-bottom: 1px solid var(--line); }
+    /* Menu de filtros (hamburguesa): se despliega bajo el boton, alineado a
+       su borde derecho. Mismo tono que .pp-nota-menu. */
+    .pp-filtros { position: relative; flex: none; }
+    .pp-filtros .pp-btn-buscar { position: relative; }
+    .pp-filtros .pp-btn-buscar[aria-expanded="true"] { background: var(--graphite); border-color: transparent; color: var(--on-g); }
+    /* Punto de aviso: hay algun filtro activo aunque el menu este cerrado */
+    .pp-filtros-punto {
+      position: absolute; top: 5px; right: 5px;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--int); box-shadow: 0 0 0 2px var(--surface-2);
+      display: none;
+    }
+    .pp-filtros.is-activo .pp-filtros-punto { display: block; }
+    /* Vive en body (position: fixed, ubicado por JS): la caja del panel
+       tiene overflow hidden y con la lista corta lo recortaria. */
+    .pp-filtros-menu {
+      position: fixed;
+      z-index: 260;
+      width: 240px;
+      max-width: 80vw;
+      padding: 0 0 10px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r2);
+      box-shadow: var(--sh3);
+      transform-origin: top right;
+      animation: ppNotaMenuIn .18s var(--ease-spring) both;
+    }
+    .pp-filtros-menu[hidden] { display: none; }
+    .pp-filtros-menu .pp-ocultar {
+      display: flex;
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 13px;
+      justify-content: flex-start;
+    }
+    .pp-filtros-nota {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 14px 0;
+      margin-top: 4px;
+      border-top: 1px solid var(--line);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .pp-filtros-nota select {
+      width: 100%;
+      height: 36px;
+      box-sizing: border-box;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .pp-filtros-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: calc(100% - 16px);
+      margin: 10px 8px 0;
+      padding: 10px 8px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: none;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-2);
+      text-align: left;
+      cursor: pointer;
+    }
+    .pp-filtros-item:hover { color: var(--ink); }
+    .pp-filtros-item svg { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+    /* Modal de leyendas: una fila por indicador, icono real a la izquierda */
+    #leyendasModal { z-index: 225; }
+    .pp-ley-box { max-width: 420px; }
+    .pp-ley-titulo { font-size: 17px; font-weight: 800; letter-spacing: -.3px; color: var(--ink); margin-bottom: 4px; }
+    .pp-ley-sec {
+      margin: 14px 0 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .pp-ley-fila {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      line-height: 1.35;
+      color: var(--ink-3);
+    }
+    .pp-ley-fila:last-child { border-bottom: 0; }
+    .pp-ley-fila b { color: var(--ink); font-weight: 700; }
+    .pp-ley-ic { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 22px; }
+    .pp-ley-ic .pp-seg { width: 5px; height: 15px; }
+    .pp-ley-ic .pp-btn-wa, .pp-ley-ic .pp-btn-desp, .pp-ley-ic .pp-btn-menu { pointer-events: none; transform: scale(.85); }
+    .pp-ley-ic .pp-nota { cursor: default; font-size: 12px; }
+    .pp-buscar { padding: 8px 16px; }   /* la linea de abajo la pone la lista */
     .pp-buscar[hidden] { display: none; }
     .pp-buscar input,
     .pp-buscar select {
@@ -6350,8 +6451,10 @@
           <div class="print-menu-wrap">
             <button class="footer-btn-base btn-icono btn-impresion" id="btnImpresion" aria-label="Imprimir" title="Imprimir" aria-haspopup="menu"><svg class="fb-ic" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg></button>
             <div class="print-menu" id="printMenu">
+              <div class="print-menu-item" id="printIdPedido"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><rect x="14" y="9" width="5" height="6" rx="0.5"></rect><line x1="5" y1="10" x2="11" y2="10"></line><rect x="5" y="13" width="2" height="2"></rect><rect x="9" y="13" width="2" height="2"></rect></svg><span>Imprimir Id pedido</span></div>
               <div class="print-menu-item" id="printRotuloPOS"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"></path><circle cx="7.5" cy="7.5" r="1.2"></circle></svg><span>R&oacute;tulo</span></div>
               <div class="print-menu-item" id="printTicket"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><line x1="8" y1="8" x2="16" y2="8"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="8" y1="16" x2="13" y2="16"></line></svg><span>Ticket</span></div>
+              <div class="print-menu-item" id="printTicketRotulo"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 2v11l1.5-1 1.5 1 1.5-1 1.5 1 1.5-1 1.5 1V2Z"></path><path d="M14 9h5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-3"></path><circle cx="16.5" cy="13.5" r="1"></circle></svg><span>Ticket + R&oacute;tulo</span></div>
               <!-- Solo aplica dentro de la app Android (impresion Bluetooth directa);
                    se muestra u oculta desde JS, ver btnImpresion click. -->
               <div class="print-menu-item" id="printConfigBT" style="display:none"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10-5 5V2l5 5L7 17"></path></svg><span>Impresora Bluetooth</span></div>
@@ -6480,36 +6583,38 @@
           <h3>Pedidos pendientes</h3>
           <span class="pp-resumen" id="pedidosResumen"></span>
         </div>
-        <button type="button" class="pp-btn-rotulos" id="ppBtnRotulos" aria-pressed="false" title="Elegir pedidos e imprimir sus r&oacute;tulos juntos"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Imprimir</span></button>
+        <button type="button" class="pp-btn-rotulos" id="ppBtnRotulos" aria-pressed="false" title="Elegir pedidos e imprimir sus etiquetas de Id juntas"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Imprimir</span></button>
         <button type="button" class="pp-btn-buscar" id="ppBtnBuscar" aria-pressed="false" aria-label="Buscar por nombre" title="Buscar por nombre"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
-        <button type="button" class="pp-btn-buscar" id="ppBtnFiltroNota" aria-pressed="false" aria-label="Filtrar por nota" title="Filtrar por nota"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg></button>
+        <!-- Menu de filtros: Ocultar listos, Con comprobante y filtro por nota -->
+        <div class="pp-filtros">
+          <button type="button" class="pp-btn-buscar" id="ppBtnFiltros" aria-haspopup="true" aria-expanded="false" aria-label="Filtros" title="Filtros"><svg class="ic-sm" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg><i class="pp-filtros-punto" aria-hidden="true"></i></button>
+          <div class="pp-filtros-menu" id="ppFiltrosMenu" hidden>
+            <div class="pp-nota-menu-titulo">Filtros</div>
+            <!-- Oculta el grupo "listos para despachar" para ganar lugar. Arranca
+                 apagado cada vez que se carga la pagina (no se recuerda). -->
+            <button type="button" class="int-toggle pp-ocultar" id="ppOcultarListos" role="switch" aria-checked="false" title="Ocultar los pedidos listos para despachar">
+              <span class="int-toggle-pista" aria-hidden="true"></span>
+              <span>Ocultar listos</span>
+            </button>
+            <!-- Solo los pedidos con comprobante de pago recibido. Arranca
+                 apagado cada vez que se carga la pagina (no se recuerda). -->
+            <button type="button" class="int-toggle pp-ocultar" id="ppSoloComprobante" role="switch" aria-checked="false" title="Mostrar solo los pedidos con comprobante enviado">
+              <span class="int-toggle-pista" aria-hidden="true"></span>
+              <span>Con comprobante</span>
+            </button>
+            <!-- Filtro por nota: chequeo rapido, se borra al cerrar el panel -->
+            <label class="pp-filtros-nota">
+              <span>Nota</span>
+              <select id="ppFiltroNotaSel" aria-label="Nota a mostrar"></select>
+            </label>
+            <button type="button" class="pp-filtros-item" id="ppBtnLeyendas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><line x1="12" y1="7.6" x2="12.01" y2="7.6"></line></svg><span>Leyendas</span></button>
+          </div>
+        </div>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
       </div>
       <!-- Buscador por nombre: oculto hasta tocar la lupa -->
       <div class="pp-buscar" id="ppBuscar" hidden>
         <input type="search" id="ppBuscarInput" placeholder="Buscar por nombre..." autocomplete="off" autocapitalize="off" spellcheck="false">
-      </div>
-      <!-- Filtro por nota: chequeo rapido, se borra al cerrar el panel -->
-      <div class="pp-buscar" id="ppFiltroNota" hidden>
-        <select id="ppFiltroNotaSel" aria-label="Nota a mostrar"></select>
-      </div>
-      <!-- Leyenda del riel: una fila por hito con sus dos estados (lleno y
-           rayado), en el mismo orden vertical que los tramos de cada fila -->
-      <div class="pp-leyenda">
-        <span class="pp-leyenda-fila">
-          <span><i class="pp-seg pp-seg--pago is-on" aria-hidden="true"></i>Pago</span>
-          <span><i class="pp-seg pp-seg--pago is-wait" aria-hidden="true"></i>Esperando pago</span>
-        </span>
-        <span class="pp-leyenda-fila">
-          <span><i class="pp-seg pp-seg--armado is-on" aria-hidden="true"></i>Completo</span>
-          <span><i class="pp-seg pp-seg--armado is-wait" aria-hidden="true"></i>En preparación</span>
-        </span>
-        <!-- Oculta el grupo "listos para despachar" para ganar lugar. Arranca
-             apagado cada vez que se carga la pagina (no se recuerda). -->
-        <button type="button" class="int-toggle pp-ocultar" id="ppOcultarListos" role="switch" aria-checked="false" title="Ocultar los pedidos listos para despachar">
-          <span class="int-toggle-pista" aria-hidden="true"></span>
-          <span>Ocultar listos</span>
-        </button>
       </div>
       <div class="pedidos-panel-list" id="pedidosPanelList">
         <div class="pedidos-panel-empty">Presiona "Pedidos" para cargar</div>
@@ -6726,6 +6831,18 @@
       <div class="modal-btns">
         <button class="btn-cancel" id="rotuloCancel">Cancelar</button>
         <button class="btn-primary" id="rotuloConfirm">Imprimir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL LEYENDAS: que significa cada indicador de la lista de pendientes.
+       El contenido lo arma ppLeyendasHtml() con los mismos iconos de la lista. -->
+  <div class="modal-backdrop" id="leyendasModal">
+    <div class="modal-box modal-box--form pp-ley-box" role="dialog" aria-modal="true" aria-labelledby="leyendasTitulo">
+      <h3 class="pp-ley-titulo" id="leyendasTitulo">Leyendas</h3>
+      <div id="leyendasCuerpo"></div>
+      <div class="modal-btns">
+        <button class="btn-primary" id="leyendasCerrar">Entendido</button>
       </div>
     </div>
   </div>
@@ -6984,6 +7101,8 @@
   <!-- Cobertura de sucursales por transporte (solo se usa EnviosAR.consultar) -->
   <script src="https://home-point.com.ar/envios-ar.js" defer></script>
   <script src="config.js"></script>
+  <!-- Alias del día (lo elige ../alias.html): el de envíos es la sugerencia principal -->
+  <script src="../aliasDelDia.js"></script>
   <!-- Conversaciones de WhatsApp: proyecto Firebase aparte (carpeta WhatsAppSync) -->
   <script src="config-whatsapp.js"></script>
 
@@ -9897,7 +10016,8 @@
       ppNotaCerrar();
       ppRotSalir();
       ppDesuscribir();
-      ppFiltroNotaToggle(false);
+      ppFiltrosToggle(false);
+      ppFiltroNotaLimpiar();
       ppBuscarToggle(false);
     }
 
@@ -9962,7 +10082,7 @@
         nota: p.nota || '',
         embalado: p.embalado === true,
         controlado: controlEstado(p).finalValido,
-        rotuloImpreso: p.rotuloImpreso || 0,
+        idImpreso: p.idImpreso || 0,
         tipoEntrega: p.tipoEntrega || '',
         cat: p.cat || '',
         paquete: paqueteValido(p.paquete),
@@ -9978,7 +10098,7 @@
     // Lo que dibuja la fila: si no cambia, la fila se ve igual.
     function ppFirmaFila(p) {
       return [p.nombre, p.telefono, p.nota, p.rank, p.pago, p.armado, p.enPreparacion,
-        p.embalado, p.controlado, p.rotuloImpreso, p.tipoEntrega, p.cat, p.timestamp,
+        p.embalado, p.controlado, p.idImpreso, p.tipoEntrega, p.cat, p.timestamp,
         p.paquete ? paqueteTexto(p.paquete) : '', waComprobantesFirma(p),
         p.despachoLink, despEstadoClase(p)].join('\u0001');
     }
@@ -10775,6 +10895,8 @@
       }
     }
 
+    // OJO: cada indicador nuevo que se agregue a la fila tiene que sumarse
+    // tambien a ppLeyendasHtml() (menu de filtros > Leyendas).
     function ppFilaHtml(p) {
       const ant = textoAntiguedad(p.timestamp);
       const listo = p.score === 2;
@@ -10839,6 +10961,17 @@
     document.getElementById('ppOcultarListos').addEventListener('click', (e) => {
       ppOcultarListos = !ppOcultarListos;
       e.currentTarget.setAttribute('aria-checked', String(ppOcultarListos));
+      ppFiltrosMarcar();
+      renderPedidosPendientes();
+    });
+
+    // "Con comprobante": deja solo los pedidos que muestran el indicador de
+    // comprobante de pago (waComprobantesDe). Apagado por defecto.
+    let ppSoloComprobante = false;
+    document.getElementById('ppSoloComprobante').addEventListener('click', (e) => {
+      ppSoloComprobante = !ppSoloComprobante;
+      e.currentTarget.setAttribute('aria-checked', String(ppSoloComprobante));
+      ppFiltrosMarcar();
       renderPedidosPendientes();
     });
 
@@ -10898,13 +11031,11 @@
       ppBuscarInput.dispatchEvent(new Event('input'));
     });
 
-    // Filtro por nota: el embudo muestra un desplegable con las notas que hay
+    // Filtro por nota: desplegable del menu de filtros con las notas que hay
     // en los pendientes (las de pago unificadas, igual que los grupos). Es un
-    // chequeo rapido: no se recuerda y se borra al ocultarlo o cerrar el panel.
+    // chequeo rapido: no se recuerda y se borra al cerrar el panel.
     let ppFiltroNota = null;   // clave de ppGrupoNota; null = todas
-    const ppFiltroNotaEl = document.getElementById('ppFiltroNota');
     const ppFiltroNotaSel = document.getElementById('ppFiltroNotaSel');
-    const ppBtnFiltroNota = document.getElementById('ppBtnFiltroNota');
     function ppFiltroNotaOpciones() {
       const grupos = new Map();
       pedidosCache.forEach(p => {
@@ -10912,7 +11043,7 @@
         if (!grupos.has(g.clave)) grupos.set(g.clave, { titulo: g.clave === '' ? 'Sin nota' : g.titulo, n: 0 });
         grupos.get(g.clave).n++;
       });
-      if (ppFiltroNota !== null && !grupos.has(ppFiltroNota)) ppFiltroNota = null;
+      if (ppFiltroNota !== null && !grupos.has(ppFiltroNota)) { ppFiltroNota = null; ppFiltrosMarcar(); }
       const orden = Array.from(grupos.entries())
         .sort((a, b) => a[1].titulo.localeCompare(b[1].titulo, 'es', { sensitivity: 'base' }));
       ppFiltroNotaSel.innerHTML = '<option value="*">Todas las notas</option>' +
@@ -10920,21 +11051,106 @@
           '<option value="' + escapeHtml(clave) + '">' + escapeHtml(g.titulo) + ' (' + g.n + ')</option>').join('');
       ppFiltroNotaSel.value = ppFiltroNota === null ? '*' : ppFiltroNota;
     }
-    function ppFiltroNotaToggle(abrir) {
-      ppFiltroNotaEl.hidden = !abrir;
-      ppBtnFiltroNota.setAttribute('aria-pressed', String(abrir));
-      if (abrir) { ppFiltroNotaOpciones(); ppFiltroNotaSel.focus(); return; }
-      if (ppFiltroNota !== null) { ppFiltroNota = null; renderPedidosPendientes(); }
+    function ppFiltroNotaLimpiar() {
+      if (ppFiltroNota === null) return;
+      ppFiltroNota = null;
+      ppFiltrosMarcar();
+      renderPedidosPendientes();
     }
-    ppBtnFiltroNota.addEventListener('click', () => ppFiltroNotaToggle(ppFiltroNotaEl.hidden));
     ppFiltroNotaSel.addEventListener('change', () => {
       ppFiltroNota = ppFiltroNotaSel.value === '*' ? null : ppFiltroNotaSel.value;
+      ppFiltrosMarcar();
       renderPedidosPendientes();
+    });
+
+    // Menu de filtros (hamburguesa): agrupa los dos interruptores y la nota.
+    // Se cierra al tocar afuera o con Escape; los filtros siguen aplicados.
+    const ppFiltrosEl = document.querySelector('.pp-filtros');
+    const ppBtnFiltros = document.getElementById('ppBtnFiltros');
+    const ppFiltrosMenu = document.getElementById('ppFiltrosMenu');
+    document.body.appendChild(ppFiltrosMenu);
+    function ppFiltrosMarcar() {
+      const activo = ppOcultarListos || ppSoloComprobante || ppFiltroNota !== null;
+      ppFiltrosEl.classList.toggle('is-activo', activo);
+      ppBtnFiltros.title = activo ? 'Filtros (hay filtros activos)' : 'Filtros';
+    }
+    function ppFiltrosToggle(abrir) {
+      ppFiltrosMenu.hidden = !abrir;
+      ppBtnFiltros.setAttribute('aria-expanded', String(abrir));
+      if (!abrir) return;
+      ppFiltroNotaOpciones();
+      // Debajo del boton, alineado a su borde derecho
+      const r = ppBtnFiltros.getBoundingClientRect();
+      const ancho = ppFiltrosMenu.offsetWidth;
+      ppFiltrosMenu.style.top = (r.bottom + 6) + 'px';
+      ppFiltrosMenu.style.left = Math.max(6, Math.min(r.right - ancho, window.innerWidth - ancho - 6)) + 'px';
+    }
+    ppBtnFiltros.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ppFiltrosToggle(ppFiltrosMenu.hidden);
+    });
+    document.addEventListener('click', (e) => {
+      if (!ppFiltrosMenu.hidden && !ppFiltrosEl.contains(e.target) && !ppFiltrosMenu.contains(e.target)) ppFiltrosToggle(false);
+    });
+    window.addEventListener('resize', () => { if (!ppFiltrosMenu.hidden) ppFiltrosToggle(false); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !ppFiltrosMenu.hidden) { e.stopPropagation(); ppFiltrosToggle(false); }
+    });
+    // Leyendas: explica cada indicador de la fila con su icono real. Se arma
+    // al abrir (los iconos se declaran mas abajo en el script).
+    function ppLeyendasHtml() {
+      const fila = (ic, nombre, txt) =>
+        '<div class="pp-ley-fila"><span class="pp-ley-ic">' + ic + '</span>' +
+        '<span><b>' + nombre + '</b> · ' + txt + '</span></div>';
+      const sec = (t) => '<div class="pp-ley-sec">' + t + '</div>';
+      const seg = (hito, clase) => '<i class="pp-seg pp-seg--' + hito + ' ' + clase + '" aria-hidden="true"></i>';
+      const ind = (clase, ic) => '<span class="' + clase + '">' + ic + '</span>';
+      const ent = (k) => ind('pp-entrega-ind pp-entrega-ind--' + PP_ENTREGAS[k][2], PP_ENTREGAS[k][1]);
+      return sec('Barras de la izquierda') +
+        fila(seg('pago', 'is-on'), 'Pago', 'pago registrado.') +
+        fila(seg('pago', 'is-wait'), 'Esperando pago', 'pago solicitado, sin confirmar.') +
+        fila(seg('armado', 'is-on'), 'Completo', 'todos los artículos armados.') +
+        fila(seg('armado', 'is-wait'), 'En preparación', 'armado empezado, faltan artículos.') +
+        sec('Junto al nombre') +
+        fila(ind('pp-listo-sello', '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"></polyline></svg>'), 'Listo', 'controlado, para despachar.') +
+        fila(ind('pp-rot-impreso', IC_ROTULO_IMPRESO), 'Id sin imprimir', 'falta imprimir la etiqueta de Id.') +
+        fila(ind('pp-descuento', IC_DESCUENTO), 'Descuento', 'pedido con precio int.') +
+        fila(ent('Motomensajeria'), 'Flete', 'envío por moto.') +
+        fila(ent('Correo Argentino'), 'Correo Argentino', 'envío por correo.') +
+        fila(ent('Via Cargo'), 'Vía Cargo', 'envío por Vía Cargo.') +
+        fila(ent('Flecha Carga'), 'Flecha Carga', 'envío por Flecha Carga.') +
+        fila(ind('pp-embalado-ind is-embalado', IC_PAQUETE), 'Embalado', 'controlado y embalado.') +
+        fila(ind('pp-comprobante', IC_COMPROBANTE), 'Comprobante', 'el cliente mandó comprobante de pago (el número indica cuántos).') +
+        fila(ind('pp-comprobante is-alerta-amarillo', IC_COMPROBANTE), 'Punto amarillo', 'revisar: sin monto leído o asignación dudosa.') +
+        fila(ind('pp-comprobante is-alerta-rojo', IC_COMPROBANTE), 'Punto rojo', 'pago parcial o comprobante dudoso.') +
+        sec('Debajo del nombre') +
+        fila('<span class="pedidos-panel-fecha">3d</span>', 'Antigüedad', 'días desde que entró (resaltado desde ' + PEDIDO_VIEJO_DIAS + ').') +
+        fila('<span class="pp-nota">Nota</span>', 'Nota', 'estado del pedido; doble toque para cambiarla.') +
+        sec('Botones de la derecha') +
+        fila('<span class="pp-btn-desp">' + IC_LINK + '</span>', 'Link de despacho', 'solo Flecha Carga: amarillo enviando, verde enviado, rojo error.') +
+        fila('<span class="pp-btn-wa">' + IC_CHAT + '</span>', 'WhatsApp', 'escribirle al cliente.') +
+        fila('<span class="pp-btn-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="20" y2="17"></line></svg></span>', 'Más acciones', 'imprimir, pago, peso y entrega.');
+    }
+    const leyendasModal = document.getElementById('leyendasModal');
+    document.getElementById('ppBtnLeyendas').addEventListener('click', () => {
+      ppFiltrosToggle(false);
+      document.getElementById('leyendasCuerpo').innerHTML = ppLeyendasHtml();
+      leyendasModal.classList.add('active');
+    });
+    const leyendasCerrar = () => leyendasModal.classList.remove('active');
+    document.getElementById('leyendasCerrar').addEventListener('click', leyendasCerrar);
+    leyendasModal.addEventListener('click', (e) => { if (e.target === leyendasModal) leyendasCerrar(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && leyendasModal.classList.contains('active')) leyendasCerrar();
+    });
+
+    ppFiltrosMenu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); ppFiltrosToggle(false); ppBtnFiltros.focus(); }
     });
 
     function renderPedidosPendientes() {
       ppNotaCerrar();
-      if (!ppFiltroNotaEl.hidden) ppFiltroNotaOpciones();
+      if (!ppFiltrosMenu.hidden) ppFiltroNotaOpciones();
       // Contador sobre el boton de la barra: se llena en cuanto el panel se
       // abre por primera vez y se refresca en cada carga posterior.
       const badge = document.getElementById('pedidosBadge');
@@ -11008,9 +11224,10 @@
       const porNota = new Map();
       const visibles = pedidosCache.filter(p =>
         (!ppBusqueda || normalizarNota(p.nombre).indexOf(ppBusqueda) !== -1) &&
-        (ppFiltroNota === null || ppGrupoNota(p.nota).clave === ppFiltroNota));
+        (ppFiltroNota === null || ppGrupoNota(p.nota).clave === ppFiltroNota) &&
+        (!ppSoloComprobante || !!waComprobantesDe(p)));
       visibles.forEach(p => {
-        if (ppRotModo && !p.rotuloImpreso) { sinImprimir.push(p); return; }
+        if (ppRotModo && !p.idImpreso) { sinImprimir.push(p); return; }
         if (p.rank === 3) { (ppEsParaDespachar(p) ? listos : aPreparar).push(p); return; }
         const g = ppGrupoNota(p.nota);
         if (!porNota.has(g.clave)) {
@@ -11077,7 +11294,10 @@
       if (aPreparar.length) html += grupoHtml('Para preparar', aPreparar, ' pp-grupo--listo');
       gruposNota.forEach(g => { html += grupoHtml(g.titulo, g.pedidos); });
 
-      if (!visibles.length) html = '<div class="pedidos-panel-empty">Ning&uacute;n pedido coincide con la b&uacute;squeda</div>';
+      if (!visibles.length) html = '<div class="pedidos-panel-empty">' +
+        (ppSoloComprobante && !ppBusqueda && ppFiltroNota === null
+          ? 'Ning&uacute;n pedido pendiente tiene comprobante enviado'
+          : 'Ning&uacute;n pedido coincide con la b&uacute;squeda') + '</div>';
       pedidosPanelList.innerHTML = html;
     }
 
@@ -11129,6 +11349,8 @@
     // Usa el mismo nodo y cierre que el menu de notas (ppNotaMenuEl / ppNotaCerrar).
     const IC_MENU_ROTULO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>';
     const IC_MENU_TICKET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h14v20l-2.5-1.5L14 22l-2-1.5L10 22l-2.5-1.5L5 22z"></path><line x1="9" y1="8" x2="15" y2="8"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>';
+    const IC_MENU_TICKET_ROTULO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 2v11l1.5-1 1.5 1 1.5-1 1.5 1 1.5-1 1.5 1V2Z"></path><path d="M14 9h5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-3"></path><circle cx="16.5" cy="13.5" r="1"></circle></svg>';
+    const IC_MENU_ID = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><rect x="14" y="9" width="5" height="6" rx="0.5"></rect><line x1="5" y1="10" x2="11" y2="10"></line><rect x="5" y="13" width="2" height="2"></rect><rect x="9" y="13" width="2" height="2"></rect></svg>';
     const IC_MENU_ENTREGADO = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>';
 
     const IC_MENU_PAGO_SOLICITADO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
@@ -11147,8 +11369,10 @@
       // "Pago solicitado". Para borrar la nota esta la pastilla de notas.
       const ofrecePago = estadoPago(p.nota) === 'espera';
       const acciones = [
+        ['id', 'Imprimir Id pedido', IC_MENU_ID],
         ['rotulo', 'Imprimir rótulo', IC_MENU_ROTULO],
         ['ticket', 'Imprimir ticket', IC_MENU_TICKET],
+        ['ticket-rotulo', 'Ticket + rótulo', IC_MENU_TICKET_ROTULO],
         ['paquete', 'Peso y tamaño', IC_MENU_MEDIDAS, false, p.paquete ? paqueteTextoCorto(p.paquete) : ''],
         ofrecePago ? ['pago', 'Pago', IC_MENU_PAGO]
                    : ['pago-solicitado', 'Pago solicitado', IC_MENU_PAGO_SOLICITADO]
@@ -11206,12 +11430,11 @@
       actualizarEstadoBtnImpresion();
       actualizarEstadoBtnDespachar();
 
-      if (accion === 'rotulo' || accion === 'ticket') {
-        // Mismo requisito que el boton Imprimir de la vista del pedido.
-        if (btnImpresion.disabled) { showToast('Elegí pago y entrega para imprimir'); return; }
-        if (accion === 'rotulo') document.getElementById('printRotuloPOS').click();
-        else imprimirTicket();
-      } else if (accion === 'entregado') {
+      if (accion === 'rotulo') document.getElementById('printRotuloPOS').click();
+      else if (accion === 'ticket') imprimirTicket();
+      else if (accion === 'ticket-rotulo') document.getElementById('printTicketRotulo').click();
+      else if (accion === 'id') imprimirIdPedido();
+      else if (accion === 'entregado') {
         const btnDesp = document.getElementById('btnDespachar');
         if (btnDesp.disabled) {
           showToast(pedidoActual.status === 'DESPACHADO/ENTREGADO' ? 'El pedido ya está entregado'
@@ -11233,11 +11456,11 @@
     }
 
     // ==========================================
-    // IMPRIMIR ROTULOS EN LOTE
+    // IMPRIMIR ETIQUETAS DE ID EN LOTE
     // ==========================================
-    // Se eligen varios pedidos de la lista y salen todos juntos por la POS,
-    // con el corte de papel entre uno y otro. Cada pedido impreso queda con
-    // `rotuloImpreso` (timestamp) y la fila muestra un icono chico.
+    // Se eligen varios pedidos de la lista y sus etiquetas de Id salen todas
+    // juntas por la POS, con el corte de papel entre una y otra. Cada pedido
+    // impreso queda con `idImpreso` (timestamp) y la fila pierde el icono.
     const IC_ROTULO_IMPRESO = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>';
     const ppPanelBox = pedidosPanel.querySelector('.pedidos-panel-box');
     const ppBtnRotulos = document.getElementById('ppBtnRotulos');
@@ -11247,17 +11470,17 @@
     // Pedido con descuento (cat = "int"): mismo trazo discreto que el de impreso.
     const IC_DESCUENTO = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>';
 
-    // El icono de impresora avisa lo que FALTA: se ve solo mientras el rotulo
-    // no se imprimio, y desaparece al imprimirlo (la fila queda mas limpia).
+    // El icono de impresora avisa lo que FALTA: se ve solo mientras la
+    // etiqueta de Id no se imprimio, y desaparece al imprimirla.
     function ppRotImpresoHtml(p) {
-      if (p.rotuloImpreso) return '';
-      const titulo = 'Rótulo sin imprimir';
+      if (p.idImpreso) return '';
+      const titulo = 'Id sin imprimir';
       return '<span class="pp-rot-impreso" role="img" title="' + titulo + '" aria-label="' + titulo + '">' + IC_ROTULO_IMPRESO + '</span>';
     }
 
     function ppRotActualizarBarra() {
       const n = ppRotSeleccion.size;
-      ppRotCuenta.textContent = n ? n + (n === 1 ? ' pedido seleccionado' : ' pedidos seleccionados') : 'Tocá los pedidos a rotular';
+      ppRotCuenta.textContent = n ? n + (n === 1 ? ' pedido seleccionado' : ' pedidos seleccionados') : 'Tocá los pedidos a imprimir';
       ppRotImprimir.disabled = n === 0;
       ppRotImprimir.textContent = n ? 'Imprimir ' + n : 'Imprimir';
     }
@@ -11300,15 +11523,25 @@
     document.getElementById('ppRotCancelar').addEventListener('click', ppRotSalir);
     ppRotImprimir.addEventListener('click', ppRotImprimirSeleccion);
 
-    // Guarda la marca de impreso en Firebase y en la lista ya pintada.
+    // El rotulo solo deja registro en Firebase: la marca de la lista sigue a
+    // la etiqueta de Id (marcarIdImpreso).
     function marcarRotuloImpreso(ids) {
       const ahora = Date.now();
       ids.forEach(id => {
         db.ref('pedidos/' + id).update({ rotuloImpreso: ahora })
           .catch(err => console.error('No se pudo marcar el rotulo impreso:', err));
+      });
+    }
+
+    // Guarda la marca de Id impreso en Firebase y en la lista ya pintada.
+    function marcarIdImpreso(ids) {
+      const ahora = Date.now();
+      ids.forEach(id => {
+        db.ref('pedidos/' + id).update({ idImpreso: ahora })
+          .catch(err => console.error('No se pudo marcar el Id impreso:', err));
         const p = pedidosCache.find(x => x.id === id);
         if (!p) return;
-        p.rotuloImpreso = ahora;
+        p.idImpreso = ahora;
         if (ppVivo) return;   // la lista en vivo ya repinta la fila
         const fila = pedidosPanelList.querySelector('.pedidos-panel-item[data-id="' + CSS.escape(id) + '"]');
         if (fila) fila.outerHTML = ppFilaHtml(p);
@@ -11323,25 +11556,22 @@
       ppRotImprimir.disabled = true;
       ppRotImprimir.textContent = 'Preparando...';
       try {
-        const datos = await conTimeout(() => Promise.all(ids.map(id => db.ref('pedidos/' + id).once('value'))));
-        const qrs = await Promise.all(ids.map(id => rotCargarQR(id)));
-        const rotulos = [];
-        datos.forEach((snap, i) => {
-          const p = snap.val();
-          if (!p) return;
-          rotulos.push({ id: ids[i], dataUrl: rotConstruirCanvas(datosRotuloPedido(p), qrs[i]) });
-        });
-        if (!rotulos.length) { showToast('No se encontraron los pedidos'); return; }
+        // La etiqueta solo lleva el nombre, que ya esta en la lista: no hace
+        // falta volver a leer los pedidos de Firebase.
+        const pedidos = ids.map(id => pedidosCache.find(x => x.id === id)).filter(Boolean);
+        if (!pedidos.length) { showToast('No se encontraron los pedidos'); return; }
+        const qrs = await Promise.all(pedidos.map(p => rotCargarQR(p.id, ID_QR)));
+        const etiquetas = pedidos.map((p, i) => ({ id: p.id, dataUrl: idConstruirCanvas(p.nombre, qrs[i], p.timestamp) }));
 
-        const impresos = await rotImprimirTiras(rotulos.map(r => r.dataUrl), 1);
+        const impresos = await rotImprimirTiras(etiquetas.map(r => r.dataUrl), 1);
         if (impresos) {
-          marcarRotuloImpreso(rotulos.map(r => r.id));
+          marcarIdImpreso(etiquetas.map(r => r.id));
           ppRotSalir();
-          showToast(rotulos.length === 1 ? 'Rótulo enviado a imprimir' : rotulos.length + ' rótulos enviados a imprimir');
+          showToast(etiquetas.length === 1 ? 'Etiqueta de Id enviada a imprimir' : etiquetas.length + ' etiquetas de Id enviadas a imprimir');
         }
       } catch (err) {
-        console.error('Error imprimiendo rotulos en lote:', err);
-        showToast(err && err.esTimeout ? 'Sin conexion con el servidor' : 'No se pudieron preparar los rótulos');
+        console.error('Error imprimiendo etiquetas de Id en lote:', err);
+        showToast('No se pudieron preparar las etiquetas');
       } finally {
         if (ppRotModo) ppRotActualizarBarra();
       }
@@ -13222,14 +13452,12 @@
       printMenu.classList.toggle('active');
     });
 
+    // Imprimir ya no exige elegir pago y entrega: el boton queda siempre
+    // habilitado. Se mantiene la funcion porque la llaman desde varios lados.
     function actualizarEstadoBtnImpresion() {
-      const pagoOk = !!document.querySelector('input[name="pvTipoPago"]:checked');
-      const entregaOk = !!document.querySelector('input[name="pvTipoEntrega"]:checked');
-      const ok = pagoOk && entregaOk;
-      btnImpresion.disabled = !ok;
-      btnImpresion.style.opacity = ok ? '' : '0.5';
-      btnImpresion.style.cursor = ok ? '' : 'not-allowed';
-      if (!ok) printMenu.classList.remove('active');
+      btnImpresion.disabled = false;
+      btnImpresion.style.opacity = '';
+      btnImpresion.style.cursor = '';
     }
     window.actualizarEstadoBtnImpresion = actualizarEstadoBtnImpresion;
 
@@ -13251,14 +13479,29 @@
       imprimirTicket();
     });
 
+    // Ticket + Rotulo: ticket, corte y rotulo(s) en un mismo envio. Usa el
+    // mismo modal de cantidad que el Rotulo.
+    document.getElementById('printTicketRotulo').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      rotuloDestino = 'ticket+pos';
+      document.getElementById('rotuloModal').classList.add('active');
+      document.getElementById('rotuloCantidad').value = 1;
+    });
+
+    // Etiqueta chica con el nombre, PAGO / LISTO y el QR del pedido
+    document.getElementById('printIdPedido').addEventListener('click', () => {
+      printMenu.classList.remove('active');
+      imprimirIdPedido();
+    });
+
     // Elegir o cambiar la impresora Bluetooth (solo dentro de la app Android)
     document.getElementById('printConfigBT').addEventListener('click', () => {
       printMenu.classList.remove('active');
       if (typeof window.configurarImpresoraBluetooth === 'function') window.configurarImpresoraBluetooth();
     });
 
-    // El modal de cantidad lo comparten los dos rotulos: esto recuerda
-    // cual de los dos lo abrio para saber a donde mandar la salida.
+    // El modal de cantidad lo comparten los rotulos (PDF, POS y Ticket +
+    // Rotulo): esto recuerda cual lo abrio para saber a donde mandar la salida.
     let rotuloDestino = 'pdf';
 
     // Generar Rotulo PDF (A4)
@@ -13285,6 +13528,7 @@
       const cant = Math.max(1, Math.min(20, parseInt(document.getElementById('rotuloCantidad').value) || 1));
       document.getElementById('rotuloModal').classList.remove('active');
       if (rotuloDestino === 'pos') imprimirRotuloPOS(cant);
+      else if (rotuloDestino === 'ticket+pos') imprimirTicketYRotulo(cant);
       else generarRotuloPDF(cant);
     });
 
@@ -14129,7 +14373,7 @@
       h += 5.5;                                      // casilleros
       h += ROT_PDF.pad;
       // La columna derecha (QR + caja del remitente) marca un piso.
-      const minDer = ROT_PDF.pad + ROT_PDF.qr + 2.5 + 20 + ROT_PDF.pad;
+      const minDer = ROT_PDF.pad + ROT_PDF.qr + 2.5 + 30 + ROT_PDF.pad;
       return Math.max(h, minDer);
     }
 
@@ -14242,7 +14486,7 @@
       const altoRem = y + alto - ROT_PDF.pad - yRem;
       doc.setDrawColor(200);
       doc.setLineWidth(0.3);
-      doc.roundedRect(xRem, yRem, ROT_PDF.colRem, Math.max(20, altoRem), 1.5, 1.5, 'S');
+      doc.roundedRect(xRem, yRem, ROT_PDF.colRem, Math.max(30, altoRem), 1.5, 1.5, 'S');
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
@@ -14253,7 +14497,8 @@
       doc.line(xRem + 3, yRem + 6, xRem + ROT_PDF.colRem - 3, yRem + 6);
       let ry = yRem + 9.5;
       ry += pdfCampo(doc, 'Nombre', d.remNombre, xRem + 3, ry, ROT_PDF.colRem - 6, true) + 1.5;
-      pdfCampo(doc, 'Telefono', d.remTelefono, xRem + 3, ry, ROT_PDF.colRem - 6, true);
+      ry += pdfCampo(doc, 'Telefono', d.remTelefono, xRem + 3, ry, ROT_PDF.colRem - 6, true) + 1.5;
+      pdfCampo(doc, 'DNI', d.remDni, xRem + 3, ry, ROT_PDF.colRem - 6, true);
     }
 
     function construirRotuloPDF(d, cantidad, qrDataUrl) {
@@ -14753,7 +14998,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
 
     // Respaldo: impresión HTML clásica (rasterizada por el navegador).
-    function imprimirReciboHTML(d) {
+    // 'rotUrls' (opcional): rotulos que salen a continuacion del ticket, en
+    // el mismo documento, 'cantRot' copias de cada uno (Ticket + Rotulo).
+    function imprimirReciboHTML(d, rotUrls, cantRot) {
+      let rotulosHtml = '';
+      (rotUrls || []).forEach(url => {
+        for (let i = 0; i < (cantRot || 1); i++) rotulosHtml += '<img class="rotulo" src="' + url + '">';
+      });
       let itemsHtml = '';
       d.items.forEach(it => {
         const cant = it.cantidad || 0;
@@ -14798,6 +15049,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             .tot-final { font-weight: bold; }
             .legend { text-align: center; font-weight: bold; margin-top: 12px; }
             .pedido-id { text-align: center; margin-top: 10px; font-size: 9px; color: #555; }
+            .rotulo { display: block; width: 72mm; margin: 0 auto; page-break-before: always; }
             @media print { button { display: none !important; } }
           </style>
         </head>
@@ -14828,6 +15080,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
             <div class="legend">PEDIDO CONTROLADO</div>
             ${d.pedidoId ? `<div class="pedido-id">${String(d.pedidoId).slice(-8).toUpperCase()}</div>` : ''}
           </div>
+          ${rotulosHtml}
           <script>window.onload = function(){ window.print(); }<\/script>
         </body>
         </html>
@@ -14887,34 +15140,36 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // Arma el snapshot con los datos del pedido y lo manda por la misma via
     // que ingresoPedido.js: ESC-POS via QZ Tray, con respaldo HTML.
     // ==========================================
-    async function imprimirTicket() {
-      if (!pedidoActual || !pedidoId) return;
-
-      // Datos frescos de Firebase antes de imprimir (igual que la orden de pedido)
-      let pedidoFresh;
+    // Datos frescos de Firebase antes de imprimir (igual que la orden de pedido).
+    // Devuelve el pedido, o null si no se pudo (ya avisado con un toast).
+    async function cargarPedidoFresco() {
+      if (!pedidoActual || !pedidoId) return null;
       try {
         const snap = await conTimeout(() => db.ref('pedidos/' + pedidoId).once('value'));
-        pedidoFresh = snap.val();
-        if (!pedidoFresh) { showToast('Error: pedido no encontrado'); return; }
-        pedidoActual = pedidoFresh;
+        const p = snap.val();
+        if (!p) { showToast('Error: pedido no encontrado'); return null; }
+        pedidoActual = p;
         pedidoActual.id = pedidoId;
+        return p;
       } catch (err) {
         showToast('Error al cargar datos para imprimir');
         console.error(err);
-        return;
+        return null;
       }
+    }
 
-      const cliente = pedidoFresh.cliente || {};
-      const pagos = pedidoFresh.pagos || {};
-      const itemsPedido = pedidoFresh.items || [];
+    // Snapshot del ticket armado desde el pedido guardado.
+    function datosTicketPedido(p) {
+      const cliente = p.cliente || {};
+      const pagos = p.pagos || {};
+      const itemsPedido = p.items || [];
       // En ingresoPedido el subtotal viene del formulario; aca se recalcula
       // desde los items, que es lo unico que queda guardado del pedido.
       const subtotal = itemsPedido.reduce((s, it) => s + (it.cantidad || 0) * (it.valorU || 0), 0);
-
-      const d = {
+      return {
         nombre: cliente.nombre || '',
         telefono: cliente.telefono || '',
-        medioPago: pedidoFresh.tipoPago || '',
+        medioPago: p.tipoPago || '',
         subtotal: subtotal,
         recargo: pagos.recargo || '',
         descuento: pagos.descuento || '',
@@ -14927,8 +15182,105 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           cantidad: it.cantidad, valorU: it.valorU
         }))
       };
+    }
 
-      imprimirComprobante(d);
+    async function imprimirTicket() {
+      const p = await cargarPedidoFresco();
+      if (!p) return;
+      imprimirComprobante(datosTicketPedido(p));
+    }
+
+    // Motivo legible de un fallo de QZ Tray, para el cartel de respaldo.
+    function motivoFalloQZ(e) {
+      let motivo = (e && e.message) ? e.message : String(e);
+      if (typeof qz === 'undefined') {
+        motivo = 'La librería de QZ Tray no se cargó (¿sin internet o CDN bloqueado?).';
+      } else if (!qz.websocket.isActive()) {
+        motivo = 'No se pudo conectar con QZ Tray. Verificá que QZ Tray esté instalado y CORRIENDO (ícono en la bandeja del sistema).\n\nDetalle técnico: ' + motivo;
+      }
+      return motivo;
+    }
+
+    // ==========================================
+    // TICKET + ROTULO
+    // ==========================================
+    // Ticket y, a continuacion, 'cantidad' rotulos, con corte entre cada uno.
+    // En PC sale en un unico trabajo de QZ Tray; en la app Android, por
+    // Bluetooth uno detras del otro; en el respaldo, en un solo documento.
+    async function imprimirTicketYRotulo(cantidad) {
+      const p = await cargarPedidoFresco();
+      if (!p) return;
+      const id = pedidoId;
+      const d = datosTicketPedido(p);
+
+      const qrImg = await rotCargarQR(id);
+      if (!qrImg) console.warn('No se pudo cargar el QR; el rotulo sale sin el.');
+      let rotUrl;
+      try {
+        rotUrl = rotConstruirCanvas(datosRotuloPedido(p), qrImg);
+      } catch (e) {
+        console.error('No se pudo generar el rotulo:', e);
+        showToast('No se pudo generar el rotulo');
+        return;
+      }
+
+      // App Android empaquetada (APK): directo por Bluetooth.
+      if (window.APP_ANDROID && typeof window.imprimirEscPosBT === 'function') {
+        let ticketOk = false;
+        try {
+          await imprimirReciboESCPOSBluetooth(d);
+          ticketOk = true;
+          await imprimirRotuloPOSBluetooth(await rotDataUrlACanvas(rotUrl), cantidad);
+          marcarRotuloImpreso([id]);
+        } catch (e) {
+          console.error('Fallo impresión de ticket + rótulo por Bluetooth:', e);
+          const motivo = (e && e.message) ? e.message : String(e);
+          const usarHTML = confirm(
+            'No se pudo imprimir por Bluetooth.\n\n' + motivo +
+            '\n\n¿Querés imprimir con el método de respaldo?'
+          );
+          if (usarHTML) {
+            // Si el ticket ya salio, el respaldo manda solo los rotulos.
+            if (ticketOk) rotRespaldoHTML(rotUrl, cantidad);
+            else imprimirReciboHTML(d, [rotUrl], cantidad);
+            marcarRotuloImpreso([id]);
+          }
+        }
+        return;
+      }
+
+      // Android sin la app (navegador suelto): servicio de impresion del sistema.
+      if (ES_ANDROID) {
+        imprimirReciboHTML(d, [rotUrl], cantidad);
+        marcarRotuloImpreso([id]);
+        return;
+      }
+
+      try {
+        await conectarQZ();
+        const printerName = await seleccionarImpresoraPOS();
+        if (!printerName) throw new Error('No se encontró ninguna impresora');
+        const config = qz.configs.create(printerName, { encoding: 'CP437' });
+        const rotulo = rotComandosQZ([rotUrl], cantidad);
+        try {
+          await qz.print(config, construirESCPOS(d, true).concat(rotulo));
+        } catch (eLogo) {
+          console.warn('Print con logo falló, reintentando sin logo:', eLogo);
+          await qz.print(config, construirESCPOS(d, false).concat(rotulo));
+        }
+        marcarRotuloImpreso([id]);
+      } catch (e) {
+        console.error('Fallo impresión de ticket + rótulo en la POS:', e);
+        const usarHTML = confirm(
+          'No se pudo imprimir el ticket y el rótulo en la impresora POS.\n\n' +
+          motivoFalloQZ(e) + '\n\n' +
+          '¿Querés imprimirlos con el método HTML de respaldo?'
+        );
+        if (usarHTML) {
+          imprimirReciboHTML(d, [rotUrl], cantidad);
+          marcarRotuloImpreso([id]);
+        }
+      }
     }
 
     // ==========================================
@@ -14947,6 +15299,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     const ROT_GAP = 24;
     const ROT_QR = 240;
     const ROT_UMBRAL = 150;   // corte blanco/negro antes de mandar a la termica
+    const REM_DNI = '34.924.986';   // DNI del remitente (rotulo POS y PDF)
 
     // El QR se pide a la misma API que el rotulo A4. Responde con
     // Access-Control-Allow-Origin: *, por eso se puede volcar al canvas sin
@@ -15081,6 +15434,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       ctx.fillText('TELEFONO', ix, boxY + 120);
       ctx.font = '600 26px Arial, Helvetica, sans-serif';
       ctx.fillText('11-3130-8444', ix, boxY + 142);
+      ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+      ctx.fillText('DNI', ix, boxY + 180);
+      ctx.font = '600 26px Arial, Helvetica, sans-serif';
+      ctx.fillText(REM_DNI, ix, boxY + 202);
     }
 
     // Lleva el canvas a blanco y negro puro. La termica es de 1 bit: si le
@@ -15313,17 +15670,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // Android sin la app (navegador suelto): la tira sale por ESC Print Service.
       if (ES_ANDROID) { rotRespaldoHTML(dataUrls, cantidad); return true; }
 
-      const data = [];
-      data.push(escCmd('1B40'));   // ESC @ -> reset
-      dataUrls.forEach(dataUrl => {
-        const base64 = dataUrl.split(',')[1];
-        for (let i = 0; i < cantidad; i++) {
-          data.push({ type: 'raw', format: 'image', flavor: 'base64', data: base64,
-                      options: { language: 'ESCPOS', dotDensity: 'double' } });
-          data.push(escTxt('\n'));
-          data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
-        }
-      });
+      const data = [escCmd('1B40')].concat(rotComandosQZ(dataUrls, cantidad));   // ESC @ -> reset
 
       try {
         await conectarQZ();
@@ -15334,15 +15681,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         return true;
       } catch (e) {
         console.error('Fallo impresión del rótulo en la POS:', e);
-        let motivo = (e && e.message) ? e.message : String(e);
-        if (typeof qz === 'undefined') {
-          motivo = 'La librería de QZ Tray no se cargó (¿sin internet o CDN bloqueado?).';
-        } else if (!qz.websocket.isActive()) {
-          motivo = 'No se pudo conectar con QZ Tray. Verificá que QZ Tray esté instalado y CORRIENDO (ícono en la bandeja del sistema).\n\nDetalle técnico: ' + motivo;
-        }
         const usarHTML = confirm(
           'No se pudo imprimir el rótulo en la impresora POS.\n\n' +
-          motivo + '\n\n' +
+          motivoFalloQZ(e) + '\n\n' +
           '¿Querés imprimirlo con el método HTML de respaldo?'
         );
         if (usarHTML) { rotRespaldoHTML(dataUrls, cantidad); return true; }
@@ -15350,12 +15691,163 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       }
     }
 
+    // Comandos de QZ Tray para una o varias tiras (imagen raster), 'cantidad'
+    // copias de cada una, con corte despues de cada copia. Sin el reset
+    // inicial: lo pone quien arma el trabajo completo.
+    function rotComandosQZ(dataUrls, cantidad) {
+      const data = [];
+      dataUrls.forEach(dataUrl => {
+        const base64 = dataUrl.split(',')[1];
+        for (let i = 0; i < cantidad; i++) {
+          data.push({ type: 'raw', format: 'image', flavor: 'base64', data: base64,
+                      options: { language: 'ESCPOS', dotDensity: 'double' } });
+          data.push(escTxt('\n'));
+          data.push(escCmd('1D564203')); // GS V 66 3 -> avanza y corta (parcial)
+        }
+      });
+      return data;
+    }
+
+    // ==========================================
+    // ETIQUETA DE ID DEL PEDIDO (tira de 80mm)
+    // ==========================================
+    // Etiqueta chica a lo ancho del rollo, sin girar, pensada para encontrar
+    // rapido al titular al ir adjudicando mercaderia y para controlar con el
+    // QR despues. Todo encuadrado en una grilla:
+    //   +--------------------------------+-------------+
+    //   | PEDIDO · 20/11/2026            |     QR      |
+    //   |                                |             |
+    //   | NOMBRE GRANDE, CENTRADO        |-------------|
+    //   |                                | []PAGO []LISTO
+    //   +--------------------------------+-------------+
+    // 336 puntos = 42 mm: con el avance hasta el corte queda bajo los 5 cm.
+    const ID_ANCHO = 576;   // 72 mm de area imprimible
+    const ID_ALTO = 336;
+    const ID_QR = 238;      // 30 mm
+    const ID_MARCO = 3;     // grosor de marco y divisiones
+    const ID_PANEL_QR = ID_QR + 28;   // columna del QR: el QR mas un margen parejo
+    const ID_BANDA = 64;    // alto de la banda de casilleros (debajo del QR)
+
+    function idFecha(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      const dos = (n) => String(n).padStart(2, '0');
+      return dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear();
+    }
+
+    function idConstruirCanvas(nombre, qrImg, fechaTs) {
+      const W = ID_ANCHO, H = ID_ALTO, L = ID_MARCO;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#000';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = L;
+      ctx.textBaseline = 'alphabetic';
+
+      // Marco exterior redondeado
+      const m = L / 2 + 1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(m, m, W - 2 * m, H - 2 * m, 16);
+      else ctx.rect(m, m, W - 2 * m, H - 2 * m);
+      ctx.stroke();
+
+      // Division vertical: columna del QR a la derecha
+      const xDiv = W - L - ID_PANEL_QR;
+      ctx.fillRect(xDiv - L / 2, 1, L, H - 2);
+
+      // Division horizontal de la columna derecha: QR arriba, casilleros abajo
+      const yBanda = H - L - ID_BANDA;
+      ctx.fillRect(xDiv, yBanda - L / 2, W - 1 - xDiv, L);
+      if (qrImg) {
+        ctx.imageSmoothingEnabled = false;   // el QR tiene que salir con el borde duro
+        ctx.drawImage(qrImg, Math.round(xDiv + (W - L - xDiv - ID_QR) / 2),
+                      Math.round(L + (yBanda - L - ID_QR) / 2), ID_QR, ID_QR);
+      }
+
+      // Casilleros: uno al lado del otro, centrados en la banda bajo el QR
+      const caja = 28, sepTxt = 8, sepGrupo = 22;
+      ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
+      const grupos = ['PAGO', 'LISTO'].map(t => ({ t, w: caja + sepTxt + ctx.measureText(t).width }));
+      const total = grupos[0].w + sepGrupo + grupos[1].w;
+      let gx = Math.round(xDiv + (W - L - xDiv - total) / 2);
+      const yCaja = Math.round(yBanda + (H - L - yBanda - caja) / 2);
+      grupos.forEach(g => {
+        ctx.strokeRect(gx + L / 2, yCaja + L / 2, caja - L, caja - L);
+        ctx.fillText(g.t, gx + caja + sepTxt, yCaja + caja - 5);
+        gx += g.w + sepGrupo;
+      });
+
+      const x0 = 24;                 // margen izquierdo comun a todo
+      const ancho = xDiv - 20 - x0;  // ancho util de la columna izquierda
+
+      // Encabezado chico: PEDIDO y la fecha en que se ingreso
+      const fecha = idFecha(fechaTs);
+      ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+      ctx.fillText('PEDIDO' + (fecha ? '  ·  ' + fecha : ''), x0, 22 + 16);
+
+      // Nombre en mayusculas, al tamano mas grande que entre, centrado en
+      // vertical en el resto de la columna.
+      const yTop = 22 + 16 + 12;
+      const yBot = H - L - 18;
+      const alto = yBot - yTop;
+      const texto = (String(nombre || '').trim() || 'Sin nombre').toUpperCase();
+      const interl = 1.08;
+      let tam = 64, lineas;
+      for (; tam > 24; tam -= 2) {
+        ctx.font = 'bold ' + tam + 'px Arial, Helvetica, sans-serif';
+        lineas = rotWrap(ctx, texto, ancho);
+        if (lineas.length * tam * interl <= alto &&
+            lineas.every(l => ctx.measureText(l).width <= ancho)) break;
+      }
+      ctx.font = 'bold ' + tam + 'px Arial, Helvetica, sans-serif';
+      lineas = rotWrap(ctx, texto, ancho);
+      const maxLineas = Math.max(1, Math.floor(alto / (tam * interl)));
+      if (lineas.length > maxLineas) {
+        lineas = lineas.slice(0, maxLineas);
+        lineas[maxLineas - 1] += '…';
+      }
+      // Centrado optico: se mide la altura de mayusculas (sin descendentes)
+      const cap = tam * 0.72;
+      const bloque = (lineas.length - 1) * tam * interl + cap;
+      const y0 = yTop + (alto - bloque) / 2 + cap;
+      lineas.forEach((ln, i) => {
+        ctx.fillText(recortarTexto(ln, ancho, t => ctx.measureText(t).width), x0, Math.round(y0 + i * tam * interl));
+      });
+
+      rotBinarizar(ctx, W, H);
+      return canvas.toDataURL('image/png');
+    }
+
+    // Usa el pedido ya abierto: la etiqueta solo lleva el nombre, no hace
+    // falta otra lectura de Firebase.
+    async function imprimirIdPedido() {
+      if (!pedidoActual || !pedidoId) return;
+      const id = pedidoId;
+      const nombre = (pedidoActual.cliente && pedidoActual.cliente.nombre) || '';
+      const qrImg = await rotCargarQR(id, ID_QR);
+      if (!qrImg) console.warn('No se pudo cargar el QR; la etiqueta sale sin el.');
+      let dataUrl;
+      try {
+        dataUrl = idConstruirCanvas(nombre, qrImg, pedidoActual.timestamp);
+      } catch (e) {
+        console.error('No se pudo generar la etiqueta de Id:', e);
+        showToast('No se pudo generar la etiqueta');
+        return;
+      }
+      const impreso = await rotImprimirTiras([dataUrl], 1);
+      if (impreso) marcarIdImpreso([id]);
+    }
+
     // ==========================================
     // GENERAR ROTULO PDF
     // ==========================================
     async function generarRotuloPDF(cantidad, manual) {
       if (!pedidoActual) return;
-      const remitente = { remNombre: 'Javier Romero', remTelefono: '11-3130-8444' };
+      const remitente = { remNombre: 'Javier Romero', remTelefono: '11-3130-8444', remDni: REM_DNI };
 
       const d = Object.assign({}, manual || datosRotuloPedido(pedidoActual), remitente);
 
@@ -15787,6 +16279,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           // Alias visibility
           const aliasRow = document.getElementById('pvAliasRow');
           if (aliasRow) aliasRow.style.display = (admin && r.value === 'Transferencia') ? 'flex' : 'none';
+          if (admin && r.value === 'Transferencia') pvAliasPrecargarDelDia();
 
           if (window.actualizarEstadoBtnImpresion) window.actualizarEstadoBtnImpresion();
         });
@@ -15959,6 +16452,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         }
         pvAliasRender();
       }, e => { aliasSuscrito = false; console.error('Error cargando alias:', e); });
+      // Alias del día: el de envíos va primero en la lista y como sugerencia
+      if (window.AliasDelDia) AliasDelDia.escuchar(db, () => { pvAliasRender(); pvAliasDelDiaPlaceholder(); });
       // Fecha del último uso de cada alias (nodo aparte para no romper "alias")
       db.ref('aliasUso').on('value', snap => {
         const val = snap.val() || {};
@@ -16002,7 +16497,35 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         (aliasUso[b] || 0) - (aliasUso[a] || 0) ||
         posLocal(a) - posLocal(b) ||
         a.localeCompare(b, 'es'));
+      // El alias de envíos del día (alias.html) siempre primero
+      const delDia = pvAliasDelDia();
+      if (delDia) {
+        const i = lista.indexOf(delDia);
+        if (i >= 0) lista.splice(i, 1);
+        lista.unshift(delDia);
+      }
       return lista;
+    }
+
+    function pvAliasDelDia() {
+      return window.AliasDelDia ? AliasDelDia.envios() : '';
+    }
+
+    // Con el campo vacío, el placeholder muestra el alias de envíos del día
+    function pvAliasDelDiaPlaceholder() {
+      const input = document.getElementById('pvAlias');
+      if (!input) return;
+      const delDia = pvAliasDelDia();
+      input.placeholder = delDia ? 'Del día: ' + delDia : 'Alias de la cuenta';
+    }
+
+    // Al pasar a Transferencia sin alias se completa el de envíos del día.
+    // Pasa por pvAliasElegir para guardarse igual que al tipear.
+    function pvAliasPrecargarDelDia() {
+      const input = document.getElementById('pvAlias');
+      const delDia = pvAliasDelDia();
+      if (!input || !delDia || input.value.trim() || input.readOnly || input.disabled) return;
+      pvAliasElegir(delDia);
     }
 
     // Borra el alias de la lista (no toca los pedidos que ya lo tienen asignado)
@@ -16076,6 +16599,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const span = document.createElement('span');
         span.className = 'pv-alias-item-texto';
         span.textContent = a;
+        if (a === pvAliasDelDia()) {
+          const tag = document.createElement('span');
+          tag.className = 'pv-alias-item-dia';
+          tag.textContent = 'Del día';
+          span.appendChild(tag);
+        }
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'pv-alias-item-borrar';
@@ -16111,6 +16640,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const ul = document.getElementById('pvAliasLista');
       if (!ul) return;
       pvAliasCerrar();
+      pvAliasDelDiaPlaceholder();
       const bloqueado = () => input.readOnly || input.disabled;
 
       input.addEventListener('click', () => {
