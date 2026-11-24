@@ -4141,6 +4141,122 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* =========================================
+       CELDAS (casilleros A1, B4...): chip, banner de asociacion y modal
+       ========================================= */
+    .celda-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 26px;
+      min-width: 40px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--ink);
+      color: var(--surface);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .3px;
+      line-height: 1;
+      flex: none;
+    }
+    .celda-chip--vacia {
+      background: transparent;
+      color: var(--ink-3);
+      border: 1px dashed var(--line);
+      font-weight: 600;
+    }
+    .articulo-celdas { flex: none; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+    /* Dato secundario: igual que la fecha, cede el lugar cuando falta ancho.
+       Se encoge antes que la fecha (flex-shrink alto) y en pantallas
+       angostas se oculta del todo para no dejar casillas cortadas. */
+    .ctx-celdas { display: inline-flex; flex-wrap: nowrap; gap: 4px; flex: 0 100 auto; min-width: 0; overflow: hidden; }
+    .ctx-celdas[hidden] { display: none; }
+    .ctx-celdas .celda-chip { cursor: pointer; height: 22px; font-size: 12.5px; }
+    @media (max-width: 480px) { .ctx-celdas { display: none; } }
+    .ctx-celdas .celda-chip::after { content: '\00d7'; font-family: inherit; opacity: .55; font-weight: 700; }
+    .ctx-celdas .celda-chip:active { transform: scale(.94); }
+
+    .celda-banner {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translate(-50%, -140%);
+      z-index: 400;
+      width: min(440px, calc(100vw - 32px));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 12px 14px 16px;
+      border-radius: 14px;
+      background: var(--ink);
+      color: var(--surface);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+      overflow: hidden;
+      transition: transform .22s cubic-bezier(.2, .8, .2, 1);
+      pointer-events: none;
+    }
+    .celda-banner.active { transform: translate(-50%, 0); pointer-events: auto; }
+    .celda-banner-celda {
+      flex: none;
+      min-width: 58px;
+      padding: 6px 10px;
+      border-radius: 9px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .celda-banner-tx { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.3; }
+    .celda-banner-tx small { display: block; font-size: 11.5px; font-weight: 600; opacity: .7; }
+    .celda-banner button {
+      flex: none;
+      height: 34px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, .14);
+      color: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .celda-banner-barra {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 3px;
+      width: 100%;
+      background: var(--accent);
+      transform-origin: left;
+    }
+    .celda-banner.active .celda-banner-barra { animation: celdaBarra var(--celda-espera, 30s) linear forwards; }
+    @keyframes celdaBarra { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+    @media (prefers-reduced-motion: reduce) {
+      .celda-banner { transition: none; }
+      .celda-banner.active .celda-banner-barra { animation: none; }
+    }
+
+    .celdas-rango { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px 10px; align-items: center; margin: 12px 0 6px; }
+    .celdas-rango label { font-size: 12px; font-weight: 700; color: var(--ink-3); }
+    .celdas-rango .rotulo-qty-input { width: 100%; height: 44px; margin: 0; font-size: 18px; text-transform: uppercase; }
+    .celdas-ayuda { font-size: 12px !important; font-weight: 600 !important; color: var(--ink-3) !important; margin-top: 6px; }
+    .celdas-resumen { font-size: 12.5px; font-weight: 600; color: var(--ink-3); min-height: 18px; margin-bottom: 4px; }
+    .celdas-resumen.error { color: #c62828; }
+    .articulo-pedido-nota {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #c62828;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .articulo-pedido-nota.ok { color: var(--pago); }
     .articulo-pedido-id {
       font-family: var(--font-mono);
       font-size: 10.5px;
@@ -4546,7 +4662,7 @@
          card: la guarda de toques accidentales ya la cubre por selector. */
       .item-delete { width: 30px; height: 30px; font-size: 18px; }
 
-      .ctx-fecha, .ctx-link { display: none; }
+      .ctx-fecha, .ctx-link, .ctx-celdas { display: none; }
       .progress-bar-track { width: 84px; }
 
       .modal-backdrop, .pedidos-panel, .faltantes-panel, .add-item-modal { padding: 14px; }
@@ -5259,7 +5375,7 @@
       padding: 8px 12px 9px;
     }
     .ctx-id { font-size: 17px; max-width: 100%; flex: 0 1 auto; }
-    .ctx-fecha, .ctx-link, .ctx-dot, .ctx-spacer { display: none !important; }
+    .ctx-fecha, .ctx-link, .ctx-dot, .ctx-spacer, .ctx-celdas { display: none !important; }
     .ctx-bar .progress-section { flex: 1 0 100%; display: flex; align-items: center; gap: 10px; }
     .ctx-bar .progress-label { font-size: 13px; white-space: nowrap; }
     .ctx-bar .progress-bar-track { display: block !important; flex: 1; width: auto !important; height: 8px; }
@@ -5546,6 +5662,7 @@
     <button type="button" class="ctl-chip" id="ctxControl" title="Abrir el control del pedido" hidden></button>
     <span class="ctx-dot"></span>
     <span class="ctx-fecha" id="ctxFecha"></span>
+    <span class="ctx-celdas" id="ctxCeldas" hidden></span>
     <button class="ctx-link" id="ctxLink" type="button" title="Copiar link del pedido" onclick="copiarLinkPedido()"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"></path><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"></path></svg></button>
     <span class="ctx-spacer"></span>
     <div class="progress-section">
@@ -5976,6 +6093,29 @@
   </div>
 
   <!-- MODAL ROTULOS -->
+  <!-- MODAL ETIQUETAS DE CELDAS: rango de columnas (letras) y filas (numeros)
+       para el PDF A4 con un QR "CELDA-C4" por casillero. -->
+  <div class="modal-backdrop" id="celdasModal">
+    <div class="modal-box">
+      <p>Etiquetas de casillas</p>
+      <p class="celdas-ayuda">Letras = columnas, n&uacute;meros = filas (como en Excel). Sale un PDF A4 para recortar.</p>
+      <div class="celdas-rango">
+        <span></span><label for="celdasColDesde">Desde</label><label for="celdasColHasta">Hasta</label>
+        <label>Columnas</label>
+        <input type="text" id="celdasColDesde" class="rotulo-qty-input" value="A" maxlength="2" autocomplete="off">
+        <input type="text" id="celdasColHasta" class="rotulo-qty-input" value="F" maxlength="2" autocomplete="off">
+        <label>Filas</label>
+        <input type="number" id="celdasFilaDesde" class="rotulo-qty-input" value="1" min="1" max="999">
+        <input type="number" id="celdasFilaHasta" class="rotulo-qty-input" value="10" min="1" max="999">
+      </div>
+      <div class="celdas-resumen" id="celdasResumen"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="celdasCancel">Cancelar</button>
+        <button class="btn-primary" id="celdasGenerar">Generar PDF</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="rotuloModal">
     <div class="modal-box">
       <p>Cantidad de rotulos a imprimir?</p>
@@ -6113,6 +6253,7 @@
       <!-- Header paso 1: identificar articulo -->
       <div class="add-item-header" id="articuloHeader1">
         <input type="text" id="articuloSearch" placeholder="Buscar articulo por nombre o codigo...">
+        <button id="btnCeldasEtiquetas" type="button" title="Etiquetas QR de las casillas" aria-label="Etiquetas QR de las casillas"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
         <button id="articuloClose1">&times;</button>
       </div>
       <!-- Header paso 2: articulo elegido -->
@@ -6149,6 +6290,15 @@
   </div>
 
   <div class="lectura-destello" id="lecturaDestello" aria-hidden="true"></div>
+
+  <!-- MODO ASOCIACION DE CELDA: aparece al leer el QR de un casillero y
+       espera la etiqueta de Id del pedido que va ahi. -->
+  <div class="celda-banner" id="celdaBanner" role="status" aria-live="polite">
+    <span class="celda-banner-celda" id="celdaBannerCelda"></span>
+    <span class="celda-banner-tx">Escane&aacute; la etiqueta del pedido<small>para guardarlo en esta casilla</small></span>
+    <button type="button" id="celdaBannerCancelar">Cancelar</button>
+    <span class="celda-banner-barra" id="celdaBannerBarra"></span>
+  </div>
 
   <!-- MODO CONTROL
        Verificacion final del casillero con la pistola lectora. La lista y la
@@ -6926,6 +7076,18 @@
           { facingMode: 'environment' },
           { fps: 10, qrbox: 250 },
           async (decodedText) => {
+            // QR de celda: entra en modo asociacion y la camara sigue
+            // abierta para leer la etiqueta del pedido. La camara repite la
+            // misma lectura a cada cuadro: solo cuenta si cambia la celda.
+            const celda = celdaDeLectura(decodedText);
+            if (celda) {
+              if (!celdaAsociando || celdaAsociando.celda !== celda) celdaIniciarAsociacion(celda);
+              return;
+            }
+            if (celdaAsociando) {
+              if (!celdaGuardando) { cerrarQR(); celdaLecturaPedido(decodedText, decodedText); }
+              return;
+            }
             const id = idPedidoDeLectura(decodedText);
             if (id) {
               cerrarQR();
@@ -7045,7 +7207,15 @@
           skipNextListenerUpdate = false;
           pedidoActual = nuevoPedido;
           pedidoActual.id = id;
+          celdaPintarCtx();
           return;
+        }
+
+        // Las celdas se guardan desde otra pantalla (la asociacion con la
+        // pistola): se repinta solo su chip, sin rehacer la vista.
+        if (JSON.stringify(nuevoPedido.celdas || null) !== JSON.stringify(pedidoActual.celdas || null)) {
+          pedidoActual.celdas = nuevoPedido.celdas;
+          celdaPintarCtx();
         }
 
         const itemsChanged = JSON.stringify(nuevoPedido.items) !== JSON.stringify(pedidoActual.items);
@@ -7355,6 +7525,7 @@
       const ctxCatInt = document.getElementById('ctxCatInt');
       if (ctxCatInt) ctxCatInt.hidden = !esCatInt(pedidoActual);
       actualizarBtnCatInt();
+      celdaPintarCtx();
       document.getElementById('ctxFecha').textContent = fechaIngreso ? 'Ingresado ' + fechaIngreso : '';
 
       // ---------- COLUMNA IZQUIERDA: ARTICULOS ----------
@@ -8696,7 +8867,8 @@
         tipoEntrega: p.tipoEntrega || '',
         cat: p.cat || '',
         paquete: paqueteValido(p.paquete),
-        timestamp: p.timestamp || 0
+        timestamp: p.timestamp || 0,
+        celdas: celdasDe(p)   // no se muestra en la lista: lo usa la asociacion de celdas
       };
       // Las etapas se calculan una sola vez, en la carga: el sort, el
       // agrupado y el resumen las leen despues sin recomputarlas.
@@ -10044,18 +10216,27 @@
               cantidad: item.cantidad || 1,
               yaListo: item.listo === 'y',
               pagado: estadoPago(p.nota) === 'pagado',
+              nota: p.nota || '',
               timestamp: p.timestamp || 0,
-              // Pre-marcado: el flujo normal es escanear -> "Marcar listo".
-              // Se destilda solo lo que no corresponda.
-              sel: item.listo !== 'y'
+              celdas: celdasDe(p),
+              sel: false
             });
+            // Pre-marcado solo de lo positivo: nota verde o icono de pagado.
+            // Lo que se ve en rojo arranca destildado.
+            const r = resultados[resultados.length - 1];
+            r.sel = !r.yaListo && (r.pagado || articuloNotaVerde(r.nota));
           });
         };
         recolectar(snapAbierto);
         recolectar(snapCerrado);
 
-        // Pendientes primero, luego por fecha descendente
-        resultados.sort((a, b) => (a.yaListo - b.yaListo) || (b.timestamp - a.timestamp));
+        // Pendientes primero; despues por celda (A1, A2... para recorrer el
+        // deposito en orden), los que no tienen celda al final; luego por fecha.
+        const porCelda = (a, b) => {
+          if (a.celdas.length && b.celdas.length) return celdaComparar(a.celdas[0], b.celdas[0]);
+          return b.celdas.length - a.celdas.length;
+        };
+        resultados.sort((a, b) => (a.yaListo - b.yaListo) || porCelda(a, b) || (b.timestamp - a.timestamp));
         articuloResultados = resultados;
         articuloRenderPedidos();
       } catch (err) {
@@ -10063,6 +10244,10 @@
         articuloPedidosList.innerHTML = htmlErrorReintento(err, 'articuloReintentarBusqueda()', 'articulo-empty');
       }
     }
+
+    // Verde: Esperando cierre, Pedido Confirmado, Pago Solicitado y Pago. Resto, rojo.
+    const ARTICULO_NOTAS_VERDES = new Set(['Esperando cierre', 'Pedido Confirmado', 'Pago Solicitado', 'Pago'].map(normalizarNota));
+    function articuloNotaVerde(nota) { return ARTICULO_NOTAS_VERDES.has(normalizarNota(nota)); }
 
     function articuloRenderPedidos() {
       if (articuloResultados.length === 0) {
@@ -10073,12 +10258,17 @@
       articuloPedidosList.innerHTML = articuloResultados.map((r, i) =>
         '<div class="articulo-pedido-row' + (r.yaListo ? ' ya-listo' : '') + '" data-i="' + i + '">' +
         '<input type="checkbox"' + (r.sel ? ' checked' : '') + (r.yaListo ? ' disabled' : '') + '>' +
+        '<div class="articulo-celdas">' +
+          (r.celdas.length
+            ? r.celdas.map(c => '<span class="celda-chip" title="Casilla ' + escapeHtml(c) + '">' + escapeHtml(c) + '</span>').join('')
+            : '<span class="celda-chip celda-chip--vacia" title="Sin casilla asignada">&ndash;</span>') +
+        '</div>' +
         '<div class="articulo-pedido-info">' +
         '<div class="articulo-pedido-titulo">' +
           '<span class="articulo-pedido-nombre">' + escapeHtml(r.nombre) + '</span>' +
           (r.pagado ? '<span class="articulo-pedido-pago" title="Pagado" aria-label="Pagado">' + IC_MENU_PAGO + '</span>' : '') +
         '</div>' +
-        '<div class="articulo-pedido-id">' + escapeHtml(r.id) + '</div>' +
+        '<div class="articulo-pedido-nota' + (articuloNotaVerde(r.nota) ? ' ok' : '') + '">' + escapeHtml(r.nota || 'Sin nota') + '</div>' +
         '</div>' +
         '<span class="articulo-pedido-cant">x' + r.cantidad + '</span>' +
         (r.yaListo
@@ -10334,6 +10524,11 @@
       if (document.getElementById('blockingOverlay').classList.contains('active')) return;
       // Con un dialogo de confirmacion abierto (accion irreversible) no se abre nada encima.
       if (confirmResolver) return;
+      // El QR de una celda manda sobre cualquier pantalla: entra en modo
+      // asociacion y la lectura siguiente es la etiqueta del pedido.
+      const celda = celdaDeLectura(texto, textoUS);
+      if (celda) { celdaIniciarAsociacion(celda); return; }
+      if (celdaAsociando) { celdaLecturaPedido(texto, textoUS); return; }
       // Con el modo control abierto, cada lectura es una unidad del casillero.
       if (controlAbierto()) { controlLectura(texto); return; }
       if (articuloModal.classList.contains('active')) { pistolaArticulo(texto); return; }
@@ -10415,6 +10610,27 @@
     // un pedido (consulta liviana, solo el status) antes de tocar la pantalla,
     // asi un codigo que no es de pedido no deja la vista en "no encontrado".
     let pistolaPedidoEnCurso = false;
+
+    // Numero de pedido real para una lectura, o '' si no es un pedido. Usa el
+    // pedido abierto si coincide y si no consulta solo el status de cada
+    // candidato. Tira el error de red para que cada llamador avise a su modo.
+    async function pistolaResolverPedido(texto, textoUS) {
+      const candidatos = pistolaIdsCandidatos(texto, textoUS);
+      const enMemoria = candidatos.find(c => pedidoId === c && pedidoActual);
+      if (enMemoria) return enMemoria;
+      // Casi siempre resuelve el primero o el segundo: van de a uno.
+      for (const c of candidatos) {
+        const snap = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
+        if (snap.exists()) return c;
+      }
+      // Pistola configurada en mayusculas: se busca sin distinguirlas.
+      for (const c of candidatos) {
+        const real = await pistolaBuscarSinMayusculas(c);
+        if (real) return real;
+      }
+      return '';
+    }
+
     async function pistolaPedido(texto, textoUS) {
       // Formularios abiertos (agregar articulo, rotulos, peso y tamano...): la
       // lectura ya se retiro del campo; no se abre nada encima de lo que se edita.
@@ -10424,34 +10640,19 @@
       }
       if (pistolaPedidoEnCurso) return;
 
-      const candidatos = pistolaIdsCandidatos(texto, textoUS);
-      let id = candidatos.find(c => pedidoId === c && pedidoActual) || '';
-      let existe = !!id;
-      if (!existe && candidatos.length) {
-        pistolaPedidoEnCurso = true;
-        try {
-          // Casi siempre resuelve el primero o el segundo: van de a uno.
-          for (const c of candidatos) {
-            const snap = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
-            if (snap.exists()) { id = c; existe = true; break; }
-          }
-          // Pistola configurada en mayusculas: se busca sin distinguirlas.
-          if (!existe) {
-            for (const c of candidatos) {
-              const real = await pistolaBuscarSinMayusculas(c);
-              if (real) { id = real; existe = true; break; }
-            }
-          }
-        } catch (err) {
-          console.error('Error buscando el pedido escaneado:', err);
-          showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
-          return;
-        } finally {
-          pistolaPedidoEnCurso = false;
-        }
+      let id = '';
+      pistolaPedidoEnCurso = true;
+      try {
+        id = await pistolaResolverPedido(texto, textoUS);
+      } catch (err) {
+        console.error('Error buscando el pedido escaneado:', err);
+        showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
+        return;
+      } finally {
+        pistolaPedidoEnCurso = false;
       }
 
-      if (existe) {
+      if (id) {
         if (navigator.vibrate) navigator.vibrate(60);
         lecturaDestello(true);
         // El control se abre sobre la vista del pedido: se despejan los paneles.
@@ -10506,6 +10707,315 @@
         articuloReanudarScanner();
         articuloSearch.focus();
       }
+    }
+
+    // ==========================================
+    // CELDAS: casilleros con coordenadas tipo planilla (A1, B4, C12)
+    // ==========================================
+    // Cada casillero lleva pegado un QR "CELDA-C4". Al leerlo (pistola o la
+    // camara del header) se entra en modo asociacion: la lectura siguiente
+    // tiene que ser la etiqueta de Id de un pedido, y queda guardado
+    //   pedidos/<id>/celdas/C4 = true
+    // Un pedido grande puede ocupar varias celdas; una celda tiene un solo
+    // pedido pendiente. Solo cuentan los pedidos ABIERTO/CERRADO: al
+    // despachar o cancelar, sus celdas quedan libres sin borrar nada.
+    const CELDA_PREFIJO = 'CASILLA-';
+    const CELDA_ESPERA_MS = 30000;
+    const CELDA_MAX_ETIQUETAS = 400;
+    // Tolerante: con la tablet en espanol el guion llega como ' y muchas
+    // pistolas mandan todo en mayusculas.
+    const CELDA_RE = /^\s*(?:CELDA|CASILLA)[\s\-'_]?([A-Z]{1,2})\s*(\d{1,3})\s*$/i;
+
+    function celdaDeLectura(...textos) {
+      for (const t of textos) {
+        const m = CELDA_RE.exec(String(t || ''));
+        if (!m) continue;
+        const fila = parseInt(m[2], 10);
+        if (fila >= 1) return m[1].toUpperCase() + fila;
+      }
+      return '';
+    }
+
+    function celdaValida(c) { return /^[A-Z]{1,2}[1-9]\d{0,2}$/.test(c); }
+
+    // Celdas guardadas en un pedido, ordenadas como se recorre el deposito.
+    function celdasDe(p) {
+      const obj = p && p.celdas;
+      if (!obj || typeof obj !== 'object') return [];
+      return Object.keys(obj).filter(k => obj[k] && celdaValida(k)).sort(celdaComparar);
+    }
+
+    // Orden natural: A1, A2 ... A10, B1 ... Z9, AA1.
+    function celdaComparar(a, b) {
+      const ma = /^([A-Z]+)(\d+)$/.exec(a) || ['', '', '0'];
+      const mb = /^([A-Z]+)(\d+)$/.exec(b) || ['', '', '0'];
+      return (ma[1].length - mb[1].length) || (ma[1] < mb[1] ? -1 : ma[1] > mb[1] ? 1 : 0) ||
+        (parseInt(ma[2], 10) - parseInt(mb[2], 10));
+    }
+
+    function celdaEsPendiente(p) { return !!p && (p.status === 'ABIERTO' || p.status === 'CERRADO'); }
+
+    // --- Modo asociacion ---
+    let celdaAsociando = null;     // { celda, timer }
+    let celdaGuardando = false;
+    const celdaBanner = document.getElementById('celdaBanner');
+
+    function celdaIniciarAsociacion(celda) {
+      if (navigator.vibrate) navigator.vibrate(60);
+      if (celdaAsociando) clearTimeout(celdaAsociando.timer);
+      celdaAsociando = {
+        celda,
+        timer: setTimeout(() => celdaCancelar('Se canceló la asociación de la casilla ' + celda), CELDA_ESPERA_MS)
+      };
+      document.getElementById('celdaBannerCelda').textContent = celda;
+      celdaBanner.style.setProperty('--celda-espera', (CELDA_ESPERA_MS / 1000) + 's');
+      // Reinicia la barra de tiempo aunque el banner ya estuviera a la vista.
+      celdaBanner.classList.remove('active');
+      void celdaBanner.offsetWidth;
+      celdaBanner.classList.add('active');
+    }
+
+    function celdaCancelar(aviso) {
+      if (!celdaAsociando) return;
+      clearTimeout(celdaAsociando.timer);
+      celdaAsociando = null;
+      celdaBanner.classList.remove('active');
+      if (aviso) showToast(aviso);
+    }
+
+    document.getElementById('celdaBannerCancelar').addEventListener('click', () => celdaCancelar());
+
+    // Pedidos pendientes que hoy ocupan la celda (sin contar 'exceptoId').
+    // Con la lista de pendientes abierta en vivo se usa lo que ya esta en
+    // memoria; si no, se consultan los ABIERTO y CERRADO, igual que el
+    // buscador de articulos.
+    async function celdaOcupantes(celda, exceptoId) {
+      if (ppVivo && pedidosCacheAt) {
+        return pedidosCache
+          .filter(f => f.id !== exceptoId && f.celdas && f.celdas.includes(celda))
+          .map(f => ({ id: f.id, nombre: f.nombre }));
+      }
+      const snaps = await conTimeout(() => Promise.all(['ABIERTO', 'CERRADO'].map(st =>
+        db.ref('pedidos').orderByChild('status').equalTo(st).once('value'))));
+      const out = [];
+      snaps.forEach(snap => snap.forEach(ch => {
+        const p = ch.val();
+        if (ch.key !== exceptoId && p && p.celdas && p.celdas[celda]) {
+          out.push({ id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre' });
+        }
+      }));
+      return out;
+    }
+
+    async function celdaLecturaPedido(texto, textoUS) {
+      if (!celdaAsociando || celdaGuardando) return;
+      const celda = celdaAsociando.celda;
+      celdaGuardando = true;
+      try {
+        const id = await pistolaResolverPedido(texto, textoUS);
+        if (!celdaAsociando || celdaAsociando.celda !== celda) return;   // se cancelo mientras buscaba
+        if (!id) {
+          // Sigue esperando: puede haber leido un articulo por error.
+          if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+          lecturaDestello(false);
+          showToast('Eso no es la etiqueta de un pedido. Escaneá el QR del Id para ' + celda);
+          return;
+        }
+        const snap = await conTimeout(() => db.ref('pedidos/' + id).once('value'));
+        const p = snap.val();
+        const nombre = (p && p.cliente && p.cliente.nombre) || 'Sin nombre';
+        if (!celdaEsPendiente(p)) {
+          if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+          lecturaDestello(false);
+          celdaCancelar('El pedido de ' + nombre + ' está ' + String((p && p.status) || 'sin estado').toLowerCase() + ': no se guarda en ' + celda);
+          return;
+        }
+        if (p.celdas && p.celdas[celda]) {
+          if (navigator.vibrate) navigator.vibrate(60);
+          celdaCancelar(nombre + ' ya estaba en ' + celda);
+          return;
+        }
+
+        const updates = {};
+        const ocupantes = await celdaOcupantes(celda, id);
+        if (ocupantes.length) {
+          // Mientras se decide no corre el tiempo de espera.
+          clearTimeout(celdaAsociando.timer);
+          const ok = await confirmarAccion({
+            titulo: 'La casilla ' + celda + ' está ocupada',
+            texto: 'Ahí está el pedido de ' + ocupantes.map(o => o.nombre).join(', ') +
+              '. ¿Pasar la casilla al pedido de ' + nombre + '?',
+            confirmar: 'Sí, reemplazar',
+            volver: 'Cancelar',
+            tono: 'aviso',
+            icono: IC_ALERTA
+          });
+          if (!ok) { celdaCancelar('No se cambió la casilla ' + celda); return; }
+          ocupantes.forEach(o => { updates['pedidos/' + o.id + '/celdas/' + celda] = null; });
+        }
+        updates['pedidos/' + id + '/celdas/' + celda] = true;
+        await conTimeout(() => db.ref().update(updates));
+        if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
+        lecturaDestello(true);
+        celdaCancelar(nombre + ' → ' + celda);
+      } catch (err) {
+        console.error('Error asociando la celda:', err);
+        celdaCancelar(err && err.esTimeout ? 'Sin conexión: no se guardó la casilla ' + celda : 'No se pudo guardar la casilla ' + celda);
+      } finally {
+        celdaGuardando = false;
+      }
+    }
+
+    // --- Celdas en la cabecera del pedido abierto (tocar una la quita) ---
+    function celdaPintarCtx() {
+      const el = document.getElementById('ctxCeldas');
+      if (!el) return;
+      const celdas = celdaEsPendiente(pedidoActual) ? celdasDe(pedidoActual) : [];
+      el.hidden = celdas.length === 0;
+      el.innerHTML = celdas.map(c =>
+        '<button type="button" class="celda-chip" data-celda="' + escapeHtml(c) + '" title="Casilla ' + escapeHtml(c) + ' (tocar para quitarla)">' +
+        escapeHtml(c) + '</button>').join('');
+    }
+
+    document.getElementById('ctxCeldas').addEventListener('click', async (e) => {
+      const b = e.target.closest('.celda-chip');
+      if (!b || !pedidoId || !pedidoActual) return;
+      const celda = b.dataset.celda;
+      const id = pedidoId;
+      const ok = await confirmarAccion({
+        titulo: '¿Quitar la casilla ' + celda + '?',
+        texto: 'El pedido deja de figurar en ' + celda + '. Para volver a guardarlo, escaneá la casilla y la etiqueta.',
+        confirmar: 'Quitar',
+        volver: 'Volver',
+        tono: 'peligro'
+      });
+      if (!ok) return;
+      try {
+        await conTimeout(() => db.ref('pedidos/' + id + '/celdas/' + celda).remove());
+        showToast('Se quitó la casilla ' + celda);
+      } catch (err) {
+        console.error('No se pudo quitar la celda:', err);
+        showToast('No se pudo quitar la casilla');
+      }
+    });
+
+    // --- Etiquetas de celdas (PDF A4) ---
+    function celdaColNum(txt) {
+      const t = String(txt || '').trim().toUpperCase();
+      if (!/^[A-Z]{1,2}$/.test(t)) return 0;
+      let n = 0;
+      for (const ch of t) n = n * 26 + (ch.charCodeAt(0) - 64);
+      return n;
+    }
+    function celdaColTxt(n) {
+      let s = '';
+      while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+      return s;
+    }
+
+    const celdasModal = document.getElementById('celdasModal');
+    const CELDAS_POR_HOJA = { cols: 3, filas: 8 };
+
+    function celdasRangoLeido() {
+      const c1 = celdaColNum(document.getElementById('celdasColDesde').value);
+      const c2 = celdaColNum(document.getElementById('celdasColHasta').value);
+      const f1 = parseInt(document.getElementById('celdasFilaDesde').value, 10);
+      const f2 = parseInt(document.getElementById('celdasFilaHasta').value, 10);
+      if (!c1 || !c2) return { error: 'Las columnas van con letras (A a ZZ)' };
+      if (!(f1 >= 1 && f1 <= 999) || !(f2 >= 1 && f2 <= 999)) return { error: 'Las filas van del 1 al 999' };
+      const celdas = [];
+      for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
+        for (let f = Math.min(f1, f2); f <= Math.max(f1, f2); f++) celdas.push(celdaColTxt(c) + f);
+      }
+      if (celdas.length > CELDA_MAX_ETIQUETAS) return { error: 'Son ' + celdas.length + ' etiquetas: el máximo por PDF es ' + CELDA_MAX_ETIQUETAS };
+      return { celdas };
+    }
+
+    function celdasActualizarResumen() {
+      const r = celdasRangoLeido();
+      const el = document.getElementById('celdasResumen');
+      const btn = document.getElementById('celdasGenerar');
+      el.classList.toggle('error', !!r.error);
+      if (r.error) { el.textContent = r.error; btn.disabled = true; return; }
+      const porHoja = CELDAS_POR_HOJA.cols * CELDAS_POR_HOJA.filas;
+      const hojas = Math.ceil(r.celdas.length / porHoja);
+      el.textContent = r.celdas.length + (r.celdas.length === 1 ? ' etiqueta' : ' etiquetas') +
+        ' (' + r.celdas[0] + (r.celdas.length > 1 ? ' a ' + r.celdas[r.celdas.length - 1] : '') + ') · ' +
+        hojas + (hojas === 1 ? ' hoja' : ' hojas');
+      btn.disabled = false;
+    }
+
+    document.getElementById('btnCeldasEtiquetas').addEventListener('click', () => {
+      celdasActualizarResumen();
+      celdasModal.classList.add('active');
+    });
+    ['celdasColDesde', 'celdasColHasta', 'celdasFilaDesde', 'celdasFilaHasta'].forEach(id =>
+      document.getElementById(id).addEventListener('input', celdasActualizarResumen));
+    document.getElementById('celdasCancel').addEventListener('click', () => celdasModal.classList.remove('active'));
+    celdasModal.addEventListener('click', (e) => { if (e.target === celdasModal) celdasModal.classList.remove('active'); });
+
+    document.getElementById('celdasGenerar').addEventListener('click', async () => {
+      const r = celdasRangoLeido();
+      if (r.error) return;
+      const btn = document.getElementById('celdasGenerar');
+      btn.disabled = true;
+      try {
+        await cargarLibsPDF();
+        // Los QR se piden de a tandas para no saturar la red de la tablet.
+        const qrs = [];
+        const TANDA = 8;
+        for (let i = 0; i < r.celdas.length; i += TANDA) {
+          btn.textContent = 'Generando ' + Math.min(i + TANDA, r.celdas.length) + '/' + r.celdas.length + '...';
+          const parte = await Promise.all(r.celdas.slice(i, i + TANDA).map(c => qrParaPDF(CELDA_PREFIJO + c, 240)));
+          qrs.push(...parte);
+        }
+        if (qrs.some(q => !q)) {
+          showToast('No se pudieron generar los QR. Revisá la conexión e intentá de nuevo.');
+          return;
+        }
+        const nombre = 'Casillas-' + r.celdas[0] + (r.celdas.length > 1 ? '-' + r.celdas[r.celdas.length - 1] : '') + '.pdf';
+        celdasModal.classList.remove('active');
+        ofrecerPDF(construirCeldasPDF(r.celdas, qrs), nombre);
+      } catch (e) {
+        console.error('No se pudo generar el PDF de celdas:', e);
+        showToast('No se pudo generar el PDF');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generar PDF';
+      }
+    });
+
+    // 3 x 8 etiquetas por hoja, de 62 x 33 mm aprox., con el borde en gris
+    // claro como guia de corte. QR a la izquierda y la coordenada grande.
+    function construirCeldasPDF(celdas, qrs) {
+      const doc = pdfNuevo();
+      const M = 10;
+      const { cols, filas } = CELDAS_POR_HOJA;
+      const w = (PDF_A4.ancho - M * 2) / cols;
+      const h = (PDF_A4.alto - M * 2) / filas;
+      const qr = Math.min(h - 8, 26);
+      celdas.forEach((c, i) => {
+        const enHoja = i % (cols * filas);
+        if (i > 0 && enHoja === 0) doc.addPage();
+        const x = M + (enHoja % cols) * w;
+        const y = M + Math.floor(enHoja / cols) * h;
+        doc.setDrawColor(200);
+        doc.setLineWidth(0.2);
+        doc.rect(x, y, w, h);
+        const qx = x + 4, qy = y + (h - qr) / 2;
+        doc.addImage(qrs[i], 'PNG', qx, qy, qr, qr, 'celda-' + c);
+        const tx = qx + qr + 3;
+        const anchoTx = x + w - 3 - tx;
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text('CASILLA', tx + anchoTx / 2, y + h / 2 - 7, { align: 'center' });
+        let tam = 34;
+        doc.setFontSize(tam);
+        while (tam > 14 && doc.getTextWidth(c) > anchoTx) { tam -= 2; doc.setFontSize(tam); }
+        doc.text(c, tx + anchoTx / 2, y + h / 2 + tam * 0.353 * 0.36 + 2, { align: 'center' });
+      });
+      return doc.output('blob');
     }
 
     // ==========================================
@@ -16475,6 +16985,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!soloPedido) {
         masSeccion('Herramientas');
         masDesde('btnBuscarArticulo', 'Buscar artículo');
+        masDesde('btnCeldasEtiquetas', 'Etiquetas de casillas');
         masDesde('btnHistorial', 'Historial de despachos');
         masDesde('btnNecesarios', 'Artículos necesarios');
         masItem('Escanear con la cámara', abrirQRCamara);

@@ -58,7 +58,12 @@ const ARCHIVOS = [
   'config.js',
   'config2.js',
   'logo.png',
-  'faviconnegro.png'
+  'faviconnegro.png',
+  'alias.html',
+  'sw-alias.js',
+  'iconos/alias-192.png',
+  'manifest-alias.json',
+  'iconos/alias-apple-touch.png'
 ];
 
 // Tienen las claves de Firebase (una por punto de venta) y pueden no estar en

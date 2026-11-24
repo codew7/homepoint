@@ -198,12 +198,14 @@ document.addEventListener('DOMContentLoaded', function() {
   function regResumen(lineas) { return window.Registro ? window.Registro.resumen(lineas) : ''; }
   function regEdicion() { return new URLSearchParams(window.location.search).get('id') || ''; }
 
+  // Los textos de PEDIDO terminan en " · ID <id completo>" cuando hay un pedido
+  // en Firebase: actividadCajas.html lo usa para el link directo al pedido.
   // Pedido con artículos que se pierde sin haberse guardado.
   function regDescarte(motivo) {
     if (!items.length || pedidoCerrado) return;
     pedidoCerrado = true;
     const edicion = regEdicion();
-    reg('PEDIDO', `✖ DESCARTADO (${motivo})${edicion ? ' · salió sin guardar la edición del pedido ' + idCortoPedido(edicion) : ''} · ${regResumen(items)}`,
+    reg('PEDIDO', `✖ DESCARTADO (${motivo})${edicion ? ' · salió sin guardar la edición del pedido ' + idCortoPedido(edicion) : ''} · ${regResumen(items)}${edicion ? ' · ID ' + edicion : ''}`,
       items.map(regLinea));
   }
   window.addEventListener('pagehide', () => regDescarte('se cerró, recargó o cambió de pantalla'));
@@ -221,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (p.alias) detalle.push('Alias: ' + p.alias);
     reg('PEDIDO', `✔ ${estado} ticket ${idCortoPedido(id)} · Cliente ${(obj.cliente && obj.cliente.nombre) || '—'} · ` +
       `${regResumen(lineas)}${extras.length ? ' · ' + extras.join(' · ') : ''} · Total ${regPlata(parseImporte(p.totalFinal))} · ` +
-      `${medio} · Vendedor ${obj.vendedor || '—'}`, detalle);
+      `${medio} · Vendedor ${obj.vendedor || '—'}${id ? ' · ID ' + id : ''}`, detalle);
   }
   
   // Prevenir cierre de ventana durante procesos críticos
@@ -4979,8 +4981,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (guardado === '1') activarModoWhatsapp(false);
     };
 
-    // Admin sólo para Alejandro y Javier, con la clave personal de cada uno.
-    const ADMINS = ['alejandro', 'javier'];
+    // Admin sólo para Alejandro, Javier y Sabrina, con la clave personal de cada uno.
+    const ADMINS = ['alejandro', 'javier', 'sabrina'];
     function esAdmin(nombre) { return ADMINS.includes(String(nombre || '').trim().toLowerCase()); }
     function actualizarBotonAdmin() {
       const nombre = window.UsuarioActivo ? UsuarioActivo.actual() : '';

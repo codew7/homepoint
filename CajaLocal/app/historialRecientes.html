@@ -38,6 +38,8 @@
        Va antes de usuarioActivo.js, que ya anota al elegir usuario. -->
   <script src="registroCaja.js"></script>
   <script src="usuarioActivo.js"></script>
+  <!-- Alias del día por rango de monto (lo elige alias.html) -->
+  <script src="aliasDelDia.js"></script>
   <script>
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
@@ -245,12 +247,56 @@
 
     function elegirAlias(alias) {
       document.getElementById('waAliasInput').value = alias;
+      document.getElementById('waAliasInput').dataset.precargar = '0';
       cerrarListaAlias();
+      actualizarEtiquetaAliasDelDia();
     }
 
     // Cargar alias al inicio
     cargarHistorialAliasDesdeLocalStorage();
     cargarAliasDesdeFirebase();
+
+    // === ALIAS DEL DÍA (alias.html + aliasDelDia.js) ===
+    // Se lee con sesión iniciada (las reglas lo piden). Sólo precarga el campo
+    // cuando el pedido todavía no tiene alias; el cajero lo puede cambiar.
+    firebase.auth().onAuthStateChanged(user => {
+      if (user && window.AliasDelDia) AliasDelDia.escuchar(db, actualizarEtiquetaAliasDelDia);
+    });
+
+    // Lo que el cliente transfiere: en un Parcial, sólo la parte en
+    // Transferencia del desglose; si no hay desglose, el total.
+    function montoATransferir(pagos) {
+      const d = desgloseGuardado(pagos);
+      if (esPagoParcial(pagos) && d) {
+        const t = d.find(p => p.medio === 'Transferencia');
+        if (t) return Number(t.monto) || 0;
+      }
+      return montoPedido(pagos);
+    }
+
+    function aliasDelDiaDelPedido(id) {
+      const pedido = pedidosCache[id];
+      if (!pedido || !window.AliasDelDia) return null;
+      return AliasDelDia.paraMonto(montoATransferir(pedido.pagos));
+    }
+
+    function actualizarEtiquetaAliasDelDia() {
+      const el = document.getElementById('waAliasDelDia');
+      if (!el) return;
+      const sugerido = whatsappPedidoId ? aliasDelDiaDelPedido(whatsappPedidoId) : null;
+      if (!sugerido) { el.hidden = true; return; }
+      const input = document.getElementById('waAliasInput');
+      // Si el modal se abrió antes de que llegara el alias del día, se completa
+      if (!input.value.trim() && input.dataset.precargar === '1') input.value = sugerido.alias;
+      const actual = input.value.trim().toUpperCase();
+      const confirmado = AliasDelDia.confirmadoHoy();
+      el.classList.toggle('sin-confirmar', !confirmado);
+      el.classList.toggle('distinto', confirmado && actual !== sugerido.alias);
+      el.textContent = actual === sugerido.alias
+        ? `Alias del día · ${sugerido.etiqueta}${confirmado ? '' : ' · sin confirmar hoy'}`
+        : `Alias del día para ${sugerido.etiqueta}: ${sugerido.alias}${confirmado ? '' : ' (sin confirmar hoy)'}`;
+      el.hidden = false;
+    }
 
     // === MODAL WHATSAPP ===
     let whatsappPedidoId = null;
@@ -261,7 +307,12 @@
       if (!pedido) { alert('Pedido no encontrado'); return; }
 
       const aliasActual = (pedido.pagos && pedido.pagos.alias) ? pedido.pagos.alias.trim().toUpperCase() : '';
-      document.getElementById('waAliasInput').value = aliasActual;
+      // Sin alias guardado se precarga el alias del día según el monto
+      const sugerido = aliasActual ? null : aliasDelDiaDelPedido(id);
+      const aliasInputEl = document.getElementById('waAliasInput');
+      aliasInputEl.value = aliasActual || (sugerido ? sugerido.alias : '');
+      aliasInputEl.dataset.precargar = aliasActual ? '0' : '1';
+      actualizarEtiquetaAliasDelDia();
 
       const telefonoActual = (pedido.cliente && pedido.cliente.telefono) ? pedido.cliente.telefono : '';
       const telInput = document.getElementById('waTelefonoInput');
@@ -1935,6 +1986,20 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
     .modal-input--alias { text-transform: uppercase; }
 
+    /* Etiqueta del alias del día bajo el campo (aliasDelDia.js) */
+    .alias-del-dia {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 6px;
+      font-size: 12px; font-weight: 600;
+      color: var(--violeta);
+    }
+    .alias-del-dia::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor; flex-shrink: 0;
+    }
+    .alias-del-dia.sin-confirmar { color: #b45309; }
+    .alias-del-dia.distinto { color: var(--ink-4); }
+
     /* Lista desplegable de alias: cada fila tiene una × para borrarla (o Supr) */
     .alias-combo { position: relative; }
     .alias-lista {
@@ -2254,6 +2319,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           <input type="text" id="waAliasInput" class="modal-input modal-input--alias" placeholder="Ingrese o seleccione un alias" autocomplete="off" role="combobox" aria-controls="waAliasLista">
           <ul id="waAliasLista" class="alias-lista" role="listbox"></ul>
         </div>
+        <!-- Alias del día (alias.html): de qué rango salió el alias precargado -->
+        <div id="waAliasDelDia" class="alias-del-dia" hidden></div>
         <div class="alias-lista-ayuda">↑ ↓ para elegir · Supr o × para quitar un alias de la lista</div>
       </div>
 
@@ -2378,7 +2445,12 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       input.addEventListener('click', () => {
         if (aliasListaAbierta) cerrarListaAlias(); else abrirListaAlias(true);
       });
-      input.addEventListener('input', () => abrirListaAlias(false));
+      input.addEventListener('input', () => {
+        // Lo escribió el cajero: ya no se vuelve a precargar el alias del día
+        input.dataset.precargar = '0';
+        abrirListaAlias(false);
+        actualizarEtiquetaAliasDelDia();
+      });
       input.addEventListener('blur', () => cerrarListaAlias());
       // Evita que el clic en la lista saque el foco del input (y la cierre)
       ul.addEventListener('mousedown', e => e.preventDefault());

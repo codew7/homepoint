@@ -274,6 +274,22 @@ code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font
 .prio svg { width: 15px; height: 15px; stroke-width: 3.6; }
 .prio-si { background: var(--ok); }
 .prio-no { background: var(--mal); }
+/* Casillas (A1, B4...): chip oscuro, se lee de lejos */
+.celdas-col { flex: none; display: flex; flex-direction: column; gap: 4px; }
+.celda-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 46px; height: 30px; padding: 0 8px; border-radius: 9px;
+  background: var(--tinta); color: var(--amarillo);
+  font: 900 18px/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.celda-chip--vacia { background: transparent; color: var(--suave); border: 2px dashed var(--linea); font-weight: 700; }
+@media (prefers-color-scheme: dark) { .celda-chip:not(.celda-chip--vacia) { background: var(--amarillo); color: var(--tinta); } }
+/* En la barra del control: dato secundario, se oculta en pantallas angostas */
+.ctl-celdas { flex: 0 100 auto; min-width: 0; overflow: hidden; display: flex; gap: 4px; }
+.ctl-celdas .celda-chip { background: var(--amarillo); color: var(--tinta); height: 28px; font-size: 16px; }
+.ctl-celdas .celda-chip::after { content: '×'; margin-left: 4px; opacity: .55; }
+@media (max-width: 480px) { .ctl-celdas { display: none !important; } }
+
 .cant { font: 900 24px/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; flex: none; }
 .cant small { font-size: 15px; opacity: .6; margin-right: 1px; }
 
@@ -420,6 +436,24 @@ code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font
 #fin p { margin: 10px 0 28px; font-size: 17px; opacity: .92; }
 #fin .btn { background: #fff; color: #111; min-width: 200px; }
 
+#celdaBanner {
+  position: fixed; left: 12px; right: 12px; top: calc(10px + var(--sat)); z-index: 35;
+  display: flex; align-items: center; gap: 12px; padding: 12px 12px 15px 14px;
+  border-radius: var(--r); background: var(--tinta); color: #fff;
+  box-shadow: 0 12px 30px rgba(0,0,0,.35); overflow: hidden;
+  transform: translateY(calc(-100% - 20px - var(--sat))); transition: transform .22s cubic-bezier(.2,.8,.2,1);
+  pointer-events: none;
+}
+#celdaBanner.on { transform: none; pointer-events: auto; }
+.celda-banner-celda { flex: none; min-width: 64px; padding: 6px 10px; border-radius: 12px; background: var(--amarillo); color: var(--tinta); text-align: center; font: 900 28px/1 var(--display); font-stretch: 85%; }
+.celda-banner-tx { flex: 1; min-width: 0; font-weight: 700; font-size: 16px; line-height: 1.25; }
+.celda-banner-tx small { display: block; font-size: 13px; font-weight: 400; color: #c9ccd2; }
+#celdaBanner button { flex: none; height: 44px; padding: 0 12px; border-radius: 12px; background: rgba(255,255,255,.14); font-weight: 700; font-size: 15px; }
+.celda-banner-barra { position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: var(--amarillo); transform-origin: left; }
+#celdaBanner.on .celda-banner-barra { animation: celdaBarra 30s linear forwards; }
+@keyframes celdaBarra { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { #celdaBanner { transition: none; } #celdaBanner.on .celda-banner-barra { animation: none; } }
+
 #toast { position: fixed; left: 12px; right: 12px; bottom: calc(96px + var(--sab)); z-index: 60; display: flex; justify-content: center; pointer-events: none; }
 #toast div { background: var(--tinta); color: #fff; padding: 14px 18px; border-radius: 14px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,.35); opacity: 0; transform: translateY(10px); transition: .2s; text-align: center; max-width: 440px; }
 @media (prefers-color-scheme: dark) { #toast div { background: #f1f0ea; color: #111; } }
@@ -472,7 +506,7 @@ code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font
       <span>Escaneá el QR del rótulo o elegilo de la lista.</span>
     </button>
   </div>
-  <div class="lista-escanear" id="inicioLector" hidden><i></i>Listo para escanear: QR de pedido o artículo</div>
+  <div class="lista-escanear" id="inicioLector" hidden><i></i>Listo para escanear: QR de pedido, casilla o artículo</div>
   <div class="inicio-pie">
     <span class="email" id="inicioEmail"></span>
     <button type="button" id="btnSalir">Cerrar sesión</button>
@@ -527,6 +561,7 @@ code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font
   <header class="barra">
     <button class="btn-barra" type="button" data-volver aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
     <div class="barra-titulo"><h1 id="ctlTitulo">Pedido</h1><p id="ctlSub"></p></div>
+    <div class="ctl-celdas" id="ctlCeldas" hidden></div>
     <div class="anillo" id="ctlRing"><svg viewBox="0 0 54 54"><circle class="pista" cx="27" cy="27" r="22"/><circle class="relleno" id="ctlRingFill" cx="27" cy="27" r="22" stroke-dasharray="138.2" stroke-dashoffset="138.2"/></svg><span id="ctlRingTx">0%</span></div>
   </header>
   <div class="hero" id="ctlHero" data-estado="idle" aria-live="polite">
@@ -584,6 +619,15 @@ code, .mono { font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace; font
   <h3 id="finT">Pedido controlado</h3>
   <p id="finS"></p>
   <button type="button" class="btn" id="finListo">Listo</button>
+</div>
+
+<!-- Modo asociacion de casilla: aparece al leer el QR de una casilla y
+     espera la etiqueta de Id del pedido que va ahi. -->
+<div id="celdaBanner" role="status" aria-live="polite">
+  <span class="celda-banner-celda" id="celdaBannerCelda"></span>
+  <span class="celda-banner-tx">Escaneá la etiqueta del pedido<small>para guardarlo en esta casilla</small></span>
+  <button type="button" id="celdaBannerCancelar">Cancelar</button>
+  <span class="celda-banner-barra"></span>
 </div>
 
 <div id="toast"><div id="toastTx"></div></div>
@@ -1098,8 +1142,9 @@ function camOnScan(decodedText, decodedResult) {
   const pausa = pantalla === 'control' ? 1500 : 2500;
   if (texto === camUltimo.texto && ahora - camUltimo.ts < pausa) return;
   camUltimo = { texto, ts: ahora };
-  // Fuera del control alcanza con una lectura: se cierra la camara.
-  if (pantalla !== 'control') camCerrar();
+  // Fuera del control alcanza con una lectura: se cierra la camara. Con el
+  // QR de una casilla sigue abierta para leer enseguida la etiqueta del pedido.
+  if (pantalla !== 'control' && !celdaDeLectura(texto)) camCerrar();
   lectura(texto, texto, 'camara');
 }
 
@@ -1114,6 +1159,11 @@ async function lectura(texto, textoUS, origen) {
   if (eco) return;
   if (pantalla === 'login' || pantalla === '') return;
   if (dlgResolver || ctlQuienResolver) return;
+  // El QR de una casilla manda sobre cualquier pantalla: entra en modo
+  // asociacion y la lectura siguiente es la etiqueta del pedido.
+  const celda = celdaDeLectura(texto, textoUS);
+  if (celda) { celdaIniciarAsociacion(celda); return; }
+  if (celdaAsociando) { celdaLecturaPedido(texto, textoUS); return; }
   if (pantalla === 'control') { if (pedidoActual && !$('fin').classList.contains('on')) controlLectura(texto); return; }
   if (pantalla === 'buscar') { lecturaArticulo(texto); return; }
   lecturaPedido(texto, textoUS);
@@ -1166,25 +1216,30 @@ async function buscarSinMayusculas(id) {
   return '';
 }
 
+// Numero de pedido real para una lectura, o '' si no es un pedido. Tira el
+// error de red para que cada llamador avise a su modo.
+async function resolverPedido(texto, textoUS) {
+  const cand = idsCandidatos(texto, textoUS);
+  for (const c of cand) {
+    if (pedidosCache.some(p => p.id === c)) return c;
+    const s = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
+    if (s.exists()) return c;
+  }
+  for (const c of cand) { const r = await buscarSinMayusculas(c); if (r) return r; }
+  return '';
+}
+
 let lecturaPedidoEnCurso = false;
 async function lecturaPedido(texto, textoUS) {
   if (lecturaPedidoEnCurso) return;
-  const cand = idsCandidatos(texto, textoUS);
   let id = '';
-  if (cand.length) {
-    lecturaPedidoEnCurso = true;
-    try {
-      for (const c of cand) {
-        if (pedidosCache.some(p => p.id === c)) { id = c; break; }
-        const s = await conTimeout(() => db.ref('pedidos/' + c + '/status').once('value'));
-        if (s.exists()) { id = c; break; }
-      }
-      if (!id) for (const c of cand) { const r = await buscarSinMayusculas(c); if (r) { id = r; break; } }
-    } catch (err) {
-      showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
-      lecturaPedidoEnCurso = false;
-      return;
-    }
+  lecturaPedidoEnCurso = true;
+  try {
+    id = await resolverPedido(texto, textoUS);
+  } catch (err) {
+    showToast(err && err.esTimeout ? 'Sin conexión: no se pudo abrir el pedido' : 'No se pudo abrir el pedido');
+    return;
+  } finally {
     lecturaPedidoEnCurso = false;
   }
   if (id) { vibrar(60); destello(true); abrirControl(id); return; }
@@ -1195,6 +1250,151 @@ async function lecturaPedido(texto, textoUS) {
   const leido = String(texto).length > 24 ? String(texto).slice(0, 23) + '…' : String(texto);
   showToast('No hay ningún pedido con el código «' + leido + '»');
 }
+
+// =========================================================================
+// CASILLAS: casilleros con coordenadas tipo planilla (A1, B4, C12)
+// =========================================================================
+// Mismo esquema que pedidosv2: cada casillero lleva un QR "CASILLA-C4" (las
+// primeras etiquetas decian "CELDA-C4" y se siguen aceptando). Al leerlo se
+// entra en modo asociacion y la lectura siguiente tiene que ser la etiqueta
+// de Id de un pedido:  pedidos/<id>/celdas/C4 = true
+// Un pedido puede ocupar varias casillas; una casilla, un solo pedido
+// pendiente. Solo cuentan los ABIERTO/CERRADO: al despachar o cancelar, sus
+// casillas quedan libres solas. Las etiquetas se imprimen desde pedidosv2.
+const CELDA_ESPERA_MS = 30000;
+const CELDA_RE = /^\s*(?:CELDA|CASILLA)[\s\-'_]?([A-Z]{1,2})\s*(\d{1,3})\s*$/i;
+
+function celdaDeLectura(...textos) {
+  for (const t of textos) {
+    const m = CELDA_RE.exec(String(t || ''));
+    if (!m) continue;
+    const fila = parseInt(m[2], 10);
+    if (fila >= 1) return m[1].toUpperCase() + fila;
+  }
+  return '';
+}
+function celdaValida(c) { return /^[A-Z]{1,2}[1-9]\d{0,2}$/.test(c); }
+// Orden natural: A1, A2 ... A10, B1 ... Z9, AA1.
+function celdaComparar(a, b) {
+  const ma = /^([A-Z]+)(\d+)$/.exec(a) || ['', '', '0'];
+  const mb = /^([A-Z]+)(\d+)$/.exec(b) || ['', '', '0'];
+  return (ma[1].length - mb[1].length) || (ma[1] < mb[1] ? -1 : ma[1] > mb[1] ? 1 : 0) || (parseInt(ma[2], 10) - parseInt(mb[2], 10));
+}
+function celdasDe(p) {
+  const o = p && p.celdas;
+  if (!o || typeof o !== 'object') return [];
+  return Object.keys(o).filter(k => o[k] && celdaValida(k)).sort(celdaComparar);
+}
+function celdaEsPendiente(p) { return !!p && (p.status === 'ABIERTO' || p.status === 'CERRADO'); }
+
+// --- Modo asociacion ---
+let celdaAsociando = null;   // { celda, timer }
+let celdaGuardando = false;
+function celdaIniciarAsociacion(celda) {
+  vibrar(60);
+  if (celdaAsociando) clearTimeout(celdaAsociando.timer);
+  celdaAsociando = { celda, timer: setTimeout(() => celdaCancelar('Se canceló la asociación de la casilla ' + celda), CELDA_ESPERA_MS) };
+  $('celdaBannerCelda').textContent = celda;
+  // Reinicia la barra de tiempo aunque el aviso ya estuviera a la vista.
+  const b = $('celdaBanner');
+  b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+}
+function celdaCancelar(aviso) {
+  if (!celdaAsociando) return;
+  clearTimeout(celdaAsociando.timer);
+  celdaAsociando = null;
+  $('celdaBanner').classList.remove('on');
+  if (aviso) showToast(aviso);
+}
+$('celdaBannerCancelar').addEventListener('click', () => celdaCancelar());
+
+// Pedidos pendientes que hoy ocupan la casilla. Con la lista en vivo se usa
+// lo que ya esta en memoria; si no, se consultan los ABIERTO y CERRADO.
+async function celdaOcupantes(celda, exceptoId) {
+  if (ppVivo && pedidosCache.length) {
+    return pedidosCache.filter(f => f.id !== exceptoId && f.celdas && f.celdas.includes(celda)).map(f => ({ id: f.id, nombre: f.nombre }));
+  }
+  const snaps = await conTimeout(() => Promise.all(['ABIERTO', 'CERRADO'].map(st => db.ref('pedidos').orderByChild('status').equalTo(st).once('value'))));
+  const out = [];
+  snaps.forEach(s => s.forEach(ch => {
+    const p = ch.val();
+    if (ch.key !== exceptoId && p && p.celdas && p.celdas[celda]) out.push({ id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre' });
+  }));
+  return out;
+}
+
+async function celdaLecturaPedido(texto, textoUS) {
+  if (!celdaAsociando || celdaGuardando) return;
+  const celda = celdaAsociando.celda;
+  celdaGuardando = true;
+  try {
+    const id = await resolverPedido(texto, textoUS);
+    if (!celdaAsociando || celdaAsociando.celda !== celda) return;   // se cancelo mientras buscaba
+    if (!id) {
+      // Sigue esperando: puede haber leido un articulo por error.
+      vibrar([40, 60, 40]); destello(false);
+      showToast('Eso no es la etiqueta de un pedido. Escaneá el QR del Id para ' + celda);
+      return;
+    }
+    const p = (await conTimeout(() => db.ref('pedidos/' + id).once('value'))).val();
+    const nombre = (p && p.cliente && p.cliente.nombre) || 'Sin nombre';
+    if (!celdaEsPendiente(p)) {
+      vibrar([40, 60, 40]); destello(false);
+      celdaCancelar('El pedido de ' + nombre + ' está ' + String((p && p.status) || 'sin estado').toLowerCase() + ': no se guarda en ' + celda);
+      return;
+    }
+    if (p.celdas && p.celdas[celda]) { vibrar(60); celdaCancelar(nombre + ' ya estaba en ' + celda); return; }
+
+    const up = {};
+    const ocupantes = await celdaOcupantes(celda, id);
+    if (ocupantes.length) {
+      // Mientras se decide no corre el tiempo de espera.
+      clearTimeout(celdaAsociando.timer);
+      const ok = await confirmarAccion({
+        titulo: 'La casilla ' + celda + ' está ocupada',
+        texto: 'Ahí está el pedido de ' + ocupantes.map(o => o.nombre).join(', ') + '. ¿Pasar la casilla al pedido de ' + nombre + '?',
+        confirmar: 'Sí, reemplazar', volver: 'Cancelar', tono: 'aviso'
+      });
+      if (!ok) { celdaCancelar('No se cambió la casilla ' + celda); return; }
+      ocupantes.forEach(o => { up['pedidos/' + o.id + '/celdas/' + celda] = null; });
+    }
+    up['pedidos/' + id + '/celdas/' + celda] = true;
+    await conTimeout(() => db.ref().update(up));
+    vibrar([60, 40, 60]); destello(true);
+    celdaCancelar(nombre + ' → ' + celda);
+  } catch (err) {
+    console.error('Error asociando la casilla:', err);
+    celdaCancelar(err && err.esTimeout ? 'Sin conexión: no se guardó la casilla ' + celda : 'No se pudo guardar la casilla ' + celda);
+  } finally {
+    celdaGuardando = false;
+  }
+}
+
+// --- Casillas en la barra del control (tocar una la quita) ---
+function celdaPintarCtl() {
+  const el = $('ctlCeldas');
+  const celdas = celdaEsPendiente(pedidoActual) ? celdasDe(pedidoActual) : [];
+  el.hidden = !celdas.length;
+  el.innerHTML = celdas.map(c => '<button type="button" class="celda-chip" data-celda="' + escapeHtml(c) + '" aria-label="Casilla ' + escapeHtml(c) + ', tocar para quitarla">' + escapeHtml(c) + '</button>').join('');
+}
+$('ctlCeldas').addEventListener('click', async (e) => {
+  const b = e.target.closest('.celda-chip');
+  if (!b || !pedidoId) return;
+  const celda = b.dataset.celda, id = pedidoId;
+  const ok = await confirmarAccion({
+    titulo: '¿Quitar la casilla ' + celda + '?',
+    texto: 'El pedido deja de figurar en ' + celda + '. Para volver a guardarlo, escaneá la casilla y la etiqueta.',
+    confirmar: 'Quitar', volver: 'Volver', tono: 'peligro'
+  });
+  if (!ok) return;
+  try {
+    await conTimeout(() => db.ref('pedidos/' + id + '/celdas/' + celda).remove());
+    showToast('Se quitó la casilla ' + celda);
+  } catch (err) {
+    console.error('No se pudo quitar la casilla:', err);
+    showToast('No se pudo quitar la casilla');
+  }
+});
 
 // =========================================================================
 // BUSCAR ARTICULO -> pedidos que lo contienen -> marcar listo
@@ -1343,14 +1543,20 @@ async function articuloBuscarEnPedidos(codigo) {
       res.push({
         id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', status: p.status,
         cantidad: it.cantidad || 1, yaListo: it.listo === 'y', nota: String(p.nota || '').trim(),
-        prioridad: prioridadNota(p.nota), timestamp: p.timestamp || 0, sel: it.listo !== 'y'
+        prioridad: prioridadNota(p.nota), timestamp: p.timestamp || 0, celdas: celdasDe(p),
+        // Pre-tildado solo lo prioritario (check verde); cruz roja o sin nota
+        // arrancan destildados.
+        sel: it.listo !== 'y' && prioridadNota(p.nota) === 'si'
       });
     });
     recolectar(sA); recolectar(sC);
     // Pendientes primero; dentro, los prioritarios (check verde) arriba y los
-    // de cruz roja al final, para saber a quien asignarle la mercaderia.
+    // de cruz roja al final, para saber a quien asignarle la mercaderia. En
+    // cada grupo, por casilla (A1, A2... para recorrer el deposito en orden).
     const pesoPrio = { si: 0, '': 1, no: 2 };
-    res.sort((a, b) => (a.yaListo - b.yaListo) || (pesoPrio[a.prioridad] - pesoPrio[b.prioridad]) || (b.timestamp - a.timestamp));
+    const porCelda = (a, b) => (a.celdas.length && b.celdas.length)
+      ? celdaComparar(a.celdas[0], b.celdas[0]) : b.celdas.length - a.celdas.length;
+    res.sort((a, b) => (a.yaListo - b.yaListo) || (pesoPrio[a.prioridad] - pesoPrio[b.prioridad]) || porCelda(a, b) || (b.timestamp - a.timestamp));
     articuloResultados = res;
     articuloRenderPedidos();
   } catch (err) {
@@ -1370,6 +1576,9 @@ function articuloRenderPedidos() {
   articuloPedidosList.innerHTML = articuloResultados.map((r, i) =>
     '<div class="fila fila-check' + (r.yaListo ? ' listo' : r.sel ? ' sel' : '') + '" data-i="' + i + '" role="checkbox" aria-checked="' + (r.sel || r.yaListo) + '">' +
       '<span class="caja">' + IC.check + '</span>' +
+      '<div class="celdas-col">' + (r.celdas.length
+        ? r.celdas.map(c => '<span class="celda-chip" title="Casilla ' + escapeHtml(c) + '">' + escapeHtml(c) + '</span>').join('')
+        : '<span class="celda-chip celda-chip--vacia" title="Sin casilla asignada">–</span>') + '</div>' +
       '<div class="fila-tx"><div class="fila-nom">' + escapeHtml(r.nombre) + iconoPrioridad(r.prioridad) + '</div>' +
       '<div class="fila-sub">' + (r.yaListo ? '<b style="color:var(--ok)">Ya listo</b>' : (r.status === 'CERRADO' ? 'Cerrado' : 'Abierto')) +
         (r.nota ? ' · ' + escapeHtml(r.nota) : '') + ' · ' + fechaCorta(r.timestamp) + '</div></div>' +
@@ -1481,7 +1690,8 @@ function ppFila(id, p) {
   return {
     id, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', telefono: (p.cliente && p.cliente.telefono) || '',
     status: p.status, timestamp: p.timestamp || 0, items: e.lineas.length, totalU: e.totalU, contadoU: e.contadoU,
-    controlado: e.finalValido, conDif: !!(e.final && e.final.conDiferencias), iniciado: e.iniciado, desact: !!e.final && !e.finalValido
+    controlado: e.finalValido, conDif: !!(e.final && e.final.conDiferencias), iniciado: e.iniciado, desact: !!e.final && !e.finalValido,
+    celdas: celdasDe(p)   // no se muestra en la lista: lo usa la asociacion de casillas
   };
 }
 function ppSuscribir() {
@@ -1675,7 +1885,8 @@ function activarListener(id) {
     const n = snap.val();
     if (!n || !pedidoActual || pedidoId !== id) return;
     const cambio = controlHuella(n.control) !== controlHuella(pedidoActual.control) ||
-      JSON.stringify(n.items) !== JSON.stringify(pedidoActual.items) || n.status !== pedidoActual.status;
+      JSON.stringify(n.items) !== JSON.stringify(pedidoActual.items) || n.status !== pedidoActual.status ||
+      JSON.stringify(n.celdas || null) !== JSON.stringify(pedidoActual.celdas || null);
     if (!cambio) return;
     pedidoActual = n; pedidoActual.id = id;
     if (n.status === 'CANCELADO') { showToast('El pedido fue cancelado'); salirControl(); return; }
@@ -1962,6 +2173,7 @@ function controlRender(op) {
   const e = controlEstado(pedidoActual);
   const cli = pedidoActual.cliente || {};
   $('ctlTitulo').textContent = cli.nombre || ('#' + (pedidoId || ''));
+  celdaPintarCtl();
   $('ctlSub').textContent = e.contadoU + ' de ' + e.totalU + ' u. · ' + e.lineasOk + ' de ' + e.lineas.length + ' artículos';
   const pct = e.totalU ? e.contadoU / e.totalU : 0;
   $('ctlRingFill').setAttribute('stroke-dashoffset', (CTL_RING * (1 - pct)).toFixed(1));
