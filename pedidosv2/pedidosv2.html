@@ -3540,6 +3540,7 @@
       text-align: left;
       cursor: pointer;
     }
+    .pp-filtros-item + .pp-filtros-item { margin-top: 0; }
     .pp-filtros-item:hover { color: var(--ink); }
     .pp-filtros-item svg { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 
@@ -6717,6 +6718,8 @@
               <select id="ppFiltroNotaSel" aria-label="Nota a mostrar"></select>
             </label>
             <button type="button" class="pp-filtros-item" id="ppBtnLeyendas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><line x1="12" y1="7.6" x2="12.01" y2="7.6"></line></svg><span>Leyendas</span></button>
+            <!-- Mapa de casillas: vista informativa, vive en mapaCasillas.js y se carga al tocarla -->
+            <button type="button" class="pp-filtros-item" id="ppBtnMapaCasillas"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"></rect><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"></rect><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"></rect><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"></rect></svg><span>Mapa de casillas</span></button>
           </div>
         </div>
         <button class="pedidos-panel-close" id="pedidosPanelClose">&times;</button>
@@ -11301,6 +11304,29 @@
       document.getElementById('leyendasCuerpo').innerHTML = ppLeyendasHtml();
       leyendasModal.classList.add('active');
     });
+    // Mapa de casillas: modulo aparte (mapaCasillas.js), solo de lectura. Se
+    // pide recien al tocarlo; si la red falla, el proximo toque reintenta.
+    let mapaCasillasCarga = null;
+    document.getElementById('ppBtnMapaCasillas').addEventListener('click', async () => {
+      ppFiltrosToggle(false);
+      if (!mapaCasillasCarga) {
+        mapaCasillasCarga = new Promise((listo, fallo) => {
+          const et = document.createElement('script');
+          et.src = 'mapaCasillas.js';
+          et.onload = listo;
+          et.onerror = () => fallo(new Error('No se pudo cargar mapaCasillas.js'));
+          document.head.appendChild(et);
+        }).catch(err => { mapaCasillasCarga = null; throw err; });
+      }
+      try {
+        await mapaCasillasCarga;
+        window.MapaCasillas.abrir();
+      } catch (err) {
+        console.error(err);
+        showToast('No se pudo abrir el mapa de casillas. Revisá la conexión.');
+      }
+    });
+
     const leyendasCerrar = () => leyendasModal.classList.remove('active');
     document.getElementById('leyendasCerrar').addEventListener('click', leyendasCerrar);
     leyendasModal.addEventListener('click', (e) => { if (e.target === leyendasModal) leyendasCerrar(); });
