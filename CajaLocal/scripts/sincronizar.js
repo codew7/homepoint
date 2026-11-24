@@ -52,6 +52,9 @@ const ARCHIVOS = [
   // Lectura y análisis del registro: lo usa el visor local
   // (electron/visor-registro.html), igual que el panel web actividadCajas.html.
   'registroAnalisis.js',
+  // Alias del día por rango de monto (lo elige la app alias/ y lo usa el
+  // modal de WhatsApp del historial).
+  'aliasDelDia.js',
   'config.js',
   'config2.js',
   'logo.png',

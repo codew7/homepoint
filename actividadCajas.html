@@ -345,6 +345,12 @@
     .ev-t .pant { font-size: 11px; color: var(--ink-4); margin-right: 6px; }
     .ev.ok .ev-t .tp { color: var(--verde); font-weight: 600; }
     .ev.mal .ev-t .tp { color: var(--alta); font-weight: 600; }
+    .ev-ped {
+      display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 1px 8px; border-radius: 6px;
+      font-size: 12px; font-weight: 600; color: var(--violeta); background: var(--violeta-soft); text-decoration: none; white-space: nowrap;
+    }
+    .ev-ped:hover { background: var(--violeta-ring); }
+    .ev-ped.buscando { opacity: .6; cursor: progress; }
     .ev.con-alerta { box-shadow: inset 3px 0 0 var(--media); }
     .ev.con-alerta.alta { box-shadow: inset 3px 0 0 var(--alta); }
     .ev ul { margin: 4px 0 0; padding: 0 0 0 14px; color: var(--ink-3); font-size: 12.5px; }
@@ -1182,6 +1188,97 @@
     }));
   }
 
+  // ------------------------------------------------- link a cada pedido
+  // La caja anota el ID completo al final (" · ID -Nabc…"). Los registros
+  // viejos sólo traen el código corto del ticket (últimos 8 caracteres en
+  // mayúscula): al tocar el link se busca el pedido completo en Firebase.
+  const RX_ID = / · ID ([A-Za-z0-9_-]{12,})$/;
+  const RX_TICKET = /(?:ticket|pedido) ([A-Z0-9_-]{8})(?![A-Za-z0-9_-])/;
+  // buscarPedidos.html abre los pedidos del punto de venta de este navegador
+  // (sin elegir uno, el primero de la lista).
+  const pvLocal = puntoEquipo || (sucursales[0] && sucursales[0].id) || null;
+  const idsResueltos = new Map(); // "pv|código" → id completo
+  function pedidoDe(e) {
+    const mId = RX_ID.exec(e.texto);
+    const texto = mId ? e.texto.slice(0, mId.index) : e.texto;
+    const mT = RX_TICKET.exec(texto);
+    if (!mId && (!mT || /NO SE GUARDÓ/.test(texto))) return null;
+    const codigo = mT ? mT[1] : mId[1].slice(-8).toUpperCase();
+    const id = mId ? mId[1] : (idsResueltos.get(e.pv + '|' + codigo) || '');
+    return { id, codigo, pv: e.pv, texto };
+  }
+
+  // Las push keys de Firebase empiezan con la hora en que se crearon: con la
+  // hora del registro alcanza bajar los pedidos de esa media hora.
+  const PUSH = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+  function prefijoPush(ms) {
+    let s = '';
+    for (let i = 0; i < 8; i++) { s = PUSH[ms % 64] + s; ms = Math.floor(ms / 64); }
+    return s;
+  }
+  async function buscarId(s, codigo, t, dia) {
+    const k = s.id + '|' + codigo;
+    if (idsResueltos.has(k)) return idsResueltos.get(k);
+    const hallar = (snap) => {
+      let id = '';
+      snap.forEach((c) => { if (c.key.slice(-8).toUpperCase() === codigo) { id = c.key; return true; } });
+      return id;
+    };
+    // Otro registro del mismo ticket puede traer el ID, o la hora en que se ingresó.
+    const mismos = s.eventos.filter((x) => x.cat === 'PEDIDO' && /^✔ /.test(x.texto) && RX_TICKET.exec(x.texto) && RX_TICKET.exec(x.texto)[1] === codigo);
+    for (const x of mismos) {
+      const m = RX_ID.exec(x.texto);
+      if (m) { idsResueltos.set(k, m[1]); return m[1]; }
+    }
+    let id = '';
+    for (const h of [...new Set(mismos.map((x) => x.t).concat(t))]) {
+      if (!h) continue;
+      const snap = await s.db.ref('pedidos').orderByKey()
+        .startAt(prefijoPush(h - 30 * 60000)).endAt(prefijoPush(h + 5 * 60000)).once('value');
+      if ((id = hallar(snap))) break;
+    }
+    // Último intento: los pedidos con fecha de ese día.
+    if (!id && dia) {
+      const snap = await s.db.ref('pedidos').orderByChild('fecha').startAt(dia).endAt(dia + '').once('value');
+      id = hallar(snap);
+    }
+    if (id) idsResueltos.set(k, id);
+    return id;
+  }
+
+  document.addEventListener('click', async (ev) => {
+    const a = ev.target.closest && ev.target.closest('.ev-ped');
+    if (!a) return;
+    ev.stopPropagation();
+    const local = a.dataset.pv === pvLocal;
+    if (a.dataset.id && local) return; // el link ya apunta al pedido
+    ev.preventDefault();
+    if (a.classList.contains('buscando')) return;
+    const s = sucursales.find((x) => x.id === a.dataset.pv);
+    // La pestaña se abre en el momento del clic: si se abre después de
+    // buscar, el navegador la bloquea como ventana emergente.
+    const pestana = local ? window.open('', '_blank') : null;
+    let id = a.dataset.id;
+    a.classList.add('buscando');
+    try {
+      if (!id && s && s.db) id = await buscarId(s, a.dataset.codigo, Number(a.dataset.t) || 0, a.dataset.dia);
+    } catch (error) { console.warn(error); }
+    a.classList.remove('buscando');
+    if (!id) {
+      if (pestana) pestana.close();
+      toast(`No encontré el pedido ${a.dataset.codigo}. Probá buscar ese código en Buscar pedidos.`);
+      return;
+    }
+    a.dataset.id = id;
+    if (local) {
+      a.href = 'buscarPedidos.html?id=' + encodeURIComponent(id);
+      if (pestana) pestana.location.href = a.href; else window.open(a.href, '_blank');
+      return;
+    }
+    try { await navigator.clipboard.writeText(id); } catch (_) {}
+    toast(`Es un pedido de ${s ? s.nombre : 'otra sucursal'}: se abre desde una caja de esa sucursal. Copié su ID.`);
+  }, true);
+
   function filaEvento(e, buscado, o) {
     o = o || {};
     const ok = e.cat === 'PEDIDO' && /✔/.test(e.texto);
@@ -1189,12 +1286,16 @@
     const sevMarca = o.sinMarca ? null : marcados.get(e);
     const det = e.detalle.length ? '<ul>' + e.detalle.map((d) => `<li>${resaltar(d, buscado)}</li>`).join('') + '</ul>' : '';
     const conDia = o.conDia !== false;
+    const ped = pedidoDe(e);
+    const link = ped ? `<a class="ev-ped" target="_blank" rel="noopener" href="${ped.id && ped.pv === pvLocal ? 'buscarPedidos.html?id=' + encodeURIComponent(ped.id) : '#'}"` +
+      ` data-pv="${esc(ped.pv)}" data-codigo="${esc(ped.codigo)}" data-id="${esc(ped.id)}" data-t="${e.t}" data-dia="${esc(e.dia)}"` +
+      ` title="Abrir el pedido ${esc(ped.codigo)} en otra pestaña">Ver pedido ${esc(ped.codigo)} ↗</a>` : '';
     return `<div class="ev${ok ? ' ok' : ''}${mal ? ' mal' : ''}${o.clave ? ' clave' : ''}${sevMarca && sevMarca !== 'baja' ? ' con-alerta ' + sevMarca : ''}">` +
       `<span class="ev-h">${conDia ? `<small>${esc(RA.nombreDia(e.dia, false))}</small>` : ''}${esc(e.hora)}</span>` +
       (o.sinEquipo ? `<span class="ev-eq ev-c">${e.ventana && e.ventana !== '--' ? `<span class="cat">${esc(e.ventana)}</span>` : ''}</span>` : `<span class="ev-eq ev-c">${etiquetaEquipo(e.pv, e.eq)}</span>`) +
       `<span class="ev-u${e.usuario === 'sistema' ? ' sistema' : ''}" title="${esc(e.usuario)}">${resaltar(e.usuario, buscado)}</span>` +
       `<span><span class="cat cat-${esc(e.cat)}">${esc(e.cat)}</span></span>` +
-      `<div class="ev-t">${e.pantalla ? `<span class="pant">${esc(e.pantalla)}</span>` : ''}<span class="tp">${resaltar(e.texto, buscado)}</span>${det}</div>` +
+      `<div class="ev-t">${e.pantalla ? `<span class="pant">${esc(e.pantalla)}</span>` : ''}<span class="tp">${resaltar(ped ? ped.texto : e.texto, buscado)}</span>${link}${det}</div>` +
       `</div>`;
   }
 
