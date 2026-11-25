@@ -1605,7 +1605,7 @@ function getTipoCliente() {
     });
 
     // El banner de "sin coincidencias" reutiliza el flujo del candado, que ya
-    // decide entre pedir la contraseña o activar directo en modo Whatsapp.
+    // decide entre pedir la contraseña o activar directo en modo Whatsapp o Admin.
     const scanNotFoundBtn = document.getElementById('scanNotFoundBtn');
     if (scanNotFoundBtn) {
       scanNotFoundBtn.addEventListener('click', function() {
@@ -5103,6 +5103,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         desactivarModoManual();
       } else if (busquedaManualPersistente) {
         // En modo Whatsapp el usuario ya se autenticó: puede reactivarla libremente
+        activarModoManual();
+      } else if (mostrarClientesAdmin) {
+        // En modo Admin el usuario ya validó su clave personal: no se pide
+        // la contraseña de búsqueda manual.
         activarModoManual();
       } else {
         abrirModal();
