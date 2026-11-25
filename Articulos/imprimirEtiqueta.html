@@ -119,6 +119,10 @@ body{
 .page-head .ttl{display:flex;flex-direction:column;gap:4px}
 .page-head h1{font-size:1.4rem;font-weight:800;letter-spacing:-.03em}
 .page-head .count{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.precios-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.precios-hora{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.precios-hora b{color:var(--text)}
+.precios-hora.viejo,.precios-hora.viejo b{color:var(--amber);font-weight:700}
 
 /* ====== CARD ====== */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
@@ -373,6 +377,13 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
     <div class="ttl">
       <h1>Etiquetas de precio</h1>
       <span class="count" id="pageCount">Cargando artículos…</span>
+    </div>
+    <div class="precios-info">
+      <span class="precios-hora" id="preciosHora" title="Momento en que se leyeron los precios de Google Sheets. Es la misma fecha y hora que sale impresa en la etiqueta.">Precios cargados: —</span>
+      <button class="tool-btn" id="refreshPreciosBtn" type="button" title="Volver a leer los precios de Google Sheets">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Actualizar precios
+      </button>
     </div>
   </div>
 
@@ -643,6 +654,59 @@ async function loadSheets(){
   }).filter(a => a.codigo && a.nombre);
   // orden por código (descendente / invertido)
   articulos.sort((x, y) => String(y.codigo).localeCompare(String(x.codigo), 'es', { numeric:true }));
+  preciosCargadosEn = new Date();
+  renderPreciosHora();
+}
+
+// ============================================================
+//  Hora de carga de precios + actualización manual
+// ============================================================
+// Los precios se leen una sola vez; si la pestaña queda abierta mucho tiempo pueden
+// quedar viejos. Se muestra cuándo se leyeron (y se pinta en ámbar pasado PRECIOS_VIEJOS_MIN)
+// y esa misma hora es la que sale impresa en la etiqueta.
+let preciosCargadosEn = null;
+const PRECIOS_VIEJOS_MIN = 30;
+
+function renderPreciosHora(){
+  const el = $('preciosHora');
+  if(!preciosCargadosEn){ el.textContent = 'Precios cargados: —'; el.classList.remove('viejo'); return; }
+  const min = Math.floor((Date.now() - preciosCargadosEn.getTime()) / 60000);
+  const viejo = min >= PRECIOS_VIEJOS_MIN;
+  el.innerHTML = 'Precios cargados: <b>' + formatFechaEtiqueta(preciosCargadosEn) + '</b>' +
+    (viejo ? ' · hace ' + (min >= 60 ? Math.floor(min / 60) + ' h' : min + ' min') + ', conviene actualizar' : '');
+  el.classList.toggle('viejo', viejo);
+}
+setInterval(renderPreciosHora, 60000);
+
+async function actualizarPrecios(){
+  const btn = $('refreshPreciosBtn');
+  btn.disabled = true;
+  showBlock('Actualizando precios…');
+  try{
+    await loadSheets();
+    // La selección guarda copias de los artículos: se reemplazan por los recién leídos
+    // para que se impriman con el precio nuevo. Los que ya no existen se quitan.
+    let quitados = 0;
+    for(const codigo of [...selected.keys()]){
+      const nuevo = articulos.find(a => a.codigo === codigo);
+      if(nuevo) selected.set(codigo, nuevo);
+      else { selected.delete(codigo); quitados++; }
+    }
+    if(lastPreviewCodigo && selected.has(lastPreviewCodigo)) updatePreview(selected.get(lastPreviewCodigo));
+    else if(selected.size){ const ult = [...selected.values()].pop(); lastPreviewCodigo = ult.codigo; updatePreview(ult); }
+    else { lastPreviewCodigo = null; hidePreview(); }
+    recomputeFiltered();
+    renderPage();
+    updateActionBar();
+    showToast('Precios actualizados' + (quitados ? ' · ' + quitados + ' artículo(s) ya no existen y se quitaron de la selección' : ''), 'ok');
+  }catch(err){
+    console.error('Actualizar precios:', err);
+    showToast('No se pudieron actualizar los precios. Siguen los de las ' + (preciosCargadosEn ? formatFechaEtiqueta(preciosCargadosEn) : '—'), 'err');
+  }finally{
+    hideBlock();
+    btn.disabled = false;
+    btn.blur();
+  }
 }
 
 // ============================================================
@@ -816,7 +880,7 @@ function updatePreview(item){
   $('previewName').textContent = item.nombre;
   $('previewCode').textContent = formatCodigoLinea(item);
   $('previewPrice').textContent = formatPriceDisplay(item.precio);
-  $('previewDate').textContent = getTodayString();
+  $('previewDate').textContent = getFechaEtiqueta();
 }
 function hidePreview(){
   $('labelPreview').style.display = 'none';
@@ -838,12 +902,14 @@ function formatCodigoLinea(item){
   return cb ? item.codigo + ' - ' + cb : item.codigo;
 }
 
-function getTodayString(){
-  const d = new Date();
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yy = String(d.getFullYear());
-  return dd + '/' + mm + '/' + yy;
+// Fecha impresa en la etiqueta: día/mes hora:minutos del momento en que se LEYERON
+// los precios (no del momento de imprimir), así una etiqueta con precio viejo se delata sola.
+function formatFechaEtiqueta(d){
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getDate()) + '/' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function getFechaEtiqueta(){
+  return formatFechaEtiqueta(preciosCargadosEn || new Date());
 }
 
 // ============================================================
@@ -868,7 +934,7 @@ function generatePDF(){
     const format = [w, h];
 
     const doc = new jsPDF({ orientation, unit:'mm', format });
-    const today = getTodayString();
+    const today = getFechaEtiqueta();
 
     // Agrupar en páginas
     const pages = [];
@@ -1189,7 +1255,7 @@ async function imprimirPOS(){
     const printer = await seleccionarImpresoraPOS();
     if(!printer) throw new Error('No se encontró ninguna impresora.');
     const config = qz.configs.create(printer);
-    const today = getTodayString();
+    const today = getFechaEtiqueta();
 
     for(const item of items){
       showBlock(`Imprimiendo ${impresas + 1} de ${items.length}…`);
@@ -1327,6 +1393,9 @@ $('generateBtn').addEventListener('click', generatePDF);
 
 // Imprimir en la térmica (QZ Tray)
 $('posBtn').addEventListener('click', imprimirPOS);
+
+// Actualizar precios a mano
+$('refreshPreciosBtn').addEventListener('click', actualizarPrecios);
 
 // Paginación
 $('pagerPrev').addEventListener('click', () => gotoPage(page - 1));
