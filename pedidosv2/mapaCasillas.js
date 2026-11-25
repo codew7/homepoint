@@ -5,7 +5,10 @@
 // casillas (columnas A, B, C... y filas 1, 2, 3...) y muestra en cada una el
 // pedido que la ocupa con su avance de armado.
 //
-// Es SOLO lectura sobre los pedidos: nunca escribe en pedidos/<id>. Lo unico
+// Tambien cruza los traspasos a Caseros creados desde Articulos necesarios
+// (traspasos/<id>/cubre) para mostrar que mercaderia espera cada pedido.
+//
+// Es SOLO lectura sobre los pedidos y traspasos: nunca escribe en ellos. Lo unico
 // que guarda es el tamano de la cuadricula, en casillasMapa (4 valores).
 //
 // Se carga recien cuando se pide desde el menu de Pedidos pendientes
@@ -257,6 +260,57 @@
     .mc-pct svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
     .mc-items { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
+    /* Traspasos: marca en la casilla */
+    .mc-tr {
+      margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border-radius: 6px;
+      background: var(--int-soft); color: var(--int);
+      font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .2px; white-space: nowrap;
+    }
+    .mc-tr svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+    .mc-tr--falta { background: var(--bad-soft); color: var(--bad); }
+    .mc-tr--llego { background: var(--ok-soft); color: var(--ok); }
+    .mc-tr + .mc-multi { margin-left: 0; }
+    .mc-tr--espera svg { animation: mcRuta 1.6s ease-in-out infinite; }
+    @keyframes mcRuta { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(1.5px); } }
+
+    .mc-leyenda-sep { flex: none; width: 1px; height: 20px; margin: 0 4px; background: var(--line); }
+    .mc-f-tr { --mc-tono: var(--int); --mc-soft: var(--int-soft); }
+    .mc-filtro.mc-f-tr svg { width: 15px; height: 15px; stroke-width: 2; stroke-linejoin: round; }
+
+    /* Traspasos: detalle en la ficha */
+    .mc-trs { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .mc-trs-tit {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--ink-3);
+    }
+    .mc-trs-tit svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+    .mc-trs-aviso { padding: 10px 12px; border-radius: var(--r2); background: var(--warn-soft); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+    .mc-tr-grupo { border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; }
+    .mc-tr-cab {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--surface-2);
+      font-size: 12px; font-weight: 600; color: var(--ink-3);
+    }
+    .mc-tr-cab b { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+    .mc-tr-cab time { font-variant-numeric: tabular-nums; }
+    .mc-tr-cab a { margin-left: auto; color: var(--accent); font-weight: 700; text-decoration: none; }
+    .mc-tr-cab a:hover { text-decoration: underline; }
+    .mc-tr-chip { height: 20px; padding: 0 7px; border-radius: 6px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; }
+    .mc-tr-chip.is-pendiente { background: var(--int-soft); color: var(--int); }
+    .mc-tr-chip.is-preparando { background: var(--warn-soft); color: var(--warn); }
+    .mc-tr-chip.is-enviado { background: var(--ok-soft); color: var(--ok); }
+    .mc-tr-art {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
+      padding: 8px 12px; border-top: 1px solid var(--line-2);
+    }
+    .mc-tr-nom { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mc-tr-u { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); }
+    .mc-tr-u span { text-decoration: underline dotted; cursor: help; }
+    .mc-tr-est { grid-row: span 2; font-size: 11.5px; font-weight: 700; text-align: right; }
+    .mc-tr-est.is-ok { color: var(--ok); }
+    .mc-tr-est.is-espera { color: var(--int); }
+    .mc-tr-est.is-parcial { color: var(--warn); }
+    .mc-tr-est.is-falta { color: var(--bad); }
+
     /* Seleccion y filtro: lo que no corresponde se apaga */
     .mc-celda.is-dim { opacity: .28; }
     .mc-celda--vacia.is-dim { opacity: .45; }
@@ -297,7 +351,8 @@
     }
     .mc-box.con-hoja .mc-velo { opacity: 1; pointer-events: auto; }
     .mc-hoja {
-      position: absolute; left: 50%; bottom: 16px; z-index: 6; overflow: hidden;
+      position: absolute; left: 50%; bottom: 16px; z-index: 6;
+      max-height: calc(100% - 32px); overflow-y: auto; overscroll-behavior: contain;
       width: min(440px, calc(100% - 28px)); padding: 22px 22px 18px;
       background: var(--surface); border-radius: var(--r3); box-shadow: var(--sh3);
       transform: translate(-50%, calc(100% + 30px)); visibility: hidden;
@@ -354,14 +409,15 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .mc-celda, .mc-hoja, .mc-velo, .mc-barra i { transition: none; }
-      .mc-grid.mc-entra .mc-celda, .mc-celda.is-cambio, .mc-tira i, .mc-vivo i::after { animation: none; }
+      .mc-grid.mc-entra .mc-celda, .mc-celda.is-cambio, .mc-tira i, .mc-vivo i::after, .mc-tr--espera svg { animation: none; }
     }
   `;
 
   const IC_GRILLA = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"></rect><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"></rect><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"></rect><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"></rect></svg>';
   const IC_AJUSTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="17" x2="20" y2="17"></line><circle cx="9" cy="7" r="2.4" fill="var(--surface)"></circle><circle cx="15" cy="17" r="2.4" fill="var(--surface)"></circle></svg>';
   const IC_CERRAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>';
-  const IC_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  const IC_CAMION = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5h11v10h-11z"></path><path d="M13.5 9.5h4l3.5 3.5v3.5h-7.5"></path><circle cx="6.5" cy="17.5" r="1.7"></circle><circle cx="17" cy="17.5" r="1.7"></circle></svg>';
+  const IC_CHECK ='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
   const HTML = `
     <div class="mc-box" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="mcTitulo">
@@ -383,6 +439,8 @@
         <button type="button" class="mc-filtro mc-t-armando" data-filtro="armando" aria-pressed="false"><i></i>Armando<span data-cnt="armando">0</span></button>
         <button type="button" class="mc-filtro mc-t-completo" data-filtro="completo" aria-pressed="false"><i></i>Completo<span data-cnt="completo">0</span></button>
         <button type="button" class="mc-filtro mc-t-controlado" data-filtro="controlado" aria-pressed="false">${IC_CHECK}Controlado<span data-cnt="controlado">0</span></button>
+        <i class="mc-leyenda-sep"></i>
+        <button type="button" class="mc-filtro mc-f-tr" data-filtro="traspaso" aria-pressed="false" title="Pedidos con mercadería pedida a Caseros que todavía no llegó">${IC_CAMION}Esperando traspaso<span data-cnt="traspaso">0</span></button>
         <span class="mc-leyenda-ayuda">Tocá un estado para resaltarlo</span>
       </div>
       <div class="mc-aviso" id="mcAviso" hidden>
@@ -433,6 +491,14 @@
   let gridClave = '';         // rango de la cuadricula armada
   let seleccion = null;       // id del pedido elegido
   let filtro = null;          // estado resaltado desde la leyenda
+
+  // Misma clave que usan Articulos necesarios y Traspasos para cada codigo.
+  const claveSegura = (codigo) => String(codigo).replace(/[.#$\/\[\]]/g, '_');
+  const TR_ESTADOS = { PENDIENTE: 'Pendiente', PREPARANDO: 'Preparando', ENVIADO: 'Enviado' };
+  const linkTraspaso = (id) => new URL('../Traspasos/index.html?tr=' + encodeURIComponent(id), location.href).href;
+  const fechaCorta = (ts) => ts
+    ? new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
 
   // ------------------------------------------
   // CONFIGURACION
@@ -509,8 +575,80 @@
       controlado: controlado,
       embalado: p.embalado === true,
       status: p.status,
-      timestamp: p.timestamp || 0
+      timestamp: p.timestamp || 0,
+      // Lineas por articulo, para cruzarlas con los traspasos.
+      lineas: validos.map(it => {
+        const codigo = it.codigo || 'SIN_CODIGO';
+        return { k: claveSegura(codigo), nombre: it.nombre || codigo, cantidad: parseInt(it.cantidad, 10) || 0, listo: it.listo === 'y' };
+      }),
+      tr: [],
+      trEstado: ''
     };
+  }
+
+  // ------------------------------------------
+  // TRASPASOS DE CASEROS
+  // ------------------------------------------
+  // Los traspasos creados desde Articulos necesarios (fuente 'pedidos')
+  // anotan en cubre/<clave>/<pedidoId> cuantas unidades son para cada pedido.
+  // Los que no lo tienen (anteriores a ese dato, o articulos agregados despues
+  // en la app Traspasos) se toman, igual que en necesarios, como pedidos para
+  // los pedidos que ya existian al crearlos: esos quedan marcados "estimado".
+  // Si Caseros envio menos de lo pedido, lo que llego se reparte primero entre
+  // los pedidos mas antiguos.
+  function asociarTraspasos(lista) {
+    lista.forEach(p => { p.tr = []; p.trEstado = ''; });
+    if (!vivo || !vivo.tr) return;
+    const porId = new Map(lista.map(p => [p.id, p]));
+    vivo.tr.forEach(ch => {
+      const t = ch.val();
+      if (!t || t.fuente !== 'pedidos') return;
+      const estado = t.estado === 'RECIBIDO' ? 'ENVIADO' : t.estado;
+      if (estado !== 'PENDIENTE' && estado !== 'PREPARANDO' && estado !== 'ENVIADO') return;
+      Object.keys(t.items || {}).forEach(k => {
+        const it = t.items[k] || {};
+        const cubre = t.cubre && t.cubre[k];
+        const asig = [];
+        if (cubre) {
+          Object.keys(cubre).forEach(pid => {
+            const p = porId.get(pid);
+            const u = Number(cubre[pid]) || 0;
+            if (p && u > 0) asig.push({ p, u, estimado: false });
+          });
+        } else {
+          lista.forEach(p => {
+            if ((p.timestamp || 0) > (t.creadoEn || 0)) return;
+            const u = p.lineas.filter(l => l.k === k && !l.listo).reduce((s, l) => s + l.cantidad, 0);
+            if (u > 0) asig.push({ p, u, estimado: true });
+          });
+        }
+        asig.sort((a, b) => (a.p.timestamp || 0) - (b.p.timestamp || 0));
+        let quedan = Number(it.enviada) || 0;
+        asig.forEach(a => {
+          const lineas = a.p.lineas.filter(l => l.k === k);
+          if (!lineas.length) return; // ya no esta en el pedido
+          let llega = null;
+          if (estado === 'ENVIADO') { llega = Math.min(a.u, Math.max(0, quedan)); quedan -= llega; }
+          a.p.tr.push({
+            id: ch.key, numero: t.numero || 'TR', estado: estado,
+            creadoEn: t.creadoEn || 0, enviadoEn: t.enviadoEn || 0,
+            nombre: it.nombre || lineas[0].nombre, unidades: a.u, llega: llega, motivo: it.motivo || '',
+            estimado: a.estimado, empacado: lineas.every(l => l.listo)
+          });
+        });
+      });
+    });
+    lista.forEach(p => { p.trEstado = estadoTr(p.tr); });
+  }
+
+  // espera: hay mercaderia en camino que el pedido todavia necesita.
+  // falta: Caseros mando menos de lo pedido. llego: ya esta todo para armar.
+  function estadoTr(arr) {
+    const rel = arr.filter(a => !a.empacado);
+    if (!rel.length) return '';
+    if (rel.some(a => a.estado !== 'ENVIADO')) return 'espera';
+    if (rel.some(a => a.llega < a.unidades)) return 'falta';
+    return 'llego';
   }
 
   function reconstruir() {
@@ -523,6 +661,7 @@
       });
     });
     lista.sort((a, b) => a.timestamp - b.timestamp);
+    asociarTraspasos(lista);
     pedidos = lista;
     porCelda = new Map();
     lista.forEach(p => p.celdas.forEach(c => {
@@ -553,6 +692,24 @@
       });
       v.subs.push([q, cb]);
     });
+    // Traspasos: misma consulta que Articulos necesarios (los ultimos 100).
+    // Si el usuario no tiene acceso, el mapa sigue sin esa informacion.
+    const qTr = db.ref('traspasos').limitToLast(100);
+    const cbTr = qTr.on('value', snap => {
+      if (vivo !== v) return;
+      v.tr = snap;
+      v.trError = false;
+      if (!v.snaps.ABIERTO || !v.snaps.CERRADO) return;
+      clearTimeout(pintarTimer);
+      pintarTimer = setTimeout(() => { reconstruir(); pintar(); }, PAUSA_MS);
+    }, err => {
+      if (vivo !== v) return;
+      console.warn('Mapa de casillas: no se pudieron leer los traspasos', err);
+      v.tr = null;
+      v.trError = true;
+      if (v.snaps.ABIERTO && v.snaps.CERRADO) { reconstruir(); pintar(); }
+    });
+    v.subs.push([qTr, cbTr]);
   }
 
   function marcarVivo(ok) {
@@ -578,6 +735,32 @@
     return '<span class="mc-pct">' + p.pct + '<small>%</small></span>';
   }
 
+  // Estado de traspaso de la casilla: el mas urgente entre sus pedidos.
+  const TR_PRIORIDAD = { espera: 3, falta: 2, llego: 1 };
+  function trCelda(lista) {
+    let estado = '';
+    lista.forEach(p => { if ((TR_PRIORIDAD[p.trEstado] || 0) > (TR_PRIORIDAD[estado] || 0)) estado = p.trEstado; });
+    if (!estado) return null;
+    const numeros = [];
+    lista.forEach(p => p.tr.forEach(a => {
+      if (a.empacado || numeros.includes(a.numero)) return;
+      if (estado === 'espera' ? a.estado === 'ENVIADO' : a.estado !== 'ENVIADO') return;
+      numeros.push(a.numero);
+    }));
+    return { estado: estado, numeros: numeros };
+  }
+
+  const TR_TITULO = {
+    espera: 'Esperando mercadería de Caseros',
+    falta: 'Caseros envió menos de lo pedido',
+    llego: 'Llegó la mercadería de Caseros'
+  };
+  function trBadge(tr, compacto) {
+    const txt = compacto ? '' : (tr.numeros.length === 1 ? tr.numeros[0] : tr.numeros.length + ' TR');
+    return '<span class="mc-tr mc-tr--' + tr.estado + '" title="' + escapeHtml(TR_TITULO[tr.estado] + ' (' + tr.numeros.join(', ') + ')') + '">' +
+      IC_CAMION + (txt ? '<span>' + escapeHtml(txt) + '</span>' : '') + '</span>';
+  }
+
   function contenidoCelda(celda, lista) {
     if (!lista || !lista.length) {
       return { clase: 'mc-celda mc-celda--vacia', p: 0, html: '<span class="mc-coord">' + celda + '</span>', firma: '' };
@@ -585,6 +768,8 @@
     const p = lista[0];
     const multi = lista.length > 1;
     let html = '<span class="mc-cab"><span class="mc-coord">' + celda + '</span>';
+    const tr = trCelda(lista);
+    if (tr) html += trBadge(tr, multi);
     if (multi) html += '<span class="mc-multi" title="Hay ' + lista.length + ' pedidos en esta casilla">×' + lista.length + '</span>';
     html += '</span>';
     html += '<span class="mc-nombre">' + escapeHtml(p.nombre) + '</span>';
@@ -597,7 +782,9 @@
       p: p.estado === 'controlado' ? 100 : p.pct,
       html: html,
       estado: p.estado,
-      firma: lista.map(x => x.id + ':' + x.nombre + ':' + x.listos + '/' + x.total + ':' + x.estado + ':' + x.celdas.length).join('|'),
+      tr: tr ? tr.estado : '',
+      firma: lista.map(x => x.id + ':' + x.nombre + ':' + x.listos + '/' + x.total + ':' + x.estado + ':' + x.celdas.length).join('|') +
+        (tr ? '#' + tr.estado + ':' + tr.numeros.join(',') : ''),
       ids: lista.map(x => x.id)
     };
   }
@@ -653,6 +840,7 @@
       if (ocupada) {
         nodo.dataset.ids = d.ids.join(',');
         nodo.dataset.estado = d.estado;
+        if (d.tr) nodo.dataset.tr = d.tr; else delete nodo.dataset.tr;
         const p = porCelda.get(celda)[0];
         nodo.setAttribute('aria-label', 'Casilla ' + celda + ': ' + p.nombre + ', ' +
           (p.controlado ? 'controlado' : p.pct + '% armado'));
@@ -671,6 +859,7 @@
       } else {
         delete nodo.dataset.ids;
         delete nodo.dataset.estado;
+        delete nodo.dataset.tr;
         nodo.removeAttribute('aria-label');
         nodo.style.removeProperty('--mc-p');
       }
@@ -691,6 +880,7 @@
     const n = pedidos.length;
     const cuenta = { nuevo: 0, armando: 0, completo: 0, controlado: 0 };
     pedidos.forEach(p => { cuenta[p.estado]++; });
+    cuenta.traspaso = pedidos.filter(p => p.trEstado === 'espera').length;
     const listos = cuenta.completo + cuenta.controlado;
     const libres = Math.max(0, totalCasillas - ocupadas);
     const pctOcup = totalCasillas ? Math.round(ocupadas / totalCasillas * 100) : 0;
@@ -746,7 +936,8 @@
     grid.querySelectorAll('.mc-celda').forEach(el => {
       const ids = (el.dataset.ids || '').split(',');
       const sel = !!seleccion && ids.includes(seleccion);
-      const dim = seleccion ? !sel : (filtro ? el.dataset.estado !== filtro : false);
+      const coincide = filtro === 'traspaso' ? el.dataset.tr === 'espera' : el.dataset.estado === filtro;
+      const dim = seleccion ? !sel : (filtro ? !coincide : false);
       el.classList.toggle('is-sel', sel);
       el.classList.toggle('is-dim', dim);
     });
@@ -782,10 +973,53 @@
       '<div class="mc-ficha-av"><b>' + p.pct + '<small>%</small></b><span>' + p.listos + ' de ' + p.total + ' empacados</span>' +
       '<div class="mc-barra"><i></i></div></div>' +
       '<div class="mc-ficha-tags">' + tags.join('') + '</div>' +
+      fichaTraspasos(p) +
       '<div class="modal-btns">' +
         '<button type="button" class="btn-cancel" data-accion="cerrar">Cerrar</button>' +
         '<button type="button" class="btn-primary" data-accion="abrir">Abrir pedido</button>' +
       '</div>';
+  }
+
+  // Estado de un articulo del traspaso para este pedido: [clase, texto].
+  function estadoArtTr(a) {
+    if (a.empacado) return ['ok', 'Empacado'];
+    if (a.estado === 'PENDIENTE') return ['espera', 'Pedido a Caseros'];
+    if (a.estado === 'PREPARANDO') return ['espera', 'Caseros lo prepara'];
+    if (a.llega >= a.unidades) return ['ok', 'Llegó'];
+    if (a.llega > 0) return ['parcial', 'Llegaron ' + a.llega + ' de ' + a.unidades];
+    return ['falta', a.motivo === 'SIN_STOCK' ? 'Sin stock en Caseros' : 'No se envió'];
+  }
+
+  function fichaTraspasos(p) {
+    if (vivo && vivo.trError) {
+      return '<div class="mc-trs"><div class="mc-trs-aviso">No se pudieron leer los traspasos. Revisá la conexión o que tu usuario tenga acceso a Traspasos.</div></div>';
+    }
+    if (!p.tr.length) return '';
+    const grupos = new Map();
+    p.tr.forEach(a => {
+      if (!grupos.has(a.id)) grupos.set(a.id, []);
+      grupos.get(a.id).push(a);
+    });
+    const orden = [...grupos.values()].sort((x, y) => y[0].creadoEn - x[0].creadoEn);
+    return '<div class="mc-trs"><div class="mc-trs-tit">' + IC_CAMION + 'Mercadería pedida a Caseros</div>' +
+      orden.map(arts => {
+        const t = arts[0];
+        const fecha = fechaCorta(t.estado === 'ENVIADO' ? t.enviadoEn : t.creadoEn);
+        return '<div class="mc-tr-grupo">' +
+          '<div class="mc-tr-cab"><b>' + escapeHtml(t.numero) + '</b>' +
+            '<span class="mc-tr-chip is-' + t.estado.toLowerCase() + '">' + TR_ESTADOS[t.estado] + '</span>' +
+            (fecha ? '<time>' + fecha + '</time>' : '') +
+            '<a href="' + escapeHtml(linkTraspaso(t.id)) + '" target="_blank" rel="noopener">Ver en Traspasos</a></div>' +
+          arts.map(a => {
+            const [cls, txt] = estadoArtTr(a);
+            return '<div class="mc-tr-art"><span class="mc-tr-nom">' + escapeHtml(a.nombre) + '</span>' +
+              '<span class="mc-tr-est is-' + cls + '">' + escapeHtml(txt) + '</span>' +
+              '<span class="mc-tr-u">' + a.unidades + ' u.' +
+              (a.estimado ? ' · <span title="Este traspaso no detalla a qué pedido va cada unidad: se asume para los pedidos que ya existían al crearlo.">estimado</span>' : '') +
+              '</span></div>';
+          }).join('') +
+        '</div>';
+      }).join('') + '</div>';
   }
 
   function abrirFicha(id) {
