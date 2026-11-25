@@ -314,6 +314,36 @@
     "2027": { ".read": "auth != null" },
     "2028": { ".read": "auth != null" },
 
+    "catalogoCMS": {
+      "publicado": {
+        ".read": true,
+        "$cat": {
+          ".write": "auth != null && $cat.matches(/^(mayorista|interior)$/) && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root'",
+          ".validate": "newData.hasChildren(['version'])"
+        }
+      },
+      "borrador": {
+        ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root'",
+        "$cat": {
+          ".write": "auth != null && $cat.matches(/^(mayorista|interior)$/) && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root'"
+        }
+      },
+      "historial": {
+        ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root'",
+        "$cat": {
+          ".indexOn": ["fecha"],
+          "$version": {
+            ".write": "auth != null && $cat.matches(/^(mayorista|interior)$/) && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root' && (!data.exists() || !newData.exists())",
+            ".validate": "!newData.exists() || newData.hasChildren(['config', 'autor', 'fecha'])"
+          }
+        }
+      },
+      "plantillas": {
+        ".read": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root'",
+        ".write": "auth != null && root.child('admins').child(auth.token.email.replace('.', ',')).child('rol').val() === 'root'"
+      }
+    },
+
     "dolar": {
       ".read": true,
       ".write": "auth != null && auth.token.email !== 'homepoint2@homepoint.com' && root.child('admins').child(auth.token.email.replace('.', ',')).exists()"
