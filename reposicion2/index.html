@@ -791,6 +791,9 @@ function guardarCfg() { LS.set('repo2Config', CFG); }
 
 let PUESTO = LS.get('repo2Puesto', '');
 let NOMBRE = LS.get('repo2Nombre', '');
+// Enlace directo: ?puesto=salon o ?puesto=deposito fija el puesto y entra sin preguntar.
+const PUESTO_URL = new URLSearchParams(location.search).get('puesto');
+if (PUESTO_URL === 'salon' || PUESTO_URL === 'deposito') { PUESTO = PUESTO_URL; LS.set('repo2Puesto', PUESTO); }
 
 // ---------------------------------------------------------------- firebase
 firebase.initializeApp(firebaseConfig);
@@ -937,7 +940,7 @@ function mostrarArranque(paso) {
 document.querySelectorAll('.puesto').forEach(b => b.addEventListener('click', () => {
   activarAudio();
   PUESTO = b.dataset.p; LS.set('repo2Puesto', PUESTO);
-  if (NOMBRE) entrar(); else mostrarArranque('nombre');
+  entrar();
 }));
 $('arrVolver').addEventListener('click', () => mostrarArranque('puesto'));
 
@@ -973,6 +976,8 @@ $('nombres').addEventListener('click', e => {
 });
 
 function entrar() {
+  // Sin nombre elegido se anota con el nombre del puesto (no hace falta elegir).
+  NOMBRE = LS.get('repo2Nombre', '') || (PUESTO === 'salon' ? 'Salón' : 'Depósito');
   $('arranque').hidden = true;
   $('app').hidden = false;
   document.body.dataset.puesto = PUESTO;
@@ -1385,7 +1390,7 @@ function htmlDeposito() {
 }
 
 // Lecturas del Lector: lo que hay que resolver (no encontrado, varios
-// artículos) y la última lectura en grande, para revisar que sea lo correcto.
+// artículos). Lo leído bien ya aparece en el listado, y se borra desde ahí.
 function htmlLecturas() {
   const lects = Object.keys(LECT).map(id => Object.assign({ id }, LECT[id])).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const pend = lects.filter(l => (l.resultado === 'varios' || l.resultado === 'no-encontrado') && !l.resuelto && ahora() - (l.ts || 0) < 12 * 3600e3);
@@ -1409,20 +1414,6 @@ function htmlLecturas() {
       }
     });
     h += '</div></section>';
-  }
-  // La última lectura en grande (si fue hace menos de 30 minutos).
-  const u = lects[0];
-  const it = u && (u.resultado === 'ok' || u.resultado === 'ya') && u.itemId ? ITEMS[u.itemId] : null;
-  if (it && ahora() - (u.ts || 0) < 30 * 60000) {
-    const a = art(it.codigo);
-    const quitar = it.estado === 'ofrecido';
-    h += '<section class="lec ok" data-id="' + it.id + '"><div class="ul-cap">Última lectura · <span data-hace="' + u.ts + '">' + hace(u.ts) + '</span></div>' +
-      '<div class="ul">' + foto(a) + '<div style="min-width:0"><div class="ul-n">' + esc(a.n) + '</div>' +
-        '<div class="ul-m">' + pill(it.estado) + '</div>' +
-        '<div class="ul-m">Leyó <code>' + esc(u.texto) + '</code>' + (u.texto !== a.c ? ' → <code>' + esc(a.c) + '</code>' : '') + '</div>' +
-        (u.resultado === 'ya' ? '<div class="ul-m">Ya estaba en la lista: no se repitió.</div>' : '') + '</div></div>' +
-      (quitar ? '<div class="lec-acc"><button class="btn btn-red" type="button" data-acc="dep-cancelar" data-id="' + it.id + '">Se leyó mal · quitar</button></div>' : '') +
-    '</section>';
   }
   return h;
 }
@@ -2462,8 +2453,8 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 
 // ---------------------------------------------------------------- inicio
 cargarCatalogo();
-if (PUESTO && NOMBRE) entrar();
-else mostrarArranque(PUESTO ? 'nombre' : 'puesto');
+if (PUESTO) entrar();
+else mostrarArranque('puesto');
 </script>
 </body>
 </html>
