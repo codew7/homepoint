@@ -2174,6 +2174,20 @@
     }
     .print-menu-item:hover .mi-ic, .msg-dropdown-item:hover .mi-ic { stroke: var(--ink); }
     .msg-dropdown-item.disabled { opacity: .45; pointer-events: none; }
+    /* Interruptor "Validez 24 h" del menu de WhatsApp */
+    .msg-dropdown-item.msg-toggle { font-weight: 500; font-size: 12px; }
+    .msg-toggle .mt-sw {
+      margin-left: auto; flex: none; position: relative;
+      width: 30px; height: 17px; border-radius: 9px;
+      background: var(--line-2); transition: background .15s;
+    }
+    .msg-toggle .mt-sw::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 13px; height: 13px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s;
+    }
+    .msg-toggle[aria-checked="true"] .mt-sw { background: var(--ok); }
+    .msg-toggle[aria-checked="true"] .mt-sw::after { transform: translateX(13px); }
     .print-menu-item + .print-menu-item,
     .msg-dropdown-item + .msg-dropdown-item { border-top: 1px solid var(--line-2); }
     .print-menu-item:hover, .msg-dropdown-item:hover { background: var(--surface-2); color: var(--ink); }
@@ -6583,6 +6597,7 @@
               <a class="msg-dropdown-item disabled" id="dockPeekWa" target="_blank" rel="noopener" title="Sin tel&eacute;fono"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.3 9.3 0 0 1-3.3-.6L3 21l1.7-5A8.3 8.3 0 0 1 4 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"></path></svg><span>Abrir chat</span></a>
               <div class="msg-dropdown-item" data-msg="1"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg><span>Saludo inicial</span></div>
               <div class="msg-dropdown-item" data-msg="2"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span>Cotizaci&oacute;n</span></div>
+              <div class="msg-dropdown-item msg-toggle" id="msgToggleValidez" role="switch" aria-checked="false" title="Agrega &quot;Cotizaci&oacute;n v&aacute;lida por 24 horas&quot; al final de la cotizaci&oacute;n. Vale para todos los vendedores."><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 7v5l3 2"></path></svg><span>Validez 24 h</span><span class="mt-sw" aria-hidden="true"></span></div>
               <div class="msg-dropdown-item" data-msg="3"><svg class="mi-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 5 3h14l2 6"></path><path d="M3 9h18v1a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"></path><path d="M5 13v8h14v-8"></path><path d="M10 21v-5h4v5"></path></svg><span>Convertir a retiro</span></div>
             </div>
           </div>
@@ -16578,7 +16593,41 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         texto += '\n\nPodés revisar el detalle de tu pedido en este link:\n' +
           'https://www.home-point.com.ar/pedidos.html?id=' + pedidoId;
       }
+      if (pvValidez24h) texto += '\n\n_Cotización válida por 24 horas._';
       return texto;
+    }
+
+    // Leyenda "Cotización válida por 24 horas" al pie de la cotizacion (copiada
+    // con TOTAL FINAL o enviada por WhatsApp). Se prende/apaga desde el menu de
+    // WhatsApp del pedido y se guarda en Firebase, asi vale para todos los
+    // vendedores a la vez y se mantiene al recargar.
+    let pvValidez24h = false;
+    const pvValidezRef = db.ref('ajustes/cotizacionValidez24h');
+    function pvPintarValidez24h() {
+      const el = document.getElementById('msgToggleValidez');
+      if (el) el.setAttribute('aria-checked', pvValidez24h ? 'true' : 'false');
+    }
+    // Recien con sesion (las reglas piden auth), como el nodo alias; si Firebase
+    // cancela la escucha, se reintenta en el proximo login.
+    let pvValidezSuscrito = false;
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user || pvValidezSuscrito) return;
+      pvValidezSuscrito = true;
+      pvValidezRef.on('value', snap => { pvValidez24h = snap.val() === true; pvPintarValidez24h(); },
+        err => { pvValidezSuscrito = false; console.warn('ajustes/cotizacionValidez24h:', err); });
+    });
+    function pvToggleValidez24h() {
+      const nuevo = !pvValidez24h;
+      pvValidez24h = nuevo;
+      pvPintarValidez24h();
+      pvValidezRef.set(nuevo).then(() => {
+        showToast(nuevo ? 'Validez 24 h activada' : 'Validez 24 h desactivada');
+      }).catch(err => {
+        console.warn('No se pudo guardar validez 24 h:', err);
+        pvValidez24h = !nuevo;
+        pvPintarValidez24h();
+        showToast('No se pudo guardar el ajuste');
+      });
     }
 
     // Ultimos 6 caracteres del id del pedido (unico en la practica entre los
@@ -17766,6 +17815,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     msgDropdown.addEventListener('click', (e) => {
       const item = e.target.closest('.msg-dropdown-item');
       if (!item) return;
+      // El interruptor no cierra el menu: se ve el cambio y se puede seguir.
+      if (item.id === 'msgToggleValidez') { e.stopPropagation(); pvToggleValidez24h(); return; }
       msgDropdown.classList.remove('active');
       // "Abrir chat" es un <a> con su propio href: el navegador lo abre solo.
       if (!item.dataset.msg) return;
