@@ -117,19 +117,6 @@ svg { display: block; }
 .puesto span { color: var(--muted); font-size: 14.5px; }
 .puesto > svg { width: 20px; height: 20px; fill: none; stroke: var(--faint); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
-.arr-volver { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 700; font-size: 15px; padding: 8px 8px 8px 0; margin-bottom: 4px; }
-.arr-volver svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.nombres { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.nombre {
-  display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; background: var(--surface);
-  box-shadow: var(--sh-1), inset 0 0 0 1px var(--line); text-align: left; font-weight: 700; font-size: 16px; min-height: 64px;
-  transition: transform .14s var(--ease-out);
-}
-.nombre:active { transform: scale(.97); }
-.nombre.es-ultimo { box-shadow: var(--sh-1), inset 0 0 0 2px var(--ink); }
-.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px; flex: none; letter-spacing: .02em; }
-.nombre span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.arr-estado { color: var(--muted); padding: 24px 0; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
 
 /* ---------- Encabezado ---------- */
 #app { min-height: 100%; }
@@ -570,13 +557,6 @@ body[data-puesto="salon"] .quien-ic { background: var(--blu-s); color: var(--blu
       <em>Instalar</em>
     </button>
   </div>
-  <div id="arrNombre" hidden>
-    <button class="arr-volver" type="button" id="arrVolver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Puesto</button>
-    <h1 class="arr-titulo" id="arrNombreTit">¿Quién sos?</h1>
-    <p class="arr-sub" id="arrNombreSub">Elegí tu nombre. Queda en el historial.</p>
-    <div class="nombres" id="nombres"></div>
-    <div class="arr-estado" id="nombresEstado" hidden></div>
-  </div>
 </section>
 
 <!-- ======================= APP ======================= -->
@@ -789,11 +769,24 @@ if ((cfgGuardada.v || 1) < 2) { delete cfgGuardada.ancho; delete cfgGuardada.qr;
 let CFG = Object.assign({}, CFG_DEF, cfgGuardada, { v: CFG_V });
 function guardarCfg() { LS.set('repo2Config', CFG); }
 
-let PUESTO = LS.get('repo2Puesto', '');
-let NOMBRE = LS.get('repo2Nombre', '');
-// Enlace directo: ?puesto=salon o ?puesto=deposito fija el puesto y entra sin preguntar.
-const PUESTO_URL = new URLSearchParams(location.search).get('puesto');
-if (PUESTO_URL === 'salon' || PUESTO_URL === 'deposito') { PUESTO = PUESTO_URL; LS.set('repo2Puesto', PUESTO); }
+// El puesto NO se recuerda: cada vez que se abre la página se pregunta Depósito o Salón.
+let PUESTO = '';
+let NOMBRE = ''; // ya no se elige persona: los registros se anotan con el nombre del puesto
+// Borra lo guardado por versiones anteriores (puesto, nombre y lista de nombres).
+['repo2Puesto', 'repo2Nombre', 'repo2Usuarios'].forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+
+// Pantalla completa: el navegador sólo la permite tras un toque, así que se pide
+// en el primer toque (y de nuevo si se sale de ella).
+function pantallaCompleta() {
+  const d = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  try {
+    const p = d.requestFullscreen ? d.requestFullscreen({ navigationUI: 'hide' }) : d.webkitRequestFullscreen && d.webkitRequestFullscreen();
+    if (p && p.catch) p.catch(() => {});
+  } catch (_) {}
+}
+document.addEventListener('pointerdown', pantallaCompleta, true);
+document.addEventListener('keydown', pantallaCompleta, true);
 
 // ---------------------------------------------------------------- firebase
 firebase.initializeApp(firebaseConfig);
@@ -900,90 +893,26 @@ function fotoError(el) {
   el.replaceWith(ph);
 }
 
-// ---------------------------------------------------------------- usuarios (misma lista que la caja)
-const TONOS = ['#7c5fd0', '#3f8fe6', '#1f9d86', '#d08a1e', '#d6604f', '#b25cc4', '#4b7d2f', '#c24d7a'];
-function tono(nombre) { let h = 0; for (const ch of nombre) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return TONOS[h % TONOS.length]; }
-function iniciales(n) { const p = n.trim().split(/\s+/); return ((p[0] || '')[0] || '').toUpperCase() + ((p[1] || '')[0] || '').toUpperCase(); }
-function sucursalFiltro() {
-  if (CFG.sucursal && CFG.sucursal !== 'auto') return CFG.sucursal === 'todas' ? null : CFG.sucursal;
-  try { return localStorage.getItem('hpPuntoVenta') || null; } catch (_) { return null; }
-}
-async function cargarUsuarios() {
-  const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID +
-    '/values/' + encodeURIComponent('Usuarios!A:B') + '?key=' + GOOGLE_SHEETS_CONFIG.API_KEY;
-  const pv = sucursalFiltro();
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const data = await r.json();
-  const vistos = new Set(), nombres = [];
-  (data.values || []).forEach((f, i) => {
-    const n = String((f && f[0]) || '').trim();
-    if (!n) return;
-    if (i === 0 && ['vendedor', 'vendedores', 'usuario', 'usuarios', 'nombre'].includes(n.toLowerCase())) return;
-    if (n.toLowerCase() === 'whatsapp') return;
-    const b = String(f[1] == null ? '' : f[1]).trim();
-    if (b && pv && !b.split(/[\s,;\/]+/).filter(Boolean).includes(pv)) return;
-    if (vistos.has(n.toLowerCase())) return;
-    vistos.add(n.toLowerCase()); nombres.push(n);
-  });
-  if (nombres.length) LS.set('repo2Usuarios', nombres);
-  return nombres;
-}
-
 // ---------------------------------------------------------------- arranque
-function mostrarArranque(paso) {
+function mostrarArranque() {
   $('arranque').hidden = false;
-  $('arrPuesto').hidden = paso !== 'puesto';
-  $('arrNombre').hidden = paso !== 'nombre';
-  if (paso === 'nombre') pintarNombres();
+  $('arrPuesto').hidden = false;
 }
 document.querySelectorAll('.puesto').forEach(b => b.addEventListener('click', () => {
   activarAudio();
-  PUESTO = b.dataset.p; LS.set('repo2Puesto', PUESTO);
+  pantallaCompleta();
+  PUESTO = b.dataset.p;
   entrar();
 }));
-$('arrVolver').addEventListener('click', () => mostrarArranque('puesto'));
-
-async function pintarNombres() {
-  $('arrNombreTit').textContent = PUESTO === 'salon' ? '¿Quién está en el salón?' : '¿Quién está en el depósito?';
-  const cont = $('nombres'), est = $('nombresEstado');
-  const pintarLista = lista => {
-    const ultimo = LS.get('repo2Nombre', '');
-    cont.innerHTML = lista.map(n => '<button class="nombre' + (n === ultimo ? ' es-ultimo' : '') + '" type="button" data-n="' + esc(n) + '"><span class="avatar" style="background:' + tono(n) + '">' + esc(iniciales(n)) + '</span><span>' + esc(n) + '</span></button>').join('');
-  };
-  const cache = LS.get('repo2Usuarios', []);
-  if (cache.length) pintarLista(cache);
-  else { est.hidden = false; est.innerHTML = '<div class="cargando" style="padding:0"><span class="spin"></span>Cargando nombres…</div>'; }
-  try {
-    const lista = await cargarUsuarios();
-    est.hidden = true;
-    if (lista.length) pintarLista(lista);
-    else { est.hidden = false; est.innerHTML = '<p>La lista de nombres está vacía. Revisá la hoja “Usuarios” de la planilla.</p>'; }
-  } catch (err) {
-    if (!cache.length) {
-      est.hidden = false;
-      est.innerHTML = '<p>No se pudo cargar la lista de nombres.</p><button class="btn btn-ink" type="button" id="reintentarNombres">Reintentar</button>';
-      $('reintentarNombres').onclick = pintarNombres;
-    }
-  }
-}
-$('nombres').addEventListener('click', e => {
-  const b = e.target.closest('.nombre');
-  if (!b) return;
-  activarAudio();
-  NOMBRE = b.dataset.n; LS.set('repo2Nombre', NOMBRE);
-  entrar();
-});
-
 function entrar() {
-  // Sin nombre elegido se anota con el nombre del puesto (no hace falta elegir).
-  NOMBRE = LS.get('repo2Nombre', '') || (PUESTO === 'salon' ? 'Salón' : 'Depósito');
+  // Los registros se anotan con el nombre del puesto.
+  NOMBRE = PUESTO === 'salon' ? 'Salón' : 'Depósito';
   $('arranque').hidden = true;
   $('app').hidden = false;
   document.body.dataset.puesto = PUESTO;
   $('quienIc').innerHTML = IC[PUESTO];
   $('quienPuesto').textContent = PUESTO === 'salon' ? 'Salón' : 'Depósito';
-  $('quienNombre').textContent = NOMBRE;
+  $('quienNombre').textContent = 'Reposición';
   $('btnEscanearTx').textContent = 'Escanear para pedir';
   $('btnBuscar').setAttribute('aria-label', PUESTO === 'salon' ? 'Buscar para pedir' : 'Agregar a mano');
   // En la v2 el depósito no escanea: lo hace el Lector. Queda sólo el buscador.
@@ -1304,7 +1233,7 @@ function irVista(v) {
     $('quienIc').innerHTML = IC.volver; $('quienPuesto').textContent = 'Etiquetas QR'; $('quienNombre').textContent = 'Volver a ' + (PUESTO === 'salon' ? 'Salón' : 'Depósito');
     pintarEtiquetas();
   } else {
-    $('quienIc').innerHTML = IC[PUESTO]; $('quienPuesto').textContent = PUESTO === 'salon' ? 'Salón' : 'Depósito'; $('quienNombre').textContent = NOMBRE;
+    $('quienIc').innerHTML = IC[PUESTO]; $('quienPuesto').textContent = PUESTO === 'salon' ? 'Salón' : 'Depósito'; $('quienNombre').textContent = 'Reposición';
   }
   pintarPistola();
   window.scrollTo(0, 0);
@@ -1605,13 +1534,12 @@ $('tkOk').addEventListener('click', () => { const q = +tkValor, cb = tkCb; cerra
 // --- Menú ---
 function abrirMenu() {
   const it = (ic, t, s, acc) => '<button type="button" data-m="' + acc + '"><span class="mi">' + IC[ic] + '</span><span>' + t + (s ? '<small>' + s + '</small>' : '') + '</span>' + IC.chev + '</button>';
-  $('menuTit').textContent = NOMBRE + ' · ' + (PUESTO === 'salon' ? 'Salón' : 'Depósito');
+  $('menuTit').textContent = PUESTO === 'salon' ? 'Salón' : 'Depósito';
   $('menu').innerHTML =
     it('etiq', 'Etiquetas QR', 'Para artículos sin código de barras', 'etiq') +
-    it('persona', 'Cambiar de nombre', 'Si cambia quien usa este equipo', 'nombre') +
     it('cambiar', PUESTO === 'salon' ? 'Usar como Depósito' : 'Usar como Salón', 'Cambia el puesto de este equipo', 'puesto') +
     it('recarga', 'Actualizar catálogo', CAT.lista.length ? CAT.lista.length.toLocaleString('es-AR') + ' artículos cargados' : 'Cargando…', 'catalogo') +
-    it('cfg', 'Configuración', 'Etiqueta, impresora, sonido y nombres', 'cfg') +
+    it('cfg', 'Configuración', 'Etiqueta, impresora y sonido', 'cfg') +
     (instalada() ? '' : it('bajar', 'Instalar en este celular', 'Queda como una app en la pantalla de inicio', 'instalar')) +
     it('compartir', 'Instalar en otro celular', 'Muestra un código QR para escanear', 'otro');
   abrirHoja('hMenu');
@@ -1626,8 +1554,7 @@ $('menu').addEventListener('click', e => {
   if (m === 'otro') { abrirInstrucciones(true); return; }
   cerrarHoja();
   if (m === 'etiq') irVista('etiq');
-  else if (m === 'nombre') { $('app').hidden = true; mostrarArranque('nombre'); }
-  else if (m === 'puesto') { PUESTO = PUESTO === 'salon' ? 'deposito' : 'salon'; LS.set('repo2Puesto', PUESTO); entrar(); toast('Este equipo ahora es ' + (PUESTO === 'salon' ? 'Salón' : 'Depósito'), 'ok'); }
+  else if (m === 'puesto') { PUESTO = PUESTO === 'salon' ? 'deposito' : 'salon'; entrar(); toast('Este equipo ahora es ' + (PUESTO === 'salon' ? 'Salón' : 'Depósito'), 'ok'); }
   else if (m === 'catalogo') { cargarCatalogo().then(() => toast('Catálogo actualizado', 'ok')); }
 });
 
@@ -1664,8 +1591,6 @@ function pintarConfig() {
     '</div>' +
     '<div class="cfg-g"><h4>Equipo</h4>' +
     '<div class="cfg-f"><label for="cfgSon">Sonido de avisos</label><span class="sw"><input type="checkbox" id="cfgSon"' + (CFG.sonido ? ' checked' : '') + '><span></span></span></div>' +
-    '<div class="cfg-f"><label for="cfgSuc">Nombres de<small>Qué sucursal mostrar al elegir nombre</small></label><select id="cfgSuc">' +
-      [['auto', 'La de este equipo'], ['todas', 'Todas'], ['1', 'Munro'], ['2', 'Caseros']].map(o => '<option value="' + o[0] + '"' + (CFG.sucursal === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
     '</div>';
   $('cfgCont').innerHTML = h;
   pintarPrevia();
@@ -1714,7 +1639,6 @@ $('cfgCont').addEventListener('change', e => {
   if (e.target.id === 'cfgCod') { CFG.verCodigo = e.target.checked; guardarCfg(); pintarPrevia(); }
   if (e.target.id === 'cfgGirar') { CFG.girar = e.target.checked; guardarCfg(); }
   if (e.target.id === 'cfgSon') { CFG.sonido = e.target.checked; guardarCfg(); revisarAudio(); if (CFG.sonido) { activarAudio(); sonar('ok'); } }
-  if (e.target.id === 'cfgSuc') { CFG.sucursal = e.target.value; guardarCfg(); LS.set('repo2Usuarios', []); }
 });
 
 // ---------------------------------------------------------------- etiquetas QR
@@ -2376,7 +2300,7 @@ function abrirInstrucciones(soloOtro) {
       'Deslizá hacia abajo y tocá ' + k('sumar', 'Agregar a inicio') + '.',
       'Tocá <b>Agregar</b>, arriba a la derecha.'
     ];
-    nota = 'Después abrila siempre desde el ícono. La primera vez se elige de nuevo el puesto y el nombre.';
+    nota = 'Después abrila siempre desde el ícono. Cada vez que se abre se elige el puesto (Depósito o Salón).';
   } else if (false) { // (v2: sin APK propio)
     apk = true;
     pasos = [
@@ -2384,7 +2308,7 @@ function abrirInstrucciones(soloOtro) {
       'Cuando termine, abrí <b>Reposicion.apk</b> desde la notificación o desde Descargas.',
       'Si Android pregunta, permití <b>instalar apps de esta fuente</b> y tocá <b>Instalar</b>.'
     ];
-    nota = 'Las actualizaciones las ofrece la propia app con un cartel: un toque y listo. La primera vez se elige de nuevo el puesto y el nombre.';
+    nota = 'Las actualizaciones las ofrece la propia app con un cartel: un toque y listo. Cada vez que se abre se elige el puesto (Depósito o Salón).';
   } else {
     pasos = [
       'Tocá ' + k('puntos', 'Menú') + ' del navegador, arriba a la derecha.',
@@ -2453,8 +2377,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 
 // ---------------------------------------------------------------- inicio
 cargarCatalogo();
-if (PUESTO) entrar();
-else mostrarArranque('puesto');
+mostrarArranque('puesto'); // siempre se pregunta el puesto al abrir
 </script>
 </body>
 </html>

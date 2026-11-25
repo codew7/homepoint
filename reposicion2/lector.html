@@ -480,6 +480,14 @@ function pintarLista() {
 // ---------------------------------------------------------------- pistola (modo teclado)
 // Escribe muy rápido y termina con Enter (o Tab). Lo que se tipea despacio
 // en el campo "Escribir un código a mano" también vale, con Enter.
+// La app de Windows (desde la 1.2.0) lee la pistola aunque esta ventana esté
+// atrás y manda cada lectura con APP.onLectura. Ahí lo que la pistola escribe
+// acá se reconoce igual (para sacarlo del campo de texto), pero no se envía:
+// si no, se leería dos veces.
+let segundoPlano = false;
+if (APP && typeof APP.onLectura === 'function') {
+  APP.onLectura(t => { ultLectura = Date.now(); if (!bloqueado) procesar(t); }, si => { segundoPlano = si; revisarFoco(); });
+}
 const P_GAP = 120, P_MIN = 3, P_MIN_SIN_FIN = 6;
 let pBuf = '', pUlt = 0, pTimer = null, pTragarEnter = 0;
 function pReset() { pBuf = ''; clearTimeout(pTimer); pTimer = null; }
@@ -497,7 +505,7 @@ document.addEventListener('keydown', e => {
     pReset();
     if (!rapido || t.length < P_MIN) return;
     e.preventDefault(); e.stopPropagation();
-    pLimpiarInput(t); procesar(t);
+    pLimpiarInput(t); if (!segundoPlano) procesar(t);
     return;
   }
   if (e.key && e.key.length === 1) {
@@ -508,7 +516,7 @@ document.addEventListener('keydown', e => {
       const t = pBuf; pReset();
       if (t.length < P_MIN_SIN_FIN) return;
       pTragarEnter = Date.now() + 300;
-      pLimpiarInput(t); procesar(t);
+      pLimpiarInput(t); if (!segundoPlano) procesar(t);
     }, P_GAP * 2);
     return;
   }
@@ -529,7 +537,8 @@ let focoT = null;
 function revisarFoco() {
   clearTimeout(focoT);
   focoT = setTimeout(() => {
-    const sin = !document.hasFocus();
+    // Con lectura en segundo plano no hace falta tener el foco.
+    const sin = !document.hasFocus() && !segundoPlano;
     const antes = !$('vFoco').hidden;
     $('vFoco').hidden = !sin || bloqueado;
     if (sin && !antes && !bloqueado) sonar('mal');

@@ -7,8 +7,9 @@
 //    - SOLO toma lecturas si Caja HomePoint no está abierta en esta PC: la
 //      pistola escribe en la ventana que está adelante, y así nunca se mezclan
 //      lecturas entre la Caja y el Lector. Se revisa al abrir y cada 5 s;
-//    - recupera el foco solo cuando nadie usa la PC (para que la pistola
-//      escriba acá);
+//    - toma las lecturas de la pistola aunque la ventana esté atrás o
+//      minimizada (pistola.js), y igual recupera el foco cuando nadie usa la
+//      PC, para que el código no se escriba en otro programa;
 //    - se abre sola al prender la PC y se actualiza sola (actualizador.js).
 //
 //  Registro técnico: %APPDATA%\Lector HomePoint\logs\main.log
@@ -23,6 +24,7 @@ const { execFile } = require('child_process');
 const path = require('path');
 const log = require('electron-log/main');
 const { iniciarActualizador } = require('./actualizador');
+const pistola = require('./pistola');
 
 log.initialize();
 log.transports.file.maxSize = 2 * 1024 * 1024;
@@ -45,6 +47,18 @@ let ventana = null;
 let modo = '';
 let cajaAbierta = false;
 let revisando = false;
+// La lectura en segundo plano anda (pistola.js) y la página la usa.
+let enSegundoPlano = false;
+let paginaLista = false;
+
+// La pistola se lee sólo con la pantalla del Lector abierta y sin la Caja.
+function actualizarPistola() {
+  pistola.activar(enSegundoPlano && paginaLista && modo === 'lector' && !cajaAbierta);
+}
+function enviarLectura(texto) {
+  if (!ventana || ventana.isDestroyed() || modo !== 'lector') return;
+  ventana.webContents.send('lector:lectura', texto);
+}
 
 // Una sola copia: si alguien vuelve a hacer doble clic, se trae la ventana adelante.
 if (!app.requestSingleInstanceLock()) {
@@ -82,6 +96,7 @@ async function hayInternet() {
 function mostrarEspera(nuevo) {
   if (modo === nuevo || !ventana) return;
   modo = nuevo;
+  paginaLista = false; actualizarPistola();
   log.info(nuevo === 'caja' ? 'Caja HomePoint abierta: el Lector espera' : 'Sin internet: el Lector espera');
   ventana.loadFile(ESPERA, { query: { modo: nuevo } });
 }
@@ -90,6 +105,7 @@ async function mostrarLector() {
   if (modo === 'lector' || !ventana) return;
   if (!(await hayInternet())) { mostrarEspera('red'); return; }
   modo = 'lector';
+  paginaLista = false; actualizarPistola();
   log.info('Se abre la pantalla del Lector');
   ventana.loadURL(URL_LECTOR);
 }
@@ -108,6 +124,7 @@ async function revisar() {
       cajaAbierta = abierta;
       log.info(abierta ? 'Se abrió Caja HomePoint: el Lector se pausa' : 'Se cerró Caja HomePoint: el Lector sigue');
       avisarBloqueo();
+      actualizarPistola();
     }
     // Con la pantalla del Lector ya abierta, la Caja sólo la pausa (la página
     // sigue conectada y el depósito ve "en pausa"). Si todavía no estaba
@@ -193,7 +210,12 @@ function crearVentana() {
     log.warn(`No cargó ${url}: ${descripcion} (${codigo})`);
     if (modo === 'lector') { modo = ''; mostrarEspera('red'); }
   });
+  // Al recargar (F5, versión nueva) la página vuelve a pedir la pistola.
+  contenido.on('did-start-navigation', (detalle) => {
+    if (detalle.isMainFrame && !detalle.isSameDocument) { paginaLista = false; actualizarPistola(); }
+  });
   contenido.on('render-process-gone', (_evento, detalle) => {
+    paginaLista = false; actualizarPistola();
     log.error('La pantalla se cerró inesperadamente:', detalle.reason);
     if (detalle.reason !== 'clean-exit' && ventana && !ventana.isDestroyed()) contenido.reload();
   });
@@ -216,6 +238,13 @@ async function arrancar() {
   ipcMain.on('lector:listo', (evento) => {
     if (ventana && evento.sender === ventana.webContents) evento.sender.send('lector:bloqueo', cajaAbierta);
   });
+  // La página pide las lecturas de la pistola: se le dice si hay lectura en
+  // segundo plano (si no, sigue tomando lo que se escribe en su ventana).
+  ipcMain.on('lector:pistola', (evento) => {
+    if (!ventana || evento.sender !== ventana.webContents) return;
+    paginaLista = true; actualizarPistola();
+    evento.sender.send('lector:segundoPlano', enSegundoPlano);
+  });
   ipcMain.on('lector:salir', () => app.quit());
   ipcMain.on('lector:reintentar', () => { revisar(); });
 
@@ -224,6 +253,7 @@ async function arrancar() {
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true });
 
   crearVentana();
+  enSegundoPlano = pistola.iniciar({ ventana, carpeta: app.getPath('userData'), registro: log, onLectura: enviarLectura });
   cajaAbierta = await revisarCaja();
   if (cajaAbierta) mostrarEspera('caja');
   else await mostrarLector();
