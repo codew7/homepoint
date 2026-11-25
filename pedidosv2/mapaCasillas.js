@@ -23,7 +23,7 @@
   const LS_CONFIG = 'pv2.casillasMapa';
   const PAUSA_MS = 90;
   const MAX_CASILLAS = 900;
-  const DEFECTO = { colDesde: 'A', colHasta: 'D', filaDesde: 1, filaHasta: 6 };
+  const DEFECTO = { colDesde: 'A', colHasta: 'D', filaDesde: 1, filaHasta: 4 };
 
   // ------------------------------------------
   // ESTILOS (se inyectan una sola vez)
@@ -35,52 +35,116 @@
       position: fixed; inset: 0; z-index: 210;
       display: none; align-items: center; justify-content: center;
       padding: 20px; background: var(--scrim);
+      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
       animation: fadeIn .16s ease both;
     }
     .mc-panel.active { display: flex; }
     .mc-box {
-      position: relative; width: 100%; max-width: 1120px; height: min(90vh, 900px);
+      position: relative; width: 100%; max-width: 1180px; height: min(90vh, 920px);
       display: flex; flex-direction: column; overflow: hidden;
       background: var(--surface); border-radius: var(--r4); box-shadow: var(--sh3);
       animation: sheetIn .26s var(--ease-out) both;
       outline: none;
     }
 
-    /* Cabecera */
-    .mc-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 18px 20px 12px; }
+    /* Cabecera: banda grafito con el resumen y la tira de ocupacion */
+    .mc-head {
+      flex: none; position: relative; padding: 18px 20px 16px;
+      background: var(--graphite); color: var(--on-g);
+    }
+    .mc-head-fila { display: flex; align-items: center; gap: 12px; }
     .mc-head-ic {
-      flex: none; width: 38px; height: 38px; border-radius: 11px;
+      flex: none; width: 40px; height: 40px; border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
-      background: var(--accent-soft); color: var(--accent);
+      background: var(--accent); color: #fff;
+      box-shadow: 0 6px 18px -6px var(--accent), inset 0 1px 0 rgba(255,255,255,.22);
     }
     .mc-head-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
-    .mc-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-    .mc-title h3 { font-size: 18px; font-weight: 800; letter-spacing: -.4px; color: var(--ink); }
-    .mc-resumen { font-size: 12.5px; font-weight: 500; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-    .mc-resumen b { color: var(--ink); font-weight: 700; }
+    .mc-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .mc-title h3 { font-size: 19px; font-weight: 800; letter-spacing: -.5px; color: var(--on-g); line-height: 1.1; }
+    .mc-vivo {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; color: var(--on-g-2);
+    }
+    .mc-vivo i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: #4fc08d; }
+    .mc-vivo i::after {
+      content: ''; position: absolute; inset: 0; border-radius: inherit; background: inherit;
+      animation: mcLatido 2s ease-out infinite;
+    }
+    .mc-vivo.is-off i { background: var(--bad); }
+    .mc-vivo.is-off i::after { animation: none; }
+    @keyframes mcLatido { from { transform: scale(1); opacity: .7; } to { transform: scale(3); opacity: 0; } }
     .mc-btn-ic {
-      flex: none; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 11px;
+      flex: none; width: 38px; height: 38px; border: 1px solid var(--graphite-line); border-radius: 11px;
       display: flex; align-items: center; justify-content: center;
-      background: var(--surface); color: var(--ink-2); cursor: pointer;
-      transition: background .14s, color .14s, transform .12s;
+      background: var(--graphite-2); color: var(--on-g-2); cursor: pointer;
+      transition: background .14s, color .14s, transform .12s, border-color .14s;
       -webkit-tap-highlight-color: transparent;
     }
-    .mc-btn-ic:hover { background: var(--surface-2); color: var(--ink); }
+    .mc-btn-ic:hover { color: var(--on-g); border-color: var(--on-g-3); }
     .mc-btn-ic:active { transform: scale(.94); }
+    .mc-btn-ic:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .mc-btn-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .mc-btn-ic svg circle { fill: var(--graphite-2); }
 
-    /* Leyenda */
-    .mc-leyenda {
-      flex: none; display: flex; flex-wrap: wrap; gap: 6px 14px;
-      padding: 0 20px 12px; font-size: 11.5px; font-weight: 600; color: var(--ink-3);
+    .mc-resumen {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 22px; margin-top: 16px;
+      font-size: 12px; font-weight: 600; color: var(--on-g-2);
     }
-    .mc-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
-    .mc-leyenda i { width: 9px; height: 9px; border-radius: 3px; background: var(--mc-tono); }
+    .mc-stat { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+    .mc-stat b {
+      font-family: var(--font-mono); font-size: 22px; font-weight: 700; letter-spacing: -.8px; color: var(--on-g);
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .mc-stat b small { font-size: 13px; font-weight: 600; color: var(--on-g-3); letter-spacing: 0; }
+    .mc-stat--pct b { color: #f0a868; }
+
+    /* Tira: una marca por casilla, en el mismo orden que el mapa */
+    .mc-tira {
+      display: flex; gap: 2px; height: 8px; margin-top: 12px;
+    }
+    .mc-tira.is-densa { gap: 1px; }
+    .mc-tira i {
+      flex: 1 1 0; min-width: 0; border-radius: 2px; background: var(--mc-tono, var(--graphite-line));
+      transform-origin: bottom; animation: mcTira .5s var(--ease-out) both; animation-delay: calc(var(--mc-i, 0) * 6ms);
+    }
+    .mc-tira i.mc-libre { --mc-tono: var(--graphite-line); }
+    @keyframes mcTira { from { transform: scaleY(.2); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    /* Filtros por estado (con cantidades) */
+    .mc-leyenda {
+      flex: none; display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none;
+      padding: 12px 20px; border-bottom: 1px solid var(--line-2); background: var(--surface);
+    }
+    .mc-leyenda::-webkit-scrollbar { display: none; }
+    .mc-filtro {
+      flex: none; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px 0 10px;
+      border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+      font: inherit; font-size: 12px; font-weight: 700; color: var(--ink-2); cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mc-filtro:hover { border-color: var(--ink-4); color: var(--ink); }
+    .mc-filtro:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .mc-filtro i { width: 8px; height: 8px; border-radius: 50%; background: var(--mc-tono); box-shadow: 0 0 0 3px var(--mc-soft); }
+    .mc-filtro svg { width: 12px; height: 12px; fill: none; stroke: var(--mc-tono); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+    .mc-filtro span {
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 6px; margin-left: 1px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--surface-3); font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+    .mc-filtro[aria-pressed="true"] {
+      border-color: var(--mc-tono); background: var(--mc-soft); color: var(--ink);
+      box-shadow: 0 0 0 1px var(--mc-tono);
+    }
+    .mc-filtro[aria-pressed="true"] span { background: var(--mc-tono); color: var(--surface); }
+    .mc-leyenda-ayuda { flex: none; margin-left: auto; padding-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-4); white-space: nowrap; }
 
     /* Aviso de configuracion */
     .mc-aviso {
       flex: none; display: flex; align-items: center; gap: 10px;
-      margin: 0 20px 12px; padding: 10px 12px; border-radius: var(--r2);
+      margin: 12px 20px 0; padding: 10px 12px; border-radius: var(--r2);
       background: var(--warn-soft); color: var(--ink-2); font-size: 12.5px; font-weight: 600;
     }
     .mc-aviso[hidden] { display: none; }
@@ -90,95 +154,121 @@
       background: var(--inverso-bg); color: var(--inverso-fg); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
     }
 
-    /* Cuadricula */
+    /* Cuadricula: el area visible siempre muestra 4 filas */
     .mc-scroll {
       flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;
-      border-top: 1px solid var(--line-2); background: var(--surface-2);
+      container-type: size;
+      background-color: var(--surface-2);
+      background-image: radial-gradient(var(--line) 1px, transparent 1.3px);
+      background-size: 18px 18px; background-attachment: local;
     }
     .mc-grid {
-      display: grid; gap: 6px; padding: 0 14px 14px 0;
+      --mc-gap: 8px;
+      display: grid; gap: var(--mc-gap); padding: 0 16px 16px 0;
       width: max-content; min-width: 100%;
-      grid-template-columns: 38px repeat(var(--mc-cols), minmax(118px, 1fr));
-      grid-auto-rows: 96px;
+      grid-template-columns: 40px repeat(var(--mc-cols), minmax(132px, 1fr));
+      grid-template-rows: 36px;
+      grid-auto-rows: 104px;
+      grid-auto-rows: max(84px, calc((100cqh - 36px - 4 * var(--mc-gap) - 16px) / 4));
     }
+    .mc-grid { --mc-cols: 1; }
     .mc-grid > .mc-hcol, .mc-grid > .mc-hfila, .mc-grid > .mc-esq {
       display: flex; align-items: center; justify-content: center;
-      font-family: var(--font-mono); font-size: 12px; font-weight: 800; color: var(--ink-3);
-      background: var(--surface-2); position: sticky; z-index: 2;
+      font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .6px; color: var(--ink-3);
+      position: sticky; z-index: 2;
     }
-    .mc-grid > .mc-hcol { top: 0; height: 34px; align-self: start; }
-    .mc-grid > .mc-hfila { left: 0; }
-    .mc-grid > .mc-esq { top: 0; left: 0; z-index: 3; height: 34px; align-self: start; }
-    .mc-grid { --mc-cols: 1; grid-template-rows: 34px; }
+    .mc-grid > .mc-hcol {
+      top: 0; height: 36px; align-self: start;
+      background: linear-gradient(var(--surface-2) 78%, transparent);
+    }
+    .mc-grid > .mc-hfila { left: 0; background: linear-gradient(90deg, var(--surface-2) 78%, transparent); }
+    .mc-grid > .mc-esq { top: 0; left: 0; z-index: 3; height: 36px; align-self: start; background: var(--surface-2); }
+    .mc-hcol b, .mc-hfila b {
+      min-width: 26px; height: 22px; padding: 0 6px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--surface); box-shadow: var(--sh1); color: var(--ink-2); font-weight: 700;
+    }
 
     .mc-celda {
       --mc-tono: var(--ink-4);
       --mc-soft: var(--surface-3);
       position: relative; min-width: 0; overflow: hidden;
-      display: flex; flex-direction: column; gap: 4px;
-      padding: 8px 9px 9px; border-radius: 12px; text-align: left;
+      display: flex; flex-direction: column; gap: 3px;
+      padding: 10px 11px 10px; border-radius: 14px; text-align: left;
       font: inherit; color: var(--ink);
-      transition: opacity .2s, transform .16s var(--ease-out), box-shadow .2s, --mc-p .7s var(--ease-out);
+      transition: opacity .25s, transform .2s var(--ease-out), box-shadow .2s, border-color .2s, --mc-p .9s var(--ease-out);
     }
     .mc-celda--vacia {
-      border: 1px dashed var(--line); background: transparent;
+      border: 1.5px dashed var(--line); background: color-mix(in srgb, var(--surface-2) 55%, transparent);
       align-items: center; justify-content: center;
     }
-    .mc-celda--vacia .mc-coord { position: static; color: var(--ink-4); opacity: .7; font-size: 12px; }
+    .mc-celda--vacia .mc-coord { color: var(--ink-4); font-size: 12px; opacity: .8; background: none; padding: 0; }
+    .mc-celda--vacia .mc-coord::before { display: none; }
     .mc-celda--ocupada {
-      border: 1px solid var(--line); cursor: pointer;
+      border: 1px solid color-mix(in srgb, var(--mc-tono) 22%, var(--line));
+      cursor: pointer;
       background:
-        linear-gradient(to top, var(--mc-soft) var(--mc-p), transparent var(--mc-p)),
+        linear-gradient(to top,
+          var(--mc-soft) var(--mc-p),
+          color-mix(in srgb, var(--mc-tono) 55%, transparent) var(--mc-p),
+          color-mix(in srgb, var(--mc-tono) 55%, transparent) calc(var(--mc-p) + 1.5px),
+          transparent calc(var(--mc-p) + 1.5px)),
         var(--surface);
       box-shadow: var(--sh1);
       -webkit-tap-highlight-color: transparent;
     }
-    .mc-celda--ocupada:hover { box-shadow: var(--sh2); }
+    .mc-celda--ocupada:hover { transform: translateY(-2px); box-shadow: var(--sh2); border-color: color-mix(in srgb, var(--mc-tono) 45%, var(--line)); }
     .mc-celda--ocupada:active { transform: scale(.97); }
-    .mc-celda--ocupada::before {
-      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--mc-tono);
-    }
+    .mc-celda--ocupada:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .mc-t-nuevo { --mc-tono: var(--ink-4); --mc-soft: var(--surface-3); }
     .mc-t-armando { --mc-tono: var(--prep); --mc-soft: var(--prep-soft); }
-    .mc-t-completo, .mc-t-controlado { --mc-tono: var(--ok); --mc-soft: var(--ok-soft); }
+    .mc-t-completo { --mc-tono: var(--ok); --mc-soft: var(--ok-soft); }
+    .mc-t-controlado { --mc-tono: var(--ok); --mc-soft: color-mix(in srgb, var(--ok) 20%, var(--surface)); }
 
+    .mc-cab { display: flex; align-items: center; gap: 6px; min-height: 20px; }
     .mc-coord {
-      position: absolute; top: 7px; right: 8px;
-      font-family: var(--font-mono); font-size: 10.5px; font-weight: 800; letter-spacing: .2px; color: var(--ink-4);
+      display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px 0 6px; border-radius: 6px;
+      background: color-mix(in srgb, var(--surface) 80%, transparent);
+      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .4px; color: var(--ink-2);
+    }
+    .mc-coord::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mc-tono); }
+    .mc-multi {
+      margin-left: auto; height: 20px; padding: 0 6px; border-radius: 6px;
+      display: inline-flex; align-items: center;
+      background: var(--warn-soft); color: var(--warn); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
     }
     .mc-nombre {
-      padding-right: 26px; font-size: 13px; font-weight: 700; line-height: 1.25; letter-spacing: -.1px;
+      margin-top: 4px; font-size: 13.5px; font-weight: 700; line-height: 1.22; letter-spacing: -.2px;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;
     }
-    .mc-pie { margin-top: auto; display: flex; align-items: center; gap: 7px; }
-    .mc-barra { flex: 1; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
-    .mc-barra i {
-      display: block; height: 100%; width: var(--mc-p); border-radius: inherit; background: var(--mc-tono);
-    }
+    .mc-sub { font-size: 11px; font-weight: 600; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mc-pie { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
     .mc-pct {
-      flex: none; min-width: 30px; text-align: right;
-      font-family: var(--font-mono); font-size: 11.5px; font-weight: 800; color: var(--mc-tono);
+      font-family: var(--font-mono); font-size: 21px; font-weight: 700; letter-spacing: -1px; line-height: 1;
+      color: color-mix(in srgb, var(--mc-tono) 85%, var(--ink));
       font-variant-numeric: tabular-nums;
     }
-    .mc-pct svg { width: 13px; height: 13px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-    .mc-multi {
-      position: absolute; top: 7px; right: 8px; padding: 1px 5px; border-radius: 5px;
-      background: var(--warn-soft); color: var(--warn); font-size: 10px; font-weight: 800;
+    .mc-pct small { font-size: 11px; font-weight: 600; letter-spacing: 0; margin-left: 1px; opacity: .7; }
+    .mc-pct--ok {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--ok); color: #fff; box-shadow: 0 4px 12px -4px var(--ok);
     }
-    .mc-celda--multi .mc-coord { right: 34px; }
-    .mc-sub { font-size: 11px; font-weight: 600; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mc-pct svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+    .mc-items { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
-    /* Seleccion: el pedido elegido se resalta en todas sus casillas */
-    .mc-grid.has-sel .mc-celda { opacity: .38; }
-    .mc-grid.has-sel .mc-celda.is-sel { opacity: 1; box-shadow: 0 0 0 2px var(--mc-tono), var(--sh2); }
-    .mc-celda.is-cambio { animation: mcCambio .9s var(--ease-out); }
+    /* Seleccion y filtro: lo que no corresponde se apaga */
+    .mc-celda.is-dim { opacity: .28; }
+    .mc-celda--vacia.is-dim { opacity: .45; }
+    .mc-celda.is-sel { box-shadow: 0 0 0 2px var(--mc-tono), 0 12px 28px -10px color-mix(in srgb, var(--mc-tono) 60%, transparent); transform: translateY(-2px); }
+    .mc-celda.is-cambio { animation: mcCambio 1s var(--ease-out); }
     @keyframes mcCambio {
       0% { box-shadow: 0 0 0 0 var(--mc-tono), var(--sh1); }
-      35% { box-shadow: 0 0 0 3px var(--mc-tono), var(--sh2); }
+      30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mc-tono) 45%, transparent), var(--sh2); }
       100% { box-shadow: var(--sh1); }
     }
-    .mc-grid.mc-entra .mc-celda { animation: mcEntra .42s var(--ease-out) both; animation-delay: calc(var(--mc-i, 0) * 14ms); }
-    @keyframes mcEntra { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+    .mc-grid.mc-entra .mc-celda { animation: mcEntra .5s var(--ease-out) both; animation-delay: calc(var(--mc-i, 0) * 16ms); }
+    @keyframes mcEntra { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
 
     /* Fuera del mapa */
     .mc-fuera {
@@ -187,6 +277,7 @@
       font-size: 12px; font-weight: 700; color: var(--ink-3);
     }
     .mc-fuera[hidden] { display: none; }
+    .mc-fuera > span { flex: none; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .8px; text-transform: uppercase; }
     .mc-fuera button {
       flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 4px;
       border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2);
@@ -201,25 +292,37 @@
 
     /* Hojas internas (ficha y tamano) */
     .mc-velo {
-      position: absolute; inset: 0; z-index: 5; background: rgba(0, 0, 0, .18);
+      position: absolute; inset: 0; z-index: 5; background: rgba(0, 0, 0, .22);
       opacity: 0; pointer-events: none; transition: opacity .22s;
     }
     .mc-box.con-hoja .mc-velo { opacity: 1; pointer-events: auto; }
     .mc-hoja {
-      position: absolute; left: 50%; bottom: 14px; z-index: 6;
-      width: min(420px, calc(100% - 28px)); padding: 20px 20px 16px;
+      position: absolute; left: 50%; bottom: 16px; z-index: 6; overflow: hidden;
+      width: min(440px, calc(100% - 28px)); padding: 22px 22px 18px;
       background: var(--surface); border-radius: var(--r3); box-shadow: var(--sh3);
       transform: translate(-50%, calc(100% + 30px)); visibility: hidden;
-      transition: transform .34s cubic-bezier(.32, .72, 0, 1), visibility 0s linear .34s;
+      transition: transform .38s cubic-bezier(.32, .72, 0, 1), visibility 0s linear .38s;
     }
-    .mc-hoja.active { transform: translate(-50%, 0); visibility: visible; transition: transform .34s cubic-bezier(.32, .72, 0, 1), visibility 0s; }
-    .mc-hoja h4 { font-size: 17px; font-weight: 800; letter-spacing: -.3px; color: var(--ink); line-height: 1.25; }
+    .mc-hoja.active { transform: translate(-50%, 0); visibility: visible; transition: transform .38s cubic-bezier(.32, .72, 0, 1), visibility 0s; }
+    .mc-ficha::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+      background: linear-gradient(90deg, var(--mc-tono) var(--mc-p), var(--line-2) var(--mc-p));
+    }
+    .mc-hoja h4 { font-size: 18px; font-weight: 800; letter-spacing: -.4px; color: var(--ink); line-height: 1.25; }
     .mc-hoja-sub { margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
     .mc-ficha-celdas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
-    .mc-ficha-av { margin-top: 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-    .mc-ficha-av b { font-family: var(--font-mono); font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: var(--mc-tono); }
-    .mc-ficha-av span { font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
-    .mc-ficha .mc-barra { height: 6px; margin-top: 8px; }
+    .mc-ficha-av {
+      margin-top: 16px; padding: 14px 14px 12px; border-radius: var(--r2); background: var(--mc-soft);
+      display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px 12px;
+    }
+    .mc-ficha-av b {
+      font-family: var(--font-mono); font-size: 34px; font-weight: 700; letter-spacing: -1.6px; line-height: 1;
+      color: color-mix(in srgb, var(--mc-tono) 85%, var(--ink));
+    }
+    .mc-ficha-av b small { font-size: 16px; letter-spacing: 0; opacity: .7; }
+    .mc-ficha-av > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-align: right; }
+    .mc-barra { grid-column: 1 / -1; height: 6px; border-radius: 6px; background: color-mix(in srgb, var(--mc-tono) 16%, var(--surface)); overflow: hidden; }
+    .mc-barra i { display: block; height: 100%; width: var(--mc-p); border-radius: inherit; background: var(--mc-tono); transition: width .6s var(--ease-out); }
     .mc-ficha-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
     .mc-tag {
       display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 7px;
@@ -236,14 +339,22 @@
     @media (max-width: 600px) {
       .mc-panel { padding: 0; align-items: stretch; }
       .mc-box { height: 100%; max-width: none; border-radius: 0; }
-      .mc-head { padding: 14px 14px 10px; }
-      .mc-leyenda { padding: 0 14px 10px; }
-      .mc-aviso { margin: 0 14px 10px; }
-      .mc-grid { grid-template-columns: 32px repeat(var(--mc-cols), minmax(104px, 1fr)); grid-auto-rows: 88px; }
+      .mc-head { padding: 14px 14px 14px; }
+      .mc-resumen { gap: 4px 16px; margin-top: 12px; }
+      .mc-stat b { font-size: 19px; }
+      .mc-leyenda { padding: 10px 14px; }
+      .mc-leyenda-ayuda { display: none; }
+      .mc-aviso { margin: 10px 14px 0; }
+      .mc-grid {
+        --mc-gap: 6px; padding: 0 12px 12px 0;
+        grid-template-columns: 32px repeat(var(--mc-cols), minmax(112px, 1fr));
+        grid-auto-rows: max(78px, calc((100cqh - 36px - 4 * var(--mc-gap) - 12px) / 4));
+      }
+      .mc-pct { font-size: 18px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .mc-celda, .mc-hoja, .mc-velo { transition: none; }
-      .mc-grid.mc-entra .mc-celda, .mc-celda.is-cambio { animation: none; }
+      .mc-celda, .mc-hoja, .mc-velo, .mc-barra i { transition: none; }
+      .mc-grid.mc-entra .mc-celda, .mc-celda.is-cambio, .mc-tira i, .mc-vivo i::after { animation: none; }
     }
   `;
 
@@ -255,19 +366,24 @@
   const HTML = `
     <div class="mc-box" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="mcTitulo">
       <div class="mc-head">
-        <span class="mc-head-ic">${IC_GRILLA}</span>
-        <div class="mc-title">
-          <h3 id="mcTitulo">Mapa de casillas</h3>
-          <span class="mc-resumen" id="mcResumen">Cargando...</span>
+        <div class="mc-head-fila">
+          <span class="mc-head-ic">${IC_GRILLA}</span>
+          <div class="mc-title">
+            <h3 id="mcTitulo">Mapa de casillas</h3>
+            <span class="mc-vivo" id="mcVivo"><i></i><span>En vivo</span></span>
+          </div>
+          <button type="button" class="mc-btn-ic" id="mcBtnAjustar" title="Tamaño del depósito" aria-label="Tamaño del depósito">${IC_AJUSTE}</button>
+          <button type="button" class="mc-btn-ic" id="mcBtnCerrar" title="Cerrar" aria-label="Cerrar">${IC_CERRAR}</button>
         </div>
-        <button type="button" class="mc-btn-ic" id="mcBtnAjustar" title="Tamaño del depósito" aria-label="Tamaño del depósito">${IC_AJUSTE}</button>
-        <button type="button" class="mc-btn-ic" id="mcBtnCerrar" title="Cerrar" aria-label="Cerrar">${IC_CERRAR}</button>
+        <div class="mc-resumen" id="mcResumen" aria-live="polite">Cargando...</div>
+        <div class="mc-tira" id="mcTira" aria-hidden="true"></div>
       </div>
-      <div class="mc-leyenda" aria-hidden="true">
-        <span><i style="background:var(--ink-4)"></i>Sin empezar</span>
-        <span><i style="background:var(--prep)"></i>Armando</span>
-        <span><i style="background:var(--ok)"></i>Completo</span>
-        <span><span class="mc-pct" style="color:var(--ok);min-width:0">${IC_CHECK}</span>Controlado</span>
+      <div class="mc-leyenda" id="mcLeyenda" role="toolbar" aria-label="Resaltar pedidos por estado">
+        <button type="button" class="mc-filtro mc-t-nuevo" data-filtro="nuevo" aria-pressed="false"><i></i>Sin empezar<span data-cnt="nuevo">0</span></button>
+        <button type="button" class="mc-filtro mc-t-armando" data-filtro="armando" aria-pressed="false"><i></i>Armando<span data-cnt="armando">0</span></button>
+        <button type="button" class="mc-filtro mc-t-completo" data-filtro="completo" aria-pressed="false"><i></i>Completo<span data-cnt="completo">0</span></button>
+        <button type="button" class="mc-filtro mc-t-controlado" data-filtro="controlado" aria-pressed="false">${IC_CHECK}Controlado<span data-cnt="controlado">0</span></button>
+        <span class="mc-leyenda-ayuda">Tocá un estado para resaltarlo</span>
       </div>
       <div class="mc-aviso" id="mcAviso" hidden>
         <span>Todavía no se configuró el tamaño del depósito: se muestra lo necesario para ver las casillas ocupadas.</span>
@@ -316,6 +432,7 @@
   let firmas = new Map();     // 'C4' -> firma pintada
   let gridClave = '';         // rango de la cuadricula armada
   let seleccion = null;       // id del pedido elegido
+  let filtro = null;          // estado resaltado desde la leyenda
 
   // ------------------------------------------
   // CONFIGURACION
@@ -424,6 +541,7 @@
       const cb = q.on('value', snap => {
         if (vivo !== v) return;
         v.snaps[st] = snap;
+        marcarVivo(true);
         if (!v.snaps.ABIERTO || !v.snaps.CERRADO) return;
         clearTimeout(pintarTimer);
         pintarTimer = setTimeout(() => { reconstruir(); pintar(); }, PAUSA_MS);
@@ -431,9 +549,17 @@
         if (vivo !== v) return;
         console.error('Mapa de casillas: error escuchando pedidos', err);
         document.getElementById('mcResumen').textContent = 'Sin conexión: no se pudo cargar el mapa';
+        marcarVivo(false);
       });
       v.subs.push([q, cb]);
     });
+  }
+
+  function marcarVivo(ok) {
+    const el = document.getElementById('mcVivo');
+    if (!el) return;
+    el.classList.toggle('is-off', !ok);
+    el.lastElementChild.textContent = ok ? 'En vivo' : 'Sin conexión';
   }
 
   function desuscribir() {
@@ -448,9 +574,8 @@
   // PINTADO
   // ------------------------------------------
   function htmlPct(p) {
-    return p.estado === 'controlado' || p.estado === 'completo'
-      ? (p.estado === 'controlado' ? IC_CHECK : '100%')
-      : p.pct + '%';
+    if (p.estado === 'controlado') return '<span class="mc-pct mc-pct--ok" title="Controlado">' + IC_CHECK + '</span>';
+    return '<span class="mc-pct">' + p.pct + '<small>%</small></span>';
   }
 
   function contenidoCelda(celda, lista) {
@@ -459,17 +584,20 @@
     }
     const p = lista[0];
     const multi = lista.length > 1;
-    let html = '<span class="mc-coord">' + celda + '</span>';
+    let html = '<span class="mc-cab"><span class="mc-coord">' + celda + '</span>';
     if (multi) html += '<span class="mc-multi" title="Hay ' + lista.length + ' pedidos en esta casilla">×' + lista.length + '</span>';
+    html += '</span>';
     html += '<span class="mc-nombre">' + escapeHtml(p.nombre) + '</span>';
     if (multi) html += '<span class="mc-sub">+ ' + lista.slice(1).map(x => escapeHtml(x.nombre)).join(', ') + '</span>';
-    else if (p.celdas.length > 1) html += '<span class="mc-sub">' + p.celdas.length + ' casillas</span>';
-    html += '<span class="mc-pie"><span class="mc-barra"><i></i></span><span class="mc-pct">' + htmlPct(p) + '</span></span>';
+    else if (p.celdas.length > 1) html += '<span class="mc-sub">Ocupa ' + p.celdas.length + ' casillas</span>';
+    html += '<span class="mc-pie">' + htmlPct(p) +
+      '<span class="mc-items">' + (p.total ? p.listos + '/' + p.total : 'sin ítems') + '</span></span>';
     return {
       clase: 'mc-celda mc-celda--ocupada mc-t-' + p.estado + (multi ? ' mc-celda--multi' : ''),
       p: p.estado === 'controlado' ? 100 : p.pct,
       html: html,
-      firma: lista.map(x => x.id + ':' + x.nombre + ':' + x.pct + ':' + x.estado + ':' + x.celdas.length).join('|'),
+      estado: p.estado,
+      firma: lista.map(x => x.id + ':' + x.nombre + ':' + x.listos + '/' + x.total + ':' + x.estado + ':' + x.celdas.length).join('|'),
       ids: lista.map(x => x.id)
     };
   }
@@ -478,10 +606,10 @@
     const cols = cfg.c2 - cfg.c1 + 1;
     grid.style.setProperty('--mc-cols', cols);
     let h = '<div class="mc-esq"></div>';
-    for (let c = cfg.c1; c <= cfg.c2; c++) h += '<div class="mc-hcol">' + celdaColTxt(c) + '</div>';
+    for (let c = cfg.c1; c <= cfg.c2; c++) h += '<div class="mc-hcol"><b>' + celdaColTxt(c) + '</b></div>';
     let i = 0;
     for (let f = cfg.f1; f <= cfg.f2; f++) {
-      h += '<div class="mc-hfila">' + f + '</div>';
+      h += '<div class="mc-hfila"><b>' + f + '</b></div>';
       for (let c = cfg.c1; c <= cfg.c2; c++) {
         const celda = celdaColTxt(c) + f;
         h += '<div class="mc-celda mc-celda--vacia" data-celda="' + celda + '" style="--mc-i:' + Math.min(i++, 40) + '"></div>';
@@ -524,6 +652,7 @@
       nodo.innerHTML = d.html;
       if (ocupada) {
         nodo.dataset.ids = d.ids.join(',');
+        nodo.dataset.estado = d.estado;
         const p = porCelda.get(celda)[0];
         nodo.setAttribute('aria-label', 'Casilla ' + celda + ': ' + p.nombre + ', ' +
           (p.controlado ? 'controlado' : p.pct + '% armado'));
@@ -541,6 +670,7 @@
         }
       } else {
         delete nodo.dataset.ids;
+        delete nodo.dataset.estado;
         nodo.removeAttribute('aria-label');
         nodo.style.removeProperty('--mc-p');
       }
@@ -559,11 +689,38 @@
     let ocupadas = 0;
     porCelda.forEach((_, c) => { if (dentro(c, cfg)) ocupadas++; });
     const n = pedidos.length;
-    const completos = pedidos.filter(p => p.estado === 'completo' || p.estado === 'controlado').length;
+    const cuenta = { nuevo: 0, armando: 0, completo: 0, controlado: 0 };
+    pedidos.forEach(p => { cuenta[p.estado]++; });
+    const listos = cuenta.completo + cuenta.controlado;
+    const libres = Math.max(0, totalCasillas - ocupadas);
+    const pctOcup = totalCasillas ? Math.round(ocupadas / totalCasillas * 100) : 0;
     document.getElementById('mcResumen').innerHTML =
-      '<b>' + ocupadas + '</b> de ' + totalCasillas + ' casillas ocupadas · ' +
-      '<b>' + n + '</b> ' + (n === 1 ? 'pedido' : 'pedidos') +
-      (n ? ' · ' + completos + (completos === 1 ? ' completo' : ' completos') : '');
+      '<span class="mc-stat mc-stat--pct"><b>' + pctOcup + '<small>%</small></b>ocupado</span>' +
+      '<span class="mc-stat"><b>' + ocupadas + '<small>/' + totalCasillas + '</small></b>casillas</span>' +
+      '<span class="mc-stat"><b>' + libres + '</b>' + (libres === 1 ? 'libre' : 'libres') + '</span>' +
+      '<span class="mc-stat"><b>' + n + '</b>' + (n === 1 ? 'pedido' : 'pedidos') + '</span>' +
+      '<span class="mc-stat"><b>' + listos + '</b>' + (listos === 1 ? 'listo' : 'listos') + '</span>';
+    Object.keys(cuenta).forEach(k => {
+      const el = panel.querySelector('[data-cnt="' + k + '"]');
+      if (el) el.textContent = cuenta[k];
+    });
+    pintarTira(cfg, totalCasillas);
+  }
+
+  // Una marca por casilla recorriendo el mapa fila por fila.
+  function pintarTira(cfg, totalCasillas) {
+    const el = document.getElementById('mcTira');
+    let h = '', i = 0;
+    for (let f = cfg.f1; f <= cfg.f2; f++) {
+      for (let c = cfg.c1; c <= cfg.c2; c++) {
+        const lista = porCelda.get(celdaColTxt(c) + f);
+        h += '<i class="' + (lista ? 'mc-t-' + lista[0].estado : 'mc-libre') + '" style="--mc-i:' + Math.min(i++, 60) + '"></i>';
+      }
+    }
+    if (el.dataset.firma === h) return;
+    el.dataset.firma = h;
+    el.classList.toggle('is-densa', totalCasillas > 80);
+    el.innerHTML = h;
   }
 
   function dentro(celda, cfg) {
@@ -584,11 +741,17 @@
       escapeHtml(x.p.nombre) + '</button>').join('');
   }
 
+  // La seleccion de un pedido manda; si no hay, se aplica el filtro de la leyenda.
   function aplicarSeleccion() {
-    grid.classList.toggle('has-sel', !!seleccion);
-    grid.querySelectorAll('.mc-celda--ocupada').forEach(el => {
-      el.classList.toggle('is-sel', !!seleccion && (el.dataset.ids || '').split(',').includes(seleccion));
+    grid.querySelectorAll('.mc-celda').forEach(el => {
+      const ids = (el.dataset.ids || '').split(',');
+      const sel = !!seleccion && ids.includes(seleccion);
+      const dim = seleccion ? !sel : (filtro ? el.dataset.estado !== filtro : false);
+      el.classList.toggle('is-sel', sel);
+      el.classList.toggle('is-dim', dim);
     });
+    if (panel) panel.querySelectorAll('.mc-filtro').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.filtro === filtro)));
   }
 
   // ------------------------------------------
@@ -616,8 +779,8 @@
       '<h4 id="mcFichaNombre">' + escapeHtml(p.nombre) + '</h4>' +
       '<div class="mc-hoja-sub">Pedido ' + escapeHtml(p.id) + ' · ' + String(p.status || '').toLowerCase() + '</div>' +
       '<div class="mc-ficha-celdas">' + p.celdas.map(c => '<span class="celda-chip">' + c + '</span>').join('') + '</div>' +
-      '<div class="mc-ficha-av"><b>' + p.pct + '%</b><span>' + p.listos + ' de ' + p.total + ' empacados</span></div>' +
-      '<div class="mc-barra"><i></i></div>' +
+      '<div class="mc-ficha-av"><b>' + p.pct + '<small>%</small></b><span>' + p.listos + ' de ' + p.total + ' empacados</span>' +
+      '<div class="mc-barra"><i></i></div></div>' +
       '<div class="mc-ficha-tags">' + tags.join('') + '</div>' +
       '<div class="modal-btns">' +
         '<button type="button" class="btn-cancel" data-accion="cerrar">Cerrar</button>' +
@@ -751,6 +914,13 @@
       abrirFicha(id);
     });
 
+    document.getElementById('mcLeyenda').addEventListener('click', e => {
+      const b = e.target.closest('.mc-filtro');
+      if (!b) return;
+      filtro = filtro === b.dataset.filtro ? null : b.dataset.filtro;
+      if (seleccion) cerrarFicha(); else aplicarSeleccion();
+    });
+
     document.getElementById('mcFuera').addEventListener('click', e => {
       const b = e.target.closest('button[data-id]');
       if (b) abrirFicha(b.dataset.id);
@@ -782,6 +952,7 @@
   async function abrir() {
     montar();
     seleccion = null;
+    filtro = null;
     gridClave = '';
     firmas = new Map();
     cerrarFicha();
@@ -790,6 +961,10 @@
     document.getElementById('mcResumen').textContent = 'Cargando...';
     document.getElementById('mcFuera').hidden = true;
     document.getElementById('mcAviso').hidden = true;
+    const tira = document.getElementById('mcTira');
+    tira.innerHTML = '';
+    tira.dataset.firma = '';
+    marcarVivo(true);
     panel.classList.add('active');
     panel.querySelector('.mc-box').focus({ preventScroll: true });
     await cargarConfig();
