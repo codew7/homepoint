@@ -33,6 +33,8 @@
   // ------------------------------------------
   const CSS = `
     @property --mc-p { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+    /* --mc-q: armado + lo pedido a Caseros (tope de la franja celeste) */
+    @property --mc-q { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
 
     .mc-panel {
       position: fixed; inset: 0; z-index: 210;
@@ -144,18 +146,6 @@
     .mc-filtro[aria-pressed="true"] span { background: var(--mc-tono); color: var(--surface); }
     .mc-leyenda-ayuda { flex: none; margin-left: auto; padding-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-4); white-space: nowrap; }
 
-    /* Aviso de configuracion */
-    .mc-aviso {
-      flex: none; display: flex; align-items: center; gap: 10px;
-      margin: 12px 20px 0; padding: 10px 12px; border-radius: var(--r2);
-      background: var(--warn-soft); color: var(--ink-2); font-size: 12.5px; font-weight: 600;
-    }
-    .mc-aviso[hidden] { display: none; }
-    .mc-aviso span { flex: 1; }
-    .mc-aviso button {
-      flex: none; height: 30px; padding: 0 12px; border: 0; border-radius: 8px;
-      background: var(--inverso-bg); color: var(--inverso-fg); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-    }
 
     /* Cuadricula: el area visible siempre muestra 4 filas */
     .mc-scroll {
@@ -199,7 +189,7 @@
       display: flex; flex-direction: column; gap: 3px;
       padding: 10px 11px 10px; border-radius: 14px; text-align: left;
       font: inherit; color: var(--ink);
-      transition: opacity .25s, transform .2s var(--ease-out), box-shadow .2s, border-color .2s, --mc-p .9s var(--ease-out);
+      transition: opacity .25s, transform .2s var(--ease-out), box-shadow .2s, border-color .2s, --mc-p .9s var(--ease-out), --mc-q .9s var(--ease-out);
     }
     .mc-celda--vacia {
       border: 1.5px dashed var(--line); background: color-mix(in srgb, var(--surface-2) 55%, transparent);
@@ -213,13 +203,17 @@
       background:
         linear-gradient(to top,
           var(--mc-soft) var(--mc-p),
-          color-mix(in srgb, var(--mc-tono) 55%, transparent) var(--mc-p),
-          color-mix(in srgb, var(--mc-tono) 55%, transparent) calc(var(--mc-p) + 1.5px),
-          transparent calc(var(--mc-p) + 1.5px)),
+          var(--mc-trband) var(--mc-p) var(--mc-q),
+          var(--mc-linea) var(--mc-q),
+          var(--mc-linea) calc(var(--mc-q) + 1.5px),
+          transparent calc(var(--mc-q) + 1.5px)),
         var(--surface);
       box-shadow: var(--sh1);
       -webkit-tap-highlight-color: transparent;
+      --mc-trband: color-mix(in srgb, var(--int) 24%, var(--surface));
+      --mc-linea: color-mix(in srgb, var(--mc-tono) 55%, transparent);
     }
+    .mc-celda--ocupada.mc-con-tr { --mc-linea: color-mix(in srgb, var(--int) 70%, transparent); }
     .mc-celda--ocupada:hover { transform: translateY(-2px); box-shadow: var(--sh2); border-color: color-mix(in srgb, var(--mc-tono) 45%, var(--line)); }
     .mc-celda--ocupada:active { transform: scale(.97); }
     .mc-celda--ocupada:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -258,6 +252,10 @@
       background: var(--ok); color: #fff; box-shadow: 0 4px 12px -4px var(--ok);
     }
     .mc-pct svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+    .mc-pct-tr {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: -.3px; color: var(--int);
+      margin-left: 3px; font-variant-numeric: tabular-nums;
+    }
     .mc-items { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
     /* Traspasos: marca en la casilla */
@@ -361,7 +359,7 @@
     .mc-hoja.active { transform: translate(-50%, 0); visibility: visible; transition: transform .38s cubic-bezier(.32, .72, 0, 1), visibility 0s; }
     .mc-ficha::before {
       content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px;
-      background: linear-gradient(90deg, var(--mc-tono) var(--mc-p), var(--line-2) var(--mc-p));
+      background: linear-gradient(90deg, var(--mc-tono) var(--mc-p), var(--int) var(--mc-p) var(--mc-q), var(--line-2) var(--mc-q));
     }
     .mc-hoja h4 { font-size: 18px; font-weight: 800; letter-spacing: -.4px; color: var(--ink); line-height: 1.25; }
     .mc-hoja-sub { margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
@@ -377,7 +375,17 @@
     .mc-ficha-av b small { font-size: 16px; letter-spacing: 0; opacity: .7; }
     .mc-ficha-av > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-align: right; }
     .mc-barra { grid-column: 1 / -1; height: 6px; border-radius: 6px; background: color-mix(in srgb, var(--mc-tono) 16%, var(--surface)); overflow: hidden; }
-    .mc-barra i { display: block; height: 100%; width: var(--mc-p); border-radius: inherit; background: var(--mc-tono); transition: width .6s var(--ease-out); }
+    .mc-barra { display: flex; }
+    .mc-barra i { display: block; flex: none; height: 100%; width: var(--mc-p); background: var(--mc-tono); transition: width .6s var(--ease-out); }
+    .mc-barra i.mc-barra-tr {
+      width: calc(var(--mc-q) - var(--mc-p));
+      background: repeating-linear-gradient(135deg, var(--int) 0 4px, color-mix(in srgb, var(--int) 60%, var(--surface)) 4px 8px);
+    }
+    .mc-ficha-desglose { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+    .mc-ficha-desglose span { display: inline-flex; align-items: center; gap: 6px; }
+    .mc-ficha-desglose i { width: 9px; height: 9px; border-radius: 3px; background: var(--mc-tono); }
+    .mc-ficha-desglose i.is-tr { background: var(--int); }
+    .mc-ficha-desglose i.is-falta { background: var(--line); }
     .mc-ficha-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
     .mc-tag {
       display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 7px;
@@ -399,7 +407,6 @@
       .mc-stat b { font-size: 19px; }
       .mc-leyenda { padding: 10px 14px; }
       .mc-leyenda-ayuda { display: none; }
-      .mc-aviso { margin: 10px 14px 0; }
       .mc-grid {
         --mc-gap: 6px; padding: 0 12px 12px 0;
         grid-template-columns: 32px repeat(var(--mc-cols), minmax(112px, 1fr));
@@ -443,10 +450,6 @@
         <button type="button" class="mc-filtro mc-f-tr" data-filtro="traspaso" aria-pressed="false" title="Pedidos con mercadería pedida a Caseros que todavía no llegó">${IC_CAMION}Esperando traspaso<span data-cnt="traspaso">0</span></button>
         <span class="mc-leyenda-ayuda">Tocá un estado para resaltarlo</span>
       </div>
-      <div class="mc-aviso" id="mcAviso" hidden>
-        <span>Todavía no se configuró el tamaño del depósito: se muestra lo necesario para ver las casillas ocupadas.</span>
-        <button type="button" id="mcAvisoAjustar">Ajustar</button>
-      </div>
       <div class="mc-scroll" id="mcScroll">
         <div class="mc-grid" id="mcGrid"></div>
       </div>
@@ -482,7 +485,6 @@
   let panel = null;
   let grid = null;
   let config = null;          // { colDesde, colHasta, filaDesde, filaHasta } normalizado
-  let configGuardada = false; // false: se dedujo de las casillas ocupadas
   let vivo = null;            // { snaps, subs }
   let pintarTimer = null;
   let pedidos = [];           // pedidos con casillas, ya resumidos
@@ -527,11 +529,11 @@
 
   async function cargarConfig() {
     const local = leerLocal();
-    if (local) { config = local; configGuardada = true; }
+    if (local) { config = local; }
     try {
       const snap = await conTimeout(() => db.ref(RUTA_CONFIG).once('value'));
       const remota = normalizar(snap.val());
-      if (remota) { config = remota; configGuardada = true; escribirLocal(remota); }
+      if (remota) { config = remota; escribirLocal(remota); }
     } catch (e) {
       console.warn('Mapa de casillas: no se pudo leer el tamaño guardado', e);
     }
@@ -582,7 +584,8 @@
         return { k: claveSegura(codigo), nombre: it.nombre || codigo, cantidad: parseInt(it.cantidad, 10) || 0, listo: it.listo === 'y' };
       }),
       tr: [],
-      trEstado: ''
+      trEstado: '',
+      pctTr: 0      // parte del pedido que ya se pidio a Caseros (sin empacar)
     };
   }
 
@@ -630,7 +633,7 @@
           let llega = null;
           if (estado === 'ENVIADO') { llega = Math.min(a.u, Math.max(0, quedan)); quedan -= llega; }
           a.p.tr.push({
-            id: ch.key, numero: t.numero || 'TR', estado: estado,
+            k: k, id: ch.key, numero: t.numero || 'TR', estado: estado,
             creadoEn: t.creadoEn || 0, enviadoEn: t.enviadoEn || 0,
             nombre: it.nombre || lineas[0].nombre, unidades: a.u, llega: llega, motivo: it.motivo || '',
             estimado: a.estimado, empacado: lineas.every(l => l.listo)
@@ -638,7 +641,31 @@
         });
       });
     });
-    lista.forEach(p => { p.trEstado = estadoTr(p.tr); });
+    lista.forEach(p => { p.trEstado = estadoTr(p.tr); p.pctTr = pctTraspaso(p); });
+  }
+
+  // Que porcentaje del pedido (medido igual que el armado: por linea) cubre
+  // la mercaderia pedida a Caseros que todavia no se empaco. Cuenta lo que
+  // esta pedido o en preparacion y, de lo ya enviado, solo lo que llego: lo
+  // que Caseros no mando vuelve a ser faltante. Una linea cubierta en parte
+  // suma en proporcion. Nunca pasa de lo que le falta al armado.
+  function pctTraspaso(p) {
+    if (!p.total || p.controlado || !p.tr.length) return 0;
+    const enCamino = new Map();
+    p.tr.forEach(a => {
+      if (a.empacado) return;
+      const u = a.estado === 'ENVIADO' ? (a.llega || 0) : a.unidades;
+      if (u > 0) enCamino.set(a.k, (enCamino.get(a.k) || 0) + u);
+    });
+    let cubiertas = 0;
+    enCamino.forEach((u, k) => {
+      const pend = p.lineas.filter(l => l.k === k && !l.listo);
+      if (!pend.length) return;
+      const unid = pend.reduce((s, l) => s + l.cantidad, 0);
+      cubiertas += pend.length * (unid > 0 ? Math.min(1, u / unid) : 1);
+    });
+    const pct = Math.round(cubiertas / p.total * 100);
+    return Math.max(0, Math.min(100 - p.pct, pct));
   }
 
   // espera: hay mercaderia en camino que el pedido todavia necesita.
@@ -732,7 +759,8 @@
   // ------------------------------------------
   function htmlPct(p) {
     if (p.estado === 'controlado') return '<span class="mc-pct mc-pct--ok" title="Controlado">' + IC_CHECK + '</span>';
-    return '<span class="mc-pct">' + p.pct + '<small>%</small></span>';
+    return '<span class="mc-pct">' + p.pct + '<small>%</small>' +
+      (p.pctTr ? '<span class="mc-pct-tr" title="' + p.pctTr + '% pedido a Caseros">+' + p.pctTr + '</span>' : '') + '</span>';
   }
 
   // Estado de traspaso de la casilla: el mas urgente entre sus pedidos.
@@ -778,12 +806,13 @@
     html += '<span class="mc-pie">' + htmlPct(p) +
       '<span class="mc-items">' + (p.total ? p.listos + '/' + p.total : 'sin ítems') + '</span></span>';
     return {
-      clase: 'mc-celda mc-celda--ocupada mc-t-' + p.estado + (multi ? ' mc-celda--multi' : ''),
+      clase: 'mc-celda mc-celda--ocupada mc-t-' + p.estado + (multi ? ' mc-celda--multi' : '') + (p.pctTr ? ' mc-con-tr' : ''),
       p: p.estado === 'controlado' ? 100 : p.pct,
+      q: p.estado === 'controlado' ? 100 : p.pct + p.pctTr,
       html: html,
       estado: p.estado,
       tr: tr ? tr.estado : '',
-      firma: lista.map(x => x.id + ':' + x.nombre + ':' + x.listos + '/' + x.total + ':' + x.estado + ':' + x.celdas.length).join('|') +
+      firma: lista.map(x => x.id + ':' + x.nombre + ':' + x.listos + '/' + x.total + ':' + x.estado + ':' + x.celdas.length + ':' + x.pctTr).join('|') +
         (tr ? '#' + tr.estado + ':' + tr.numeros.join(',') : ''),
       ids: lista.map(x => x.id)
     };
@@ -843,14 +872,19 @@
         if (d.tr) nodo.dataset.tr = d.tr; else delete nodo.dataset.tr;
         const p = porCelda.get(celda)[0];
         nodo.setAttribute('aria-label', 'Casilla ' + celda + ': ' + p.nombre + ', ' +
-          (p.controlado ? 'controlado' : p.pct + '% armado'));
+          (p.controlado ? 'controlado' : p.pct + '% armado' + (p.pctTr ? ', ' + p.pctTr + '% pedido a Caseros' : '')));
         // Primero sin avance y en el cuadro siguiente el valor real: asi el
         // relleno sube con la transicion en lugar de aparecer de golpe.
         if (firmaVieja === undefined || firmaVieja === '') {
           nodo.style.setProperty('--mc-p', '0%');
-          requestAnimationFrame(() => requestAnimationFrame(() => nodo.style.setProperty('--mc-p', d.p + '%')));
+          nodo.style.setProperty('--mc-q', '0%');
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            nodo.style.setProperty('--mc-p', d.p + '%');
+            nodo.style.setProperty('--mc-q', d.q + '%');
+          }));
         } else {
           nodo.style.setProperty('--mc-p', d.p + '%');
+          nodo.style.setProperty('--mc-q', d.q + '%');
         }
         if (!primera && firmaVieja !== undefined) {
           nodo.classList.add('is-cambio');
@@ -862,6 +896,7 @@
         delete nodo.dataset.tr;
         nodo.removeAttribute('aria-label');
         nodo.style.removeProperty('--mc-p');
+        nodo.style.removeProperty('--mc-q');
       }
       firmas.set(celda, d.firma);
     });
@@ -869,7 +904,6 @@
     aplicarSeleccion();
     pintarResumen(cfg);
     pintarFuera(cfg);
-    document.getElementById('mcAviso').hidden = configGuardada;
     if (seleccion) pintarFicha(seleccion);
   }
 
@@ -965,13 +999,20 @@
       tags.push('<span class="mc-tag' + (ant.viejo ? ' bad' : '') + '">' + txt + '</span>');
     }
     el.className = 'mc-hoja mc-ficha active mc-t-' + p.estado;
-    el.style.cssText = '--mc-p:' + (p.controlado ? 100 : p.pct) + '%';
+    const pp = p.controlado ? 100 : p.pct;
+    const falta = Math.max(0, 100 - pp - p.pctTr);
+    el.style.cssText = '--mc-p:' + pp + '%;--mc-q:' + (pp + p.pctTr) + '%';
     el.innerHTML =
       '<h4 id="mcFichaNombre">' + escapeHtml(p.nombre) + '</h4>' +
       '<div class="mc-hoja-sub">Pedido ' + escapeHtml(p.id) + ' · ' + String(p.status || '').toLowerCase() + '</div>' +
       '<div class="mc-ficha-celdas">' + p.celdas.map(c => '<span class="celda-chip">' + c + '</span>').join('') + '</div>' +
       '<div class="mc-ficha-av"><b>' + p.pct + '<small>%</small></b><span>' + p.listos + ' de ' + p.total + ' empacados</span>' +
-      '<div class="mc-barra"><i></i></div></div>' +
+      '<div class="mc-barra"><i></i>' + (p.pctTr ? '<i class="mc-barra-tr"></i>' : '') + '</div>' +
+      (p.pctTr ? '<div class="mc-ficha-desglose">' +
+        '<span><i></i>' + pp + '% armado</span>' +
+        '<span><i class="is-tr"></i>' + p.pctTr + '% pedido a Caseros</span>' +
+        '<span><i class="is-falta"></i>' + falta + '% falta</span></div>' : '') +
+      '</div>' +
       '<div class="mc-ficha-tags">' + tags.join('') + '</div>' +
       fichaTraspasos(p) +
       '<div class="modal-btns">' +
@@ -1094,7 +1135,6 @@
     const btn = document.getElementById('mcConfigGuardar');
     btn.disabled = true;
     config = n;
-    configGuardada = true;
     escribirLocal(n);
     cerrarConfig();
     pintar();
@@ -1129,7 +1169,6 @@
     panel.addEventListener('click', e => { if (e.target === panel) cerrar(); });
     document.getElementById('mcBtnCerrar').addEventListener('click', cerrar);
     document.getElementById('mcBtnAjustar').addEventListener('click', abrirConfig);
-    document.getElementById('mcAvisoAjustar').addEventListener('click', abrirConfig);
     document.getElementById('mcVelo').addEventListener('click', () => { cerrarFicha(); cerrarConfig(); });
     document.getElementById('mcConfigCancelar').addEventListener('click', () => cerrarConfig());
     document.getElementById('mcConfigGuardar').addEventListener('click', guardarConfig);
@@ -1194,7 +1233,6 @@
     grid.innerHTML = '<div class="mc-estado"><div class="spinner"></div>Cargando el mapa...</div>';
     document.getElementById('mcResumen').textContent = 'Cargando...';
     document.getElementById('mcFuera').hidden = true;
-    document.getElementById('mcAviso').hidden = true;
     const tira = document.getElementById('mcTira');
     tira.innerHTML = '';
     tira.dataset.firma = '';
