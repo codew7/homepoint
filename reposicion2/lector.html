@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lector · Reposición</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap" rel="stylesheet">
+<style>
+/* =========================================================================
+   LECTOR · REPOSICIÓN 2
+   Pantalla de la PC que tiene la pistola. La abre la app de Windows
+   "Lector HomePoint" (LectorLocal). Cada lectura se sube a Firebase: le llega
+   al salón como "ofrecido" y el celular del depósito la ve para revisarla.
+   Pensada para mirarse de lejos: letra grande, el color dice qué pasó.
+   ========================================================================= */
+:root {
+  --bg: #f1f2f4; --surface: #ffffff; --surface-2: #f7f8f9;
+  --ink: #101216; --ink-2: #3a3f48; --muted: #6c727d; --faint: #a4a9b2;
+  --line: rgba(16, 18, 22, .08); --line-2: rgba(16, 18, 22, .14);
+  --amb: #c26a00; --amb-s: #fff1d9;
+  --blu: #1f5fd6; --blu-s: #e6eeff;
+  --grn: #157a3c; --grn-s: #e1f4e7; --grn-l: #5cbf7f;
+  --red: #c8302b; --red-s: #fde7e5; --red-l: #f08a84;
+  --gry: #6c727d; --gry-s: #eceef1;
+  --display: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
+  --ui: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --sh-1: 0 1px 2px rgba(16,18,22,.05), 0 1px 1px rgba(16,18,22,.03);
+  --sh-2: 0 10px 30px -12px rgba(16,18,22,.18), 0 2px 6px -2px rgba(16,18,22,.06);
+  --ease: cubic-bezier(.32, .72, 0, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 16px; line-height: 1.4; -webkit-font-smoothing: antialiased; overflow: hidden; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+input { font: inherit; color: inherit; }
+img { display: block; }
+[hidden] { display: none !important; }
+svg { display: block; }
+
+.lay { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+
+/* Encabezado */
+.hdr { display: flex; align-items: center; gap: 14px; padding: 14px 24px; }
+.marca { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+.marca img { width: 40px; height: 40px; border-radius: 11px; }
+.marca b { display: block; font-family: var(--display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; line-height: 1.05; }
+.marca span { color: var(--muted); font-size: 13.5px; font-weight: 650; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--surface); box-shadow: var(--sh-1), inset 0 0 0 1px var(--line); font-weight: 750; font-size: 14px; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+.chip.ok .dot { background: var(--grn); box-shadow: 0 0 0 3px rgba(21,122,60,.15); }
+.chip.mal { background: var(--red-s); color: var(--red); box-shadow: none; }
+.chip.mal .dot { background: var(--red); }
+.chip.amb { background: var(--amb-s); color: var(--amb); box-shadow: none; }
+.chip.amb .dot { background: var(--amb); }
+.manual { position: relative; }
+.manual input { width: 230px; height: 40px; border-radius: 12px; border: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); padding: 0 12px; font-weight: 650; font-size: 15px; outline: none; }
+.manual input:focus { box-shadow: inset 0 0 0 2px var(--ink); }
+
+/* Cuerpo */
+.cuerpo { min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: 20px; padding: 4px 24px 24px; }
+.panel { background: var(--surface); border-radius: 28px; box-shadow: var(--sh-2); min-height: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+
+/* Última lectura */
+.ult { flex: 1; display: flex; flex-direction: column; }
+.ult-band { padding: 18px 26px; font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: -.02em; display: flex; align-items: center; gap: 14px; }
+.ult-band svg { width: 34px; height: 34px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.r-ok .ult-band { background: var(--grn-s); color: var(--grn); }
+.r-ya .ult-band { background: var(--amb-s); color: var(--amb); }
+.r-no-encontrado .ult-band { background: var(--red-s); color: var(--red); }
+.r-varios .ult-band { background: var(--blu-s); color: var(--blu); }
+.r-pausa .ult-band { background: var(--gry-s); color: var(--ink-2); }
+.ult-c { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 28px; padding: 26px; align-items: center; }
+.ult-c .ft { width: 100%; aspect-ratio: 1; max-height: 52vh; object-fit: contain; background: #fff; border-radius: 22px; box-shadow: inset 0 0 0 1px var(--line); padding: 10px; }
+.ult-n { font-family: var(--display); font-weight: 800; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.06; letter-spacing: -.025em; overflow-wrap: anywhere; text-wrap: balance; }
+.ult-m { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); font-weight: 650; font-size: 17px; }
+.ult-m code { font-family: var(--mono); font-size: 17px; color: var(--ink); background: var(--surface-2); padding: 3px 9px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); }
+.ops { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.op { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; text-align: left; padding: 8px; border-radius: 16px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.op:hover { box-shadow: inset 0 0 0 2px var(--ink); }
+.op .ft { width: 64px; height: 64px; border-radius: 12px; background: #fff; padding: 0; aspect-ratio: auto; }
+.op b { font-weight: 750; font-size: 16px; line-height: 1.2; }
+.op code { display: block; font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 3px; }
+.espera { flex: 1; display: grid; place-items: center; text-align: center; padding: 40px; color: var(--muted); }
+.espera .ic { width: 120px; height: 120px; border-radius: 34px; background: var(--surface-2); color: var(--faint); display: grid; place-items: center; margin: 0 auto 22px; }
+.espera .ic svg { width: 62px; height: 62px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.espera b { display: block; color: var(--ink); font-family: var(--display); font-weight: 800; font-size: 38px; letter-spacing: -.02em; margin-bottom: 8px; }
+.espera p { font-size: 18px; max-width: 34ch; margin: 0 auto; }
+.entra { animation: entra .38s var(--ease) both; }
+@keyframes entra { from { opacity: 0; transform: translateY(12px) scale(.99); } to { opacity: 1; transform: none; } }
+
+/* Lista de lecturas */
+.lst-h { display: flex; align-items: baseline; justify-content: space-between; padding: 20px 22px 10px; }
+.lst-h h2 { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -.015em; }
+.lst-h span { color: var(--muted); font-weight: 750; font-variant-numeric: tabular-nums; }
+.lst { overflow-y: auto; padding: 0 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.fila { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center; padding: 7px 10px 7px 7px; border-radius: 16px; background: var(--surface-2); }
+.fila .ft { width: 52px; height: 52px; border-radius: 11px; background: #fff; object-fit: contain; }
+.fila-n { font-weight: 750; font-size: 14.5px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.fila-m { color: var(--muted); font-size: 12.5px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 99px; font-size: 12.5px; font-weight: 750; white-space: nowrap; }
+.pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.p-ok { color: var(--grn); background: var(--grn-s); }
+.p-ya { color: var(--amb); background: var(--amb-s); }
+.p-no-encontrado { color: var(--red); background: var(--red-s); }
+.p-varios { color: var(--blu); background: var(--blu-s); }
+.p-resuelto { color: var(--gry); background: var(--gry-s); }
+.vacio-l { color: var(--muted); text-align: center; padding: 30px 16px; font-weight: 600; }
+
+/* Fotos */
+.ph { display: grid; place-items: center; color: var(--faint); background: var(--surface-2); }
+.ph svg { width: 42%; height: 42%; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Avisos a pantalla completa */
+.velo { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; text-align: center; padding: 40px; }
+.velo .caja { max-width: 640px; }
+.velo .ic { width: 110px; height: 110px; border-radius: 32px; display: grid; place-items: center; margin: 0 auto 24px; }
+.velo .ic svg { width: 58px; height: 58px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.velo b { display: block; font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.05; letter-spacing: -.025em; margin-bottom: 12px; text-wrap: balance; }
+.velo p { font-size: 20px; font-weight: 600; }
+#vFoco { background: rgba(200, 48, 43, .94); color: #fff; cursor: pointer; }
+#vFoco .ic { background: rgba(255,255,255,.16); }
+#vFoco p { color: rgba(255,255,255,.85); }
+#vPausa { background: rgba(241, 242, 244, .97); z-index: 55; }
+#vPausa .ic { background: var(--amb-s); color: var(--amb); }
+#vPausa p { color: var(--muted); }
+
+.destello { position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0; }
+.destello.on { animation: destello 1s ease-out; }
+.destello.ok { box-shadow: inset 0 0 0 10px var(--grn-l); }
+.destello.mal { box-shadow: inset 0 0 0 10px var(--red-l); }
+.destello.amb { box-shadow: inset 0 0 0 10px #f3b347; }
+.destello.blu { box-shadow: inset 0 0 0 10px #7ea4f0; }
+@keyframes destello { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (max-width: 1000px) {
+  body { overflow: auto; }
+  .lay { height: auto; min-height: 100%; }
+  .cuerpo { grid-template-columns: 1fr; }
+  .ult-c { grid-template-columns: 1fr; }
+  .lst { max-height: 50vh; }
+  .hdr { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div class="lay">
+  <header class="hdr">
+    <div class="marca"><img src="icon-192.png" alt=""><div><b>Lector</b><span>Reposición · HomePoint</span></div></div>
+    <span class="chip" id="chCon"><span class="dot"></span><span id="chConTx">Conectando…</span></span>
+    <span class="chip" id="chCat"><span class="dot"></span><span id="chCatTx">Cargando catálogo…</span></span>
+    <span class="chip" id="chHoy"><span class="dot"></span><span id="chHoyTx">0 lecturas hoy</span></span>
+    <label class="manual"><input id="manual" type="text" placeholder="Escribir un código a mano" autocomplete="off" spellcheck="false"></label>
+  </header>
+  <div class="cuerpo">
+    <section class="panel" id="pUlt">
+      <div class="espera" id="espera">
+        <div><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 7.5v-2a2 2 0 0 1 2-2h2.5M16.5 3.5H19a2 2 0 0 1 2 2v2M21 16.5v2a2 2 0 0 1-2 2h-2.5M7.5 20.5H5a2 2 0 0 1-2-2v-2M7.5 8v8M10.5 8v8M13.5 8v8M16.5 8v8"/></svg></div>
+        <b>Listo para escanear</b><p>Cada artículo que leas con la pistola le llega al salón al instante y al celular del depósito.</p></div>
+      </div>
+      <div class="ult" id="ult" hidden></div>
+    </section>
+    <section class="panel">
+      <div class="lst-h"><h2>Últimas lecturas</h2><span id="lstN"></span></div>
+      <div class="lst" id="lst"><div class="vacio-l">Todavía no se leyó nada.</div></div>
+    </section>
+  </div>
+</div>
+
+<div class="velo" id="vFoco" hidden>
+  <div class="caja"><div class="ic"><svg viewBox="0 0 24 24"><path d="M9 9l5 12 1.8-5.2L21 14 9 9z"/><path d="M7.2 2.2 8 5.1M5.1 8 2.2 7.2M14 4.1 12 6.2M6.2 12l-2.1 2"/></svg></div>
+  <b>Hacé clic acá</b><p>La pistola no está escribiendo en el Lector: hay otra ventana adelante. Un clic en cualquier parte y sigue.</p></div>
+</div>
+<div class="velo" id="vPausa" hidden>
+  <div class="caja"><div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg></div>
+  <b>Caja HomePoint está abierta</b><p>Mientras la Caja esté abierta en esta PC, el Lector no toma lecturas para que no se mezclen. Al cerrarla sigue solo.</p></div>
+</div>
+<div class="destello" id="destello"></div>
+
+<script src="../config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+'use strict';
+// =========================================================================
+// LECTOR · REPOSICIÓN 2
+//
+// Por cada lectura de la pistola:
+//   · 1 artículo y no estaba en la lista → crea reposicion/items/{id} como
+//     "ofrecido" (origen 'lector', creadoPor 'Lector'): igual que cuando el
+//     depósito escaneaba en el celular, así lo ven las dos versiones.
+//   · 1 artículo que ya estaba abierto   → no se repite ("ya").
+//   · varios artículos con ese código    → el depósito elige en el celular
+//     (o acá con un clic).
+//   · no está en el catálogo             → aviso acá y en el celular.
+// Toda lectura queda en reposicion/lector/lecturas (se guardan 2 días).
+// El estado del Lector (conectado, en pausa por la Caja) va a
+// reposicion/lector/estado. La app de Windows avisa con window.LectorApp
+// cuándo la Caja está abierta.
+// =========================================================================
+
+const $ = id => document.getElementById(id);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
+};
+const APP = window.LectorApp || null;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+const IC = {
+  caja: '<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>',
+  ok: '<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19.5 7"/></svg>',
+  ya: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  mal: '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg>',
+  varios: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  pausa: '<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>'
+};
+const RES_TX = { ok: 'Enviado al salón', ya: 'Ya estaba en la lista', 'no-encontrado': 'No está en el catálogo', varios: 'Varios artículos: elegí cuál' };
+
+// ---------------------------------------------------------------- firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const R_ITEMS = db.ref('reposicion/items');
+const R_LECTOR = db.ref('reposicion/lector');
+const R_LECT = R_LECTOR.child('lecturas');
+const R_EST = R_LECTOR.child('estado');
+let offset = 0;
+db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+function ahora() { return Date.now() + offset; }
+function diaDe(ts) { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function hora(ts) { return ts ? new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : ''; }
+
+// Estado del Lector: lo ve el celular del depósito.
+let conectado = false, bloqueado = false;
+const desde = Date.now();
+function publicarEstado() {
+  if (!conectado) return;
+  R_EST.update({ online: true, visto: firebase.database.ServerValue.TIMESTAMP, desde, bloqueado, version: (APP && APP.version) || 'web' }).catch(err => console.warn('Estado:', err));
+}
+db.ref('.info/connected').on('value', s => {
+  conectado = s.val() === true;
+  if (conectado) {
+    R_EST.onDisconnect().update({ online: false, visto: firebase.database.ServerValue.TIMESTAMP });
+    publicarEstado();
+  }
+  const ch = $('chCon');
+  ch.className = 'chip ' + (conectado ? 'ok' : 'mal');
+  $('chConTx').textContent = conectado ? 'Conectado' : 'Sin conexión · se envía al volver';
+});
+setInterval(publicarEstado, 30000);
+
+// ---------------------------------------------------------------- catálogo (igual que la app de celulares)
+const CAT = { by: {}, lista: [], barras: {}, listo: false };
+function armarCatalogo(filas) {
+  const by = {}, lista = [], barras = {};
+  filas.forEach(f => {
+    const a = { c: f[0], n: f[1], img: f[2], alt: f[3], bar: f[4] ? f[4].split(',') : [] };
+    a.k = norm(a.n + ' ' + a.c);
+    by[a.c] = a; lista.push(a);
+    a.bar.forEach(b => { const k = b.toUpperCase(); (barras[k] = barras[k] || []).push(a.c); });
+  });
+  CAT.by = by; CAT.lista = lista; CAT.barras = barras; CAT.listo = true;
+  const ch = $('chCat');
+  ch.className = 'chip ok';
+  $('chCatTx').textContent = lista.length.toLocaleString('es-AR') + ' artículos';
+  vaciarEspera();
+}
+async function cargarCatalogo() {
+  const cache = LS.get('lectorCatalogo', null);
+  if (!CAT.listo && cache && cache.length) armarCatalogo(cache);
+  try {
+    const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID +
+      '/values/' + GOOGLE_SHEETS_CONFIG.RANGO + '?key=' + GOOGLE_SHEETS_CONFIG.API_KEY;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const filas = [];
+    (data.values || []).forEach(row => {
+      const c = String(row[2] || '').trim();
+      if (!c) return;
+      const img = String(row[1] || '').split(',').map(u => u.trim());
+      const bar = String(row[11] || '').split(',').map(s => s.trim()).filter(Boolean).join(',');
+      filas.push([c, String(row[3] || '').trim() || c, img[0] || '', img[3] || '', bar]);
+    });
+    if (filas.length) { armarCatalogo(filas); LS.set('lectorCatalogo', filas); }
+  } catch (err) {
+    console.error('Catálogo:', err);
+    if (!CAT.listo) { $('chCat').className = 'chip mal'; $('chCatTx').textContent = 'Sin catálogo · reintentando'; setTimeout(cargarCatalogo, 30000); }
+  }
+}
+setInterval(cargarCatalogo, 30 * 60 * 1000); // la PC queda prendida todo el día
+function art(c) { return CAT.by[c] || { c, n: c, img: '', alt: '', bar: [] }; }
+function candidatos(texto) {
+  const k = String(texto || '').trim().toUpperCase();
+  if (!k) return [];
+  const porBarras = (CAT.barras[k] || []).filter(c => CAT.by[c]);
+  if (porBarras.length) return [...new Set(porBarras)];
+  if (CAT.by[texto.trim()]) return [texto.trim()];
+  return CAT.lista.filter(a => a.c.toUpperCase() === k).map(a => a.c);
+}
+function foto(a, cls) {
+  if (!a.img) return '<div class="ft ph ' + (cls || '') + '">' + IC.caja + '</div>';
+  return '<img class="ft ' + (cls || '') + '" src="' + esc(a.img) + '" data-alt="' + esc(a.alt) + '" alt="" decoding="async" onerror="fotoError(this)">';
+}
+function fotoError(el) {
+  if (el.dataset.alt && !el.dataset.probo) { el.dataset.probo = '1'; el.src = el.dataset.alt; return; }
+  el.onerror = null;
+  const ph = document.createElement('div');
+  ph.className = el.className + ' ph';
+  ph.innerHTML = IC.caja;
+  el.replaceWith(ph);
+}
+
+// ---------------------------------------------------------------- items abiertos (para no repetir)
+let ABIERTOS = {};
+R_ITEMS.orderByChild('abierto').equalTo(true).on('value', s => { ABIERTOS = s.val() || {}; }, err => console.error(err));
+const recientes = new Map(); // codigo -> { id, t }: lo creado hace instantes, antes de que vuelva de Firebase
+function abiertoDe(codigo) {
+  const id = Object.keys(ABIERTOS).find(k => ABIERTOS[k].codigo === codigo && (ABIERTOS[k].estado === 'ofrecido' || ABIERTOS[k].estado === 'pedido'));
+  if (id) return { id, estado: ABIERTOS[id].estado };
+  const r = recientes.get(codigo);
+  if (r && Date.now() - r.t < 15000) return { id: r.id, estado: 'ofrecido' };
+  return null;
+}
+
+// ---------------------------------------------------------------- sonido
+let actx = null;
+function activarAudio() {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+  } catch (_) {}
+}
+activarAudio();
+document.addEventListener('pointerdown', activarAudio, { capture: true, passive: true });
+function nota(f, t0, dur, vol) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine'; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function sonar(tipo) {
+  activarAudio();
+  if (!actx || actx.state !== 'running') return;
+  const t = actx.currentTime + 0.01;
+  if (tipo === 'ok') { nota(1046.5, t, 0.16, 0.25); nota(1568, t + 0.08, 0.28, 0.2); }
+  else if (tipo === 'mal') { nota(392, t, 0.22, 0.35); nota(311, t + 0.15, 0.4, 0.3); }
+  else if (tipo === 'varios') { nota(880, t, 0.2, 0.3); nota(1318.5, t + 0.13, 0.4, 0.26); }
+  else nota(1200, t, 0.1, 0.18);
+}
+function destello(tipo) {
+  const d = $('destello');
+  d.className = 'destello ' + tipo;
+  void d.offsetWidth; d.classList.add('on');
+}
+
+// ---------------------------------------------------------------- procesar una lectura
+const espera = [];
+function vaciarEspera() { while (CAT.listo && espera.length) procesar(espera.shift()); }
+function procesar(texto) {
+  texto = String(texto || '').trim().slice(0, 80);
+  if (!texto) return;
+  if (bloqueado) { sonar('mal'); return; }
+  if (!CAT.listo) { espera.push(texto); return; }
+  const ts = ahora();
+  const lref = R_LECT.push();
+  const c = candidatos(texto);
+  let lec;
+  if (!c.length) {
+    lec = { texto, ts, resultado: 'no-encontrado' };
+    sonar('mal'); destello('mal');
+  } else if (c.length > 1) {
+    lec = { texto, ts, resultado: 'varios', opciones: c.slice(0, 12) };
+    sonar('varios'); destello('blu');
+  } else {
+    lec = Object.assign({ texto, ts }, crearItem(c[0], ts));
+    if (lec.resultado === 'ok') { sonar('ok'); destello('ok'); } else { sonar('toc'); destello('amb'); }
+  }
+  lref.set(lec).catch(err => console.error('Lectura:', err));
+  ultima = Object.assign({ id: lref.key }, lec);
+  pintarUltima(true);
+}
+// Crea el item "ofrecido" (mismo formato que la app de celulares) o avisa que ya estaba.
+function crearItem(codigo, ts) {
+  const ya = abiertoDe(codigo);
+  if (ya) return { resultado: 'ya', codigo, itemId: ya.id };
+  const ref = R_ITEMS.push();
+  recientes.set(codigo, { id: ref.key, t: Date.now() });
+  ref.set({ codigo, origen: 'lector', estado: 'ofrecido', abierto: true, dia: diaDe(ts), creado: ts, creadoPor: 'Lector' })
+    .catch(err => { console.error('Item:', err); sonar('mal'); });
+  return { resultado: 'ok', codigo, itemId: ref.key };
+}
+// Elegir acá, con un clic, cuál de los varios artículos era.
+function elegir(lid, codigo) {
+  const r = crearItem(codigo, ahora());
+  R_LECT.child(lid).update({ resuelto: codigo, resueltoPor: 'Lector' }).catch(err => console.error(err));
+  sonar(r.resultado === 'ok' ? 'ok' : 'toc');
+  ultima = Object.assign({}, ultima, { resultado: r.resultado, codigo, itemId: r.itemId, resuelto: codigo });
+  pintarUltima(true);
+}
+
+// ---------------------------------------------------------------- pintar
+let ultima = null;
+function pintarUltima(nueva) {
+  const el = $('ult');
+  if (!ultima) { el.hidden = true; $('espera').hidden = false; return; }
+  $('espera').hidden = true; el.hidden = false;
+  const l = ultima;
+  el.className = 'ult r-' + l.resultado + (nueva ? ' entra' : '');
+  let h = '<div class="ult-band">' + (IC[l.resultado === 'no-encontrado' ? 'mal' : l.resultado] || IC.ok) + RES_TX[l.resultado] + '</div>';
+  if (l.resultado === 'varios' && !l.resuelto) {
+    const ops = (l.opciones || []).map(art);
+    h += '<div class="ult-c" style="grid-template-columns:1fr"><div><div class="ult-n" style="font-size:30px">El código <code style="font-family:var(--mono)">' + esc(l.texto) + '</code> es de ' + ops.length + ' artículos</div>' +
+      '<div class="ult-m">El depósito elige en el celular, o hacé clic acá en el correcto:</div><div class="ops">' +
+      ops.map(a => '<button class="op" type="button" data-c="' + esc(a.c) + '">' + foto(a) + '<span><b>' + esc(a.n) + '</b><code>' + esc(a.c) + '</code></span></button>').join('') +
+      '</div></div></div>';
+  } else if (l.resultado === 'no-encontrado') {
+    h += '<div class="ult-c" style="grid-template-columns:1fr"><div><div class="ult-n">Leyó <code style="font-family:var(--mono)">' + esc(l.texto) + '</code></div>' +
+      '<div class="ult-m"><span>Ese código no está en el catálogo. El depósito lo ve en el celular y puede buscarlo a mano.</span><span>' + hora(l.ts) + '</span></div></div></div>';
+  } else {
+    const a = art(l.codigo);
+    h += '<div class="ult-c">' + foto(a) + '<div style="min-width:0"><div class="ult-n">' + esc(a.n) + '</div>' +
+      '<div class="ult-m"><span>Leyó <code>' + esc(l.texto) + '</code></span>' + (l.texto !== a.c ? '<span>Código <code>' + esc(a.c) + '</code></span>' : '') +
+      '<span>' + (l.resultado === 'ya' ? 'No se repitió: ya está esperando al salón o pedido.' : 'Ya le llegó al salón. El depósito lo revisa en el celular.') + '</span>' +
+      '<span>' + hora(l.ts) + '</span></div></div></div>';
+  }
+  el.innerHTML = h;
+}
+$('ult').addEventListener('click', e => {
+  const b = e.target.closest('.op[data-c]');
+  if (b && ultima) elegir(ultima.id, b.dataset.c);
+});
+
+// Lista: últimas lecturas (también las de otro momento del día, y si el
+// depósito resolvió alguna desde el celular).
+let LECT = {};
+R_LECT.orderByChild('ts').limitToLast(25).on('value', s => {
+  LECT = s.val() || {};
+  // Si el depósito resolvió desde el celular la última lectura (eligió el
+  // artículo o la descartó), se refleja acá.
+  const r = ultima && LECT[ultima.id];
+  if (r && r.resuelto && !ultima.resuelto) {
+    ultima = r.resuelto === '-' ? null : Object.assign({}, ultima, { resuelto: r.resuelto, codigo: r.resuelto, resultado: 'ok' });
+    pintarUltima(false);
+  }
+  pintarLista();
+  contarHoy();
+}, err => console.error(err));
+function contarHoy() {
+  const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
+  R_LECT.orderByChild('ts').startAt(inicio.getTime()).once('value').then(s => {
+    const deHoy = s.numChildren();
+    $('chHoyTx').textContent = deHoy + (deHoy === 1 ? ' lectura hoy' : ' lecturas hoy');
+    $('chHoy').className = 'chip' + (deHoy ? ' ok' : '');
+  }).catch(() => {});
+}
+function pintarLista() {
+  const ls = Object.keys(LECT).map(id => Object.assign({ id }, LECT[id])).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  $('lstN').textContent = ls.length || '';
+  if (!ls.length) { $('lst').innerHTML = '<div class="vacio-l">Todavía no se leyó nada.</div>'; return; }
+  $('lst').innerHTML = ls.map(l => {
+    const cod = l.resuelto && l.resuelto !== '-' ? l.resuelto : l.codigo;
+    const a = cod ? art(cod) : null;
+    const res = l.resuelto ? 'resuelto' : l.resultado;
+    const tx = l.resuelto ? (l.resuelto === '-' ? 'Descartado' : 'Elegido por ' + (l.resueltoPor || '')) : RES_TX[l.resultado];
+    return '<div class="fila">' + (a ? foto(a) : '<div class="ft ph">' + IC.caja + '</div>') +
+      '<div style="min-width:0"><div class="fila-n">' + esc(a ? a.n : l.texto) + '</div><div class="fila-m">' + hora(l.ts) + ' · ' + esc(l.texto) + '</div></div>' +
+      '<span class="pill p-' + res + '">' + esc(tx) + '</span></div>';
+  }).join('');
+}
+
+// ---------------------------------------------------------------- pistola (modo teclado)
+// Escribe muy rápido y termina con Enter (o Tab). Lo que se tipea despacio
+// en el campo "Escribir un código a mano" también vale, con Enter.
+const P_GAP = 120, P_MIN = 3, P_MIN_SIN_FIN = 6;
+let pBuf = '', pUlt = 0, pTimer = null, pTragarEnter = 0;
+function pReset() { pBuf = ''; clearTimeout(pTimer); pTimer = null; }
+function pLimpiarInput(t) {
+  const el = document.activeElement;
+  if (!el || el.tagName !== 'INPUT' || !el.value.endsWith(t)) return;
+  el.value = el.value.slice(0, -t.length);
+}
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.altKey || e.metaKey) { pReset(); return; }
+  const t0 = Date.now();
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    if (t0 < pTragarEnter) { e.preventDefault(); return; }
+    const rapido = t0 - pUlt <= P_GAP, t = pBuf;
+    pReset();
+    if (!rapido || t.length < P_MIN) return;
+    e.preventDefault(); e.stopPropagation();
+    pLimpiarInput(t); procesar(t);
+    return;
+  }
+  if (e.key && e.key.length === 1) {
+    if (t0 - pUlt > P_GAP) pBuf = '';
+    pBuf += e.key; pUlt = t0;
+    clearTimeout(pTimer);
+    pTimer = setTimeout(() => {
+      const t = pBuf; pReset();
+      if (t.length < P_MIN_SIN_FIN) return;
+      pTragarEnter = Date.now() + 300;
+      pLimpiarInput(t); procesar(t);
+    }, P_GAP * 2);
+    return;
+  }
+  if (e.key !== 'Shift') pReset();
+}, true);
+$('manual').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const v = $('manual').value.trim();
+  $('manual').value = '';
+  if (v) procesar(v);
+});
+
+// ---------------------------------------------------------------- foco y pausa
+// La pistola escribe en la ventana que está adelante: si el Lector pierde el
+// foco se avisa en grande (la app de Windows además lo recupera sola cuando
+// nadie usa la PC).
+let focoT = null;
+function revisarFoco() {
+  clearTimeout(focoT);
+  focoT = setTimeout(() => {
+    const sin = !document.hasFocus();
+    const antes = !$('vFoco').hidden;
+    $('vFoco').hidden = !sin || bloqueado;
+    if (sin && !antes && !bloqueado) sonar('mal');
+  }, 400);
+}
+window.addEventListener('blur', revisarFoco);
+window.addEventListener('focus', revisarFoco);
+$('vFoco').addEventListener('click', () => { window.focus(); revisarFoco(); });
+setInterval(revisarFoco, 5000);
+
+function ponerPausa(b) {
+  bloqueado = !!b;
+  $('vPausa').hidden = !bloqueado;
+  if (bloqueado) $('vFoco').hidden = true; else revisarFoco();
+  publicarEstado();
+}
+if (APP && typeof APP.onBloqueo === 'function') APP.onBloqueo(ponerPausa);
+
+// ---------------------------------------------------------------- limpieza (2 días)
+async function limpiarViejas() {
+  const h = diaDe(ahora());
+  if (LS.get('lectorLimpieza', '') === h) return;
+  const limite = ahora() - 2 * 864e5;
+  try {
+    for (let vuelta = 0; vuelta < 20; vuelta++) {
+      const s = await R_LECT.orderByChild('ts').endAt(limite).limitToFirst(500).once('value');
+      const up = {};
+      s.forEach(c => { up[c.key] = null; });
+      const n = Object.keys(up).length;
+      if (n) await R_LECT.update(up);
+      if (n < 500) break;
+    }
+    LS.set('lectorLimpieza', h);
+  } catch (err) { console.warn('Limpieza:', err); }
+}
+setTimeout(limpiarViejas, 15000);
+setInterval(limpiarViejas, 60 * 60 * 1000);
+
+// ---------------------------------------------------------------- versión nueva
+// La PC está sola: si la página cambió, se recarga sola cuando hace un minuto
+// que no se lee nada.
+let huella = '', ultLectura = Date.now();
+document.addEventListener('keydown', () => { ultLectura = Date.now(); }, true);
+async function huellaDe(url) {
+  const t = await (await fetch(url, { cache: 'no-store' })).text();
+  let h = 0; for (let i = 0; i < t.length; i++) h = (Math.imul(h, 31) + t.charCodeAt(i)) | 0;
+  return String(h);
+}
+let hayNueva = false;
+async function revisarVersion() {
+  try {
+    const url = location.pathname + '?v=' + Date.now();
+    if (!huella) { huella = await huellaDe(url); return; }
+    if (!hayNueva && await huellaDe(url) !== huella) hayNueva = true;
+    if (hayNueva && Date.now() - ultLectura > 60000) location.reload();
+  } catch (_) {}
+}
+revisarVersion();
+setInterval(revisarVersion, 5 * 60 * 1000);
+
+// ---------------------------------------------------------------- inicio
+cargarCatalogo();
+revisarFoco();
+</script>
+</body>
+</html>

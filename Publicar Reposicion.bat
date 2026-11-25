@@ -4,7 +4,7 @@ title Publicar Reposición
 rem ==========================================================================
 rem  Sube a GitHub los cambios de Reposición para que lleguen a los celulares.
 rem
-rem  Solo publica lo de Reposición: la carpeta reposicion\, su workflow del APK
+rem  Solo publica lo de Reposición: las carpetas reposicion\ y reposicion2\, el workflow del APK
 rem  y este mismo archivo. Cualquier otro cambio del repositorio queda como
 rem  está, sin subirse.
 rem
@@ -37,7 +37,7 @@ if /i not "%RAMA%"=="main" (
 rem El instalador del driver de la impresora no se publica (pesa y no hace falta en la web).
 git rm -r --cached --ignore-unmatch -q -- "reposicion/*.exe" >nul 2>&1
 
-set "RUTAS=reposicion .github/workflows/apk-reposicion.yml .gitignore "Publicar Reposicion.bat""
+set "RUTAS=reposicion reposicion2 .github/workflows/apk-reposicion.yml .gitignore "Publicar Reposicion.bat""
 
 set "HAY="
 for /f "delims=" %%i in ('git status --porcelain -- %RUTAS%') do set "HAY=1"
