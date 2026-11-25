@@ -896,10 +896,13 @@ function formatPriceDisplay(precio){
 }
 
 // Código + código de barras (columna L), separados por guion medio.
-// Si hay varios códigos de barras (separados por coma), se usa el primero.
+// Con un solo código de barras se muestra completo; con varios (separados por coma en la
+// columna L) se muestran los últimos 6 dígitos de cada uno, separados por coma.
 function formatCodigoLinea(item){
-  const cb = (item.codigoBarras || '').split(',')[0].trim();
-  return cb ? item.codigo + ' - ' + cb : item.codigo;
+  const cbs = (item.codigoBarras || '').split(',').map(s => s.trim()).filter(Boolean);
+  if(!cbs.length) return item.codigo;
+  const cb = cbs.length === 1 ? cbs[0] : cbs.map(c => c.slice(-6)).join(', ');
+  return item.codigo + ' - ' + cb;
 }
 
 // Fecha impresa en la etiqueta: día/mes hora:minutos del momento en que se LEYERON
