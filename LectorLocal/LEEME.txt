@@ -1,0 +1,122 @@
+===============================================================================
+  LECTOR HOMEPOINT - Reposicion 2 (la PC con la pistola)
+===============================================================================
+
+  Version alternativa de Reposicion, para probar y comparar con la actual:
+
+    - La pistola lectora queda conectada a una PC del deposito, con este
+      programa ("Lector"). Cada articulo que se escanea le llega al instante
+      al salon.
+    - El celular del DEPOSITO ya no escanea: ve cada lectura (foto, nombre y
+      codigo), quita las que se leyeron mal, elige el articulo correcto si un
+      codigo es de varios y confirma lo que pide el salon.
+    - El celular del SALON indica cuantas unidades hacen falta, como siempre.
+
+  Celulares (version 2):  https://homepoint-admin.dev.ar/reposicion2/
+  Celulares (version 1):  https://homepoint-admin.dev.ar/reposicion/  (sin cambios)
+
+  Las dos versiones comparten los datos: lo que lee el Lector tambien
+  aparece en la version 1.
+
+
+-------------------------------------------------------------------------------
+  REGLA IMPORTANTE: EL LECTOR NO FUNCIONA CON LA CAJA ABIERTA
+-------------------------------------------------------------------------------
+
+  La pistola escribe en la ventana que esta adelante, como un teclado. Para
+  que nunca se mezclen lecturas entre la Caja y el Lector:
+
+    - Si Caja HomePoint esta abierta al abrir el Lector, el Lector muestra
+      "Caja HomePoint esta abierta" y espera. Al cerrar la Caja arranca solo.
+    - Si se abre la Caja con el Lector andando, el Lector se pone EN PAUSA
+      (no toma lecturas) y el celular del deposito lo muestra. Al cerrar la
+      Caja sigue solo.
+
+  Se revisa cada 5 segundos.
+
+
+-------------------------------------------------------------------------------
+  INSTALACION (una sola vez por PC)
+-------------------------------------------------------------------------------
+
+  1. Descargar el instalador:
+       https://github.com/codew7/homepoint/releases/tag/lector-win
+     (el archivo "Lector-HomePoint-Setup-X.Y.Z.exe")
+
+  2. Abrirlo con doble clic. No pide permisos de administrador.
+     Si Windows muestra "Windows protegio su PC": "Mas informacion" >
+     "Ejecutar de todas formas" (solo esta primera vez).
+
+  3. Queda el acceso "Lector HomePoint" en el Escritorio y en el menu Inicio,
+     y el Lector se abre solo cada vez que se prende la PC.
+
+  4. Conectar la pistola (USB o Bluetooth, modo teclado). No hay que
+     configurar nada: la primera lectura ya funciona.
+
+
+-------------------------------------------------------------------------------
+  USO DIARIO
+-------------------------------------------------------------------------------
+
+  - Escanear. La pantalla muestra en grande lo ultimo que se leyo:
+      verde   -> se le envio al salon
+      ambar   -> ya estaba en la lista (no se repite)
+      azul    -> el codigo es de varios articulos: se elige en el celular del
+                 deposito (o con un clic en la PC)
+      rojo    -> no esta en el catalogo (el deposito lo ve en el celular y
+                 puede buscarlo a mano)
+  - Si aparece la pantalla roja "Hace clic aca": otra ventana quedo adelante y
+    la pistola no esta escribiendo en el Lector. Un clic y sigue. Si nadie
+    usa la PC durante 20 segundos, el Lector vuelve adelante solo.
+  - Arriba a la derecha se puede escribir un codigo a mano y Enter.
+
+
+-------------------------------------------------------------------------------
+  ACTUALIZACIONES
+-------------------------------------------------------------------------------
+
+  - La PANTALLA del Lector (reposicion2\lector.html) esta en el sitio: se
+    publica con "Publicar Reposicion.bat" y el Lector la toma solo (se
+    recarga cuando hace un minuto que no se escanea nada).
+  - El PROGRAMA de Windows (esta carpeta) se actualiza solo desde GitHub: lo
+    busca al abrir y cada 2 horas, y lo instala cuando la PC esta 10 minutos
+    sin uso.
+
+  Publicar una version nueva del programa (casi nunca hace falta):
+    1. Doble clic en ARMAR VERSION.bat  (arma el instalador en dist)
+    2. Doble clic en SUBIR VERSION.bat  (lo sube al release "lector-win")
+    3. Commitear package.json (tiene el numero de version nuevo).
+
+  Las versiones van a un release fijo "lector-win" marcado como pre-release,
+  para no confundir al actualizador de Caja HomePoint.
+
+  Para probar sin instalar:  npm install  y despues  npm start
+    Con la pagina local:     $env:LECTOR_URL = 'http://localhost:8080/reposicion2/lector.html'
+    Si la Caja se prueba con "npm start" (no instalada), su proceso se llama
+    electron.exe:            $env:LECTOR_PROCESO_CAJA = 'electron.exe'
+
+
+-------------------------------------------------------------------------------
+  FIREBASE
+-------------------------------------------------------------------------------
+
+  Usa la misma base que Reposicion (config.js):
+    reposicion/items             los articulos (igual que la version 1;
+                                 los del Lector tienen origen "lector")
+    reposicion/lector/estado     conectado / en pausa (lo ve el deposito)
+    reposicion/lector/lecturas   cada lectura (se guardan 2 dias)
+
+  Hace falta publicar las reglas de database.rules.munro.json (agregan el
+  origen "lector" y el nodo reposicion/lector). Sin eso Firebase rechaza
+  lo que escribe el Lector.
+
+
+-------------------------------------------------------------------------------
+  SI ALGO NO ANDA (soporte)
+-------------------------------------------------------------------------------
+
+  * F5 recarga la pantalla. Ctrl+Shift+I abre las herramientas.
+  * Registro: %APPDATA%\Lector HomePoint\logs\main.log
+  * Instalado en: %LOCALAPPDATA%\Programs\lector-homepoint
+  * No aparecen los articulos: la clave de Google Sheets tiene que permitir
+    el sitio homepoint-admin.dev.ar (es la misma que usan los celulares).

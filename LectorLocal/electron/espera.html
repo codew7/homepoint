@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Lector HomePoint</title>
+  <style>
+    :root { --fondo: #f1f2f4; --tarjeta: #fff; --texto: #101216; --suave: #6c727d; --borde: rgba(16, 18, 22, .08); --amb: #c26a00; --amb-s: #fff1d9; --red: #c8302b; --red-s: #fde7e5; }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body { background: var(--fondo); color: var(--texto); font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; display: grid; place-items: center; padding: 24px; }
+    .tarjeta { width: min(520px, 100%); background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 22px; padding: 40px 36px 30px; text-align: center; box-shadow: 0 1px 2px rgba(16, 18, 22, .04), 0 16px 40px -16px rgba(16, 18, 22, .16); }
+    .icono { width: 72px; height: 72px; margin: 0 auto 20px; border-radius: 20px; display: grid; place-items: center; background: var(--amb-s); color: var(--amb); }
+    .red .icono { background: var(--red-s); color: var(--red); }
+    .icono svg { width: 38px; height: 38px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 10px; }
+    p { font-size: 16px; line-height: 1.55; color: var(--suave); }
+    .estado { margin-top: 22px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--suave); }
+    .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--amb); animation: latir 1.6s ease-in-out infinite; }
+    .red .punto { background: var(--red); }
+    .botones { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button { height: 46px; border: 0; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+    #reintentar { background: var(--texto); color: #fff; }
+    #salir { background: #eceef1; color: var(--texto); }
+    @keyframes latir { 50% { opacity: .35; } }
+  </style>
+</head>
+<body>
+  <div class="tarjeta" id="tarjeta">
+    <div class="icono" id="icono"></div>
+    <h1 id="titulo"></h1>
+    <p id="texto"></p>
+    <div class="estado"><span class="punto"></span><span id="estado"></span></div>
+    <div class="botones">
+      <button id="salir" type="button">Cerrar el Lector</button>
+      <button id="reintentar" type="button">Probar ahora</button>
+    </div>
+  </div>
+  <script>
+    const modo = new URLSearchParams(location.search).get('modo');
+    const T = {
+      caja: {
+        icono: '<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>',
+        titulo: 'Caja HomePoint está abierta',
+        texto: 'El Lector sólo funciona con la Caja cerrada en esta PC, para que las lecturas de la pistola no se mezclen. Cerrá la Caja y el Lector se abre solo.',
+        estado: 'Esperando que se cierre la Caja…'
+      },
+      red: {
+        icono: '<svg viewBox="0 0 24 24"><path d="M12 3.6 2.6 20h18.8L12 3.6z"/><path d="M12 10v4.4"/><path d="M12 17.4h.01"/></svg>',
+        titulo: 'Sin conexión a internet',
+        texto: 'El Lector necesita internet para avisarle al salón. Revisá el cable o el WiFi de esta PC: apenas vuelva, se abre solo.',
+        estado: 'Reintentando cada 5 segundos…'
+      }
+    };
+    const t = T[modo] || T.red;
+    document.getElementById('tarjeta').className = 'tarjeta ' + (modo === 'caja' ? 'caja' : 'red');
+    document.getElementById('icono').innerHTML = t.icono;
+    document.getElementById('titulo').textContent = t.titulo;
+    document.getElementById('texto').textContent = t.texto;
+    document.getElementById('estado').textContent = t.estado;
+    const app = window.LectorApp;
+    document.getElementById('salir').onclick = () => app && app.salir();
+    document.getElementById('reintentar').onclick = () => app && app.reintentar();
+  </script>
+</body>
+</html>
