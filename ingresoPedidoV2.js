@@ -2757,7 +2757,7 @@ function getTipoCliente() {
       ? ModoOffline.cotizacion().then(valor => ({ blue: { value_sell: valor } }))
       : fetch('https://api.bluelytics.com.ar/v2/latest').then(r => r.json());
     pedirCotizacion
-      .then(d => {
+      .then(async d => {
         if (!d.blue || (typeof d.blue.value_sell === 'undefined' && typeof d.blue.sell === 'undefined')) {
           throw new Error('cotizacion');
         }
@@ -2843,13 +2843,19 @@ function getTipoCliente() {
             if (pedidoAnterior && pedidoAnterior.sucursal) {
               pedidoObj.sucursal = pedidoAnterior.sucursal;
             }
+            // CONSERVAR en qué caja y turno se cobró (cajaTurno.js).
+            if (pedidoAnterior && pedidoAnterior.cobro) {
+              pedidoObj.cobro = pedidoAnterior.cobro;
+            }
+            // Si cambió el efectivo, la caja lo ve en "Por cobrar".
+            const escriturasCaja = window.CajaTurno ? CajaTurno.ajusteDeEdicion(pedidoId, pedidoAnterior, pedidoObj) : {};
 
             // BLOQUEAR INTERFAZ durante proceso crítico
             bloquearInterfaz('Actualizando pedido y restaurando inventario...');
-            
+
             try {
               // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
-              await guardarPedidoConMovimientos(pedidoId, pedidoObj, items);
+              await guardarPedidoConMovimientos(pedidoId, pedidoObj, items, escriturasCaja);
 
               // DESBLOQUEAR INTERFAZ después de completar proceso
               desbloquearInterfaz();
@@ -2874,14 +2880,39 @@ function getTipoCliente() {
           // Agregar campo fecha solo al crear el pedido
           pedidoObj.fecha = getFechaActual();
           asignarSucursal(pedidoObj);
-          
-          // BLOQUEAR INTERFAZ durante proceso crítico
-          bloquearInterfaz('Registrando pedido y actualizando inventario...');
-          
+
           // Usar push para obtener el id generado (sin escribir todavía)
           const pedidoRef = db.ref('pedidos').push();
-          // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
-          guardarPedidoConMovimientos(pedidoRef.key, pedidoObj, items)
+
+          // Puesto de cobro (cajaTurno.js): la plata en efectivo entra al turno
+          // abierto de esta caja, en el mismo guardado que el pedido. Sin turno
+          // se pide abrirlo; si se cancela, la venta no se guarda.
+          let escriturasCaja = {};
+          if (window.CajaTurno && CajaTurno.necesitaTurno(pedidoObj.pagos)) {
+            const turnoId = await CajaTurno.asegurarTurno();
+            if (turnoId) {
+              escriturasCaja = CajaTurno.registrarCobro(pedidoRef.key, pedidoObj, turnoId);
+            } else if (CajaTurno.usuarioGenerico()) {
+              // "Otro" no abre turnos: la venta se guarda y la plata queda
+              // "Por cobrar" hasta que alguien con usuario propio la sume.
+              escriturasCaja = CajaTurno.dejarPorCobrar(pedidoRef.key, pedidoObj);
+              reg('PEDIDO', 'Venta de usuario genérico sin turno abierto: queda en "Por cobrar"');
+            } else {
+              enviandoPedido = false;
+              reg('PEDIDO', 'No se guardó: falta abrir el turno de caja');
+              showPopup('La venta no se guardó: para cobrar en efectivo hay que abrir el turno de caja.', '❗', false);
+              return;
+            }
+          } else if (window.CajaTurno) {
+            // Puesto de sólo ingreso: el efectivo lo cobra la caja ("Por cobrar").
+            escriturasCaja = CajaTurno.marcarPendiente(pedidoRef.key, pedidoObj);
+          }
+
+          // BLOQUEAR INTERFAZ durante proceso crítico
+          bloquearInterfaz('Registrando pedido y actualizando inventario...');
+
+          // Guardado atómico: pedido + movimientos (+ caja) en una sola operación (todo o nada)
+          guardarPedidoConMovimientos(pedidoRef.key, pedidoObj, items, escriturasCaja)
             .then(async () => {
               // Guardar alias en localStorage si se usó uno
               if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
@@ -2920,7 +2951,11 @@ function getTipoCliente() {
               // DESBLOQUEAR INTERFAZ en caso de error
               desbloquearInterfaz();
               enviandoPedido = false;
-              showPopup('Error al guardar el pedido.', '❌', false);
+              // Con caja: lo más probable es que el turno se haya cerrado desde
+              // otro equipo de la misma caja (las reglas rechazan sumarle ventas).
+              showPopup(pedidoObj.cobro && pedidoObj.cobro.caja
+                ? 'Error al guardar el pedido. Si el turno de caja se cerró en otro equipo, volvé a ingresar la orden para abrir uno nuevo.'
+                : 'Error al guardar el pedido.', '❌', false);
             });
         }
       })
@@ -2962,9 +2997,14 @@ function getTipoCliente() {
     // El id se genera en la PC (no necesita internet) y el paquete se arma una
     // sola vez: si la subida se repite, escribe exactamente lo mismo.
     const pedidoKey = db.ref('pedidos').push().key;
+    // Efectivo cobrado sin internet: queda como "Venta sin conexión" para que
+    // la caja lo sume al turno al volver la conexión (cajaTurno.js). Va antes
+    // de armar el paquete porque marca pedidoObj.cobro.
+    const fichaCaja = window.CajaTurno ? CajaTurno.fichaOffline(pedidoKey, pedidoObj) : {};
     let paquete;
     try {
       paquete = armarActualizacionPedido(pedidoKey, pedidoObj, items);
+      Object.assign(paquete.rootUpdates, fichaCaja);
     } catch (err) {
       console.error('Modo Offline: no se pudo armar el pedido:', err);
       enviandoPedido = false;
@@ -3394,12 +3434,18 @@ function getTipoCliente() {
             if (pedido && pedido.sucursal) {
               pedidoObj.sucursal = pedido.sucursal;
             }
+            // CONSERVAR en qué caja y turno se cobró (cajaTurno.js).
+            if (pedido && pedido.cobro) {
+              pedidoObj.cobro = pedido.cobro;
+            }
+            // Si cambió el efectivo, la caja lo ve en "Por cobrar".
+            const escriturasCaja = window.CajaTurno ? CajaTurno.ajusteDeEdicion(pedidoId, pedido, pedidoObj) : {};
 
             // BLOQUEAR INTERFAZ durante proceso crítico
             bloquearInterfaz('Guardando cambios y actualizando inventario...');
-            
+
             // Guardado atómico: pedido + movimientos en una sola operación (todo o nada)
-            guardarPedidoConMovimientos(pedidoId, pedidoObj, items)
+            guardarPedidoConMovimientos(pedidoId, pedidoObj, items, escriturasCaja)
               .then(async () => {
                 // Guardar alias en localStorage si se usó uno
                 if (pedidoObj.pagos && pedidoObj.pagos.alias && pedidoObj.pagos.alias.trim() !== '') {
@@ -4470,6 +4516,28 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     }
   }
 
+  // Ticket de texto simple en la térmica, para otras partes de la caja (el
+  // comprobante del cierre de turno, cajaTurno.js). Mismo camino ESC-POS que
+  // el recibo. lineas: [{ texto | fila: [izq, der] | sep, negrita?, centrado? }]
+  window.imprimirTicketPOS = async function(lineas) {
+    await conectarQZ();
+    const impresora = await seleccionarImpresoraPOS();
+    if (!impresora) throw new Error('No se encontró ninguna impresora');
+    const data = [escCmd('1B40'), escCmd('1B7400'), escCmd('1B5200')];
+    lineas.forEach(l => {
+      data.push(escCmd(l.centrado ? '1B6101' : '1B6100'));
+      if (l.negrita) data.push(escCmd('1B4501'));
+      if (l.sep) data.push(escTxt(posSep()));
+      else if (l.fila) data.push(escTxt(posFila(l.fila[0], l.fila[1])));
+      else data.push(escTxt(posWrap(l.texto || '')));
+      if (l.negrita) data.push(escCmd('1B4500'));
+    });
+    data.push(escCmd('1B6100'));
+    data.push(escTxt('\n\n\n'));
+    data.push(escCmd('1D564203')); // avanza y corta
+    await qz.print(qz.configs.create(impresora, { encoding: 'CP437' }), data);
+  };
+
   // Inicializar tabla vacía
   renderItems();
 
@@ -4642,7 +4710,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
   // red) quedaba el pedido guardado SIN movimientos, de forma aleatoria y sin aviso.
   // Firebase garantiza que un update multi-ruta es atómico: todas las rutas se confirman
   // en el servidor, o ninguna. Así el pedido y sus movimientos se graban juntos (todo o nada).
-  async function guardarPedidoConMovimientos(pedidoId, pedidoObj, items) {
+  // extras: escrituras que viajan en el mismo commit (el cobro en el turno de
+  // caja, cajaTurno.js). Si falla una, no se guarda nada.
+  async function guardarPedidoConMovimientos(pedidoId, pedidoObj, items, extras) {
     console.log('===== INICIO guardarPedidoConMovimientos =====');
     console.log('PedidoId:', pedidoId, '| Items a procesar:', Array.isArray(items) ? items.length : 'N/A');
 
@@ -4677,6 +4747,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // 2 y 3. Movimientos, pedido y retro-referencias (armarActualizacionPedido).
     const { exitosos, errores: omitidos } = armarActualizacionPedido(pedidoId, pedidoObj, items, rootUpdates);
     errores.push(...omitidos);
+    if (extras) Object.assign(rootUpdates, extras);
 
     // 4. Commit atómico: pedido + movimientos juntos (todo o nada).
     console.log(`📝 Commit atómico: pedido + ${exitosos} movimientos...`);
@@ -4984,6 +5055,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
     // Admin sólo para Alejandro, Javier y Sabrina, con la clave personal de cada uno.
     const ADMINS = ['alejandro', 'javier', 'sabrina'];
     function esAdmin(nombre) { return ADMINS.includes(String(nombre || '').trim().toLowerCase()); }
+    // cajaTurno.js lo usa para dejar configurar el puesto de cobro sólo a un Admin.
+    window.esUsuarioAdmin = esAdmin;
     function actualizarBotonAdmin() {
       const nombre = window.UsuarioActivo ? UsuarioActivo.actual() : '';
       const ok = esAdmin(nombre);

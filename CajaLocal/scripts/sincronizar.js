@@ -47,6 +47,9 @@ const ARCHIVOS = [
   // Modo de emergencia "Offline" (solo actúa en la PC habilitada).
   'modoOffline.js',
   'modoOffline.css',
+  // Turnos y cierre de efectivo del puesto de cobro.
+  'cajaTurno.js',
+  'cajaTurno.css',
   // Registro diario de lo que se hace en la caja (en la web no hace nada).
   'registroCaja.js',
   // Lectura y análisis del registro: lo usa el visor local

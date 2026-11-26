@@ -1467,6 +1467,22 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         origenes.forEach(origenId => {
           updates[`pedidos/${origenId}/devoluciones/${id}`] = null;
         });
+        // Caja (cajaTurno.js): si esperaba ser cobrado, sale de "Por cobrar"; si ya
+        // se cobró en efectivo, queda una ficha "Pedido cancelado" para que la
+        // caja registre que devolvió la plata (reemplaza cualquier ficha previa).
+        const cobroCaja = pedido.cobro || {};
+        const efectivoCobrado = Math.round(Number(cobroCaja.efectivo) || 0);
+        if (cobroCaja.pendiente) {
+          updates[`cajaPendientes/${id}`] = null;
+        } else if (cobroCaja.caja && efectivoCobrado) {
+          updates[`cajaPendientes/${id}`] = {
+            tipo: 'anulacion',
+            efectivo: -efectivoCobrado,
+            cliente: String((pedido.cliente && pedido.cliente.nombre) || '').slice(0, 50),
+            vendedor: String(pedido.vendedor || '').slice(0, 30),
+            ts: Date.now()
+          };
+        }
         updates[`pedidos/${id}/status`] = 'CANCELADO';
         updates[`pedidos/${id}/locked`] = true;
         updates[`pedidos/${id}/movimientosRegistrados`] = false;

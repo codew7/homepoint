@@ -697,6 +697,9 @@
     .resumen-rangos b { color: var(--text); font-weight: 600; }
     .error-campo { color: var(--danger); font-size: 0.82rem; font-weight: 600; min-height: 1.2em; margin-bottom: 10px; }
     .hoja-acciones { display: flex; gap: 10px; }
+    .pasos { margin: 4px 0 20px; padding-left: 22px; line-height: 1.5; }
+    .pasos li { margin-bottom: 10px; padding-left: 4px; }
+    .pasos i { color: var(--primary); }
 
     /* ---------- Login / estados ---------- */
     .pantalla {
@@ -816,6 +819,7 @@
           <i class="bi bi-chevron-down"></i>
         </button>
         <div class="cab-acciones">
+          <button class="icon-btn" type="button" id="btnInstalar" title="Instalar app" aria-label="Instalar como aplicación" hidden><i class="bi bi-download"></i></button>
           <button class="icon-btn" type="button" id="btnCortes" title="Cortes de monto" aria-label="Cambiar los cortes de monto"><i class="bi bi-sliders"></i></button>
           <button class="icon-btn" type="button" id="btnSalir" title="Cerrar sesión" aria-label="Cerrar sesión en esta sucursal"><i class="bi bi-box-arrow-right"></i></button>
         </div>
@@ -1014,6 +1018,34 @@
       <div class="hoja-acciones">
         <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
         <button class="btn btn-primario" type="button" id="btnAplicarCortes">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hoja: cómo instalar (iPhone o navegadores sin botón propio) -->
+  <div class="hoja" id="hojaInstalar" role="dialog" aria-modal="true" aria-labelledby="hojaInstalarTitulo">
+    <div class="hoja-asa"></div>
+    <div class="hoja-cab">
+      <div>
+        <div class="hoja-titulo" id="hojaInstalarTitulo">Instalar como app</div>
+        <div class="hoja-sub">Queda un ícono en la pantalla de inicio</div>
+      </div>
+      <button class="icon-btn" type="button" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="hoja-cuerpo">
+      <ol class="pasos" id="pasosIos" hidden>
+        <li>Abrí esta página en <b>Safari</b>.</li>
+        <li>Tocá <b>Compartir</b> <i class="bi bi-box-arrow-up"></i> (abajo o arriba de la pantalla).</li>
+        <li>Elegí <b>Agregar a inicio</b> <i class="bi bi-plus-square"></i>. Si no aparece, deslizá la lista hacia abajo.</li>
+        <li>Tocá <b>Agregar</b>.</li>
+      </ol>
+      <ol class="pasos" id="pasosAndroid" hidden>
+        <li>Abrí esta página en <b>Chrome</b>.</li>
+        <li>Tocá el menú <i class="bi bi-three-dots-vertical"></i> (arriba a la derecha).</li>
+        <li>Elegí <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.</li>
+      </ol>
+      <div class="hoja-acciones">
+        <button class="btn btn-primario" type="button" data-cerrar>Entendido</button>
       </div>
     </div>
   </div>
@@ -1484,6 +1516,37 @@
     $('velo').addEventListener('click', cerrarHoja);
     document.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrarHoja));
     document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarHoja(); });
+
+    // ================= Instalar como app =================
+    // Android/Chrome avisa con "beforeinstallprompt" y abre su ventana propia.
+    // iPhone no tiene ese aviso: se muestran los pasos de Safari.
+    const yaInstalada = () => navigator.standalone === true ||
+      matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+    const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const esMovil = esIos || /android/i.test(navigator.userAgent);
+    let avisoInstalar = null;
+    function mostrarBtnInstalar() {
+      $('btnInstalar').hidden = yaInstalada() || !(avisoInstalar || esMovil);
+    }
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      avisoInstalar = e;
+      mostrarBtnInstalar();
+    });
+    window.addEventListener('appinstalled', () => { avisoInstalar = null; $('btnInstalar').hidden = true; });
+    $('btnInstalar').addEventListener('click', async () => {
+      if (avisoInstalar) {
+        avisoInstalar.prompt();
+        const r = await avisoInstalar.userChoice.catch(() => null);
+        if (r && r.outcome === 'accepted') { avisoInstalar = null; $('btnInstalar').hidden = true; }
+        return;
+      }
+      $('pasosIos').hidden = !esIos;
+      $('pasosAndroid').hidden = esIos;
+      abrirHoja('hojaInstalar');
+    });
+    mostrarBtnInstalar();
 
     // ================= Cambiar de sucursal =================
     function abrirSucursales() {

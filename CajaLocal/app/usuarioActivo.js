@@ -41,7 +41,8 @@
 // entra como siempre y se le invita a crearla (una vez por día y equipo).
 // "Clave personal", al pie, la crea o la cambia. La clave maestra del
 // encargado (en el código sólo va su hash) permite poner una nueva o
-// quitarla cuando alguien se la olvida. WhatsApp y Offline no llevan.
+// quitarla cuando alguien se la olvida. WhatsApp, Offline y los usuarios
+// genéricos ("Otro") no llevan.
 //
 // Se carga en <head>, antes del script de login: el resto del archivo sólo
 // toca el DOM cuando hace falta.
@@ -71,6 +72,11 @@
   const SUFIJO_PV = PUNTO_VENTA && PUNTO_VENTA !== '1' ? '_' + PUNTO_VENTA : '';
   const LS_CLAVES = 'hpClavesCache' + SUFIJO_PV;
   const LS_INVITACION = 'hpClaveInvitacion' + SUFIJO_PV;
+  // Ícono que eligió cada persona ("Cambiar ícono", al pie del selector).
+  // Nodo usuariosIconos/{claveDe(nombre)} = "gato": unos pocos bytes por
+  // persona. Se lee una sola vez por página y queda en localStorage.
+  const RUTA_ICONOS = 'usuariosIconos';
+  const LS_ICONOS = 'hpIconosCache' + SUFIJO_PV;
   const LARGO_CLAVE = 4;
   const LARGO_MAESTRA = 8;
   // SHA-256 de 'hp-maestra:' + la clave maestra. El código de la web es
@@ -79,14 +85,20 @@
   const MAX_INTENTOS = 5;
   const ESPERA_INTENTOS_MS = 30 * 1000;
 
-  // Identidad de cada vendedor: un color y un animal. Se reparten por la
-  // posición en la planilla, así dos personas nunca comparten color ni animal
-  // (mientras la lista no pase de 12; de ahí en más el color se genera y
-  // sigue sin repetirse, el animal sí puede volver a aparecer).
+  // Identidad de cada vendedor: un animal, y cada animal tiene su color fijo
+  // (el de la misma posición en TONOS). Nunca hay dos personas con el mismo
+  // animal (ni, por lo tanto, el mismo color). Cada persona elige el suyo con
+  // "Cambiar ícono" entre los que están libres y lo lleva siempre. Quien
+  // todavía no eligió recibe uno libre (ver asignacion()): puede cambiar si
+  // entra gente nueva a la planilla, hasta que elija el propio.
   // Colores apagados, pensados para leerse sobre grafito y sobre blanco.
+  // Uno por animal, en el mismo orden que ANIMALES: los 6 últimos se eligieron
+  // lejos de los 12 primeros (mostaza, pizarra, bordó, marino, lima, naranja)
+  // para que no haya dos círculos que se confundan.
   const TONOS = [
     '#7c5fd0', '#3f8fe6', '#1f9d86', '#d08a1e', '#d6604f', '#b25cc4',
-    '#2fa3c7', '#7d9446', '#d1517f', '#4f5fd1', '#3fa35a', '#a86b3c'
+    '#2fa3c7', '#7d9446', '#d1517f', '#4f5fd1', '#3fa35a', '#a86b3c',
+    '#c4a31d', '#607489', '#9a2d42', '#26457d', '#94b02a', '#ea6c1f'
   ];
 
   // Íconos de línea en 24×24, trazo blanco. Caras de frente para que todos
@@ -103,7 +115,13 @@
     cerdo:    '<circle cx="12" cy="12.5" r="7.5"/><path d="M6.4 7.4 5.2 3.6l4 2.2M17.6 7.4l1.2-3.8-4 2.2"/><ellipse cx="12" cy="14.6" rx="3" ry="2.2"/><path d="M11 14.6h.01M13 14.6h.01M9 10.5h.01M15 10.5h.01"/>',
     rana:     '<circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="7" r="2.5"/><path d="M4 13c0-3 2-5 4-5.5h8c2 .5 4 2.5 4 5.5 0 4-3.6 6.5-8 6.5S4 17 4 13Z"/><path d="M8.5 14.5c2 1.5 5 1.5 7 0M8 7h.01M16 7h.01"/>',
     pez:      '<path d="M3 12c3-5 9-6.5 13-3l4-3v12l-4-3c-4 3.5-10 2-13-3Z"/><path d="M8 11h.01"/><path d="M11 9.5c.8 1.6.8 3.4 0 5"/>',
-    tortuga:  '<path d="M3 15a8 7 0 0 1 16 0Z"/><path d="M7.5 15l1.5-4h4l1.5 4M9 11l2-3 2 3"/><path d="M6 15v2.5M16 15v2.5"/><path d="M19 13.5c.5-1.6 2.5-1.9 3-.3s-.6 2.3-2 2.3"/>'
+    tortuga:  '<path d="M3 15a8 7 0 0 1 16 0Z"/><path d="M7.5 15l1.5-4h4l1.5 4M9 11l2-3 2 3"/><path d="M6 15v2.5M16 15v2.5"/><path d="M19 13.5c.5-1.6 2.5-1.9 3-.3s-.6 2.3-2 2.3"/>',
+    leon:     '<circle cx="12" cy="12" r="9" stroke-dasharray="2.4 1.7"/><circle cx="12" cy="12.5" r="5.5"/><path d="M10 11.5h.01M14 11.5h.01"/><path d="M11 14h2l-1 1.1Z"/>',
+    mono:     '<circle cx="4.8" cy="12" r="2.3"/><circle cx="19.2" cy="12" r="2.3"/><circle cx="12" cy="12" r="6.5"/><path d="M8.6 13.2c0-1.8 1.5-2.6 3.4-2.6s3.4.8 3.4 2.6c0 2-1.5 3.3-3.4 3.3s-3.4-1.3-3.4-3.3Z"/><path d="M10 9.4h.01M14 9.4h.01"/><path d="M10.9 14.6c.7.4 1.5.4 2.2 0"/>',
+    koala:    '<circle cx="5.5" cy="8.5" r="3.2"/><circle cx="18.5" cy="8.5" r="3.2"/><circle cx="12" cy="13" r="6.5"/><ellipse cx="12" cy="14.2" rx="1.7" ry="2.4"/><path d="M9.2 11.5h.01M14.8 11.5h.01"/>',
+    panda:    '<circle cx="6.3" cy="6.8" r="2.1"/><circle cx="17.7" cy="6.8" r="2.1"/><circle cx="12" cy="13" r="7"/><ellipse cx="9" cy="12.4" rx="1.6" ry="2.3" transform="rotate(28 9 12.4)"/><ellipse cx="15" cy="12.4" rx="1.6" ry="2.3" transform="rotate(-28 15 12.4)"/><path d="M11.2 16h1.6L12 16.9Z"/>',
+    vaca:     '<path d="M7 7l-2.5-3M17 7l2.5-3"/><path d="M6 9 3 9.8l3 1.4M18 9l3 .8-3 1.4"/><path d="M7.5 6.5h9a1.5 1.5 0 0 1 1.5 1.5V13H6V8a1.5 1.5 0 0 1 1.5-1.5Z"/><rect x="6.5" y="13" width="11" height="6.5" rx="3.2"/><path d="M9.5 10h.01M14.5 10h.01M10 16.3h.01M14 16.3h.01"/>',
+    pato:     '<circle cx="10.5" cy="10" r="6"/><path d="M15.6 11.2H20a1.6 1.6 0 0 1 0 3.2h-4.8"/><path d="M11.5 8.5h.01"/><path d="M6 17.5c1.8 2 6.8 2.6 9 0"/>'
   };
   const ORDEN_ANIMALES = Object.keys(ANIMALES);
 
@@ -112,15 +130,45 @@
       'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ANIMALES[clave] + '</svg>';
   }
 
-  // Más allá de la paleta fija, ángulo áureo: cada tono nuevo cae lejos de
-  // los anteriores y nunca se repite.
-  function tonoPorIndice(i) {
-    if (i < TONOS.length) return TONOS[i];
-    return `hsl(${Math.round((i * 137.508) % 360)} 52% 50%)`;
+  // Sin acentos ni mayúsculas: en la planilla vale "Búho", "buho" o "BUHO".
+  function normalizar(texto) {
+    return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  }
+
+  // El animal si es uno de la lista, o null.
+  function animalValido(texto) {
+    const a = normalizar(texto);
+    return ANIMALES[a] ? a : null;
+  }
+
+  const NOMBRE_ANIMAL = {
+    gato: 'Gato', perro: 'Perro', zorro: 'Zorro', oso: 'Oso', conejo: 'Conejo', buho: 'Búho',
+    pinguino: 'Pingüino', raton: 'Ratón', cerdo: 'Cerdo', rana: 'Rana', pez: 'Pez', tortuga: 'Tortuga',
+    leon: 'León', mono: 'Mono', koala: 'Koala', panda: 'Panda', vaca: 'Vaca', pato: 'Pato'
+  };
+
+  // { claveDe(nombre): animal }, de Firebase (o de la caché mientras tanto).
+  function limpiarIconos(v) {
+    const r = {};
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      Object.keys(v).forEach(k => { const a = animalValido(v[k]); if (a) r[k] = a; });
+    }
+    return r;
+  }
+  let iconosElegidos = (() => {
+    try { return limpiarIconos(JSON.parse(lsGet(LS_ICONOS) || '{}')); } catch (_) { return {}; }
+  })();
+
+  // Animal que sale del nombre mientras la persona no eligió uno.
+  function animalPorNombre(nombre) {
+    const s = normalizar(nombre);
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ORDEN_ANIMALES[(h >>> 0) % ORDEN_ANIMALES.length];
   }
 
   // La lista vigente de personas (la última que respondió la planilla, o la
-  // de la caché mientras tanto) define quién lleva cada color y animal.
+  // de la caché mientras tanto): la usa el selector para pintar los botones.
   let listaIdentidades = [];
 
   // "WhatsApp" no es una persona de la planilla sino el modo homónimo: va
@@ -151,14 +199,46 @@
   function identidad(nombre) {
     if (esWhatsapp(nombre)) return { tono: TONO_WHATSAPP, whatsapp: true };
     if (esOffline(nombre)) return { tono: TONO_OFFLINE, offline: true };
-    const clave = nombre.toLowerCase();
-    let i = listaIdentidades.findIndex(n => n.toLowerCase() === clave);
-    if (i < 0) {
-      // Alguien que no está en la lista: se le da el primer lugar libre.
-      i = listaIdentidades.length;
-    }
-    return { tono: tonoPorIndice(i), animal: ORDEN_ANIMALES[i % ORDEN_ANIMALES.length] };
+    const k = claveDe(nombre);
+    const animal = asignacion()[k] || iconosElegidos[k] || animalPorNombre(nombre);
+    return { tono: TONOS[ORDEN_ANIMALES.indexOf(animal)], animal };
   }
+
+  // Quién lleva cada animal, sin repetir ninguno:
+  //   1. lo elegido con "Cambiar ícono" reserva su animal (si dos eligieron el
+  //      mismo a la vez, lo conserva el primero de la planilla);
+  //   2. el resto recibe, en orden de planilla, el primer animal libre a partir
+  //      del que le sale por su nombre.
+  // Se recalcula sólo si cambia la lista o lo elegido.
+  let cacheAsignacion = null;
+  function asignacion() {
+    const firma = listaIdentidades.join('|') + '#' + JSON.stringify(iconosElegidos);
+    if (cacheAsignacion && cacheAsignacion.firma === firma) return cacheAsignacion.mapa;
+    const mapa = {};
+    const usados = new Set();
+    const claves = listaIdentidades.filter(esPersonaIcono).map(claveDe);
+    claves.forEach(k => {
+      const a = iconosElegidos[k];
+      if (a && !usados.has(a)) { mapa[k] = a; usados.add(a); }
+    });
+    // Gente de otro local de la misma base que ya eligió: también reserva.
+    Object.keys(iconosElegidos).forEach(k => {
+      if (!claves.includes(k) && iconosElegidos[k]) usados.add(iconosElegidos[k]);
+    });
+    listaIdentidades.filter(esPersonaIcono).forEach(n => {
+      const k = claveDe(n);
+      if (mapa[k]) return;
+      const inicio = ORDEN_ANIMALES.indexOf(animalPorNombre(n));
+      for (let i = 0; i < ORDEN_ANIMALES.length; i++) {
+        const a = ORDEN_ANIMALES[(inicio + i) % ORDEN_ANIMALES.length];
+        if (!usados.has(a)) { mapa[k] = a; usados.add(a); return; }
+      }
+      mapa[k] = animalPorNombre(n);   // más personas que animales
+    });
+    cacheAsignacion = { firma, mapa };
+    return mapa;
+  }
+  function esPersonaIcono(n) { return !esWhatsapp(n) && !esOffline(n); }
 
   let actual = ssGet(SS_ACTUAL) || '';
   let promesaVendedores = null;
@@ -308,6 +388,11 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>
           <span class="usr-clave-pie-texto">Clave personal</span>
         </button>
+        <button type="button" class="usr-clave-pie usr-icono-pie" aria-pressed="false"
+                title="Elegir el animal que te representa">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/></svg>
+          <span class="usr-icono-pie-texto">Cambiar ícono</span>
+        </button>
         <div class="usr-pv" hidden>
           <span class="usr-pv-nombre"></span>
           <span aria-hidden="true">·</span>
@@ -366,12 +451,15 @@
     });
     clavePieBtn = overlay.querySelector('.usr-clave-pie');
     clavePieBtn.addEventListener('click', () => modoClave(!enModoClave));
+    iconoPieBtn = overlay.querySelector('.usr-icono-pie');
+    iconoPieBtn.addEventListener('click', () => modoIcono(!enModoIcono));
     tituloEl = overlay.querySelector('#usrTitulo');
     subEl = overlay.querySelector('#usrSub');
     grilla.addEventListener('click', e => {
       const b = e.target.closest('.usr-tile');
       if (!b) return;
       if (enModoClave) gestionarClave(b.dataset.nombre, b);
+      else if (enModoIcono) gestionarIcono(b.dataset.nombre, b);
       else elegir(b.dataset.nombre, b);
     });
     overlay.addEventListener('keydown', teclado, true);
@@ -623,6 +711,12 @@
 
   function hayFirebase() { return typeof firebase !== 'undefined' && !!firebase.apps && firebase.apps.length > 0; }
   function esPersona(nombre) { return !esWhatsapp(nombre) && !esOffline(nombre); }
+  // Usuarios genéricos de la planilla (no son una persona en particular): no
+  // llevan clave personal ni se les invita a crearla, y no operan la caja
+  // (cajaTurno.js). Sus ventas se registran igual.
+  const GENERICOS = ['otro'];
+  function esGenerico(nombre) { return GENERICOS.includes(String(nombre || '').trim().toLowerCase()); }
+  function llevaClave(nombre) { return esPersona(nombre) && !esGenerico(nombre); }
   function tieneClave(nombre) { return !!claves[claveDe(nombre)]; }
 
   function soltarEsperas() {
@@ -780,7 +874,7 @@
     if (!grilla) return;
     const conocidas = clavesFrescas || lsGet(LS_CLAVES) !== null;
     tiles().forEach(t => {
-      const sin = conocidas && esPersona(t.dataset.nombre) && !tieneClave(t.dataset.nombre);
+      const sin = conocidas && llevaClave(t.dataset.nombre) && !tieneClave(t.dataset.nombre);
       let m = t.querySelector('.usr-tile-sinclave');
       if (sin && !m) {
         m = document.createElement('span');
@@ -1024,6 +1118,7 @@
 
   // Al elegir a alguien: true si puede entrar. Sin clave entra directo.
   async function verificarEntrada(nombre) {
+    if (!llevaClave(nombre)) return true;
     await esperarClaves(nombre);
     if (!tieneClave(nombre)) return true;
     for (;;) {
@@ -1117,21 +1212,31 @@
 
   // "Clave personal", al pie: tocar un nombre crea o cambia su clave en vez
   // de entrar con él.
+  // "Cambiar ícono", al lado: tocar un nombre abre la elección de animal.
+  // Los dos modos se excluyen entre sí.
   let enModoClave = false, clavePieBtn = null, tituloEl = null, subEl = null;
+  let enModoIcono = false, iconoPieBtn = null;
 
-  function modoClave(si) {
-    enModoClave = !!si;
+  function ponerModo(modo) {
+    enModoClave = modo === 'clave';
+    enModoIcono = modo === 'icono';
     if (!overlay) return;
     overlay.classList.toggle('usr-modo-clave', enModoClave);
+    overlay.classList.toggle('usr-modo-icono', enModoIcono);
     clavePieBtn.setAttribute('aria-pressed', enModoClave ? 'true' : 'false');
     clavePieBtn.querySelector('.usr-clave-pie-texto').textContent = enModoClave ? 'Volver a elegir usuario' : 'Clave personal';
-    tituloEl.textContent = enModoClave ? 'Clave personal' : 'Selecciona Usuario';
-    subEl.textContent = enModoClave ? 'Tocá tu nombre para crear o cambiar tu clave' : 'Toca tu nombre para continuar';
-    if (si) estadoEl.textContent = '';
+    iconoPieBtn.setAttribute('aria-pressed', enModoIcono ? 'true' : 'false');
+    iconoPieBtn.querySelector('.usr-icono-pie-texto').textContent = enModoIcono ? 'Volver a elegir usuario' : 'Cambiar ícono';
+    tituloEl.textContent = enModoClave ? 'Clave personal' : enModoIcono ? 'Cambiar ícono' : 'Selecciona Usuario';
+    subEl.textContent = enModoClave ? 'Tocá tu nombre para crear o cambiar tu clave'
+      : enModoIcono ? 'Tocá tu nombre para elegir tu animal' : 'Toca tu nombre para continuar';
+    if (modo) estadoEl.textContent = '';
   }
+  function modoClave(si) { ponerModo(si ? 'clave' : ''); }
+  function modoIcono(si) { ponerModo(si ? 'icono' : ''); }
 
   async function gestionarClave(nombre, tile) {
-    if (!esPersona(nombre) || esperandoClave) return;
+    if (!llevaClave(nombre) || esperandoClave) return;
     esperandoClave = true;
     try {
       await esperarClaves(nombre);
@@ -1170,6 +1275,229 @@
     if (tile && abierto && tile.isConnected) tile.focus({ preventScroll: true });
   }
 
+  // -------------------------------------------------------- ícono propio --
+  // Una sola lectura por página, sin quedar escuchando: el ícono de alguien
+  // cambia muy de vez en cuando y mientras tanto sirve la caché.
+  let iconosLeidos = false;
+
+  function cargarIconos() {
+    if (iconosLeidos || !hayFirebase()) return;
+    iconosLeidos = true;
+    firebase.database().ref(RUTA_ICONOS).once('value').then(snap => {
+      const nuevos = limpiarIconos(snap.val());
+      if (JSON.stringify(nuevos) === JSON.stringify(iconosElegidos)) return;
+      iconosElegidos = nuevos;
+      lsSet(LS_ICONOS, JSON.stringify(nuevos));
+      repintarAvatares();
+    }).catch(err => {
+      iconosLeidos = false;
+      console.warn('Íconos de usuario no disponibles:', err);
+    });
+  }
+
+  // Cambia sólo el color y el dibujo: no rearma la grilla ni mueve el foco.
+  function repintarAvatares() {
+    pintarHeader();
+    if (!grilla) return;
+    tiles().forEach(t => {
+      const id = identidad(t.dataset.nombre);
+      t.style.setProperty('--tono', id.tono);
+      const av = t.querySelector('.usr-avatar');
+      if (av) av.innerHTML = svgAvatar(id);
+    });
+  }
+
+  // Antes de guardar se relee lo elegido (unos bytes): si otra persona tomó
+  // ese animal recién, desde otro equipo, no se repite.
+  async function guardarIcono(nombre, animal) {
+    const k = claveDe(nombre);
+    const fresco = limpiarIconos((await conLimite(firebase.database().ref(RUTA_ICONOS).once('value'), 8000)).val());
+    iconosElegidos = fresco;
+    lsSet(LS_ICONOS, JSON.stringify(fresco));
+    if (Object.keys(fresco).some(otro => otro !== k && fresco[otro] === animal)) {
+      throw new Error('ocupado');
+    }
+    await conLimite(firebase.database().ref(RUTA_ICONOS).child(k).set(animal), 8000);
+    iconosElegidos[k] = animal;
+    lsSet(LS_ICONOS, JSON.stringify(iconosElegidos));
+    reg(`Ícono cambiado (${nombre}: ${animal})`);
+  }
+
+  // Tarjeta con todos los animales. Los que ya usa otra persona quedan
+  // bloqueados, con su nombre debajo: nunca hay dos iguales.
+  let iconosEl, iconosAvatar, iconosTitulo, iconosRes = null, iconosSel = null;
+
+  function construirIconos() {
+    iconosEl = document.createElement('div');
+    iconosEl.id = 'usrIconos';
+    iconosEl.className = 'usr-clave';
+    iconosEl.hidden = true;
+    iconosEl.setAttribute('role', 'dialog');
+    iconosEl.setAttribute('aria-modal', 'true');
+    iconosEl.setAttribute('aria-labelledby', 'usrIconosTitulo');
+    iconosEl.innerHTML = `
+      <div class="usr-clave-card usr-iconos-card">
+        <span class="usr-avatar usr-clave-avatar" aria-hidden="true"></span>
+        <h2 id="usrIconosTitulo" class="usr-clave-titulo"></h2>
+        <p class="usr-clave-sub">Elegí el animal que te va a representar en todas las cajas. Cada uno es de una sola persona. <span class="usr-iconos-libres"></span></p>
+        <div class="usr-iconos-grilla" role="radiogroup" aria-labelledby="usrIconosTitulo">
+          ${ORDEN_ANIMALES.map((a, i) => `
+            <button type="button" class="usr-icono-opcion" role="radio" aria-checked="false"
+                    data-animal="${a}" style="--tono:${TONOS[i]}">
+              <span class="usr-avatar" aria-hidden="true">${svgAnimal(a)}</span>
+              <span class="usr-icono-nombre">${NOMBRE_ANIMAL[a]}</span>
+              <span class="usr-icono-dueno"></span>
+            </button>`).join('')}
+        </div>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar">Cancelar</button>
+          <button type="button" class="usr-clave-btn usr-iconos-ok">Guardar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(iconosEl);
+    iconosAvatar = iconosEl.querySelector('.usr-clave-avatar');
+    iconosTitulo = iconosEl.querySelector('.usr-clave-titulo');
+    const grillaIconos = iconosEl.querySelector('.usr-iconos-grilla');
+    grillaIconos.addEventListener('click', e => {
+      const b = e.target.closest('.usr-icono-opcion');
+      if (b) seleccionarIcono(b.dataset.animal);
+    });
+    iconosEl.querySelector('.usr-clave-cancelar').addEventListener('click', () => resolverIconos(null));
+    iconosEl.querySelector('.usr-iconos-ok').addEventListener('click', () => resolverIconos(iconosSel));
+    iconosEl.addEventListener('click', e => { if (e.target === iconosEl) resolverIconos(null); });
+    iconosEl.addEventListener('keydown', e => {
+      // El selector de abajo descarta teclas: esta tarjeta las maneja sola.
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); resolverIconos(null); return; }
+      const opciones = Array.from(grillaIconos.querySelectorAll('.usr-icono-opcion'));
+      const i = opciones.indexOf(document.activeElement);
+      if (e.key === 'Tab') {
+        // Trampa de foco: la grilla cuenta como un solo paso.
+        const focos = [opciones.find(o => o.getAttribute('aria-checked') === 'true') || opciones[0]]
+          .concat(Array.from(iconosEl.querySelectorAll('.usr-clave-btn')));
+        const j = focos.indexOf(i >= 0 ? focos[0] : document.activeElement);
+        const sig = e.shiftKey ? (j <= 0 ? focos.length - 1 : j - 1) : (j === focos.length - 1 ? 0 : j + 1);
+        e.preventDefault();
+        focos[sig].focus();
+        return;
+      }
+      if (i < 0) return;
+      const columnas = Math.max(1, getComputedStyle(grillaIconos).gridTemplateColumns.split(' ').length);
+      const mov = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columnas, ArrowUp: -columnas }[e.key];
+      if (!mov) return;
+      e.preventDefault();
+      // Saltea los ocupados en esa dirección.
+      let j = i + mov;
+      while (j >= 0 && j < opciones.length && opciones[j].disabled) j += mov;
+      const destino = opciones[j];
+      if (!destino || destino.disabled) return;
+      seleccionarIcono(destino.dataset.animal);
+      destino.focus();
+    });
+  }
+
+  function seleccionarIcono(animal) {
+    iconosSel = animal;
+    iconosAvatar.style.setProperty('--tono', TONOS[ORDEN_ANIMALES.indexOf(animal)]);
+    iconosAvatar.innerHTML = svgAnimal(animal);
+    iconosEl.querySelectorAll('.usr-icono-opcion').forEach(o => {
+      const si = o.dataset.animal === animal;
+      o.setAttribute('aria-checked', si ? 'true' : 'false');
+      o.tabIndex = si ? 0 : -1;
+    });
+  }
+
+  // Resuelve el animal elegido, o null si se canceló.
+  function elegirIcono(nombre) {
+    if (!iconosEl) construirIconos();
+    const propio = claveDe(nombre);
+    const duenos = {};
+    const enLista = new Set();
+    listaIdentidades.filter(esPersonaIcono).forEach(p => {
+      enLista.add(claveDe(p));
+      if (claveDe(p) === propio) return;
+      const a = identidad(p).animal;
+      (duenos[a] = duenos[a] || []).push(p);
+    });
+    // Quien trabaja en otro local de la misma base y ya eligió, también lo ocupa.
+    Object.keys(iconosElegidos).forEach(k => {
+      const a = iconosElegidos[k];
+      if (k !== propio && !enLista.has(k) && a && !duenos[a]) duenos[a] = ['otro local'];
+    });
+    iconosEl.querySelectorAll('.usr-icono-opcion').forEach(o => {
+      const lista = duenos[o.dataset.animal];
+      o.disabled = !!lista;
+      o.classList.toggle('usr-icono-usado', !!lista);
+      o.querySelector('.usr-icono-dueno').textContent = lista ? lista.join(', ') : 'Libre';
+      o.title = lista ? 'Ya lo usa ' + lista.join(', ') : NOMBRE_ANIMAL[o.dataset.animal] + ': libre';
+    });
+    const actualIcono = iconosEl.querySelector(`.usr-icono-opcion[data-animal="${identidad(nombre).animal}"] .usr-icono-dueno`);
+    if (actualIcono) actualIcono.textContent = 'Actual';
+    const libres = ORDEN_ANIMALES.filter(a => !duenos[a]).length;
+    iconosEl.querySelector('.usr-iconos-libres').textContent =
+      libres > 1 ? `Quedan ${libres} libres.` : libres === 1 ? 'Queda 1 libre.' : 'No quedan animales libres.';
+    iconosTitulo.textContent = 'Ícono de ' + nombre;
+    seleccionarIcono(identidad(nombre).animal);
+    iconosEl.hidden = false;
+    setTimeout(() => {
+      const sel = iconosEl.querySelector('.usr-icono-opcion[aria-checked="true"]');
+      if (sel && !iconosEl.hidden) sel.focus({ preventScroll: true });
+    }, 60);
+    return new Promise(res => { iconosRes = res; });
+  }
+
+  function resolverIconos(valor) {
+    if (!iconosRes) return;
+    const res = iconosRes;
+    iconosRes = null;
+    iconosEl.hidden = true;
+    res(valor);
+  }
+
+  // Quien tiene clave personal la escribe antes: nadie le cambia el ícono a otro.
+  let esperandoIcono = false;
+  async function gestionarIcono(nombre, tile) {
+    if (!esPersona(nombre) || esperandoIcono || esperandoClave) return;
+    esperandoIcono = true;
+    try {
+      if (llevaClave(nombre)) await esperarClaves(nombre);
+      if (llevaClave(nombre) && tieneClave(nombre)) {
+        const r = await pedirPin({
+          avatar: avatarDe(nombre),
+          titulo: 'Cambiar el ícono de ' + nombre,
+          sub: 'Ingresá tu clave.',
+          espera: esperaPendiente(claveDe(nombre)),
+          validar: pin => comprobarClave(nombre, pin)
+        });
+        if (!r) return;
+      }
+      const animal = await elegirIcono(nombre);
+      if (!animal || !abierto) return;
+      if (iconosElegidos[claveDe(nombre)] !== animal) {
+        try {
+          await guardarIcono(nombre, animal);
+        } catch (err) {
+          console.warn('Cambiar ícono:', err);
+          if (err && err.message === 'ocupado') {
+            repintarAvatares();
+            avisar('Ese animal lo acaba de elegir otra persona. Tocá tu nombre y elegí otro.');
+          } else {
+            avisar('No se pudo guardar el ícono. Revisá la conexión e intentá de nuevo.');
+          }
+          return;
+        }
+        repintarAvatares();
+      }
+      modoIcono(false);
+      avisar('Listo: el ícono de ' + nombre + ' ahora es ' + NOMBRE_ANIMAL[animal] + '.');
+    } catch (err) {
+      console.error('Cambiar ícono:', err);
+    } finally {
+      esperandoIcono = false;
+      if (tile && abierto && tile.isConnected) tile.focus({ preventScroll: true });
+    }
+  }
+
   function pintarFecha() {
     const el = overlay.querySelector('#usrFecha');
     const txt = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -1198,7 +1526,7 @@
       const esActual = actual && n.toLowerCase() === actual.toLowerCase();
       const id = identidad(n);
       return `
-        <button type="button" class="usr-tile${esUltimo ? ' es-ultimo' : ''}${id.whatsapp ? ' usr-tile-whatsapp' : ''}${id.offline ? ' usr-tile-offline' : ''}" role="option"
+        <button type="button" class="usr-tile${esUltimo ? ' es-ultimo' : ''}${id.whatsapp ? ' usr-tile-whatsapp' : ''}${id.offline ? ' usr-tile-offline' : ''}${esGenerico(n) ? ' usr-tile-generico' : ''}" role="option"
                 aria-selected="${esActual ? 'true' : 'false'}"
                 data-nombre="${esc(n)}" style="--tono:${id.tono}; --i:${i}">
           <span class="usr-avatar" aria-hidden="true">${svgAvatar(id)}</span>
@@ -1279,7 +1607,7 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      if (enModoClave) modoClave(false);
+      if (enModoClave || enModoIcono) ponerModo('');
       return;
     }
     if (e.key === 'Tab') {
@@ -1455,6 +1783,7 @@
     limpiarEstado();
     escucharPresencia(true);
     escucharClaves(true);
+    cargarIconos();
     poblar();
   }
 
@@ -1465,6 +1794,7 @@
     escucharPresencia(false);
     escucharClaves(false);
     if (pinOp) finPin(null);
+    if (iconosRes) resolverIconos(null);
     modoClave(false);
     overlay.classList.remove('usr-visible');
     overlay.classList.add('usr-saliendo');
@@ -1571,7 +1901,7 @@
     reg(`Eligió el usuario ${nombre}${forzar ? ' (entró igual: se desconectó del otro equipo)' : ''}`);
     // Sin clave personal todavía: se le invita a crearla (una vez por día)
     // antes de cerrar. Sólo si Firebase confirmó que no la tiene.
-    const invitar = esPersona(nombre) && clavesFrescas && !tieneClave(nombre) && !invitadoHoy(nombre);
+    const invitar = llevaClave(nombre) && clavesFrescas && !tieneClave(nombre) && !invitadoHoy(nombre);
     // Un instante para que se vea la confirmación sobre el botón tocado.
     setTimeout(() => {
       if (!invitar) { cerrar(); return; }
@@ -1642,6 +1972,10 @@
     headerBtn = document.getElementById('usuarioActualBtn');
     if (headerBtn) headerBtn.addEventListener('click', () => abrir());
     pintarHeader();
+    // Con sesión, se traen los íconos elegidos (una vez) para el chip.
+    if (hayFirebase() && firebase.auth) {
+      firebase.auth().onAuthStateChanged(u => { if (u) cargarIconos(); });
+    }
   });
 
   // Se cortó o volvió internet con el selector abierto: aparece o desaparece
@@ -1656,8 +1990,8 @@
   });
 
   // Arranca la consulta a la planilla ya mismo: cuando termine el login la
-  // lista suele estar lista. Con la lista fresca se recalculan los colores
-  // del chip del encabezado.
+  // lista suele estar lista. Con la lista fresca se repinta el chip del
+  // encabezado.
   listaIdentidades = soloPersonas(cacheVendedores());
   cargarVendedores().then(nombres => {
     const personas = soloPersonas(nombres);
@@ -1749,6 +2083,8 @@
   // ---------------------------------------------------------------- API --
   window.UsuarioActivo = {
     verificarClavePersonal,
+    // "Otro" y similares: no operan la caja (cajaTurno.js).
+    esGenerico,
     // La pantalla dice si se puede volver al selector por inactividad
     // (`puede`) y qué dejar en blanco antes de hacerlo (`limpiar`).
     alInactividad(gancho) { ganchoInactividad = gancho || null; },

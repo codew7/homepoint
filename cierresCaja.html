@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Cierres de caja</title>
+  <link rel="icon" href="faviconnegro.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!--
+    Cierres de caja: los turnos de cada cajón de plata (cajaTurno.js) de las
+    dos sucursales, con lo que debería haber, lo contado y la diferencia.
+
+    De dónde sale: cajaTurnos/ de la base de cada punto de venta. La lista
+    completa sólo la puede leer un usuario con rol "root" en /admins
+    (database.rules.*.json); las cajas leen únicamente su turno abierto.
+
+    Consumo de Firebase: una lectura por sucursal al abrir o al tocar
+    "Actualizar", sólo de los turnos del período. Sin escuchas en vivo.
+  -->
+  <script src="puntoVenta.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <style>
+    :root {
+      --bg: #f4f5f7; --surface: #fff; --line: #dde0e5; --line-2: #eceef1;
+      --ink: #1a1c20; --ink-2: #43464e; --ink-3: #6e7178; --ink-4: #9a9ea6;
+      --verde: #1a7f4b; --verde-bg: #e7f6ee; --rojo: #c2413b; --rojo-bg: #fcefee;
+      --ambar: #a15c07; --ambar-bg: #fff5e6; --acento: #1f9d86;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 "Instrument Sans", system-ui, sans-serif; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 16px 60px; }
+    h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -.02em; }
+    .sub { margin: 0 0 22px; color: var(--ink-3); }
+    .barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+    .grupo { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+    .grupo button { border: 0; background: none; padding: 8px 14px; font: inherit; font-size: 14px; color: var(--ink-2); cursor: pointer; }
+    .grupo button + button { border-left: 1px solid var(--line); }
+    .grupo button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+    .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+    .btn:hover { background: #fafbfc; }
+    .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+    .tile small { display: block; color: var(--ink-3); font-size: 12.5px; }
+    .tile strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+    .aviso { padding: 12px 14px; border-radius: 12px; background: var(--ambar-bg); color: var(--ambar); margin-bottom: 12px; }
+    .vacio { padding: 40px 16px; text-align: center; color: var(--ink-3); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+    .tabla { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .tabla th { text-align: left; font-size: 12px; font-weight: 600; color: var(--ink-3); padding: 10px 12px; border-bottom: 1px solid var(--line); background: #fafbfc; }
+    .tabla td { padding: 11px 12px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+    .tabla tr.fila { cursor: pointer; }
+    .tabla tr.fila:hover td { background: #fafbfc; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .quien { display: block; font-size: 12.5px; color: var(--ink-3); }
+    .dif { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 13.5px; }
+    .dif-ok { background: var(--verde-bg); color: var(--verde); }
+    .dif-falta { background: var(--rojo-bg); color: var(--rojo); }
+    .dif-sobra { background: var(--ambar-bg); color: var(--ambar); }
+    .abierto { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e8f3ff; color: #1d5fae; font-size: 13px; font-weight: 600; }
+    .detalle td { background: #fbfbfc; padding: 14px 16px 18px; }
+    .detalle h4 { margin: 0 0 8px; font-size: 13px; color: var(--ink-3); font-weight: 600; }
+    .movs { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .movs td { padding: 5px 6px; border-bottom: 1px solid var(--line-2); }
+    .neg { color: var(--rojo); } .pos { color: var(--verde); }
+    .billetes { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+    .nota { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); }
+    .login { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(20, 22, 26, .45); }
+    .login[hidden] { display: none; }
+    .login form { width: min(360px, 100%); background: var(--surface); border-radius: 16px; padding: 22px; display: grid; gap: 10px; }
+    .login h2 { margin: 0; font-size: 19px; }
+    .login p { margin: 0; color: var(--ink-3); font-size: 14px; }
+    .login input { height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font: inherit; }
+    .login .err { color: var(--rojo); font-size: 13px; min-height: 18px; }
+    .login .acc { display: flex; gap: 8px; justify-content: flex-end; }
+    .login .pri { background: var(--ink); color: #fff; border-color: var(--ink); }
+    @media (max-width: 720px) {
+      .tabla .opc { display: none; }
+      .tabla td, .tabla th { padding: 9px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Cierres de caja</h1>
+    <p class="sub">Turnos de cada caja: lo que debería haber, lo que se contó y la diferencia. Tocá un turno para ver el detalle.</p>
+
+    <div class="barra">
+      <div class="grupo" id="filtroSucursal" role="group" aria-label="Sucursal"></div>
+      <div class="grupo" id="filtroPeriodo" role="group" aria-label="Período">
+        <button type="button" data-dias="1" aria-pressed="false">Hoy</button>
+        <button type="button" data-dias="7" aria-pressed="true">7 días</button>
+        <button type="button" data-dias="31" aria-pressed="false">31 días</button>
+      </div>
+      <button type="button" class="btn" id="actualizar">Actualizar</button>
+    </div>
+
+    <div id="avisos"></div>
+    <div class="resumen" id="resumen"></div>
+    <div id="contenido"><div class="vacio">Cargando…</div></div>
+  </div>
+
+  <div class="login" id="login" hidden>
+    <form id="loginForm" novalidate>
+      <h2 id="loginTit"></h2>
+      <p id="loginSub"></p>
+      <input type="email" id="loginEmail" placeholder="Correo" autocomplete="email">
+      <input type="password" id="loginClave" placeholder="Contraseña" autocomplete="current-password">
+      <div class="err" id="loginErr" role="alert"></div>
+      <div class="acc">
+        <button type="button" class="btn" id="loginOmitir">Omitir</button>
+        <button type="submit" class="btn pri" id="loginOk">Entrar</button>
+      </div>
+    </form>
+  </div>
+
+<script>
+(function() {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const puntoEquipo = window.PuntoVenta ? PuntoVenta.actual() : null;
+  const sucursales = (window.PuntoVenta ? PuntoVenta.lista : []).map(p => ({
+    id: p.id, nombre: p.nombre, config: p.config, app: null, db: null, estado: '', mensaje: '', turnos: [], cajas: {}
+  }));
+  const ui = { sucursal: 'todas', dias: 7, abierto: null };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function pesos(n) {
+    const v = Math.round(Number(n) || 0);
+    return (v < 0 ? '−$ ' : '$ ') + Math.abs(v).toLocaleString('es-AR');
+  }
+  function fecha(ts) { return ts ? new Date(ts).toLocaleString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'; }
+  function hora(ts) { return ts ? new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : ''; }
+  function difHtml(d) {
+    d = Math.round(Number(d) || 0);
+    if (d === 0) return '<span class="dif dif-ok">Sin diferencia</span>';
+    return d < 0 ? `<span class="dif dif-falta">Faltan ${pesos(-d)}</span>` : `<span class="dif dif-sobra">Sobran ${pesos(d)}</span>`;
+  }
+  const TIPOS = {
+    venta: 'Venta', devolucion: 'Devolución', ajuste: 'Diferencia por edición',
+    anulacion: 'Pedido cancelado', retiro: 'Salida', ingreso: 'Ingreso'
+  };
+  function tipoMov(m) {
+    const base = TIPOS[m.t] || m.t;
+    if (m.offline) return base + ' (sin conexión)';
+    if (m.porCobrar && (m.t === 'venta' || m.t === 'devolucion')) return base + ' (cargada en otro puesto)';
+    return base;
+  }
+
+  // ------------------------------------------------------------ sesión --
+  // Mismo esquema que actividadCajas.html: la base del equipo usa la app por
+  // defecto; la otra, una app con nombre propio (comparten la sesión).
+  async function appDe(s) {
+    if (s.app) return s.app;
+    if (s.id === puntoEquipo) {
+      if (!firebase.apps.some(a => a.name === '[DEFAULT]')) firebase.initializeApp(firebaseConfig);
+      s.app = firebase.app();
+    } else {
+      let app = firebase.apps.find(a => a.name === 'pv-' + s.id);
+      if (!app) {
+        const resp = await fetch(s.config, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('No se pudo leer ' + s.config);
+        const config = new Function(await resp.text() + '\nreturn firebaseConfig;')();
+        app = firebase.initializeApp(config, 'pv-' + s.id);
+      }
+      s.app = app;
+    }
+    s.db = s.app.database();
+    return s.app;
+  }
+  function usuarioDe(app) {
+    return new Promise(res => { const dejar = app.auth().onAuthStateChanged(u => { dejar(); res(u); }); });
+  }
+  function pedirLogin(s) {
+    return new Promise(resolve => {
+      const caja = $('login'), form = $('loginForm'), email = $('loginEmail'), clave = $('loginClave'), err = $('loginErr');
+      $('loginTit').textContent = s.nombre;
+      $('loginSub').textContent = s.mensaje || 'Iniciá sesión con tu usuario de esta sucursal.';
+      form.reset(); err.textContent = ''; caja.hidden = false;
+      setTimeout(() => email.focus(), 40);
+      function cerrar(v) {
+        caja.hidden = true;
+        form.removeEventListener('submit', enviar);
+        $('loginOmitir').removeEventListener('click', omitir);
+        resolve(v);
+      }
+      async function enviar(e) {
+        e.preventDefault(); err.textContent = '';
+        try { await s.app.auth().signInWithEmailAndPassword(email.value.trim(), clave.value); cerrar(true); }
+        catch (_) { err.textContent = 'Correo o contraseña incorrectos.'; clave.value = ''; clave.focus(); }
+      }
+      function omitir() { cerrar(false); }
+      form.addEventListener('submit', enviar);
+      $('loginOmitir').addEventListener('click', omitir);
+    });
+  }
+  async function conectar(s) {
+    try {
+      const app = await appDe(s);
+      let u = await usuarioDe(app);
+      if (!u) {
+        if (!(await pedirLogin(s))) { s.estado = 'omitida'; return false; }
+        u = app.auth().currentUser;
+      }
+      s.estado = 'conectada';
+      return true;
+    } catch (err) {
+      console.error(err);
+      s.estado = 'error'; s.mensaje = err.message;
+      return false;
+    }
+  }
+
+  // ------------------------------------------------------------- datos --
+  async function cargar(s) {
+    if (s.estado !== 'conectada' && !(await conectar(s))) return;
+    const desde = new Date();
+    desde.setHours(0, 0, 0, 0);
+    desde.setDate(desde.getDate() - (ui.dias - 1));
+    try {
+      const [cajas, turnos] = await Promise.all([
+        s.db.ref('cajas').once('value'),
+        s.db.ref('cajaTurnos').orderByChild('abiertoTs').startAt(desde.getTime()).once('value')
+      ]);
+      s.cajas = cajas.val() || {};
+      s.turnos = [];
+      turnos.forEach(ch => { s.turnos.push(Object.assign({ id: ch.key, suc: s }, ch.val())); });
+      s.mensaje = '';
+    } catch (err) {
+      console.warn(err);
+      s.turnos = [];
+      s.mensaje = /permission/i.test(err.message || '')
+        ? `Tu usuario no puede ver los cierres de ${s.nombre}: hace falta un usuario con rol "root".`
+        : `No se pudieron leer los cierres de ${s.nombre}: ${err.message}`;
+      if (/permission/i.test(err.message || '') && await pedirOtroLogin(s)) return cargar(s);
+    }
+  }
+  // Sin permiso: ofrece entrar con otro usuario una vez.
+  async function pedirOtroLogin(s) {
+    if (s.reintentado) return false;
+    s.reintentado = true;
+    await s.app.auth().signOut();
+    s.estado = '';
+    return conectar(s);
+  }
+
+  async function cargarTodo() {
+    $('contenido').innerHTML = '<div class="vacio">Cargando…</div>';
+    for (const s of visibles()) await cargar(s);
+    pintar();
+  }
+  function visibles() { return sucursales.filter(s => ui.sucursal === 'todas' || s.id === ui.sucursal); }
+
+  // ------------------------------------------------------------ pintar --
+  function movsDe(t) { return Object.values(t.movs || {}).filter(Boolean).sort((a, b) => (a.ts || 0) - (b.ts || 0)); }
+
+  function pintar() {
+    const avisos = visibles().filter(s => s.mensaje).map(s => `<div class="aviso">${esc(s.mensaje)}</div>`);
+    $('avisos').innerHTML = avisos.join('');
+    const turnos = visibles().flatMap(s => s.turnos).sort((a, b) => (b.abiertoTs || 0) - (a.abiertoTs || 0));
+    const cerrados = turnos.filter(t => t.cerradoTs);
+    const faltante = cerrados.reduce((s, t) => s + Math.min(0, Number(t.diferencia) || 0), 0);
+    const sobrante = cerrados.reduce((s, t) => s + Math.max(0, Number(t.diferencia) || 0), 0);
+    const conDif = cerrados.filter(t => Math.round(Number(t.diferencia) || 0) !== 0).length;
+    $('resumen').innerHTML = `
+      <div class="tile"><small>Turnos cerrados</small><strong>${cerrados.length}</strong></div>
+      <div class="tile"><small>Con diferencia</small><strong>${conDif}</strong></div>
+      <div class="tile"><small>Faltantes</small><strong class="${faltante ? 'neg' : ''}">${pesos(faltante)}</strong></div>
+      <div class="tile"><small>Sobrantes</small><strong>${pesos(sobrante)}</strong></div>
+      <div class="tile"><small>Abiertos ahora</small><strong>${turnos.filter(t => !t.cerradoTs).length}</strong></div>`;
+    if (!turnos.length) {
+      $('contenido').innerHTML = '<div class="vacio">No hay turnos en este período.</div>';
+      return;
+    }
+    const varias = visibles().length > 1;
+    $('contenido').innerHTML = `
+      <table class="tabla">
+        <thead><tr>
+          <th>Caja</th><th>Apertura</th><th class="opc">Cierre</th>
+          <th class="num opc">Debería haber</th><th class="num">Contado</th><th>Diferencia</th>
+        </tr></thead>
+        <tbody>${turnos.map(t => filaHtml(t, varias)).join('')}</tbody>
+      </table>`;
+    $('contenido').querySelectorAll('tr.fila').forEach(tr => tr.addEventListener('click', () => {
+      ui.abierto = ui.abierto === tr.dataset.id ? null : tr.dataset.id;
+      pintar();
+    }));
+  }
+
+  function filaHtml(t, varias) {
+    const nombre = (t.suc.cajas[t.caja] && t.suc.cajas[t.caja].nombre) || t.cajaNombre || 'Caja';
+    const fila = `
+      <tr class="fila" data-id="${esc(t.suc.id + '/' + t.id)}">
+        <td><strong>${esc(nombre)}</strong>${varias ? `<span class="quien">${esc(t.suc.nombre)}</span>` : ''}</td>
+        <td>${esc(fecha(t.abiertoTs))}<span class="quien">${esc(t.abiertoPor || '')} · cambio ${pesos(t.fondo)}</span></td>
+        <td class="opc">${t.cerradoTs ? `${esc(hora(t.cerradoTs))}<span class="quien">${esc(t.cerradoPor || '')}</span>` : '—'}</td>
+        <td class="num opc">${t.cerradoTs ? pesos(t.esperado) : '—'}</td>
+        <td class="num">${t.cerradoTs ? pesos(t.contado) : '—'}</td>
+        <td>${t.cerradoTs ? difHtml(t.diferencia)
+          : new Date(t.abiertoTs).toDateString() === new Date().toDateString()
+            ? '<span class="abierto">Abierto</span>'
+            : '<span class="dif dif-sobra">Abierto desde otro día</span>'}</td>
+      </tr>`;
+    if (ui.abierto !== t.suc.id + '/' + t.id) return fila;
+    const movs = movsDe(t);
+    const billetes = Object.entries(t.billetes || {}).map(([k, c]) =>
+      k === 'otros' ? `Monedas/otros ${pesos(c)}` : `${c} × ${pesos(k.replace(/^b/, ''))}`);
+    return fila + `
+      <tr class="detalle"><td colspan="6">
+        <h4>Movimientos del turno (${movs.length})</h4>
+        ${movs.length ? `<table class="movs">${movs.map(m => `
+          <tr><td>${esc(hora(m.ts))}</td><td>${esc(tipoMov(m))}</td>
+            <td>${esc(m.motivo || (m.pedido ? 'Ticket ' + String(m.pedido).slice(-8).toUpperCase() : ''))}</td>
+            <td>${esc(m.por || '')}</td>
+            <td class="num ${m.monto < 0 ? 'neg' : 'pos'}">${pesos(m.monto)}</td></tr>`).join('')}</table>` : '<p class="quien">Sin movimientos.</p>'}
+        ${billetes.length ? `<div class="billetes"><strong>Conteo:</strong> ${billetes.map(esc).join(' · ')}</div>` : ''}
+        ${t.nota ? `<div class="nota"><strong>Nota:</strong> ${esc(t.nota)}</div>` : ''}
+      </td></tr>`;
+  }
+
+  // ----------------------------------------------------------- filtros --
+  $('filtroSucursal').innerHTML = [{ id: 'todas', nombre: 'Todas' }].concat(sucursales)
+    .map(s => `<button type="button" data-suc="${esc(s.id)}" aria-pressed="${s.id === 'todas'}">${esc(s.nombre.replace(/^Sucursal \d+ /, ''))}</button>`).join('');
+  $('filtroSucursal').addEventListener('click', e => {
+    const b = e.target.closest('[data-suc]');
+    if (!b) return;
+    ui.sucursal = b.dataset.suc;
+    $('filtroSucursal').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    cargarTodo();
+  });
+  $('filtroPeriodo').addEventListener('click', e => {
+    const b = e.target.closest('[data-dias]');
+    if (!b) return;
+    ui.dias = Number(b.dataset.dias);
+    $('filtroPeriodo').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    cargarTodo();
+  });
+  $('actualizar').addEventListener('click', cargarTodo);
+
+  cargarTodo();
+})();
+</script>
+</body>
+</html>
