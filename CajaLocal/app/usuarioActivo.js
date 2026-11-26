@@ -1276,23 +1276,35 @@
   }
 
   // -------------------------------------------------------- ícono propio --
-  // Una sola lectura por página, sin quedar escuchando: el ícono de alguien
-  // cambia muy de vez en cuando y mientras tanto sirve la caché.
-  let iconosLeidos = false;
+  // Se queda escuchando el nodo mientras haya sesión: son unos pocos bytes y
+  // Firebase sólo vuelve a mandar algo cuando alguien cambia su ícono, así
+  // el cambio aparece al instante en todos los equipos (antes se leía una
+  // sola vez por página y los demás equipos seguían con el ícono viejo).
+  // Mientras tanto sirve la caché de localStorage.
+  let refIconos = null;
+
+  function alCambiarIconos(snap) {
+    const nuevos = limpiarIconos(snap.val());
+    lsSet(LS_ICONOS, JSON.stringify(nuevos));
+    if (JSON.stringify(nuevos) === JSON.stringify(iconosElegidos)) return;
+    iconosElegidos = nuevos;
+    repintarAvatares();
+  }
 
   function cargarIconos() {
-    if (iconosLeidos || !hayFirebase()) return;
-    iconosLeidos = true;
-    firebase.database().ref(RUTA_ICONOS).once('value').then(snap => {
-      const nuevos = limpiarIconos(snap.val());
-      if (JSON.stringify(nuevos) === JSON.stringify(iconosElegidos)) return;
-      iconosElegidos = nuevos;
-      lsSet(LS_ICONOS, JSON.stringify(nuevos));
-      repintarAvatares();
-    }).catch(err => {
-      iconosLeidos = false;
+    if (refIconos || !hayFirebase()) return;
+    refIconos = firebase.database().ref(RUTA_ICONOS);
+    refIconos.on('value', alCambiarIconos, err => {
+      // Sin permiso (p. ej. todavía sin sesión): se reintenta en la próxima llamada.
+      refIconos = null;
       console.warn('Íconos de usuario no disponibles:', err);
     });
+  }
+
+  function dejarDeEscucharIconos() {
+    if (!refIconos) return;
+    refIconos.off('value', alCambiarIconos);
+    refIconos = null;
   }
 
   // Cambia sólo el color y el dibujo: no rearma la grilla ni mueve el foco.
@@ -1974,7 +1986,7 @@
     pintarHeader();
     // Con sesión, se traen los íconos elegidos (una vez) para el chip.
     if (hayFirebase() && firebase.auth) {
-      firebase.auth().onAuthStateChanged(u => { if (u) cargarIconos(); });
+      firebase.auth().onAuthStateChanged(u => { if (u) cargarIconos(); else dejarDeEscucharIconos(); });
     }
   });
 

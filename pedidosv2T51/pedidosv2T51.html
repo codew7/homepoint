@@ -10793,7 +10793,7 @@
       if (ppVivo && pedidosCacheAt) {
         return pedidosCache
           .filter(f => f.id !== exceptoId && f.celdas && f.celdas.includes(celda))
-          .map(f => ({ id: f.id, nombre: f.nombre }));
+          .map(f => ({ id: f.id, nombre: f.nombre, libre: !!f.controlado }));
       }
       const snaps = await conTimeout(() => Promise.all(['ABIERTO', 'CERRADO'].map(st =>
         db.ref('pedidos').orderByChild('status').equalTo(st).once('value'))));
@@ -10801,7 +10801,7 @@
       snaps.forEach(snap => snap.forEach(ch => {
         const p = ch.val();
         if (ch.key !== exceptoId && p && p.celdas && p.celdas[celda]) {
-          out.push({ id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre' });
+          out.push({ id: ch.key, nombre: (p.cliente && p.cliente.nombre) || 'Sin nombre', libre: controlEstado(p).finalValido });
         }
       }));
       return out;
@@ -10837,7 +10837,10 @@
         }
 
         const updates = {};
-        const ocupantes = await celdaOcupantes(celda, id);
+        // Los ya controlados (libre) no ocupan: se les quita la casilla sin preguntar.
+        const todos = await celdaOcupantes(celda, id);
+        todos.filter(o => o.libre).forEach(o => { updates['pedidos/' + o.id + '/celdas/' + celda] = null; });
+        const ocupantes = todos.filter(o => !o.libre);
         if (ocupantes.length) {
           // Mientras se decide no corre el tiempo de espera.
           clearTimeout(celdaAsociando.timer);
@@ -11647,11 +11650,15 @@
       controlLocal().final = final;
       // Controlado = embalado: se marca el mismo campo que el boton de la caja
       // en Pedidos pendientes, en el mismo update que el cierre del control.
+      // Controlado y embalado = ya no ocupa casilla: se liberan sus celdas.
       pedidoActual.embalado = true;
+      delete pedidoActual.celdas;
       const cacheado = pedidosCache.find(x => x.id === pedidoId);
-      if (cacheado) cacheado.embalado = true;
+      if (cacheado) { cacheado.embalado = true; cacheado.celdas = []; }
+      celdaPintarCtx();
       const up = {};
       up['control/final'] = final;
+      up.celdas = null;
       up.embalado = true;
       up.embaladoFecha = final.ts;
       up.lastUpdated = final.ts;
