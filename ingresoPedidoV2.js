@@ -534,10 +534,79 @@ document.addEventListener('DOMContentLoaded', function() {
   document.addEventListener('modooffline:cambio', e => {
     if (e.detail && e.detail.activo && !catalogoCargado && !cargandoCatalogo) cargarCatalogo();
   });
+
+  // === OFERTAS (Articulos/articulos.html → Ofertas) ===
+  // Precio temporal en ARS que convive con el de lista: articulos/{codigo}/Oferta,
+  // OfertaDesde y OfertaHasta (ms). Siempre se leen del proyecto principal
+  // (pedidos-87064), también desde Caseros, cuyo config apunta a otra base: por eso
+  // la URL va fija y se lee por REST (articulos es de lectura pública). La consulta
+  // usa el índice "OfertaHasta" de las reglas: sin él Firebase responde error y la
+  // caja sigue con los precios de siempre.
+  // (Declarados antes de cargarCatalogo(): esa llamada ya los usa.)
+  const OFERTAS_DB_URL = 'https://pedidos-87064-default-rtdb.firebaseio.com';
+  let ofertasPorCodigo = {}; // código interno normalizado -> { precio, desde, hasta }
+
   cargarCatalogo();
+
+  function cargarOfertas() {
+    // En modo Offline no hay base: se cobra a precio de lista.
+    if (window.ModoOffline && ModoOffline.activo()) return Promise.resolve();
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = setTimeout(() => ctrl && ctrl.abort(), 6000);
+    const url = `${OFERTAS_DB_URL}/articulos.json?orderBy=%22OfertaHasta%22&startAt=${Date.now()}`;
+    return fetch(url, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.error) throw new Error(data.error);
+        const mapa = {};
+        Object.entries(data || {}).forEach(([key, a]) => {
+          const precio = Math.round(Number(a && a.Oferta));
+          if (!(precio > 0)) return;
+          mapa[normalizarCodigoBarras(a.Codigo || key)] = {
+            precio, desde: Number(a.OfertaDesde) || 0, hasta: Number(a.OfertaHasta) || 0,
+            sucursal: a.OfertaSucursal ? String(a.OfertaSucursal) : ''   // '' = ambas
+          };
+        });
+        ofertasPorCodigo = mapa;
+      })
+      .catch(err => {
+        // Nunca frena la caja: sin ofertas se cobra a precio de lista.
+        console.warn('Ofertas no disponibles:', err && err.message);
+        ofertasPorCodigo = {};
+      })
+      .finally(() => clearTimeout(timer));
+  }
+
+  // Precio de oferta vigente AHORA para un artículo del catálogo (o null). La fecha
+  // se revisa en cada uso: una oferta que vence con la caja abierta deja de aplicarse.
+  function ofertaDeArticulo(art) {
+    const of = art ? ofertasPorCodigo[normalizarCodigoBarras(art[2])] : null;
+    if (!of) return null;
+    const ahora = Date.now();
+    if ((of.hasta && ahora > of.hasta) || (of.desde && ahora < of.desde)) return null;
+    // Oferta de una sola sucursal: se aplica solo en el punto de venta con ese id
+    // (puntoVenta.js: '1' Munro, '2' Caseros). Sin punto de venta conocido, no se aplica.
+    if (of.sucursal) {
+      const pv = window.PuntoVenta && PuntoVenta.actual ? PuntoVenta.actual() : null;
+      if (String(pv) !== of.sucursal) return null;
+    }
+    return of.precio;
+  }
+
+  // ¿La línea se cobra a precio de oferta? Sólo ventas, y sólo mientras el precio no
+  // se haya cambiado a mano (si el operador lo pisa, deja de ser "la oferta").
+  function esLineaOferta(it) {
+    return !!(it && (it.tipoLinea || 'VENTA') === 'VENTA' && it.oferta > 0 && it.valorU === it.oferta);
+  }
+
+  function refrescarBadgeOferta(row, item) {
+    const b = row && row.querySelector('.linea-badge-oferta');
+    if (b) b.hidden = !esLineaOferta(item);
+  }
 
   function cargarCatalogo() {
     cargandoCatalogo = true;
+    const ofertasListas = cargarOfertas();
     const urlCatalogo = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.SPREADSHEET_ID}/values/${GOOGLE_SHEETS_CONFIG.RANGO}?key=${GOOGLE_SHEETS_CONFIG.API_KEY}`;
     const pedirCatalogo = (window.ModoOffline && ModoOffline.activo())
       ? ModoOffline.catalogo(urlCatalogo)
@@ -547,7 +616,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.ModoOffline) ModoOffline.guardarCatalogo(data);
             return data;
           });
+    // El catálogo se da por cargado recién con las ofertas leídas (o descartadas por
+    // error/timeout), así el primer escaneo ya sale con el precio correcto.
     pedirCatalogo
+      .then(data => ofertasListas.then(() => data))
       .then(data => {
         cargandoCatalogo = false;
         catalogoCargado = true;
@@ -825,7 +897,20 @@ function getTipoCliente() {
       }
       valorRaw = valorRaw.replace(/\$/g, '').replace(/[.,]/g, '');
       item.valorU = parseInt(valorRaw) || 0;
-    
+
+    // Oferta vigente: reemplaza el precio del sistema (consumidor o mayorista). No se
+    // aplica a "admin", que se cobra a costo. `oferta` guarda el precio de oferta y
+    // `valorUSinOferta` el que hubiera correspondido, para mostrarlo y auditarlo.
+    const precioOferta = currentTipo !== 'admin' ? ofertaDeArticulo(art) : null;
+    if (precioOferta) {
+      item.valorUSinOferta = item.valorU;
+      item.valorU = precioOferta;
+      item.oferta = precioOferta;
+    } else {
+      delete item.oferta;
+      delete item.valorUSinOferta;
+    }
+
     // Asignar valorC desde columna H (índice 7)
     let valorCRaw = art[7] || '0';
     valorCRaw = valorCRaw.replace(/\$/g, '').replace(/[.,]/g, '');
@@ -884,6 +969,12 @@ function getTipoCliente() {
       ? `<div class="linea-origen">Del pedido <strong>${idCortoPedido(item.pedidoOrigenId)}</strong>${item.motivo ? ' · ' + item.motivo : ''}</div>`
       : '';
 
+    // Distintivo OFERTA: se crea si la línea tiene precio de oferta y se oculta si el
+    // precio se cambia a mano (ver refrescarBadgeOferta).
+    const badgeOferta = (tipo === 'VENTA' && item.oferta > 0)
+      ? `<span class="linea-badge linea-badge-oferta"${esLineaOferta(item) ? '' : ' hidden'}${item.valorUSinOferta ? ` title="Precio sin oferta: $${Number(item.valorUSinOferta).toLocaleString('es-AR')}"` : ''}>OFERTA</span>`
+      : '';
+
     // El importe de una devolución es el que el cliente pagó en su momento: se muestra de
     // solo lectura para que no se pise por error, con un botón para desbloquearlo a mano.
     const valorUAttrs = tipo === 'VENTA' ? '' : 'readonly';
@@ -896,7 +987,7 @@ function getTipoCliente() {
         ${primeraImagen ? `<img src="${primeraImagen}" class="articulo-img" style="width:50px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="Imagen del artículo" ${imgFallbackAttrs(imgs.alt)}>` : '<span style="color:#ccc;">Sin img</span>'}
       </td>
       <td><input type="text" value="${item.codigo || ''}" class="codigo" maxlength="20" style="width:80px" readonly></td>
-      <td><div class="nombre-display" style="padding:8px;min-width:220px;">${badge}${item.nombre || ''}${origen}</div></td>
+      <td><div class="nombre-display" style="padding:8px;min-width:220px;">${badge}${badgeOferta}${item.nombre || ''}${origen}</div></td>
       <td><input type="number" value="${item.cantidad}" class="cantidad" min="1"${item.cupoMaximo ? ' max="' + item.cupoMaximo + '"' : ''} style="width:60px"></td>
         <td><div class="valorU-wrap"><input type="number" value="${item.valorU}" class="valorU" min="0" step="1" style="width:80px" ${valorUAttrs}>${lapiz}</div></td>
       <td class="valorTotal">${textoTotalLinea(item)}</td>
@@ -1052,6 +1143,7 @@ function getTipoCliente() {
 
           task.row.querySelector('.valorU').value = task.item.valorU;
           task.row.querySelector('.valorTotal').textContent = textoTotalLinea(task.item);
+          refrescarBadgeOferta(task.row, task.item);
         }
       }
       
@@ -2445,6 +2537,7 @@ function getTipoCliente() {
 
         // Actualizar valor total de la fila
         row.querySelector('.valorTotal').textContent = textoTotalLinea(items[idx]);
+        refrescarBadgeOferta(row, items[idx]);
       }
     }
 
@@ -2793,7 +2886,9 @@ function getTipoCliente() {
               pedidoOrigenId: it.pedidoOrigenId || '',
               motivo: it.motivo || '',
               ...(it.valorULista ? { valorULista: it.valorULista } : {})
-            } : {})
+            } : {}),
+            // Línea cobrada a precio de oferta: queda registrado en el pedido.
+            ...(esLineaOferta(it) ? { oferta: true, ...(it.valorUSinOferta ? { valorUSinOferta: it.valorUSinOferta } : {}) } : {})
           })),
           pagos: {
             medioPago,
@@ -3217,7 +3312,10 @@ function getTipoCliente() {
         tipoLinea: it.tipoLinea || 'VENTA',
         pedidoOrigenId: it.pedidoOrigenId || '',
         motivo: it.motivo || '',
-        valorULista: it.valorULista || 0
+        valorULista: it.valorULista || 0,
+        // Pedido guardado en oferta: la marca vuelve como el precio cobrado, para que
+        // esLineaOferta() la reconozca mientras no se cambie el precio.
+        ...(it.oferta ? { oferta: it.valorU || 0, valorUSinOferta: it.valorUSinOferta || 0 } : {})
       }));
       renderItems();
       // Rellenar pagos
@@ -3396,7 +3494,8 @@ function getTipoCliente() {
                 pedidoOrigenId: it.pedidoOrigenId || '',
                 motivo: it.motivo || '',
                 ...(it.valorULista ? { valorULista: it.valorULista } : {})
-              } : {})
+              } : {}),
+              ...(esLineaOferta(it) ? { oferta: true, ...(it.valorUSinOferta ? { valorUSinOferta: it.valorUSinOferta } : {}) } : {})
             })),
             pagos: {
               medioPago: form.medioPago.value,
@@ -4206,7 +4305,7 @@ function mostrarModalRegistroCliente(nombrePrellenado = '', telefonoPrellenado, 
       const bc = ultimos5BC(it.codigoBarras);
       const prefijo = tipo === 'DEVOLUCION' ? '(-) ' : tipo === 'GARANTIA' ? '(G) ' : '';
       data.push(escCmd('1B4501'));
-      data.push(escTxt(posWrap(prefijo + (it.nombre || '').toUpperCase())));
+      data.push(escTxt(posWrap(prefijo + (it.oferta ? '[OFERTA] ' : '') + (it.nombre || '').toUpperCase())));
       data.push(escCmd('1B4500'));
       const importe = tipo === 'GARANTIA'
         ? 'SIN CARGO'
@@ -4366,7 +4465,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         : soloEntero(typeof it.totalLinea === 'number' ? it.totalLinea : cant * vU);
       itemsHtml += `
         <div class="item">
-          <div class="item-nombre">${prefijo}${(it.nombre || '').toUpperCase()}</div>
+          <div class="item-nombre">${prefijo}${it.oferta ? '[OFERTA] ' : ''}${(it.nombre || '').toUpperCase()}</div>
           <div class="item-linea">
             <span>${cant} x ${soloEntero(vU)}</span>
             <span>${importe}</span>
@@ -4478,6 +4577,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       items: items.map(it => ({
         nombre: it.nombre, codigo: it.codigo, codigoBarras: it.codigoBarras,
         cantidad: it.cantidad, valorU: it.valorU, tipoLinea: it.tipoLinea || 'VENTA',
+        oferta: esLineaOferta(it),
         totalLinea: totalLinea(it)
       }))
     };

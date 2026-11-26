@@ -137,6 +137,30 @@ function iniciarActualizador(log, anotar = () => {}, alSalir) {
     return { ok: true };
   });
 
+  // Búsqueda manual (botón "Buscar actualizaciones" del selector de usuario).
+  // Si hay versión nueva, la descarga sigue el camino de siempre: se baja en
+  // segundo plano y aparece el aviso "Nueva versión lista". Devuelve un
+  // resultado corto para que el botón diga qué pasó.
+  //   resultado: al-dia | descargando | lista | error | desarrollo
+  ipcMain.handle('actualizacion:buscar', async () => {
+    const actual = app.getVersion();
+    if (estado.estado === 'descargando' || estado.estado === 'lista') {
+      return { resultado: estado.estado, version: actual, nueva: estado.nueva };
+    }
+    if (!app.isPackaged) return { resultado: 'desarrollo', version: actual };
+    anotarRegistro('Búsqueda manual de actualizaciones');
+    try {
+      const r = await autoUpdater.checkForUpdates();
+      const nueva = r && r.updateInfo ? r.updateInfo.version : null;
+      const hay = r && (typeof r.isUpdateAvailable === 'boolean' ? r.isUpdateAvailable : !!nueva && nueva !== actual);
+      if (hay) return { resultado: 'descargando', version: actual, nueva };
+      return { resultado: 'al-dia', version: actual };
+    } catch (error) {
+      log.warn('Búsqueda manual de actualizaciones falló:', error && error.message ? error.message : error);
+      return { resultado: 'error', version: actual };
+    }
+  });
+
   // En desarrollo (npm start) no hay nada que actualizar. Para ver el aviso
   // sin publicar nada: $env:CAJA_SIMULAR_ACTUALIZACION=1; npm start
   if (!app.isPackaged) {

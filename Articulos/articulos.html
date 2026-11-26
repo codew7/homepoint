@@ -1300,6 +1300,11 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         <div class="field-note">Cada artículo toma su propio precio de lista y se redondea a peso entero.</div>
       </div>
       <div class="of-prev" id="ofPrev" hidden></div>
+      <div>
+        <label class="flbl">Válida en</label>
+        <select class="inp" id="ofSucursal"></select>
+        <div class="field-note">La caja de cada sucursal solo aplica las ofertas que le corresponden.</div>
+      </div>
       <div class="f-2">
         <div>
           <label class="flbl">Desde <span class="req">*</span></label>
@@ -1772,6 +1777,7 @@ function enterEditMode(rec){
     $('ofertaNote').textContent = (estOf === 'vigente'
       ? `En oferta a ${fmtARS(rec.Oferta)} hasta el ${fmtFechaGMT3(rec.OfertaHasta)}`
       : `Oferta programada a ${fmtARS(rec.Oferta)} desde el ${fmtFechaGMT3(rec.OfertaDesde)}`)
+      + (sucursalOfertaTxt(rec) ? ' (' + sucursalOfertaTxt(rec).toLowerCase() + ')' : '')
       + ' · se mantiene al guardar.';
     $('ofertaNote').hidden = false;
   }
@@ -3419,6 +3425,7 @@ async function deleteRow(codigo){
 //  Ofertas: precio temporal en ARS que convive con el de lista
 //  Campos en articulos/{codigo}: Oferta (ARS entero), OfertaDesde y OfertaHasta
 //  (ms; 00:00 y 23:59:59.999 del día elegido, hora Argentina GMT-3 sin DST).
+//  OfertaSucursal: ausente = ambas sucursales; '1' (Munro) o '2' (Caseros) = solo esa.
 //  Nunca se toca PrecioUSD: la oferta se escribe y se quita campo por campo.
 // ============================================================
 const AR_OFFSET_MS = 3 * 3600 * 1000;
@@ -3433,6 +3440,18 @@ function estadoOferta(rec, ahora){
   if (hasta && t > hasta) return 'vencida';
   if (desde && t < desde) return 'programada';
   return 'vigente';
+}
+
+// Sucursal de la oferta: OfertaSucursal ausente/null = ambas; si no, el id ('1' Munro, '2' Caseros)
+function sucursalOfertaTxt(rec){
+  const id = rec && rec.OfertaSucursal;
+  if (!id) return '';
+  const s = SUCURSALES.find(x => x.id === String(id));
+  return 'Solo ' + (s ? s.nombre : 'sucursal ' + id);
+}
+function ofSucursalOptions(){
+  return '<option value="">Ambas sucursales</option>' +
+    SUCURSALES.map(s => `<option value="${escapeHtml(s.id)}">Solo ${escapeHtml(s.nombre)}</option>`).join('');
 }
 
 function fmtARS(n){
@@ -3487,10 +3506,11 @@ function ofertaCellHtml(a, key){
   if (!e) return '<span class="of-none">—</span>';
   const k = escapeHtml(key);
   if (e === 'vencida') return `<button type="button" class="of-chip venc" data-key="${k}" title="Venció el ${fmtFechaGMT3(a.OfertaHasta)}">vencida</button>`;
-  if (e === 'programada') return `<button type="button" class="of-chip prog" data-key="${k}" title="${fmtARS(a.Oferta)} del ${fmtFechaGMT3(a.OfertaDesde)} al ${fmtFechaGMT3(a.OfertaHasta)}">desde ${fmtDiaMes(a.OfertaDesde)}</button>`;
+  const suc = sucursalOfertaTxt(a);
+  if (e === 'programada') return `<button type="button" class="of-chip prog" data-key="${k}" title="${fmtARS(a.Oferta)} del ${fmtFechaGMT3(a.OfertaDesde)} al ${fmtFechaGMT3(a.OfertaHasta)}${suc ? ' · ' + suc : ''}">desde ${fmtDiaMes(a.OfertaDesde)}</button>`;
   const pct = pctDescuento(Number(a.Oferta), precioListaARS(a));
-  const tip = `Hasta el ${fmtFechaGMT3(a.OfertaHasta)}` + (pct != null ? ` · ${pct >= 0 ? '−' : '+'}${Math.abs(pct)} % vs. lista` : '');
-  return `<button type="button" class="of-chip" data-key="${k}" title="${tip}">OFERTA ${fmtARS(a.Oferta)}</button>`;
+  const tip = `Hasta el ${fmtFechaGMT3(a.OfertaHasta)}` + (pct != null ? ` · ${pct >= 0 ? '−' : '+'}${Math.abs(pct)} % vs. lista` : '') + (suc ? ' · ' + suc : '');
+  return `<button type="button" class="of-chip" data-key="${k}" title="${tip}">OFERTA ${fmtARS(a.Oferta)}${suc ? ' · ' + escapeHtml(suc.replace('Solo ', '')) : ''}</button>`;
 }
 function refreshOfertaCells(){
   document.querySelectorAll('#artTbody td.oferta-col').forEach(td => {
@@ -3567,7 +3587,7 @@ function renderOfertas(){
           ${ls != null ? `<span class="ls">${fmtARS(ls)}</span>` : ''}
           ${pct != null && pct > 0 ? `<span class="pc">−${pct} %</span>` : ''}
         </div>
-        <div class="per">${per}</div>
+        <div class="per">${per} · <b>${escapeHtml(sucursalOfertaTxt(a) || 'Ambas sucursales')}</b></div>
         ${warns.length ? `<div class="warns">${warns.join('')}</div>` : ''}
       </div>
       <div class="acts">
@@ -3618,6 +3638,7 @@ async function ofEscribir(cambios){
       updates[`articulos/${k}/Oferta`] = c ? c.Oferta : null;
       updates[`articulos/${k}/OfertaDesde`] = c ? c.OfertaDesde : null;
       updates[`articulos/${k}/OfertaHasta`] = c ? c.OfertaHasta : null;
+      updates[`articulos/${k}/OfertaSucursal`] = c && c.OfertaSucursal ? c.OfertaSucursal : null;
     });
     await conTimeout(db.ref().update(updates), 15000, 'Timeout: la escritura tardó demasiado.');
 
@@ -3631,8 +3652,11 @@ async function ofEscribir(cambios){
     keys.forEach(k => {
       const rec = articulosCache[k];
       if (!rec) return;
-      if (cambios[k]) Object.assign(rec, cambios[k]);
-      else { delete rec.Oferta; delete rec.OfertaDesde; delete rec.OfertaHasta; }
+      if (cambios[k]){
+        Object.assign(rec, cambios[k]);
+        if (!cambios[k].OfertaSucursal) delete rec.OfertaSucursal;
+      }
+      else { delete rec.Oferta; delete rec.OfertaDesde; delete rec.OfertaHasta; delete rec.OfertaSucursal; }
     });
     return true;
   } catch (err){
@@ -3782,6 +3806,8 @@ function ofAbrirForm(keys, editando){
     $('ofPctMulti').value = '';
   }
 
+  $('ofSucursal').innerHTML = ofSucursalOptions();
+  $('ofSucursal').value = previa && previa.OfertaSucursal ? String(previa.OfertaSucursal) : '';
   const hoy = hoyISO();
   $('ofDesde').value = previa && previa.OfertaDesde ? isoDeMs(previa.OfertaDesde) : hoy;
   $('ofHasta').value = previa && previa.OfertaHasta ? isoDeMs(previa.OfertaHasta) : '';
@@ -3904,7 +3930,7 @@ async function ofGuardar(){
 
   const cambios = {};
   Object.entries(r.precios).forEach(([k, p]) => {
-    cambios[k] = { Oferta: p, OfertaDesde: r.desde, OfertaHasta: r.hasta };
+    cambios[k] = { Oferta: p, OfertaDesde: r.desde, OfertaHasta: r.hasta, OfertaSucursal: $('ofSucursal').value || null };
   });
   const n = Object.keys(cambios).length;
   const ok = await ofEscribir(cambios);

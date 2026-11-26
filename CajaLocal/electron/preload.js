@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld('cajaApp', {
   // el panel "Actividad de las cajas" (registroNube.js); lo muestra el selector.
   equipo: (() => { try { return ipcRenderer.sendSync('caja:equipo'); } catch (_) { return null; } })(),
   reintentarConexion: () => ipcRenderer.send('conexion:reintentar'),
+  // Búsqueda manual de versión nueva (botón del selector de usuario).
+  // Devuelve { resultado: al-dia|descargando|lista|error|desarrollo, version, nueva }.
+  actualizacion: {
+    buscar: () => ipcRenderer.invoke('actualizacion:buscar')
+  },
   // Registro diario (registro.js): registroCaja.js manda acá cada evento.
   // send y no invoke: anotar nunca hace esperar a la caja.
   registro: {

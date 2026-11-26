@@ -8347,6 +8347,25 @@
       return 'sin-dato';
     }
 
+    // Solo la nota 'Pago' (exacta) tacha el casillero PAGO de rotulos y
+    // etiquetas de Id. Ninguna otra nota lo marca.
+    function notaMarcaPago(nota) {
+      return normalizarNota(nota) === 'pago';
+    }
+
+    // Dibuja una cruz dentro de un casillero del canvas (x, y: esquina; lado: tamano).
+    function canvasCruz(ctx, x, y, lado, grosor) {
+      const m = Math.round(lado * 0.2);
+      ctx.save();
+      ctx.lineWidth = grosor;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + m, y + m); ctx.lineTo(x + lado - m, y + lado - m);
+      ctx.moveTo(x + lado - m, y + m); ctx.lineTo(x + m, y + lado - m);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Valores que escribe la opcion de pago del menu de la fila. 'Pago' entra en
     // NOTAS_PAGADO (tramo verde solido); 'Pago Solicitado' no, y como menciona
     // pago cae en 'espera' (tramo rayado). El riel refleja el toggle solo.
@@ -11775,7 +11794,7 @@
       try {
         const qr = await rotCargarQR(p.id, ID_QR);
         if (!qr) console.warn('No se pudo cargar el QR; la etiqueta sale sin el.');
-        const dataUrl = idConstruirCanvas(p.nombre, qr, p.timestamp);
+        const dataUrl = idConstruirCanvas(p.nombre, qr, p.timestamp, notaMarcaPago(p.nota));
         if (await rotImprimirTiras([dataUrl], 1)) {
           marcarIdImpreso([p.id]);
           showToast('Etiqueta de Id enviada a imprimir');
@@ -11871,7 +11890,7 @@
         const pedidos = ids.map(id => pedidosCache.find(x => x.id === id)).filter(Boolean);
         if (!pedidos.length) { showToast('No se encontraron los pedidos'); return; }
         const qrs = await Promise.all(pedidos.map(p => rotCargarQR(p.id, ID_QR)));
-        const etiquetas = pedidos.map((p, i) => ({ id: p.id, dataUrl: idConstruirCanvas(p.nombre, qrs[i], p.timestamp) }));
+        const etiquetas = pedidos.map((p, i) => ({ id: p.id, dataUrl: idConstruirCanvas(p.nombre, qrs[i], p.timestamp, notaMarcaPago(p.nota)) }));
 
         const impresos = await rotImprimirTiras(etiquetas.map(r => r.dataUrl), 1);
         if (impresos) {
@@ -14251,6 +14270,7 @@
         telefono: rotmanCampo('Telefono').value.trim(),
         dni: rotmanCampo('Dni').value.trim(),
         entrega: rotmanCampo('Entrega').value.trim(),
+        pago: notaMarcaPago(pedidoActual && pedidoActual.nota),
         ref: {
           id: String(pedidoId).slice(-8).toUpperCase(),
           cliente: ((pedidoActual && pedidoActual.cliente) || {}).nombre || ''
@@ -15109,6 +15129,10 @@
       let cx = px;
       ['PS', 'PAGO', 'LISTO'].forEach(t => {
         doc.rect(cx, cy - 3, 3.5, 3.5, 'S');
+        if (t === 'PAGO' && d.pago) {
+          doc.line(cx + 0.6, cy - 2.4, cx + 2.9, cy + 0.1);
+          doc.line(cx + 2.9, cy - 2.4, cx + 0.6, cy + 0.1);
+        }
         doc.text(t, cx + 5, cy);
         cx += 5 + doc.getTextWidth(t) + 9;
       });
@@ -16038,6 +16062,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let cx = x0;
       ['PS', 'PAGO', 'LISTO'].forEach(function (txt) {
         ctx.strokeRect(cx + reglaFina / 2, y + reglaFina / 2, caja, caja);
+        if (txt === 'PAGO' && d.pago) canvasCruz(ctx, cx + reglaFina / 2, y + reglaFina / 2, caja, reglaFina + 1);
         ctx.font = 'bold ' + (22 * k) + 'px Arial, Helvetica, sans-serif';
         ctx.fillText(txt, cx + caja + 10 * k, y + 3 * k);
         cx += caja + 10 * k + ctx.measureText(txt).width + 30 * k;
@@ -16277,7 +16302,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         provincia: cliente.provincia || '',
         telefono: cliente.telefono || '',
         dni: cliente.dni || '',
-        entrega: textoEntregaRotulo(p)
+        entrega: textoEntregaRotulo(p),
+        pago: notaMarcaPago(p.nota)
       };
     }
 
@@ -16376,7 +16402,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       return dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear();
     }
 
-    function idConstruirCanvas(nombre, qrImg, fechaTs) {
+    function idConstruirCanvas(nombre, qrImg, fechaTs, pago) {
       const W = ID_ANCHO, H = ID_ALTO, L = ID_MARCO;
       const canvas = document.createElement('canvas');
       canvas.width = W;
@@ -16418,6 +16444,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       const yCaja = Math.round(yBanda + (H - L - yBanda - caja) / 2);
       grupos.forEach(g => {
         ctx.strokeRect(gx + L / 2, yCaja + L / 2, caja - L, caja - L);
+        if (g.t === 'PAGO' && pago) canvasCruz(ctx, gx + L / 2, yCaja + L / 2, caja - L, L + 1);
         ctx.fillText(g.t, gx + caja + sepTxt, yCaja + caja - 5);
         gx += g.w + sepGrupo;
       });
@@ -16473,7 +16500,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       if (!qrImg) console.warn('No se pudo cargar el QR; la etiqueta sale sin el.');
       let dataUrl;
       try {
-        dataUrl = idConstruirCanvas(nombre, qrImg, pedidoActual.timestamp);
+        dataUrl = idConstruirCanvas(nombre, qrImg, pedidoActual.timestamp, notaMarcaPago(pedidoActual.nota));
       } catch (e) {
         console.error('No se pudo generar la etiqueta de Id:', e);
         showToast('No se pudo generar la etiqueta');

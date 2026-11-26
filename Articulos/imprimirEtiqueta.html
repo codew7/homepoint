@@ -181,6 +181,7 @@ input[type=number]{-moz-appearance:textfield}
 .label-preview.oferta .lp-price{font-size:44px}
 .of-toggle-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
 .of-toggle-row .of-info{font-size:.74rem;color:var(--muted)}
+.of-toggle-row .of-suc{border:1px solid var(--border-2);background:var(--card);border-radius:10px;padding:10px 12px;font-family:var(--font);font-size:.82rem;font-weight:700;color:var(--text-2);cursor:pointer}
 .tool-btn.toggle.of.on{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
 .tool-btn.toggle.of.on .pill-dot{background:var(--danger);box-shadow:0 0 0 3px rgba(244,63,94,.2)}
 table.art td.pricecol .of-badge{display:inline-block;font-family:var(--font);font-size:.6rem;font-weight:800;color:#fff;background:var(--danger);border-radius:5px;padding:2px 5px;margin-right:6px;vertical-align:1px}
@@ -439,6 +440,10 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
         <button class="tool-btn toggle of on" id="ofertaToggle" type="button" title="Con la oferta activada, los artículos en oferta vigente se imprimen con el precio de oferta, el precio de lista tachado y la fecha de fin">
           <span class="pill-dot"></span>Usar precio de oferta
         </button>
+        <select id="ofertaSucursal" class="of-suc" title="Sucursal donde se van a colocar las etiquetas: solo se usan las ofertas válidas ahí">
+          <option value="1">Munro</option>
+          <option value="2">Caseros</option>
+        </select>
         <span class="of-info" id="ofertaInfo">Cargando ofertas…</span>
       </div>
       <div class="cfg-note">Cada artículo seleccionado genera una etiqueta. Con “Artículos por hoja” mayor a 1, se agrupan varias etiquetas en la misma página separadas por una línea de corte. “Imprimir POS” ignora ese valor: manda cada etiqueta por separado a la térmica (máx. 72 mm de ancho) y la corta.</div>
@@ -618,7 +623,10 @@ let articulos = [];          // from Google Sheets: { codigo, nombre, imagen, pr
 const selected = new Map();  // codigo -> articulo (selección global, persiste entre filtros/páginas)
 let lastPreviewCodigo = null;
 
-let labelSettings = { width: 70, height: 25, perLabel: 1, usarOferta: true };
+// sucursal: dónde se colocan las etiquetas ('1' Munro, '2' Caseros). Arranca con el punto
+// de venta del equipo (puntoVenta.js, mismo origen) y se puede cambiar.
+let labelSettings = { width: 70, height: 25, perLabel: 1, usarOferta: true, sucursal: '1' };
+try{ const pv = localStorage.getItem('hpPuntoVenta'); if(pv === '1' || pv === '2') labelSettings.sucursal = pv; }catch(_){}
 
 const $ = id => document.getElementById(id);
 
@@ -634,9 +642,11 @@ function loadSettings(){
       labelSettings.height = p.height || 25;
       labelSettings.perLabel = p.perLabel || 1;
       labelSettings.usarOferta = p.usarOferta !== false;
+      if(p.sucursal === '1' || p.sucursal === '2') labelSettings.sucursal = p.sucursal;
     }
   }catch(_){}
   $('ofertaToggle').classList.toggle('on', labelSettings.usarOferta);
+  $('ofertaSucursal').value = labelSettings.sucursal;
   $('settingWidth').value = labelSettings.width;
   $('settingHeight').value = labelSettings.height;
   $('settingPerLabel').value = labelSettings.perLabel;
@@ -699,13 +709,12 @@ async function loadOfertas(){
       const desde = Number(a.OfertaDesde) || 0;
       const hasta = Number(a.OfertaHasta) || 0;
       if(precio > 0 && hasta >= ahora && desde <= ahora){
-        map[String(a.Codigo || ch.key).trim()] = { precio, hasta };
+        map[String(a.Codigo || ch.key).trim()] = { precio, hasta, sucursal: a.OfertaSucursal ? String(a.OfertaSucursal) : '' };
       }
     });
     ofertasMap = map;
     ofertasCargadas = true;
-    const n = Object.keys(map).length;
-    renderOfertaInfo(n ? n + ' artículo' + (n === 1 ? '' : 's') + ' en oferta vigente' : 'No hay ofertas vigentes');
+    renderOfertaInfo();
     return true;
   }catch(err){
     console.error('Error cargando ofertas:', err);
@@ -716,7 +725,15 @@ async function loadOfertas(){
   }
 }
 
-function renderOfertaInfo(txt){ $('ofertaInfo').textContent = txt; }
+// Sin texto: cuenta las ofertas vigentes que aplican a la sucursal elegida
+function renderOfertaInfo(txt){
+  if(txt == null){
+    if(!ofertasCargadas) return;
+    const n = Object.values(ofertasMap).filter(o => !o.sucursal || o.sucursal === labelSettings.sucursal).length;
+    txt = n ? n + ' artículo' + (n === 1 ? '' : 's') + ' en oferta vigente' : 'No hay ofertas vigentes';
+  }
+  $('ofertaInfo').textContent = txt;
+}
 
 // Oferta a imprimir para un artículo (null = etiqueta normal). Se revalida la fecha al
 // momento de imprimir por si la página quedó abierta y la oferta venció.
@@ -724,6 +741,7 @@ function ofertaDe(item){
   if(!labelSettings.usarOferta || !item) return null;
   const of = ofertasMap[item.codigo];
   if(!of || of.hasta < Date.now()) return null;
+  if(of.sucursal && of.sucursal !== labelSettings.sucursal) return null;   // oferta de la otra sucursal
   const lista = parseFloat(String(item.precio || '').replace(/[$\s,]/g, ''));   // mismo criterio que formatPriceDisplay
   return {
     precioTxt: Math.round(of.precio).toLocaleString('es-AR'),
@@ -1631,6 +1649,15 @@ $('pagerNext').addEventListener('click', () => gotoPage(page + 1));
 // Settings
 ['settingWidth', 'settingHeight', 'settingPerLabel'].forEach(id => {
   $(id).addEventListener('change', saveSettings);
+});
+
+// Sucursal donde se colocan las etiquetas
+$('ofertaSucursal').addEventListener('change', () => {
+  labelSettings.sucursal = $('ofertaSucursal').value;
+  saveSettings();
+  renderOfertaInfo();
+  renderPage();
+  if(lastPreviewCodigo && selected.has(lastPreviewCodigo)) updatePreview(selected.get(lastPreviewCodigo));
 });
 
 // Usar / no usar el precio de oferta en las etiquetas
