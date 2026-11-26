@@ -2726,9 +2726,41 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      width: 100%;
       padding: 8px 14px;
+      font: inherit;
       font-size: 13px;
+      text-align: left;
       color: var(--ink-2);
+      background: none;
+      border: none;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pp-desglose-fila:hover { background: var(--surface-2); }
+    .pp-desglose-fila.is-activo { background: var(--surface-3); color: var(--ink); font-weight: 600; }
+    /* Filtro por entrega activo: pastilla al final del resumen, tocarla lo quita */
+    .pp-filtro-entrega {
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      background: var(--surface-3);
+      border: 1px solid var(--line-2);
+      border-radius: 99px;
+      padding: 1px 6px 1px 9px;
+      margin-left: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      vertical-align: middle;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pp-filtro-entrega svg {
+      width: 11px; height: 11px;
+      stroke: currentColor; stroke-width: 2.6; fill: none; stroke-linecap: round;
+      opacity: .6;
     }
     .pp-desglose-fila + .pp-desglose-fila { border-top: 1px solid var(--line-2); }
     .pp-desglose-fila .pp-entrega-ind svg { width: 17px; height: 17px; }
@@ -5162,7 +5194,6 @@
     .ctx-celdas[hidden] { display: none; }
     .ctx-celdas .celda-chip { cursor: pointer; height: 22px; font-size: 12.5px; }
     @media (max-width: 480px) { .ctx-celdas { display: none; } }
-    .ctx-celdas .celda-chip::after { content: '\00d7'; font-family: inherit; opacity: .55; font-weight: 700; }
     .ctx-celdas .celda-chip:active { transform: scale(.94); }
 
     .celda-banner {
@@ -8456,7 +8487,10 @@
       // Fecha ingreso
       let fechaIngreso = '';
       if (pedidoActual.timestamp) {
-        fechaIngreso = new Date(pedidoActual.timestamp).toLocaleString('es-AR');
+        // Corta (dd/mm hh:mm) para que la cabecera entre en pantallas angostas.
+        const d = new Date(pedidoActual.timestamp);
+        const pad = n => String(n).padStart(2, '0');
+        fechaIngreso = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
       }
 
       // ---------- FRANJA DE CONTEXTO ----------
@@ -8480,7 +8514,8 @@
       actualizarCtxEntrega();
       actualizarBtnCatInt();
       celdaPintarCtx();
-      const fechaEntrega = fechaEntregaTexto(pedidoActual, true);
+      // Sin el año: dd/mm hh:mm, igual que la fecha de ingreso.
+      const fechaEntrega = fechaEntregaTexto(pedidoActual, true).replace(/^(\d{2}\/\d{2})\/\d{4}/, '$1');
       document.getElementById('ctxFecha').textContent = [
         fechaIngreso || '',
         fechaEntrega ? 'Entregado ' + fechaEntrega : ''
@@ -10144,7 +10179,16 @@
       prep: 'Para preparar por forma de entrega'
     };
     const IC_RETIRO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l1.5-5h15L21 9"></path><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"></path><path d="M5 13v7h14v-7"></path><path d="M10 20v-4h4v4"></path></svg>';
+    // Filtro momentaneo por forma de entrega, elegido desde el desglose:
+    // { tipo: 'desp'|'prep', clave: value de Entrega, txt }. null = sin filtro.
+    let ppFiltroEntrega = null;
+    const ppClaveEntrega = (p) => p.tipoEntrega in PP_ENTREGAS ? p.tipoEntrega : '';
     pedidosResumen.addEventListener('click', (e) => {
+      if (e.target.closest('.pp-filtro-entrega')) {
+        ppFiltroEntrega = null;
+        renderPedidosPendientes();
+        return;
+      }
       const btn = e.target.closest('.pp-resumen-desp');
       if (!btn || btn.disabled) return;
       if (ppNotaAbierta === btn) { ppNotaCerrar(); return; }
@@ -10156,13 +10200,27 @@
       menu.className = 'pp-nota-menu pp-desglose-pop';
       menu.setAttribute('role', 'menu');
       menu.innerHTML = '<div class="pp-nota-menu-titulo">' + PP_DESGLOSE_TITULOS[tipo] + '</div>' +
-        filas.map(([n, txt, ic, mod]) =>
-          '<div class="pp-desglose-fila">' +
+        filas.map(([n, txt, ic, mod, clave]) => {
+          const activo = ppFiltroEntrega && ppFiltroEntrega.tipo === tipo && ppFiltroEntrega.clave === clave;
+          return '<button type="button" class="pp-desglose-fila' + (activo ? ' is-activo' : '') + '" role="menuitemcheckbox"' +
+              ' aria-checked="' + (activo ? 'true' : 'false') + '" data-clave="' + escapeHtml(clave) + '" data-txt="' + escapeHtml(txt) + '">' +
             '<span class="pp-entrega-ind pp-entrega-ind--' + mod + '">' + ic + '</span>' +
             '<span class="pp-desglose-txt">' + escapeHtml(txt) + '</span>' +
             '<b class="pp-desglose-n">' + n + '</b>' +
-          '</div>'
-        ).join('');
+          '</button>';
+        }).join('');
+      // Tocar una forma de entrega filtra la lista por ella (y vuelve a
+      // tocarla, la suelta). Es momentaneo: se borra al cerrar el panel.
+      menu.addEventListener('click', (ev) => {
+        const fila = ev.target.closest('.pp-desglose-fila');
+        if (!fila) return;
+        const clave = fila.dataset.clave;
+        const yaActivo = ppFiltroEntrega && ppFiltroEntrega.tipo === tipo && ppFiltroEntrega.clave === clave;
+        ppFiltroEntrega = yaActivo ? null : { tipo, clave, txt: fila.dataset.txt };
+        ppNotaCerrar();
+        renderPedidosPendientes();
+        pedidosPanelList.scrollTop = 0;
+      });
       document.body.appendChild(menu);
       const r = btn.getBoundingClientRect();
       const mr = menu.getBoundingClientRect();
@@ -10199,6 +10257,7 @@
       ppDesuscribir();
       ppFiltrosToggle(false);
       ppFiltroNotaLimpiar();
+      ppFiltroEntrega = null;
       ppBuscarToggle(false);
     }
 
@@ -11396,10 +11455,14 @@
           ['', 'Retiro / sin envío']
         ].map(([k, txt]) => {
           const e = PP_ENTREGAS[k];
-          return [porEntrega[k], txt, e ? e[1] : IC_RETIRO, e ? e[2] : 'retiro'];
+          return [porEntrega[k], txt, e ? e[1] : IC_RETIRO, e ? e[2] : 'retiro', k];
         }).filter(([n]) => n > 0);
       };
       ppDesgloseFilas = { desp: desglose(desp), prep: desglose(prep) };
+      // Si la forma de entrega filtrada se quedo sin pedidos, el filtro se suelta.
+      if (ppFiltroEntrega && !ppDesgloseFilas[ppFiltroEntrega.tipo].some(f => f[4] === ppFiltroEntrega.clave)) {
+        ppFiltroEntrega = null;
+      }
 
       // Cada desglose se ve en un pop-up al tocar su boton del resumen.
       const botonResumen = (tipo, cantidad, texto) => {
@@ -11412,7 +11475,13 @@
       };
       pedidosResumen.innerHTML = pedidosCache.length + ' pendientes · ' +
         botonResumen('desp', desp.length, 'para despachar') + ' · ' +
-        botonResumen('prep', prep.length, 'para preparar');
+        botonResumen('prep', prep.length, 'para preparar') +
+        (ppFiltroEntrega
+          ? '<button type="button" class="pp-filtro-entrega" title="Quitar el filtro" aria-label="Quitar el filtro por ' + escapeHtml(ppFiltroEntrega.txt) + '">' +
+              (ppFiltroEntrega.tipo === 'desp' ? 'Despachar' : 'Preparar') + ': ' + escapeHtml(ppFiltroEntrega.txt) +
+              '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>' +
+            '</button>'
+          : '');
 
       // Arriba los listos para despachar; el resto se agrupa por nota. Las
       // notas de pago se unifican por estado (el Sheet escribe variantes) y las
@@ -11430,7 +11499,10 @@
       const visibles = pedidosCache.filter(p =>
         (!ppBusqueda || normalizarNota(p.nombre).indexOf(ppBusqueda) !== -1) &&
         (ppFiltroNota === null || ppGrupoNota(p.nota).clave === ppFiltroNota) &&
-        (!ppSoloComprobante || !!waComprobantesDe(p)));
+        (!ppSoloComprobante || !!waComprobantesDe(p)) &&
+        (!ppFiltroEntrega || (p.rank === 3 &&
+          ppEsParaDespachar(p) === (ppFiltroEntrega.tipo === 'desp') &&
+          ppClaveEntrega(p) === ppFiltroEntrega.clave)));
       visibles.forEach(p => {
         if (ppRotModo && !p.idImpreso) { sinImprimir.push(p); return; }
         if (p.rank === 3) { (ppEsParaDespachar(p) ? listos : aPreparar).push(p); return; }
@@ -11486,7 +11558,7 @@
       // para no perder de vista cuantos hay. En el modo rotulos se muestran
       // siempre: son justamente los que se rotulan.
       if (listos.length) {
-        if (ppOcultarListos && !ppRotModo) {
+        if (ppOcultarListos && !ppRotModo && !ppFiltroEntrega) {
           html += '<div class="pp-grupo pp-grupo--listo pp-grupo--oculto">' +
             '<span>' + escapeHtml(PP_GRUPOS[3]) + '</span>' +
             '<span class="pp-grupo-count">' + listos.length + '</span>' +
