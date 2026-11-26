@@ -100,6 +100,7 @@ async function mover(origen, destino, especial) {
 // meta/ultimo: el mayor de los dos
 function metaUltimo(destino) {
   return (rutas, viejo, nuevo) => {
+    if (rutas[destino] !== undefined) return;   // se copia entero: ya lleva su meta
     const a = Number(viejo && viejo.meta && viejo.meta.ultimo) || 0;
     const b = Number(nuevo && nuevo.meta && nuevo.meta.ultimo) || 0;
     if (a > b) rutas[destino + '/meta/ultimo'] = a;

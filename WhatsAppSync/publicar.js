@@ -19,6 +19,9 @@
 //
 //   node publicar.js                     pregunta que cambio
 //   node publicar.js "texto de cambios"  sin preguntas
+//   node publicar.js --solo-subir "..."  no arma nada: sube el instalador ya
+//                                        armado de la version actual (si la
+//                                        subida fallo la vez anterior)
 // =====================================================================
 
 const fs = require('fs');
@@ -154,25 +157,37 @@ async function avisarPorFirebase(version, notas) {
   }
   if (!process.env.GH_TOKEN) fs.writeFileSync(ARCHIVO_TOKEN, TOKEN);
 
-  const notas = process.argv.slice(2).join(' ').trim() || await preguntar('\n¿Qué cambió en esta versión? (opcional, Enter para seguir): ');
+  const SOLO_SUBIR = process.argv.includes('--solo-subir');
+  const notas = process.argv.slice(2).filter(a => a !== '--solo-subir').join(' ').trim() || await preguntar('\n¿Qué cambió en esta versión? (opcional, Enter para seguir): ');
 
   // 1. Version nueva
   const crudo = fs.readFileSync(ARCHIVO_PAQUETE, 'utf8');
   const paquete = JSON.parse(crudo);
-  const anterior = paquete.version;
-  const p = anterior.split('.').map(n => parseInt(n, 10) || 0);
-  const version = p[0] + '.' + p[1] + '.' + ((p[2] || 0) + 1);
-  paquete.version = version;
-  fs.writeFileSync(ARCHIVO_PAQUETE, JSON.stringify(paquete, null, 2) + '\n');
-  paso('Versión ' + anterior + ' -> ' + version);
+  let anterior = paquete.version;
+  let version;
+  if (SOLO_SUBIR) {
+    version = paquete.version;
+    anterior = '';   // no se borran instaladores viejos del release
+    paso('Solo subir la versión ' + version + ' (ya armada)');
+  } else {
+    const p = anterior.split('.').map(n => parseInt(n, 10) || 0);
+    version = p[0] + '.' + p[1] + '.' + ((p[2] || 0) + 1);
+    paquete.version = version;
+    fs.writeFileSync(ARCHIVO_PAQUETE, JSON.stringify(paquete, null, 2) + '\n');
+    paso('Versión ' + anterior + ' -> ' + version);
+  }
 
   // 2. Instalador
-  paso('Armando el instalador (tarda un par de minutos)...');
-  const armado = spawnSync('npm', ['run', 'instalador'], { cwd: DIR, stdio: 'inherit', shell: true });
   const exe = path.join(DIR, 'dist', 'WhatsAppSync-Setup-' + version + '.exe');
   const mapa = exe + '.blockmap';
   const yml = path.join(DIR, 'dist', 'latest.yml');
+  let armado = { status: 0 };
+  if (!SOLO_SUBIR) {
+    paso('Armando el instalador (tarda un par de minutos)...');
+    armado = spawnSync('npm', ['run', 'instalador'], { cwd: DIR, stdio: 'inherit', shell: true });
+  }
   if (armado.status !== 0 || !fs.existsSync(exe) || !fs.existsSync(yml)) {
+    if (SOLO_SUBIR) fallar('no está armado el instalador de la versión ' + version + ' (dist). Corré el publicador sin --solo-subir.');
     fs.writeFileSync(ARCHIVO_PAQUETE, crudo);   // se vuelve a la version anterior
     fallar('falló el armado del instalador (mirá los mensajes de arriba). La versión quedó en ' + anterior + '.');
   }
@@ -210,7 +225,7 @@ async function avisarPorFirebase(version, notas) {
   const lista = await gh('GET', '/releases/' + release.id + '/assets?per_page=100');
   for (const a of lista.datos || []) {
     const m = /^WhatsAppSync-Setup-(\d+\.\d+\.\d+)\.exe(\.blockmap)?$/.exec(a.name);
-    if (m && m[1] !== version && m[1] !== anterior) await gh('DELETE', '/releases/assets/' + a.id);
+    if (anterior && m && m[1] !== version && m[1] !== anterior) await gh('DELETE', '/releases/assets/' + a.id);
   }
 
   // 4. Aviso
@@ -222,4 +237,9 @@ async function avisarPorFirebase(version, notas) {
   console.log('\nLISTO: versión ' + version + ' publicada.');
   console.log('Cada PC con WhatsAppSync la descarga, se cierra y se vuelve a abrir sola.');
   process.exit(0);
-})().catch(e => fallar(e && e.message ? e.message : String(e)));
+})().catch(e => {
+  // "fetch failed" no dice nada: la causa real (DNS, conexion cortada...) va en e.cause
+  const causa = e && e.cause ? ' (' + (e.cause.code || '') + ' ' + (e.cause.message || '') + ')' : '';
+  fallar((e && e.message ? e.message : String(e)) + causa +
+    '. Si el instalador ya se armó, para no armarlo de nuevo: node publicar.js --solo-subir');
+});
