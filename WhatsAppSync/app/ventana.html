@@ -115,6 +115,7 @@
   .tipo small { grid-column: 1 / -1; }
   .tipo:has(input:checked) { border-color: var(--ok); background: var(--ok-soft); }
   .tipo.apagado { opacity: .5; cursor: default; }
+  .tipos.tres { grid-template-columns: 1fr 1fr 1fr; }
   .campo-error { margin-top: 2px; min-height: 0; }
   .acciones { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
   .acciones button.principal { margin-top: 0; }
@@ -149,8 +150,9 @@
     <section class="card" id="cardClave" hidden>
       <h2 id="claveTitulo">Falta la clave de Firebase</h2>
       <p class="error" id="claveMotivo" style="margin: 0 0 8px" hidden></p>
-      <p>Elegí el archivo <b>.json</b> de la cuenta de servicio del proyecto de esta línea
-        (Firebase → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada).</p>
+      <p>Elegí el archivo <b>.json</b> de la cuenta de servicio del proyecto de WhatsApp
+        (Firebase → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada).
+        Es una sola clave para todas las líneas de esta PC.</p>
       <button class="principal" id="btnClave">Elegir archivo de clave…</button>
       <div class="error" id="errClave"></div>
     </section>
@@ -159,6 +161,12 @@
       <h2>Hay otra copia conectada</h2>
       <p>Otro programa tomó la conexión de este WhatsApp, por ejemplo esta misma línea abierta en otra PC.
         Una línea funciona en una sola PC a la vez: cerrala allá (o quitala) y tocá <b>Reiniciar conexión</b>.</p>
+    </section>
+
+    <section class="card" id="cardNodo" hidden>
+      <h2 id="nodoTitulo"></h2>
+      <p id="nodoTexto"></p>
+      <button class="principal" id="btnNodo"></button>
     </section>
 
     <section class="card" id="cardOk" hidden>
@@ -178,8 +186,7 @@
         <dt>Tipo</dt><dd id="dTipo"></dd>
         <dt>Principal</dt><dd id="dPrincipal"></dd>
         <dt>Número</dt><dd id="dNumero"></dd>
-        <dt>Proyecto</dt><dd id="dProyecto"></dd>
-        <dt>Base WhatsApp</dt><dd id="dBase"></dd>
+        <dt>En Firebase</dt><dd id="dBase"></dd>
         <dt>Base pedidos</dt><dd id="dPedidos"></dd>
         <dt>Avisos de despacho</dt><dd id="dAvisos"></dd>
       </dl>
@@ -198,8 +205,14 @@
     <!-- ============ Alta / edición de una línea ============ -->
     <form class="card" id="form" hidden autocomplete="off" novalidate>
       <h2 id="fTitulo">Agregar línea de WhatsApp</h2>
-      <p id="fIntro">Cada línea es un número de WhatsApp con su propio proyecto de Firebase.
-        En esta PC pueden funcionar hasta 3 a la vez.</p>
+      <p id="fIntro">Cada línea es un número de WhatsApp. Todas se guardan en el mismo proyecto de Firebase,
+        cada una por separado. En esta PC pueden funcionar hasta 3 a la vez.</p>
+
+      <div class="campo" data-campo="nodo">
+        <span>Línea</span>
+        <div class="tipos tres" id="fNodos"></div>
+        <small>Cada línea puede estar en una sola PC. Las que ya están en esta PC aparecen apagadas.</small>
+      </div>
 
       <div class="campo" data-campo="modo" id="fCampoModo">
         <span>Tipo de línea</span>
@@ -211,29 +224,18 @@
         </div>
       </div>
 
-      <label class="campo" data-campo="nombre">
-        <span>Nombre</span>
-        <input id="fNombre" maxlength="30" placeholder="Ej.: Caseros">
-        <small>Para reconocerla acá y en «Dispositivos vinculados» del celular.</small>
-      </label>
-
       <label class="campo" data-campo="numero">
         <span>Número de WhatsApp</span>
         <input id="fNumero" inputmode="tel" placeholder="Ej.: 11 7646-0030">
         <small>Con código de área. Si cambiás el número de una línea ya vinculada, pide un QR nuevo.</small>
       </label>
 
-      <div class="campo" data-campo="clave">
+      <div class="campo" data-campo="clave" id="fCampoClave">
         <span>Clave de Firebase</span>
         <div class="clave"><b id="fClave">Sin elegir</b><button type="button" id="fBtnClave">Elegir archivo…</button></div>
-        <small>Firebase → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada.</small>
+        <small>Se elige una sola vez y sirve para todas las líneas de esta PC.
+          Firebase → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada.</small>
       </div>
-
-      <label class="campo" data-campo="databaseUrl">
-        <span>Base de WhatsApp</span>
-        <input id="fBase" spellcheck="false" placeholder="https://…-default-rtdb.firebaseio.com">
-        <small>Se completa sola al elegir la clave. Si no coincide, copiala de Firebase → Realtime Database.</small>
-      </label>
 
       <label class="campo" data-campo="pedidosUrl">
         <span>Base de pedidos <i>(opcional)</i></span>
@@ -272,12 +274,14 @@
     'falta-clave': ['Falta la clave de Firebase', 'err'],
     'clave-mala': ['La clave o la base de Firebase no sirven', 'err'],
     duplicado: ['Hay otra copia conectada', 'err'],
+    'nodo-ocupado': ['Esta línea la usa otro número', 'err'],
+    'sin-nodo': ['Falta elegir qué línea es', 'err'],
     detenida: ['Detenida', 'err']
   };
 
   let ultimo = null;       // ultimo estado recibido
   let formAbierto = null;  // null | { id: '' (nueva) | id de la linea (edicion) }
-  let baseAuto = '';       // URL de la base completada sola desde la clave
+  let pedidosAuto = '';    // base de pedidos sugerida por la linea elegida
 
   function lineaActual(e) {
     const ls = (e && e.lineas) || [];
@@ -315,7 +319,7 @@
     pintarTabs(e);
     const enForm = !!formAbierto;
 
-    for (const id of ['cardQr', 'cardClave', 'cardDuplicado', 'cardOk']) $(id).hidden = true;
+    for (const id of ['cardQr', 'cardClave', 'cardDuplicado', 'cardNodo', 'cardOk']) $(id).hidden = true;
     $('cardDatos').hidden = enForm;
     $('cardLogs').hidden = enForm;
     $('botonesLinea').hidden = enForm;
@@ -336,8 +340,22 @@
     $('cardClave').hidden = l.conexion !== 'falta-clave' && !claveMala;
     $('claveTitulo').textContent = claveMala ? 'La clave o la base de Firebase no sirven' : 'Falta la clave de Firebase';
     $('claveMotivo').hidden = !claveMala;
-    $('claveMotivo').textContent = claveMala ? 'Error: ' + String(l.motivo || 'desconocido').replace(/\.+$/, '') + '. Elegí la clave correcta o revisá la dirección de la base en «Datos de la línea».' : '';
+    $('claveMotivo').textContent = claveMala ? 'Error: ' + String(l.motivo || 'desconocido').replace(/\.+$/, '') + '. Elegí la clave correcta del proyecto de WhatsApp.' : '';
     $('cardDuplicado').hidden = l.conexion !== 'duplicado';
+    const ocupado = l.conexion === 'nodo-ocupado';
+    $('cardNodo').hidden = !ocupado && l.conexion !== 'sin-nodo';
+    if (ocupado) {
+      const o = l.ocupadoPor || {};
+      $('nodoTitulo').textContent = 'La línea ' + l.nombre + ' ya la usa otro número';
+      $('nodoTexto').textContent = 'En Firebase, la línea ' + l.nombre + ' es del ' + (o.numeroVisible || o.numero || 'otro número') +
+        (o.pc ? ' (PC ' + o.pc + ')' : '') + ', y acá está cargado el ' + l.numeroVisible + '. Para no mezclar datos no se arrancó. ' +
+        'Si te equivocaste de línea, tocá «Editar datos». Si el cambio de número es a propósito, tocá «Usar este número».';
+      $('btnNodo').textContent = 'Usar este número';
+    } else {
+      $('nodoTitulo').textContent = 'Falta elegir qué línea es';
+      $('nodoTexto').textContent = 'Esta línea venía de una versión anterior con otra base de Firebase. Elegí si es Envíos, Munro o Caseros.';
+      $('btnNodo').textContent = 'Elegir la línea';
+    }
     $('cardOk').hidden = l.conexion !== 'conectado';
     $('numero').textContent = l.numeroVisible || l.numero;
     $('nMensajes').textContent = (l.mensajesHoy || 0).toLocaleString('es-AR');
@@ -351,8 +369,7 @@
       : 'No';
     $('btnPrincipal').hidden = l.principal;
     $('dNumero').textContent = l.numeroVisible;
-    $('dProyecto').textContent = l.proyecto || 'Sin clave';
-    $('dBase').textContent = l.databaseUrl || '—';
+    $('dBase').textContent = l.nodo ? (l.proyecto || 'Sin clave') + ' → lineas/' + l.nodo : '—';
     $('dPedidos').textContent = l.pedidosUrl || 'Sin base de pedidos';
     $('dAvisos').textContent = l.avisosDespacho ? 'Sí, salen desde esta línea' : 'No';
 
@@ -398,55 +415,79 @@
     const r = document.querySelector('input[name=modo]:checked');
     return r ? r.value : 'cobros';
   }
-  // Al elegir Envios se sugiere el nombre.
-  function elegirTipo() {
-    const envios = tipoElegido() === 'envios';
-    if (formAbierto && !formAbierto.id && envios && !$('fNombre').value.trim()) $('fNombre').value = 'Envíos';
-    if (formAbierto && !formAbierto.id && !envios && $('fNombre').value === 'Envíos') $('fNombre').value = '';
+  function nodoElegido() {
+    const r = document.querySelector('input[name=nodo]:checked');
+    return r ? r.value : '';
   }
-  document.querySelectorAll('input[name=modo]').forEach(r => r.addEventListener('change', elegirTipo));
+  // Al elegir la linea se sugiere su base de pedidos (si no se escribio otra)
+  function elegirNodo() {
+    const n = ((ultimo && ultimo.nodos) || []).find(x => x.id === nodoElegido());
+    const actual = $('fPedidos').value.trim();
+    if (n && (!actual || actual === pedidosAuto)) { $('fPedidos').value = n.pedidos; pedidosAuto = n.pedidos; }
+  }
+
+  // Botones de las lineas posibles; las que ya estan en esta PC, apagadas
+  function pintarNodos(l) {
+    const caja = $('fNodos');
+    caja.textContent = '';
+    let elegido = l ? l.nodo : '';
+    for (const n of (ultimo && ultimo.nodos) || []) {
+      const usada = !!n.usadaPor && (!l || n.usadaPor !== l.id);
+      const et = document.createElement('label');
+      et.className = 'tipo' + (usada ? ' apagado' : '');
+      const r = document.createElement('input');
+      r.type = 'radio'; r.name = 'nodo'; r.value = n.id; r.disabled = usada;
+      if (!elegido && !usada) elegido = n.id;
+      r.checked = n.id === elegido;
+      r.addEventListener('change', elegirNodo);
+      const b = document.createElement('b');
+      b.textContent = n.nombre;
+      const sm = document.createElement('small');
+      sm.textContent = usada ? 'Ya está en esta PC' : 'lineas/' + n.id;
+      et.append(r, b, sm);
+      caja.appendChild(et);
+    }
+  }
+
+  function pintarClaveForm() {
+    const c = (ultimo && ultimo.clave) || {};
+    $('fCampoClave').hidden = !!c.hay;
+    $('fClave').textContent = c.hay ? 'Proyecto ' + c.proyecto : 'Sin elegir';
+  }
 
   function abrirForm(l) {
-    window.was.olvidarClaveForm();
     formAbierto = { id: l ? l.id : '' };
-    baseAuto = '';
+    pedidosAuto = '';
     marcarError('', '');
     $('fTitulo').textContent = l ? 'Editar la línea ' + l.nombre : 'Agregar línea de WhatsApp';
     $('fIntro').hidden = !!l;
-    $('fNombre').value = l ? l.nombre : '';
     $('fNumero').value = l ? l.numeroVisible : '';
-    $('fClave').textContent = l ? (l.proyecto ? 'Proyecto ' + l.proyecto : 'Sin clave') : 'Sin elegir';
-    $('fBtnClave').textContent = l ? 'Cambiar…' : 'Elegir archivo…';
-    $('fBase').value = l ? l.databaseUrl : '';
     $('fPedidos').value = l ? l.pedidosUrl : '';
+    pintarNodos(l);
+    if (!l) elegirNodo();
+    pintarClaveForm();
     // Tipo: libre, al agregar y al editar
     document.querySelector('input[name=modo][value=' + (l ? l.modo : 'cobros') + ']').checked = true;
-    elegirTipo();
     $('fGuardar').textContent = l ? 'Guardar cambios' : 'Guardar y vincular';
     $('fCancelar').hidden = !(ultimo && ultimo.lineas && ultimo.lineas.length);
     $('form').hidden = false;
     if (ultimo) pintar(ultimo);
-    setTimeout(() => $('fNombre').focus(), 0);
+    setTimeout(() => $('fNumero').focus(), 0);
   }
 
   function cerrarForm() {
     if (!formAbierto) return;
     formAbierto = null;
     $('form').hidden = true;
-    window.was.olvidarClaveForm();
     if (ultimo) pintar(ultimo);
   }
 
   $('fBtnClave').addEventListener('click', async () => {
     marcarError('', '');
-    const r = await window.was.elegirClaveForm();
+    const r = await window.was.elegirClave();
     if (!r.ok) { if (r.error) marcarError('clave', r.error); return; }
-    $('fClave').textContent = 'Proyecto ' + r.proyecto;
-    const actual = $('fBase').value.trim();
-    if (!actual || actual === baseAuto || !formAbierto.id) {
-      $('fBase').value = r.databaseUrl;
-      baseAuto = r.databaseUrl;
-    }
+    ultimo = await window.was.estado();
+    pintarClaveForm();
   });
 
   $('form').addEventListener('submit', async (ev) => {
@@ -459,9 +500,8 @@
     try {
       const r = await window.was.guardarLinea({
         id: formAbierto ? formAbierto.id : '',
-        nombre: $('fNombre').value,
+        nodo: nodoElegido(),
         numero: $('fNumero').value,
-        databaseUrl: $('fBase').value,
         pedidosUrl: $('fPedidos').value,
         modo: tipoElegido()
       });
@@ -484,8 +524,13 @@
 
   $('btnClave').addEventListener('click', async () => {
     $('errClave').textContent = '';
-    const r = await window.was.elegirClave(idActual());
+    const r = await window.was.elegirClave();
     if (!r.ok && r.error) $('errClave').textContent = r.error;
+  });
+  $('btnNodo').addEventListener('click', () => {
+    const l = lineaActual(ultimo);
+    if (!l) return;
+    if (l.conexion === 'nodo-ocupado') window.was.reemplazarNodo(l.id); else abrirForm(l);
   });
   $('btnEditar').addEventListener('click', () => { const l = lineaActual(ultimo); if (l) abrirForm(l); });
   $('btnQuitar').addEventListener('click', () => window.was.quitarLinea(idActual()));

@@ -2,8 +2,10 @@
 // =====================================================================
 // WhatsAppSync - app de bandeja de Windows.
 //
-// Maneja una o varias LINEAS de WhatsApp (un numero cada una, con su propio
-// proyecto de Firebase y su propia base de pedidos). Por cada linea lanza el
+// Maneja una o varias LINEAS de WhatsApp (un numero cada una). Todas van en el
+// mismo proyecto de Firebase (ajustes.js -> DATABASE_URL), cada una en su nodo
+// lineas/<nodo> (envios, munro o caseros; ver NODOS), con una sola clave por
+// PC, y cada una con su base de pedidos. Por cada linea lanza el
 // sincronizador (../index.js) en un proceso aparte y lo reinicia si se cae:
 // si una linea falla, las demas siguen. Vive en la bandeja del sistema (al
 // lado del reloj) y arranca siempre escondido ahi. Cerrar o minimizar la
@@ -12,8 +14,11 @@
 //
 // Datos en %APPDATA%\WhatsAppSync (la carpeta de instalacion no se puede
 // escribir):
-//   lineas\<id>\linea.json        { nombre, numero, databaseUrl, pedidosUrl, modo, principal, avisosDespacho, creada }
-//   lineas\<id>\clave-firebase.json, sesion\, logs\ ...   (lo de cada linea)
+//   firebase\clave.json           clave de Firebase (una sola para todas las lineas)
+//   lineas\<id>\linea.json        { nodo, nombre, numero, pedidosUrl, modo, principal, avisosDespacho, creada }
+//   lineas\<id>\sesion\, logs\ ...   (lo de cada linea)
+// (La clave comun NO va en la raiz como clave-firebase.json: eso es la marca
+// de una instalacion vieja de una sola linea.)
 //   ocr\                          idioma del lector de texto (compartido)
 //   app.json                      preferencias de la app
 // Las versiones anteriores (una sola linea) guardaban todo en la raiz: al
@@ -45,6 +50,10 @@ const DATOS = path.join(app.getPath('appData'), 'WhatsAppSync');
 const DIR_LINEAS = path.join(DATOS, 'lineas');
 const DIR_OCR = path.join(DATOS, 'ocr');
 const ARCHIVO_PREFS = path.join(DATOS, 'app.json');
+const CLAVE_COMUN = path.join(DATOS, 'firebase', 'clave.json');
+const NODOS = AJUSTES.NODOS || {};
+// Proyecto de la base unica: https://<proyecto>-default-rtdb.firebaseio.com
+const PROYECTO = (String(AJUSTES.DATABASE_URL || '').match(/^https:\/\/([a-z0-9-]+?)(-default-rtdb)?\./i) || [])[1] || '';
 const MOTOR = path.join(__dirname, '..', 'index.js');
 const MAX_LINEAS = 3;
 fs.mkdirSync(DIR_LINEAS, { recursive: true });
@@ -122,12 +131,6 @@ function ordenarLineas() {
   for (const L of lista) lineas.set(L.id, L);
 }
 
-function slug(nombre) {
-  const s = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
-  return s || 'linea';
-}
-
 // ---------------------------------------------------------------------
 // Lineas
 // ---------------------------------------------------------------------
@@ -151,15 +154,59 @@ function crearLinea(id, cfg) {
 }
 
 function archivoLinea(L) { return path.join(L.dir, 'linea.json'); }
-function archivoClave(L) { return path.join(L.dir, 'clave-firebase.json'); }
+// Una sola clave para todas las lineas. La linea de respaldo (instalacion
+// vieja que no se pudo migrar) sigue usando la suya, en la raiz.
+function archivoClave(L) { return L && L.respaldo ? path.join(DATOS, 'clave-firebase.json') : CLAVE_COMUN; }
 
 function guardarCfg(L) {
   fs.mkdirSync(L.dir, { recursive: true });
   fs.writeFileSync(archivoLinea(L), JSON.stringify(L.cfg, null, 2));
 }
 
-function proyectoDeClave(L) {
-  try { return JSON.parse(fs.readFileSync(archivoClave(L), 'utf8')).project_id || ''; } catch (_) { return ''; }
+function proyectoDeArchivo(archivo) {
+  try { return JSON.parse(fs.readFileSync(archivo, 'utf8')).project_id || ''; } catch (_) { return ''; }
+}
+function proyectoDeClave(L) { return proyectoDeArchivo(archivoClave(L)); }
+function nombreNodo(nodo) { return (NODOS[nodo] && NODOS[nodo].nombre) || nodo || ''; }
+
+// Versiones anteriores: cada linea con su clave en su carpeta. La clave del
+// proyecto unico pasa a firebase\clave.json y se borran las copias de las
+// lineas (las de otros proyectos no sirven mas y tambien se borran).
+function migrarClaveComun() {
+  const archivos = listaLineas().filter(L => !L.respaldo).map(L => path.join(L.dir, 'clave-firebase.json')).filter(a => fs.existsSync(a));
+  if (!archivos.length) return;
+  if (!fs.existsSync(CLAVE_COMUN)) {
+    const buena = archivos.find(a => proyectoDeArchivo(a) === PROYECTO);
+    if (buena) {
+      try {
+        fs.mkdirSync(path.dirname(CLAVE_COMUN), { recursive: true });
+        fs.copyFileSync(buena, CLAVE_COMUN);
+        avisosMigracion.push('La clave de Firebase ahora es una sola para todas las líneas de esta PC.');
+      } catch (e) {
+        avisosMigracion.push('No se pudo pasar la clave de Firebase a la carpeta común (' + e.message + '). Se reintenta en el próximo arranque.');
+        return;
+      }
+    }
+  }
+  if (!fs.existsSync(CLAVE_COMUN)) return;   // ninguna era del proyecto: se piden de nuevo, no se borra nada
+  for (const a of archivos) { try { fs.unlinkSync(a); } catch (_) { /* no es critico */ } }
+}
+
+// Versiones anteriores: cada linea con su base. La que usaba la base unica
+// pasa a ser la linea Envios; otra base no tiene nodo y hay que elegirlo.
+function asignarNodo(L, id) {
+  const cfg = L.cfg;
+  if (cfg.nodo && NODOS[cfg.nodo]) return false;
+  const url = String(cfg.databaseUrl || '').trim().replace(/\/+$/, '');
+  const libre = !listaLineas().some(o => o !== L && o.cfg.nodo === AJUSTES.NODO_POR_DEFECTO);
+  if ((!url || url === AJUSTES.DATABASE_URL || id === ID_VIEJA) && libre) {
+    cfg.nodo = AJUSTES.NODO_POR_DEFECTO;
+    cfg.nombre = nombreNodo(cfg.nodo);
+  } else {
+    cfg.nodo = '';
+  }
+  delete cfg.databaseUrl;
+  return true;
 }
 
 function leerLineas() {
@@ -177,11 +224,21 @@ function leerLineas() {
       // Versiones anteriores: alias cargados a mano (ya no se usan)
       if ('alias' in cfg) { delete cfg.alias; cambio = true; }
       if (id === ID_VIEJA && cfg.nombre === 'Principal') { cfg.nombre = NOMBRE_ENVIOS; cambio = true; }
-      if (cambio) guardarCfg(L);
+      if ('databaseUrl' in cfg || !cfg.nodo) cambio = true;
       lista.push(L);
+      L.cambio = cambio;
     } catch (_) { /* carpeta sin linea.json: se ignora */ }
   }
   for (const L of lista) lineas.set(L.id, L);
+  // Primero las que ya tenian la base unica (asi "envios" queda para ellas)
+  const pendientes = lista.filter(L => L.cambio).sort((a, b) => (a.id === ID_VIEJA ? -1 : b.id === ID_VIEJA ? 1 : 0));
+  for (const L of pendientes) {
+    if (asignarNodo(L, L.id) && !L.cfg.nodo) {
+      avisosMigracion.push('La línea "' + (L.cfg.nombre || L.id) + '" usaba otra base de Firebase: en «Datos de la línea» → Editar, elegí qué línea es.');
+    }
+    guardarCfg(L);
+    delete L.cambio;
+  }
   ordenarLineas();
 }
 
@@ -206,11 +263,11 @@ function migrarInstalacionVieja() {
       movidos.push(nombre);
     }
     const cfg = {
+      nodo: AJUSTES.NODO_POR_DEFECTO,
       nombre: NOMBRE_ENVIOS,
       modo: 'envios',
       principal: true,
       numero: AJUSTES.NUMERO_ESPERADO,
-      databaseUrl: AJUSTES.DATABASE_URL,
       pedidosUrl: AJUSTES.PEDIDOS_DATABASE_URL || '',
       avisosDespacho: true,
       creada: Date.now()
@@ -230,7 +287,7 @@ function migrarInstalacionVieja() {
 function lineaDeRespaldo() {
   if (lineas.size || !fs.existsSync(path.join(DATOS, 'clave-firebase.json'))) return;
   const L = crearLinea(ID_VIEJA, {
-    nombre: NOMBRE_ENVIOS, modo: 'envios', principal: true, numero: AJUSTES.NUMERO_ESPERADO, databaseUrl: AJUSTES.DATABASE_URL,
+    nodo: AJUSTES.NODO_POR_DEFECTO, nombre: NOMBRE_ENVIOS, modo: 'envios', principal: true, numero: AJUSTES.NUMERO_ESPERADO,
     pedidosUrl: AJUSTES.PEDIDOS_DATABASE_URL || '', avisosDespacho: true
   });
   L.dir = DATOS;
@@ -249,6 +306,12 @@ function anotar(L, linea) {
 function iniciarMotor(L) {
   clearTimeout(L.reinicio);
   if (L.motor || saliendo || !lineas.has(L.id)) return;
+  if (!L.respaldo && !NODOS[L.cfg.nodo]) {
+    L.estado.conexion = 'sin-nodo';
+    actualizar();
+    pedirAtencion(L, 'Falta elegir qué línea es');
+    return;
+  }
   if (!fs.existsSync(archivoClave(L))) {
     L.estado.conexion = 'falta-clave';
     actualizar();
@@ -257,8 +320,10 @@ function iniciarMotor(L) {
   }
   L.estado.conexion = 'iniciando';
   actualizar();
+  const env = { ...process.env, WAS_DATOS: L.dir, WAS_OCR: DIR_OCR, WAS_CLAVE: archivoClave(L) };
+  if (L.reemplazar) { env.WAS_REEMPLAZAR = '1'; L.reemplazar = false; }
   const m = utilityProcess.fork(MOTOR, [], {
-    env: { ...process.env, WAS_DATOS: L.dir, WAS_OCR: DIR_OCR },
+    env,
     stdio: 'ignore',
     serviceName: 'WhatsAppSync ' + (L.cfg.nombre || L.id)
   });
@@ -280,6 +345,11 @@ function iniciarMotor(L) {
       L.estado.conexion = 'duplicado';
       actualizar();
       pedirAtencion(L, 'Hay otra copia conectada');
+      return;
+    } else if (codigo === 4) {        // el nodo de la linea ya es de otro numero
+      L.estado.conexion = 'nodo-ocupado';
+      actualizar();
+      pedirAtencion(L, 'Esa línea ya la usa otro número');
       return;
     }
     L.estado.conexion = 'reiniciando';
@@ -372,6 +442,10 @@ function recibir(L, e) {
       s.conexion = 'clave-mala';
       s.motivo = e.motivo || '';
       break;
+    case 'nodo-ocupado':
+      s.conexion = 'nodo-ocupado';
+      s.ocupadoPor = { numero: e.numero || '', numeroVisible: numeroVisible(e.numero), pc: e.pc || '' };
+      break;
   }
   actualizar();
 }
@@ -394,17 +468,19 @@ const TEXTOS = {
   'falta-clave': 'Falta la clave',
   'clave-mala': 'La clave no sirve',
   duplicado: 'Otra copia conectada',
+  'nodo-ocupado': 'Línea usada por otro número',
+  'sin-nodo': 'Falta elegir la línea',
   detenida: 'Detenida'
 };
-const ERRORES = ['falta-clave', 'clave-mala', 'duplicado'];
+const ERRORES = ['falta-clave', 'clave-mala', 'duplicado', 'nodo-ocupado', 'sin-nodo'];
 
 function datosLinea(L) {
   return {
     id: L.id,
-    nombre: L.cfg.nombre || L.id,
+    nodo: L.cfg.nodo || '',
+    nombre: L.cfg.nombre || nombreNodo(L.cfg.nodo) || L.id,
     numero: L.cfg.numero || '',
     numeroVisible: numeroVisible(L.cfg.numero),
-    databaseUrl: L.cfg.databaseUrl || '',
     pedidosUrl: L.cfg.pedidosUrl || '',
     avisosDespacho: L.cfg.avisosDespacho !== false,
     modo: modoDe(L),
@@ -419,6 +495,12 @@ function estadoVentana() {
   return {
     lineas: listaLineas().map(datosLinea),
     seleccionada,
+    // Lineas posibles y si ya estan en esta PC (para el formulario)
+    nodos: Object.entries(NODOS).map(([id, n]) => ({
+      id, nombre: n.nombre, pedidos: n.pedidos || '',
+      usadaPor: (listaLineas().find(L => L.cfg.nodo === id) || {}).id || ''
+    })),
+    clave: { hay: fs.existsSync(CLAVE_COMUN), proyecto: proyectoDeArchivo(CLAVE_COMUN) },
     maxLineas: MAX_LINEAS,
     inicioConWindows,
     version: app.getVersion(),
@@ -592,9 +674,7 @@ function configurarInicio(si) {
 // ---------------------------------------------------------------------
 // Alta y cambios de lineas
 // ---------------------------------------------------------------------
-// La clave elegida queda en memoria hasta que se guarda la linea.
-let claveElegida = null;   // { contenido, proyecto }
-
+// La clave es una sola por PC: se elige una vez y sirve para todas las lineas.
 async function elegirArchivoClave() {
   const r = await dialog.showOpenDialog(ventana, {
     title: 'Elegí el archivo de clave de Firebase (.json)',
@@ -609,7 +689,24 @@ async function elegirArchivoClave() {
   if (clave.type !== 'service_account' || !clave.private_key || !clave.project_id) {
     return { error: 'Ese archivo no es una clave de cuenta de servicio de Firebase.' };
   }
+  if (PROYECTO && clave.project_id !== PROYECTO) {
+    return { error: 'Esa clave es del proyecto "' + clave.project_id + '". Tiene que ser del proyecto "' + PROYECTO + '".' };
+  }
   return { clave };
+}
+
+// Guarda la clave comun y arranca las lineas que la estaban esperando
+async function guardarClaveComun() {
+  const r = await elegirArchivoClave();
+  if (!r) return { ok: false };
+  if (r.error) return { ok: false, error: r.error };
+  fs.mkdirSync(path.dirname(CLAVE_COMUN), { recursive: true });
+  fs.writeFileSync(CLAVE_COMUN, JSON.stringify(r.clave, null, 2));
+  for (const L of listaLineas()) {
+    if (!L.respaldo && (L.estado.conexion === 'falta-clave' || L.estado.conexion === 'clave-mala')) reiniciarMotor(L);
+  }
+  actualizar();
+  return { ok: true, proyecto: r.clave.project_id };
 }
 
 // La base de pedidos se lee sin clave (como pedidos-87064): tiene que
@@ -632,37 +729,30 @@ async function guardarLinea(datos) {
   if (datos.id && !editando) return { ok: false, error: 'Esa línea ya no existe.' };
   if (!editando && lineas.size >= MAX_LINEAS) return { ok: false, error: 'Ya hay ' + MAX_LINEAS + ' líneas en esta PC.' };
 
+  // Que linea es (nodo en Firebase). La de respaldo es siempre Envios.
+  const nodo = editando && editando.respaldo ? AJUSTES.NODO_POR_DEFECTO : String(datos.nodo || '');
+  if (!NODOS[nodo]) return { ok: false, campo: 'nodo', error: 'Elegí qué línea es.' };
+  const otras = listaLineas().filter(L => L !== editando);
+  if (otras.some(L => L.cfg.nodo === nodo)) {
+    return { ok: false, campo: 'nodo', error: 'La línea ' + nombreNodo(nodo) + ' ya está en esta PC.' };
+  }
+  const nombre = nombreNodo(nodo);
+
   // Tipo: libre, al agregar o al editar
   const modo = datos.modo === 'cobros' ? 'cobros' : 'envios';
-  const nombre = String(datos.nombre || '').trim().slice(0, 30);
-  if (!nombre) return { ok: false, campo: 'nombre', error: 'Poné un nombre para la línea (por ejemplo, el del local).' };
   const numero = normalizarNumero(datos.numero);
   if (!numero) return { ok: false, campo: 'numero', error: 'El número tiene que tener código de área y número: 10 dígitos, como 11 7646-0030.' };
-
-  const otras = listaLineas().filter(L => L !== editando);
-  if (otras.some(L => (L.cfg.nombre || '').toLowerCase() === nombre.toLowerCase())) {
-    return { ok: false, campo: 'nombre', error: 'Ya hay una línea con ese nombre.' };
-  }
   if (otras.some(L => L.cfg.numero === numero)) {
     return { ok: false, campo: 'numero', error: 'Ese número ya está en otra línea de esta PC.' };
   }
-  if (!editando && !claveElegida) return { ok: false, campo: 'clave', error: 'Elegí el archivo de clave de Firebase de esta línea.' };
-  const proyecto = claveElegida ? claveElegida.proyecto : proyectoDeClave(editando);
-  if (proyecto && otras.some(L => proyectoDeClave(L) === proyecto)) {
-    return { ok: false, campo: 'clave', error: 'Esa clave es del proyecto "' + proyecto + '", que ya usa otra línea. Cada línea va en su propio proyecto de Firebase.' };
+  if (!fs.existsSync(archivoClave(editando))) {
+    return { ok: false, campo: 'clave', error: 'Elegí el archivo de clave de Firebase (una sola vez para todas las líneas de esta PC).' };
   }
 
-  const databaseUrl = limpiarUrl(datos.databaseUrl);
-  if (!RE_URL_BASE.test(databaseUrl)) {
-    return { ok: false, campo: 'databaseUrl', error: 'La dirección de la base de WhatsApp no es válida (Firebase → Realtime Database, arriba de los datos).' };
-  }
-  if (otras.some(L => limpiarUrl(L.cfg.databaseUrl) === databaseUrl)) {
-    return { ok: false, campo: 'databaseUrl', error: 'Esa base de WhatsApp ya la usa otra línea.' };
-  }
   const pedidosUrl = limpiarUrl(datos.pedidosUrl);
   if (pedidosUrl) {
     if (!RE_URL_BASE.test(pedidosUrl)) return { ok: false, campo: 'pedidosUrl', error: 'La dirección de la base de pedidos no es válida.' };
-    if (pedidosUrl === databaseUrl) return { ok: false, campo: 'pedidosUrl', error: 'La base de pedidos no puede ser la misma que la de WhatsApp.' };
+    if (pedidosUrl === limpiarUrl(AJUSTES.DATABASE_URL)) return { ok: false, campo: 'pedidosUrl', error: 'La base de pedidos no puede ser la misma que la de WhatsApp.' };
     if (!editando || pedidosUrl !== limpiarUrl(editando.cfg.pedidosUrl)) {
       const problema = await probarBasePedidos(pedidosUrl);
       if (problema) return { ok: false, campo: 'pedidosUrl', error: problema };
@@ -671,24 +761,19 @@ async function guardarLinea(datos) {
 
   let L = editando;
   if (!L) {
-    let id = slug(nombre);
-    for (let i = 2; id === ID_VIEJA || lineas.has(id) || fs.existsSync(path.join(DIR_LINEAS, id)); i++) id = slug(nombre) + '-' + i;
+    let id = nodo;
+    for (let i = 2; id === ID_VIEJA || lineas.has(id) || fs.existsSync(path.join(DIR_LINEAS, id)); i++) id = nodo + '-' + i;
     // La primera linea de la PC queda como principal
     L = crearLinea(id, { creada: Date.now(), principal: lineas.size === 0 });
   }
   const antes = { ...L.cfg };
-  L.cfg = { ...L.cfg, nombre, numero, databaseUrl, pedidosUrl, modo, avisosDespacho: modo === 'envios' };
+  L.cfg = { ...L.cfg, nodo, nombre, numero, pedidosUrl, modo, avisosDespacho: modo === 'envios' };
   delete L.cfg.alias;
+  delete L.cfg.databaseUrl;
   if (L.respaldo) {
     // Instalacion vieja que no se pudo migrar: sigue en la raiz
   } else {
     guardarCfg(L);
-  }
-  const claveNueva = !!claveElegida;
-  if (claveElegida) {
-    fs.mkdirSync(L.dir, { recursive: true });
-    fs.writeFileSync(archivoClave(L), JSON.stringify(claveElegida.contenido, null, 2));
-    claveElegida = null;
   }
   if (!editando) {
     lineas.set(L.id, L);
@@ -696,8 +781,8 @@ async function guardarLinea(datos) {
     seleccionada = L.id;
     refrescarMenu();
     iniciarMotor(L);
-  } else if (antes.numero !== numero || antes.databaseUrl !== databaseUrl || antes.pedidosUrl !== pedidosUrl ||
-             antes.modo !== modo || claveNueva || ERRORES.includes(L.estado.conexion)) {
+  } else if (antes.numero !== numero || antes.nodo !== nodo || antes.pedidosUrl !== pedidosUrl ||
+             antes.modo !== modo || ERRORES.includes(L.estado.conexion)) {
     // Si cambio el numero, el motor ve que la sesion es de otro telefono,
     // la desvincula y muestra un QR nuevo.
     reiniciarMotor(L);
@@ -717,8 +802,8 @@ async function quitarLinea(id) {
     cancelId: 0,
     title: 'WhatsAppSync',
     message: '¿Quitar la línea "' + L.cfg.nombre + '" de esta PC?',
-    detail: 'Se desvincula el WhatsApp ' + numeroVisible(L.cfg.numero) + ' de esta PC y se borran su clave y su sesión acá. ' +
-      'Lo guardado en su Firebase no se toca. Se puede volver a agregar cuando quieras (en esta PC o en otra).'
+    detail: 'Se desvincula el WhatsApp ' + numeroVisible(L.cfg.numero) + ' de esta PC y se borra su sesión acá. ' +
+      'Lo guardado en Firebase no se toca. Se puede volver a agregar cuando quieras (en esta PC o en otra).'
   });
   if (r.response !== 1) return false;
   await desvincularMotor(L);
@@ -751,6 +836,27 @@ function hacerPrincipal(id) {
   return true;
 }
 
+// La linea ya la usaba otro numero (en Firebase): tomarla igual, a proposito
+async function reemplazarNodo(id) {
+  const L = lineas.get(id);
+  if (!L) return false;
+  const otro = (L.estado.ocupadoPor && L.estado.ocupadoPor.numeroVisible) || 'otro número';
+  const r = await dialog.showMessageBox(ventana, {
+    type: 'warning',
+    buttons: ['Cancelar', 'Usar este número'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'WhatsAppSync',
+    message: '¿Pasar la línea ' + L.cfg.nombre + ' al ' + numeroVisible(L.cfg.numero) + '?',
+    detail: 'Hasta ahora la usaba el ' + otro + '. Si ese número sigue funcionando en otra PC, quitalo allá primero: ' +
+      'dos números en la misma línea mezclan los datos. Lo ya guardado no se borra.'
+  });
+  if (r.response !== 1) return false;
+  L.reemplazar = true;
+  await reiniciarMotor(L);
+  return true;
+}
+
 // ---------------------------------------------------------------------
 // Acciones desde la ventana
 // ---------------------------------------------------------------------
@@ -759,35 +865,9 @@ function linea(id) { return lineas.get(id) || null; }
 ipcMain.handle('estado', () => estadoVentana());
 ipcMain.handle('seleccionar', (_e, id) => { if (lineas.has(id)) { seleccionada = id; actualizar(); } });
 
-// Elegir clave para el formulario (alta o cambio de clave)
-ipcMain.handle('elegir-clave-form', async () => {
-  const r = await elegirArchivoClave();
-  if (!r) return { ok: false };
-  if (r.error) return { ok: false, error: r.error };
-  claveElegida = { contenido: r.clave, proyecto: r.clave.project_id };
-  return {
-    ok: true,
-    proyecto: r.clave.project_id,
-    databaseUrl: 'https://' + r.clave.project_id + '-default-rtdb.firebaseio.com'
-  };
-});
-ipcMain.handle('olvidar-clave-form', () => { claveElegida = null; });
-
-// Linea existente sin clave: se elige y se arranca
-ipcMain.handle('elegir-clave', async (_e, id) => {
-  const L = linea(id);
-  if (!L) return { ok: false };
-  const r = await elegirArchivoClave();
-  if (!r) return { ok: false };
-  if (r.error) return { ok: false, error: r.error };
-  if (listaLineas().some(o => o !== L && proyectoDeClave(o) === r.clave.project_id)) {
-    return { ok: false, error: 'Esa clave es del proyecto "' + r.clave.project_id + '", que ya usa otra línea.' };
-  }
-  fs.mkdirSync(L.dir, { recursive: true });
-  fs.writeFileSync(archivoClave(L), JSON.stringify(r.clave, null, 2));
-  await reiniciarMotor(L);
-  return { ok: true, proyecto: r.clave.project_id };
-});
+// Clave de Firebase de la PC (desde el formulario o desde el aviso de la linea)
+ipcMain.handle('elegir-clave', () => guardarClaveComun());
+ipcMain.handle('reemplazar-nodo', (_e, id) => reemplazarNodo(id));
 
 ipcMain.handle('guardar-linea', (_e, datos) => guardarLinea(datos || {}));
 ipcMain.handle('quitar-linea', (_e, id) => quitarLinea(id));
@@ -846,6 +926,7 @@ app.whenReady().then(() => {
 
   migrarInstalacionVieja();
   leerLineas();
+  migrarClaveComun();
   lineaDeRespaldo();
   const ls = listaLineas();
   seleccionada = ls.length ? ls[0].id : '';

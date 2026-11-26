@@ -7321,7 +7321,11 @@
     try {
       if (typeof whatsappFirebaseConfig !== 'undefined' && whatsappFirebaseConfig.apiKey) {
         waApp = firebase.initializeApp(whatsappFirebaseConfig, 'whatsapp');
-        waDb = waApp.database();
+        // Cada linea de WhatsApp va en su nodo (lineas/<linea>/). waDb.ref('chats/...')
+        // apunta a lineas/envios/chats/... (whatsappRaiz, en config-whatsapp.js).
+        const waBase = waApp.database();
+        const waRaiz = typeof whatsappRaiz === 'string' && whatsappRaiz ? whatsappRaiz : 'lineas/envios/';
+        waDb = { ref: (ruta) => waBase.ref(waRaiz + (ruta || '')) };
       }
     } catch (err) {
       console.warn('WhatsApp: no se pudo iniciar el proyecto aparte', err);
@@ -14540,9 +14544,9 @@
     // En la fila de pendientes con entrega Flecha Carga hay un boton para
     // pegar el link del envio. Se guarda en dos lados:
     //   pedidos/<id>/despacho       { link, ts, por }   (base de pedidos)
-    //   envios/<id>                 { tel, nombre, link, t, por }
+    //   despachos/<id>              { tel, nombre, link, t, por }
     //                               (base de WhatsApp, proyecto aparte)
-    // WhatsAppSync, en la PC del local, ve cada envios/<id> nuevo, arma el
+    // WhatsAppSync, en la PC del local, ve cada despachos/<id> nuevo, arma el
     // mensaje y se lo manda al cliente desde el 11 7646-0030. Despues anota
     // ahi mismo estado: 'enviado' | 'error' | 'vencido' (+ enviadoEn, error).
     // Volver a guardar reescribe el envio sin estado: sale de nuevo.
@@ -14555,7 +14559,7 @@
     const despLoginEl = document.getElementById('despLogin');
     const despPassInput = document.getElementById('despPass');
     let despEnviosRef = null;
-    let despEnvios = {};          // pedidoId -> envios/<id>
+    let despEnvios = {};          // pedidoId -> despachos/<id>
     let despPedido = null;        // fila de pedidosCache abierta en el modal
     let despGuardando = false;
 
@@ -14565,7 +14569,7 @@
       // se entera de un inicio de sesion hecho desde el modal.
       Promise.resolve(waApp.auth().currentUser || waEsperarAuth()).then(user => {
         if (!user || despEnviosRef || !ppVivo) return;
-        despEnviosRef = waDb.ref('envios');
+        despEnviosRef = waDb.ref('despachos');
         despEnviosRef.on('value', snap => {
           despEnvios = snap.val() || {};
           if (ppVivo) ppProgramarPintado();
@@ -14731,7 +14735,7 @@
           lastUpdated: ahora
         }), PAQ_PLAZO_MS).catch(err => { if (!(err && err.esTimeout)) throw err; });
         p.despachoLink = link;
-        await conPlazo(waDb.ref('envios/' + p.id).set({
+        await conPlazo(waDb.ref('despachos/' + p.id).set({
           tel, nombre: String(p.nombre || '').slice(0, 80), link, t: ahora, por
         }), PAQ_PLAZO_MS).catch(err => { if (!(err && err.esTimeout)) throw err; });
         despGuardando = false;

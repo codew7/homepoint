@@ -116,7 +116,7 @@ async function avisarPorFirebase(version, notas) {
   // en esta PC una clave de ese mismo proyecto.
   const ajustes = require('./ajustes');
   const dirLineas = path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas');
-  const claves = [path.join(DIR, 'clave-firebase.json')];
+  const claves = [path.join(DIR, 'clave-firebase.json'), path.join(process.env.APPDATA || '', 'WhatsAppSync', 'firebase', 'clave.json')];
   try { for (const id of fs.readdirSync(dirLineas)) claves.push(path.join(dirLineas, id, 'clave-firebase.json')); } catch (_) { /* sin app instalada */ }
   claves.push(path.join(process.env.APPDATA || '', 'WhatsAppSync', 'clave-firebase.json'));
   const host = String(ajustes.DATABASE_URL || '').replace(/^https:\/\//, '');

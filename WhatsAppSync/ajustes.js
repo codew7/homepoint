@@ -2,23 +2,33 @@
 // Este archivo NO tiene datos secretos. La clave privada va aparte, en
 // clave-firebase.json (no se sube a git).
 //
-// VARIAS LINEAS: la app instalada puede manejar hasta 3 numeros. Lo propio de
-// cada linea (numero, base de WhatsApp, base de pedidos) se carga desde la
-// ventana de la app y queda en %APPDATA%\WhatsAppSync\lineas\<id>\linea.json.
-// Los tres valores de abajo marcados (LINEA PRINCIPAL) solo se usan para la
-// linea principal (la de Envios): al pasar una instalacion vieja a lineas, con
-// "node index.js" suelto y en descargar-comprobantes.js. El resto vale para
-// todas las lineas. Las lineas de cobros (las demas) solo guardan los
-// comprobantes del cliente y nuestro mensaje con la palabra "alias" (ver index.js).
+// VARIAS LINEAS: la app instalada puede manejar hasta 3 numeros. Todas usan
+// el MISMO proyecto de Firebase (DATABASE_URL) y la misma clave; cada linea
+// guarda lo suyo en su nodo: lineas/<nodo>/ (ver NODOS). Lo propio de cada
+// linea (que nodo es, numero, tipo, base de pedidos) se carga desde la ventana
+// de la app y queda en %APPDATA%\WhatsAppSync\lineas\<id>\linea.json.
+// NUMERO_ESPERADO y PEDIDOS_DATABASE_URL (marcados LINEA ENVIOS) solo se usan
+// para la linea Envios: al pasar una instalacion vieja a lineas y con
+// "node index.js" suelto. Las lineas de cobros solo guardan los comprobantes
+// del cliente y nuestro mensaje con la palabra "alias" (ver index.js).
 
 module.exports = {
-  // (LINEA PRINCIPAL) Numero de WhatsApp que se vincula (solo digitos, con 549).
+  // (LINEA ENVIOS) Numero de WhatsApp que se vincula (solo digitos, con 549).
   // Si se escanea el QR con otro telefono, el programa lo rechaza.
   NUMERO_ESPERADO: '5491176460030',
 
-  // (LINEA PRINCIPAL) URL de la Realtime Database del proyecto Firebase APARTE para WhatsApp.
-  // Se copia de Firebase > Realtime Database (arriba de los datos).
+  // URL de la Realtime Database del proyecto Firebase de WhatsApp (uno solo
+  // para todas las lineas). Ahi tambien va el aviso de actualizacion.
   DATABASE_URL: 'https://whatsappsync-e3245-default-rtdb.firebaseio.com',
+
+  // Lineas posibles: nodo -> nombre y base de pedidos sugerida (se puede
+  // cambiar en la ventana). Los datos de cada una van en lineas/<nodo>/.
+  NODOS: {
+    envios: { nombre: 'Envíos', pedidos: 'https://pedidos-87064-default-rtdb.firebaseio.com' },
+    munro: { nombre: 'Munro', pedidos: 'https://pedidos-87064-default-rtdb.firebaseio.com' },
+    caseros: { nombre: 'Caseros', pedidos: 'https://homepoint2-pedidos-default-rtdb.firebaseio.com' }
+  },
+  NODO_POR_DEFECTO: 'envios',
 
   // Del historial que manda el celular al vincular, cuantos dias se guardan.
   DIAS_HISTORIAL: 90,
@@ -43,7 +53,7 @@ module.exports = {
   // pedidos creados como mucho estos dias antes de recibirlo.
   DIAS_ASIGNAR: 30,
 
-  // (LINEA PRINCIPAL) Base de pedidosv2, de donde se sacan los telefonos de los clientes y los
+  // (LINEA ENVIOS) Base de pedidosv2, de donde se sacan los telefonos de los clientes y los
   // pedidos para asignar comprobantes (solo lectura).
   PEDIDOS_DATABASE_URL: 'https://pedidos-87064-default-rtdb.firebaseio.com'
 };

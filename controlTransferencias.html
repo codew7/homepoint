@@ -1692,8 +1692,9 @@
 
         // ------------------------------------------ Comprobantes de WhatsApp --
         // WhatsAppSync (PC del local) guarda cada comprobante de pago que manda un
-        // cliente en su propio proyecto de Firebase y lo asigna a un pedido:
-        //   imgsIdx/{id}      = { tel, t, pedido, conf, monto, comp, cat, yo, verif }
+        // cliente en su propio proyecto de Firebase, dentro del nodo de su línea
+        // (lineas/<línea>/...), y lo asigna a un pedido:
+        //   imgsIdx/{id}    = { tel, t, pedido, conf, monto, comp, cat, yo, verif }
         //                       índice liviano, sin la imagen
         //   imgs/{tel}/{id}/d = la imagen (JPG en base64), se baja solo al verla
         //   asigManual/{id}   = corrección a mano desde pedidosv2 (manda sobre la automática)
@@ -1702,16 +1703,18 @@
         // La app se llama 'whatsapp' igual que en pedidosv2: al ser el mismo sitio,
         // la sesión que ya se inició allá sirve acá y no se pide de nuevo.
         //
-        // Solo los puntos de venta con su línea de WhatsApp en la web: la línea de
-        // whatsappsync-e3245 asigna contra la base de pedidos de Munro. Para sumar
-        // otro punto, agregar aquí su config de Firebase de WhatsApp.
+        // Todas las líneas de WhatsApp están en el mismo proyecto (whatsappFirebaseConfig),
+        // cada una en su nodo lineas/<línea>/. Acá va qué línea se mira en cada punto de
+        // venta: la línea Envíos asigna contra la base de pedidos de Munro. Para sumar
+        // otro punto, agregar aquí su nodo (ej. '2': 'lineas/caseros/').
         const WA_POR_PUNTO = {
-            '1': typeof whatsappFirebaseConfig !== 'undefined' ? whatsappFirebaseConfig : null
+            '1': typeof whatsappRaiz === 'string' && whatsappRaiz ? whatsappRaiz : 'lineas/envios/'
         };
         const WA_MARGEN_DIAS = 3;        // comprobantes de hasta 3 días antes de la ventana
         const WA_MAX_SIN_FECHA = 60;     // tope de consultas sueltas para pedidos sin fecha
 
         let waApp = null;                // app de WhatsApp del punto consultado (o null)
+        let waRaiz = '';                 // nodo de la línea de ese punto (lineas/<línea>/)
         let waEstado = 'off';            // off | cargando | login | error | listo
         let waPorPedido = new Map();     // pedidoId -> [{ id, tel, t, monto, comp, conf, verif }]
         let waAsigManual = {};
@@ -1731,9 +1734,9 @@
         }
 
         function waAppDe(punto) {
-            const cfg = WA_POR_PUNTO[punto];
-            if (!cfg || !cfg.apiKey) return null;
-            const nombre = punto === '1' ? 'whatsapp' : 'whatsapp-' + punto;
+            const cfg = typeof whatsappFirebaseConfig !== 'undefined' ? whatsappFirebaseConfig : null;
+            if (!WA_POR_PUNTO[punto] || !cfg || !cfg.apiKey) return null;
+            const nombre = 'whatsapp';   // mismo nombre que en pedidosv2: comparte la sesión
             try {
                 return firebase.apps.find(a => a.name === nombre) || firebase.initializeApp(cfg, nombre);
             } catch (error) {
@@ -1923,6 +1926,7 @@
             // La selección es de un solo punto de venta (las marcas van a su base)
             if (selPunto !== puntoConsultado) { selPunto = puntoConsultado; selVaciar(); }
             waApp = waAppDe(puntoConsultado);
+            waRaiz = WA_POR_PUNTO[puntoConsultado] || '';
             waPorPedido = new Map();
             waAsigManual = {};
             if (!waApp) { waEstado = 'off'; pintarComprobantes(); return; }
@@ -1934,7 +1938,9 @@
             if (esta !== waCargaVigente) return;
             if (!usuario) { waEstado = 'login'; pintarComprobantes(); return; }
 
-            const db = app.database();
+            const base = app.database();
+            const raiz = waRaiz;
+            const db = { ref: ruta => base.ref(raiz + (ruta || '')) };   // dentro de lineas/<línea>/
             const pedidosIds = new Set();
             transferenciasData.forEach(p => { pedidosIds.add(String(p.id)); if (p._key) pedidosIds.add(p._key); });
             const desdeT = Date.now() - (diasVentana + WA_MARGEN_DIAS) * 86400000;
@@ -2039,7 +2045,7 @@
         function waCargarFoto(a, app) {
             if (waFotos.has(a.id)) return Promise.resolve(waFotos.get(a.id));
             if (waFotosPend.has(a.id)) return waFotosPend.get(a.id);
-            const p = app.database().ref('imgs/' + a.tel + '/' + a.id + '/d').once('value')
+            const p = app.database().ref(waRaiz + 'imgs/' + a.tel + '/' + a.id + '/d').once('value')
                 .then(snap => {
                     const f = waFoto(snap.val());
                     waFotos.set(a.id, f);

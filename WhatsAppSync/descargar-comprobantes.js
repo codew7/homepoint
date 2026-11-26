@@ -64,34 +64,38 @@ function evento(ev, datos) {
 }
 
 // Este script trabaja solo con la linea PRINCIPAL de esta PC (la que se elige
-// en la ventana de WhatsAppSync con "Hacer principal"). Se busca:
+// en la ventana de WhatsAppSync con "Hacer principal"). Todas las lineas van
+// en la base de ajustes.js (DATABASE_URL), cada una en lineas/<nodo>. Se busca:
 //   1. En la app instalada: %APPDATA%\WhatsAppSync\lineas\<id>\linea.json con
-//      "principal": true -> su clave, su base de WhatsApp y su base de pedidos.
+//      "principal": true -> su nodo y su base de pedidos; la clave es la comun
+//      (%APPDATA%\WhatsAppSync\firebase\clave.json).
 //   2. Si no: clave-firebase.json junto a este archivo, con los datos de
-//      ajustes.js (modo suelto, sin app instalada).
+//      ajustes.js y el nodo Envios (modo suelto, sin app instalada).
 //   3. Versiones viejas de una sola linea: %APPDATA%\WhatsAppSync.
+const DATOS_APP = path.join(process.env.APPDATA || '', 'WhatsAppSync');
 function lineaPrincipalInstalada() {
-  const dir = path.join(process.env.APPDATA || '', 'WhatsAppSync', 'lineas');
+  const dir = path.join(DATOS_APP, 'lineas');
   let carpetas = [];
   try { carpetas = fs.readdirSync(dir); } catch (_) { return null; }
   for (const id of carpetas) {
     try {
       const cfg = JSON.parse(fs.readFileSync(path.join(dir, id, 'linea.json'), 'utf8'));
-      const clave = path.join(dir, id, 'clave-firebase.json');
-      if (cfg.principal && cfg.databaseUrl && fs.existsSync(clave)) return { cfg, clave };
+      if (cfg.principal && cfg.nodo) return { cfg };
     } catch (_) { /* carpeta sin linea.json */ }
   }
   return null;
 }
 const instalada = lineaPrincipalInstalada();
+let NODO = CFG.NODO_POR_DEFECTO || 'envios';
 if (instalada) {
-  CFG.DATABASE_URL = instalada.cfg.databaseUrl;
+  NODO = instalada.cfg.nodo;
   CFG.PEDIDOS_DATABASE_URL = instalada.cfg.pedidosUrl || '';
-  console.log('Línea principal: ' + (instalada.cfg.nombre || '') + ' (' + CFG.DATABASE_URL + ')');
+  console.log('Línea principal: ' + (instalada.cfg.nombre || NODO) + ' (lineas/' + NODO + ')');
 }
-const CLAVES = instalada ? [instalada.clave] : [
+const CLAVES = [
+  path.join(DATOS_APP, 'firebase', 'clave.json'),
   path.join(__dirname, 'clave-firebase.json'),
-  path.join(process.env.APPDATA || '', 'WhatsAppSync', 'clave-firebase.json')
+  path.join(DATOS_APP, 'clave-firebase.json')
 ];
 const archivoClave = CLAVES.find(c => fs.existsSync(c));
 if (!archivoClave) {
@@ -126,10 +130,13 @@ if (!tomarCandado()) {
   process.exit(3);
 }
 
-const db = getDatabase(initializeApp({
+// Todo lo de la linea esta en lineas/<nodo>/: db.ref('imgsIdx') es
+// lineas/<nodo>/imgsIdx (igual que en index.js).
+const base = getDatabase(initializeApp({
   credential: cert(JSON.parse(fs.readFileSync(archivoClave, 'utf8'))),
   databaseURL: CFG.DATABASE_URL
 }));
+const db = { ref: (ruta) => base.ref('lineas/' + NODO + (ruta ? '/' + ruta : '')) };
 
 // registro: { idComprobante: { archivo, pedido, comp, fmt, t, tel, doc, marca, verif } }
 function leerJson(archivo) {

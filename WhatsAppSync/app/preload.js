@@ -8,9 +8,8 @@ contextBridge.exposeInMainWorld('was', {
   alPedirAgregar: (cb) => ipcRenderer.on('abrir-agregar', () => cb()),
   estado: () => ipcRenderer.invoke('estado'),
   seleccionar: (id) => ipcRenderer.invoke('seleccionar', id),
-  elegirClave: (id) => ipcRenderer.invoke('elegir-clave', id),
-  elegirClaveForm: () => ipcRenderer.invoke('elegir-clave-form'),
-  olvidarClaveForm: () => ipcRenderer.invoke('olvidar-clave-form'),
+  elegirClave: () => ipcRenderer.invoke('elegir-clave'),   // una sola clave para toda la PC
+  reemplazarNodo: (id) => ipcRenderer.invoke('reemplazar-nodo', id),
   guardarLinea: (datos) => ipcRenderer.invoke('guardar-linea', datos),
   quitarLinea: (id) => ipcRenderer.invoke('quitar-linea', id),
   hacerPrincipal: (id) => ipcRenderer.invoke('hacer-principal', id),

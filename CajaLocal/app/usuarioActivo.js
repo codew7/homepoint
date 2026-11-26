@@ -92,20 +92,20 @@
   // todavía no eligió recibe uno libre (ver asignacion()): puede cambiar si
   // entra gente nueva a la planilla, hasta que elija el propio.
   // Colores apagados, pensados para leerse sobre grafito y sobre blanco.
-  // Uno por animal, en el mismo orden que ANIMALES: los 6 últimos se eligieron
-  // lejos de los 12 primeros (mostaza, pizarra, bordó, marino, lima, naranja)
-  // para que no haya dos círculos que se confundan.
+  // Uno por animal, en el mismo orden que ANIMALES: los 5 últimos se eligieron
+  // lejos de los primeros (mostaza, bordó, marino, lima, naranja) para que no
+  // haya dos círculos que se confundan. Perro, tortuga y mono se quitaron
+  // (2026-11) junto con su color: quien los tenía recibe uno libre solo.
   const TONOS = [
-    '#7c5fd0', '#3f8fe6', '#1f9d86', '#d08a1e', '#d6604f', '#b25cc4',
-    '#2fa3c7', '#7d9446', '#d1517f', '#4f5fd1', '#3fa35a', '#a86b3c',
-    '#c4a31d', '#607489', '#9a2d42', '#26457d', '#94b02a', '#ea6c1f'
+    '#7c5fd0', '#1f9d86', '#d08a1e', '#d6604f', '#b25cc4',
+    '#2fa3c7', '#7d9446', '#d1517f', '#4f5fd1', '#3fa35a',
+    '#c4a31d', '#9a2d42', '#26457d', '#94b02a', '#ea6c1f'
   ];
 
   // Íconos de línea en 24×24, trazo blanco. Caras de frente para que todos
   // se lean igual de grandes dentro del círculo.
   const ANIMALES = {
     gato:     '<path d="M4.5 4.5 8 7.6A7 7 0 0 1 16 7.6l3.5-3.1V12a7.5 7.5 0 0 1-15 0Z"/><path d="M9.5 12h.01M14.5 12h.01"/><path d="M10.8 15h2.4L12 16.3Z"/>',
-    perro:    '<path d="M7 7.5c1-2 2.8-3 5-3s4 1 5 3V14a5 5 0 0 1-10 0Z"/><path d="M7 8C5 6 3 7 3 9.5S4.5 14 6.5 13.5M17 8c2-2 4-1 4 1.5S19.5 14 17.5 13.5"/><path d="M10 10.5h.01M14 10.5h.01"/><path d="M11 14h2l-1 1.2Z"/>',
     zorro:    '<path d="M4 4l4 3.5h8L20 4l-1 8-7 8-7-8Z"/><path d="M9.5 11.5h.01M14.5 11.5h.01M12 16h.01"/>',
     oso:      '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="6.5" r="2.5"/><circle cx="12" cy="13" r="7"/><ellipse cx="12" cy="15.5" rx="2.6" ry="2"/><path d="M9.5 11h.01M14.5 11h.01M12 15h.01"/>',
     conejo:   '<ellipse cx="9.5" cy="5.5" rx="1.6" ry="4"/><ellipse cx="14.5" cy="5.5" rx="1.6" ry="4"/><circle cx="12" cy="15" r="6"/><path d="M10 14.5h.01M14 14.5h.01M12 17h.01"/>',
@@ -115,9 +115,7 @@
     cerdo:    '<circle cx="12" cy="12.5" r="7.5"/><path d="M6.4 7.4 5.2 3.6l4 2.2M17.6 7.4l1.2-3.8-4 2.2"/><ellipse cx="12" cy="14.6" rx="3" ry="2.2"/><path d="M11 14.6h.01M13 14.6h.01M9 10.5h.01M15 10.5h.01"/>',
     rana:     '<circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="7" r="2.5"/><path d="M4 13c0-3 2-5 4-5.5h8c2 .5 4 2.5 4 5.5 0 4-3.6 6.5-8 6.5S4 17 4 13Z"/><path d="M8.5 14.5c2 1.5 5 1.5 7 0M8 7h.01M16 7h.01"/>',
     pez:      '<path d="M3 12c3-5 9-6.5 13-3l4-3v12l-4-3c-4 3.5-10 2-13-3Z"/><path d="M8 11h.01"/><path d="M11 9.5c.8 1.6.8 3.4 0 5"/>',
-    tortuga:  '<path d="M3 15a8 7 0 0 1 16 0Z"/><path d="M7.5 15l1.5-4h4l1.5 4M9 11l2-3 2 3"/><path d="M6 15v2.5M16 15v2.5"/><path d="M19 13.5c.5-1.6 2.5-1.9 3-.3s-.6 2.3-2 2.3"/>',
     leon:     '<circle cx="12" cy="12" r="9" stroke-dasharray="2.4 1.7"/><circle cx="12" cy="12.5" r="5.5"/><path d="M10 11.5h.01M14 11.5h.01"/><path d="M11 14h2l-1 1.1Z"/>',
-    mono:     '<circle cx="4.8" cy="12" r="2.3"/><circle cx="19.2" cy="12" r="2.3"/><circle cx="12" cy="12" r="6.5"/><path d="M8.6 13.2c0-1.8 1.5-2.6 3.4-2.6s3.4.8 3.4 2.6c0 2-1.5 3.3-3.4 3.3s-3.4-1.3-3.4-3.3Z"/><path d="M10 9.4h.01M14 9.4h.01"/><path d="M10.9 14.6c.7.4 1.5.4 2.2 0"/>',
     koala:    '<circle cx="5.5" cy="8.5" r="3.2"/><circle cx="18.5" cy="8.5" r="3.2"/><circle cx="12" cy="13" r="6.5"/><ellipse cx="12" cy="14.2" rx="1.7" ry="2.4"/><path d="M9.2 11.5h.01M14.8 11.5h.01"/>',
     panda:    '<circle cx="6.3" cy="6.8" r="2.1"/><circle cx="17.7" cy="6.8" r="2.1"/><circle cx="12" cy="13" r="7"/><ellipse cx="9" cy="12.4" rx="1.6" ry="2.3" transform="rotate(28 9 12.4)"/><ellipse cx="15" cy="12.4" rx="1.6" ry="2.3" transform="rotate(-28 15 12.4)"/><path d="M11.2 16h1.6L12 16.9Z"/>',
     vaca:     '<path d="M7 7l-2.5-3M17 7l2.5-3"/><path d="M6 9 3 9.8l3 1.4M18 9l3 .8-3 1.4"/><path d="M7.5 6.5h9a1.5 1.5 0 0 1 1.5 1.5V13H6V8a1.5 1.5 0 0 1 1.5-1.5Z"/><rect x="6.5" y="13" width="11" height="6.5" rx="3.2"/><path d="M9.5 10h.01M14.5 10h.01M10 16.3h.01M14 16.3h.01"/>',
@@ -142,9 +140,9 @@
   }
 
   const NOMBRE_ANIMAL = {
-    gato: 'Gato', perro: 'Perro', zorro: 'Zorro', oso: 'Oso', conejo: 'Conejo', buho: 'Búho',
-    pinguino: 'Pingüino', raton: 'Ratón', cerdo: 'Cerdo', rana: 'Rana', pez: 'Pez', tortuga: 'Tortuga',
-    leon: 'León', mono: 'Mono', koala: 'Koala', panda: 'Panda', vaca: 'Vaca', pato: 'Pato'
+    gato: 'Gato', zorro: 'Zorro', oso: 'Oso', conejo: 'Conejo', buho: 'Búho',
+    pinguino: 'Pingüino', raton: 'Ratón', cerdo: 'Cerdo', rana: 'Rana', pez: 'Pez',
+    leon: 'León', koala: 'Koala', panda: 'Panda', vaca: 'Vaca', pato: 'Pato'
   };
 
   // { claveDe(nombre): animal }, de Firebase (o de la caché mientras tanto).
@@ -399,8 +397,13 @@
           <button type="button" class="usr-pv-cambiar">Cambiar punto de venta</button>
         </div>
       </div>
+      <button type="button" class="usr-actualizar" title="Buscar una versión nueva de la caja">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+        <span class="usr-actualizar-texto">Buscar actualizaciones</span>
+      </button>
       <span class="usr-version" aria-hidden="true"></span>`;
     document.body.appendChild(overlay);
+    prepararBotonActualizar(overlay.querySelector('.usr-actualizar'));
 
     // Versión de la aplicación, discreta en la esquina. En la caja de
     // escritorio la da la app (preload.js: cajaApp.version); en la web no hay
@@ -463,6 +466,51 @@
       else elegir(b.dataset.nombre, b);
     });
     overlay.addEventListener('keydown', teclado, true);
+  }
+
+  // ------------------------------------------- buscar actualizaciones --
+  // Botón discreto en la esquina del selector.
+  //  · Caja de escritorio: le pregunta a la app (preload.js → actualizador.js).
+  //    Si hay versión nueva se descarga sola y aparece el aviso de siempre.
+  //  · Web: los archivos no se guardan en caché (.htaccess), así que recargar
+  //    ya trae la última versión. Nunca recarga con un pedido a medio cargar.
+  function prepararBotonActualizar(btn) {
+    if (!btn) return;
+    const texto = btn.querySelector('.usr-actualizar-texto');
+    const INICIAL = texto.textContent;
+    let timer = null;
+    const mostrar = (msg, ms) => {
+      texto.textContent = msg;
+      btn.classList.toggle('buscando', !ms);   // el ícono gira solo mientras espera
+      clearTimeout(timer);
+      if (ms) timer = setTimeout(() => { texto.textContent = INICIAL; btn.disabled = false; }, ms);
+    };
+    const app = window.cajaApp;
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      if (app && app.escritorio && app.actualizacion && app.actualizacion.buscar) {
+        reg('Buscó actualizaciones a mano');
+        mostrar('Buscando…');
+        let r = null;
+        try { r = await app.actualizacion.buscar(); } catch (_) {}
+        const res = r && r.resultado;
+        if (res === 'al-dia') mostrar('Estás al día · v' + r.version, 6000);
+        else if (res === 'descargando') mostrar('Descargando v' + (r.nueva || '') + '… te avisa cuando esté lista', 8000);
+        else if (res === 'lista') mostrar('La v' + (r.nueva || '') + ' ya está lista: se instala al cerrar', 8000);
+        else if (res === 'desarrollo') mostrar('Modo desarrollo: no hay actualizaciones', 6000);
+        else mostrar('No se pudo buscar. Revisá la conexión', 6000);
+        return;
+      }
+      // Web
+      if (document.querySelector('#itemsBody tr[data-idx]')) {
+        mostrar('Hay un pedido en curso: terminalo antes de actualizar', 6000);
+        return;
+      }
+      reg('Recargó la página para actualizar');
+      mostrar('Actualizando…');
+      location.reload();
+    });
   }
 
   // --------------------------------------------------- clave WhatsApp --

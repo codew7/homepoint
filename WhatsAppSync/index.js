@@ -25,7 +25,7 @@
 // misma clave desde el telefono del cliente, asi que da igual si en el pedido
 // se cargo con 0, con +54 o con 549.
 //
-// Lo unico que envia es el aviso de despacho de Flecha Carga (envios/, ver
+// Lo unico que envia es el aviso de despacho de Flecha Carga (lineas/<nodo>/despachos/, ver
 // "Avisos de despacho" mas abajo), con un texto fijo. Nunca marca como
 // leido ni manda otra cosa. Grupos, estados y
 // canales se ignoran. Los demas textos, audios, stickers, etc. no se guardan.
@@ -52,11 +52,12 @@ fs.mkdirSync(DIR, { recursive: true });
 // base de pedidos) salen de linea.json de su carpeta, si existe; si no, se
 // usan los de ajustes.js (la linea principal).
 const CFG = Object.assign({ NOMBRE_LINEA: '', AVISOS_DESPACHO: true, MODO: 'envios' }, require('./ajustes'));
+CFG.NODO = CFG.NODO_POR_DEFECTO || 'envios';
 try {
   const linea = JSON.parse(fs.readFileSync(path.join(DIR, 'linea.json'), 'utf8'));
   if (linea.nombre) CFG.NOMBRE_LINEA = String(linea.nombre);
   if (linea.numero) CFG.NUMERO_ESPERADO = String(linea.numero);
-  if (linea.databaseUrl) CFG.DATABASE_URL = String(linea.databaseUrl);
+  if (linea.nodo) CFG.NODO = String(linea.nodo);
   if ('pedidosUrl' in linea) CFG.PEDIDOS_DATABASE_URL = String(linea.pedidosUrl || '').replace(/\/+$/, '');
   if ('avisosDespacho' in linea) CFG.AVISOS_DESPACHO = linea.avisosDespacho !== false;
   if (linea.modo === 'cobros') CFG.MODO = 'cobros';
@@ -71,7 +72,9 @@ try {
 //            archivo mio se guarda y no manda avisos de despacho.
 const COBROS = CFG.MODO === 'cobros';
 if (COBROS) CFG.AVISOS_DESPACHO = false;
-const ARCHIVO_CLAVE = path.join(DIR, 'clave-firebase.json');
+// La clave es una sola para todas las lineas de la PC (la app la pasa en
+// WAS_CLAVE). Suelto (node index.js), clave-firebase.json junto a este archivo.
+const ARCHIVO_CLAVE = process.env.WAS_CLAVE || path.join(DIR, 'clave-firebase.json');
 const DIR_SESION = path.join(DIR, 'sesion');
 const ARCHIVO_LIDS = path.join(DIR, 'lids.json');
 const ARCHIVO_CLIENTES = path.join(DIR, 'clientes-tel.json');
@@ -127,12 +130,24 @@ if (!CFG.DATABASE_URL || CFG.DATABASE_URL.includes('PEGAR-ACA')) {
   log('FALTA la URL de la base: completá DATABASE_URL en ajustes.js (LEEME.md, paso 6).');
   process.exit(2);
 }
+if (!CFG.NODOS || !CFG.NODOS[CFG.NODO]) {
+  log('La línea apunta al nodo "' + CFG.NODO + '", que no existe (ver NODOS en ajustes.js). Revisá los datos de la línea.');
+  avisar({ tipo: 'clave-mala', motivo: 'nodo "' + CFG.NODO + '" desconocido' });
+  setTimeout(() => process.exit(2), 300);
+  return;
+}
+// Todas las lineas van en el mismo proyecto; cada una en lineas/<nodo>/.
+// "db" es un envoltorio: db.ref('chats/...') es lineas/<nodo>/chats/...
+// y db.ref() es lineas/<nodo>. Asi el resto del programa no cambia.
+const RAIZ = 'lineas/' + CFG.NODO;
+let base;
 let db;
 try {
-  db = getDatabase(initializeApp({
+  base = getDatabase(initializeApp({
     credential: cert(JSON.parse(fs.readFileSync(ARCHIVO_CLAVE, 'utf8'))),
     databaseURL: CFG.DATABASE_URL
   }));
+  db = { ref: (ruta) => base.ref(ruta ? RAIZ + '/' + ruta : RAIZ) };
 } catch (e) {
   const motivo = e && e.message ? e.message : String(e);
   log('La clave de Firebase o la dirección de la base no sirven (' + motivo + '). Revisá los datos de la línea.');
@@ -426,6 +441,27 @@ async function textoDePdf(buffer) {
 // Programa principal (Baileys se carga con import porque es un modulo ES)
 // ---------------------------------------------------------------------
 (async () => {
+  // El nodo de la linea es de un solo numero: si ya lo usa otro (por ejemplo,
+  // otra PC configurada con la misma linea y otro telefono), no se arranca,
+  // para no mezclar datos. WAS_REEMPLAZAR=1 lo toma igual (lo pide la ventana
+  // cuando el cambio de numero es a proposito).
+  try {
+    const info = (await db.ref('info').once('value')).val() || {};
+    if (info.numero && info.numero !== CFG.NUMERO_ESPERADO && process.env.WAS_REEMPLAZAR !== '1') {
+      log('La línea "' + CFG.NODO + '" ya la usa el número ' + info.numero + (info.pc ? ' (PC ' + info.pc + ')' : '') +
+        '. Esta PC tiene cargado el ' + CFG.NUMERO_ESPERADO + '. No se arranca para no mezclar datos.');
+      avisar({ tipo: 'nodo-ocupado', numero: info.numero, pc: info.pc || '' });
+      setTimeout(() => process.exit(4), 300);
+      return;
+    }
+    await db.ref('info').set({
+      numero: CFG.NUMERO_ESPERADO, nombre: CFG.NOMBRE_LINEA || CFG.NODO, modo: CFG.MODO,
+      pc: require('os').hostname(), t: Date.now()
+    });
+  } catch (e) {
+    log('No se pudo revisar el nodo de la línea (' + (e && e.message ? e.message : e) + '). Se sigue igual.');
+  }
+
   const B = await import('baileys');
   const makeWASocket = B.default;
   const { useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason,
@@ -1342,7 +1378,7 @@ async function textoDePdf(buffer) {
 
   // -------------------------------------------------------------------
   // Avisos de despacho: lo UNICO que este programa envia.
-  // pedidosv2 escribe envios/{pedidoId} { tel, nombre, link, t, por } cuando
+  // pedidosv2 escribe lineas/<nodo>/despachos/{pedidoId} { tel, nombre, link, t, por } cuando
   // se pega el link de despacho de un pedido de Flecha Carga. Aca se arma
   // siempre el mismo texto (desde pedidosv2 no se puede mandar otra cosa),
   // se envia y se anota en el mismo nodo:
@@ -1354,7 +1390,7 @@ async function textoDePdf(buffer) {
   const AVISO_DIAS_MAX = 3;
   const AVISO_PAUSA_MS = 4000;      // entre un envio y otro, para no parecer masivo
   const AVISO_DIAS_GUARDAR = 90;
-  const envios = {};                // copia local de envios/
+  const envios = {};                // copia local de despachos/
   const colaEnvios = [];
   const encolados = new Set();      // id + t ya en cola o enviados en esta corrida
   let enviandoAvisos = false;
@@ -1390,7 +1426,7 @@ async function textoDePdf(buffer) {
         const id = colaEnvios.shift();
         const v = envios[id];
         if (!v || v.estado) continue;
-        const ref = db.ref('envios/' + id);
+        const ref = db.ref('despachos/' + id);
         if (Date.now() - (Number(v.t) || 0) > AVISO_DIAS_MAX * 86400000) {
           await ref.update({ estado: 'vencido', error: 'pasaron más de ' + AVISO_DIAS_MAX + ' días con la PC apagada' });
           log('Aviso de despacho vencido, no se envía:', id);
@@ -1423,15 +1459,15 @@ async function textoDePdf(buffer) {
   }
 
   // Los avisos salen solo desde la linea que los tiene prendidos (la
-  // principal); las demas ni siquiera escuchan envios/.
+  // principal); las demas ni siquiera escuchan despachos/.
   if (CFG.AVISOS_DESPACHO) {
     for (const evento of ['child_added', 'child_changed']) {
-      db.ref('envios').on(evento, s => {
+      db.ref('despachos').on(evento, s => {
         envios[s.key] = s.val();
         if (conectado) revisarEnvios();
       }, e => log('No se pueden leer los avisos de despacho:', e.message));
     }
-    db.ref('envios').on('child_removed', s => { delete envios[s.key]; });
+    db.ref('despachos').on('child_removed', s => { delete envios[s.key]; });
     setTimeout(borrarEnviosViejos, 120000);
     setInterval(borrarEnviosViejos, 86400000);
   }
@@ -1440,7 +1476,7 @@ async function textoDePdf(buffer) {
     try {
       const corte = Date.now() - AVISO_DIAS_GUARDAR * 86400000;
       const upd = {};
-      for (const [id, v] of Object.entries(envios)) if (v && (Number(v.t) || 0) < corte) upd['envios/' + id] = null;
+      for (const [id, v] of Object.entries(envios)) if (v && (Number(v.t) || 0) < corte) upd['despachos/' + id] = null;
       if (Object.keys(upd).length) await db.ref().update(upd);
     } catch (e) { log('No se pudieron borrar avisos viejos:', e.message); }
   }

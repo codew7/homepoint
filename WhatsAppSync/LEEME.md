@@ -48,7 +48,7 @@ lo corre oculto y analiza solo cada comprobante nuevo. No se pueden abrir los do
 Según el resultado, el nombre del archivo termina en **[ALTERADO]**, **[REVISAR]** o **[RECHAZADO]**, y en
 pedidosv2 el comprobante y el pedido muestran el aviso ("Comprobante posiblemente alterado"). Si en el verificador
 se marca **Aprobado**, la marca se quita. El verificador deja su resultado en `comprobantes\verificacion.json` y el
-script de descarga es el único que renombra y sube el aviso a Firebase (`imgsIdx/{id}/verif`).
+script de descarga es el único que renombra y sube el aviso a Firebase (`lineas/<línea>/imgsIdx/{id}/verif`).
 
 - Lo único que envía es el **aviso de despacho** de Flecha Carga (ver abajo). Ningún otro mensaje.
 - Comprobantes y cotizaciones se borran solos a los 90 días.
@@ -70,7 +70,7 @@ al cliente, desde el 11 7646-0030:
   (número sin WhatsApp, por ejemplo). Al tocarlo de nuevo se ve el detalle y se puede reenviar.
 - La PC del local tiene que estar prendida con WhatsAppSync abierto. Si estaba apagada, sale al prenderla,
   salvo que hayan pasado más de 3 días.
-- Se guarda en la base de WhatsApp en `envios/{pedido}`; hay que publicar de nuevo `database.rules.json`.
+- Se guarda en la base de WhatsApp en `lineas/envios/despachos/{pedido}`.
 
 ---
 
@@ -106,11 +106,11 @@ al cliente, desde el 11 7646-0030:
    tocá **Más información → Ejecutar de todas formas**.
 2. Se instala solo, sin preguntas, y abre la ventana de WhatsAppSync. Si la PC ya tenía una versión
    anterior, la pasa sola a la línea **Envíos** (no hace falta volver a escanear) y termina acá.
-3. En una PC nueva aparece **Agregar línea de WhatsApp**: elegí el tipo **Envíos**, el número
-   (**11 7646-0030**) y elegí la clave privada de Firebase
+3. En una PC nueva aparece **Agregar línea de WhatsApp**: elegí la línea (**Envíos**, **Munro** o **Caseros**),
+   el tipo, el número (Envíos: **11 7646-0030**) y, la primera vez, la clave privada de Firebase
    (**Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada**,
-   el archivo `.json` que se descarga). La dirección de la base se completa sola.
-   En **Base de pedidos** va `https://pedidos-87064-default-rtdb.firebaseio.com`. La app se queda con una copia de la clave.
+   el archivo `.json` que se descarga). La clave se elige **una sola vez por PC** y sirve para todas sus líneas.
+   La **Base de pedidos** se completa sola según la línea. La app se queda con una copia de la clave.
    ⚠️ Esa clave da acceso total a la base: no la compartas ni la subas a ningún lado.
 4. Aparece el QR en la misma ventana. En el celular de esa línea: WhatsApp → ⋮ →
    **Dispositivos vinculados → Vincular un dispositivo** → escaneá el QR.
@@ -121,16 +121,24 @@ de `whatsAppSync.bat`) y en el celular, en Dispositivos vinculados, cerrá esa s
 Dos copias a la vez se pisan la conexión.
 
 ### Varias líneas de WhatsApp
-El mismo instalador sirve para todas las líneas (hasta **3 por PC**). Cada línea es un número de WhatsApp
-con **su propio proyecto de Firebase** y, si tiene, **su propia base de pedidos**. Lo normal es una línea por PC,
-pero una PC puede tener dos o tres: cada una funciona por separado y, si una falla, las demás siguen.
+El mismo instalador sirve para todas las líneas (hasta **3 por PC**). Las tres líneas posibles son
+**Envíos**, **Munro** y **Caseros** (lista `NODOS` en `ajustes.js`). Todas van en el **mismo proyecto de Firebase**
+(`whatsappsync-e3245`), con **la misma clave**, y cada una guarda lo suyo en su nodo:
 
-**Antes de agregar una línea nueva** (una sola vez por línea):
-1. Crear su proyecto de Firebase y su Realtime Database (pasos 1 y 2 de arriba), publicando
-   `database.rules.json` en las reglas. Si después se va a ver en un sistema de pedidos, también el paso 3.
-2. Descargar su clave privada (Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada).
-3. Si tiene base de pedidos: tiene que tener el mismo formato que pedidosv2, dejar **leer sin clave** y tener
-   índice en `timestamp` para `pedidos`. La app lo prueba al guardar y avisa si algo falta.
+```
+lineas/
+  envios/    chats/  imgs/  imgsIdx/  asigManual/  despachos/  info/
+  munro/     (igual)
+  caseros/   (igual)
+actualizacion     aviso de versión nueva (común a todas las PCs)
+```
+
+`info/` dice qué número usa la línea. Si otra PC intenta usar la misma línea con **otro** número, la app no
+arranca esa línea ("Esta línea la usa otro número") para no mezclar datos; si el cambio es a propósito, se
+confirma con **Usar este número**. Lo normal es una línea por PC, pero una PC puede tener dos o tres: cada una
+funciona por separado y, si una falla, las demás siguen. Cada línea tiene **su propia base de pedidos**
+(Envíos y Munro: `pedidos-87064`; Caseros: `homepoint2-pedidos`): tiene que dejar **leer sin clave** y tener
+índice en `timestamp` para `pedidos`. La app lo prueba al guardar y avisa si algo falta.
 
 **Dos tipos de línea** (cada línea puede ser de cualquiera de los dos, y se puede cambiar cuando quieras):
 
@@ -148,7 +156,8 @@ se usa para compararlo con el comprobante. Como los alias rotan todo el tiempo, 
 que el mensaje diga «alias» (no importan mayúsculas ni tildes: «Alias:», «ALIAS», etc.).
 
 **Agregar la línea:** en la ventana, botón **+** (o clic derecho en el ícono → **Agregar línea...**):
-tipo (Envíos o Cobros), nombre, número, clave y, si tiene, base de pedidos
+qué línea es (las que ya están en la PC aparecen apagadas), tipo (Envíos o Cobros), número, base de pedidos
+y, si es la primera de la PC, la clave
 → **Guardar y vincular** → escanear el QR con el celular de esa línea.
 
 **Línea principal:** en cada PC, una de sus líneas es la **principal** (★ en la pestaña). Puede ser de cualquier tipo.
@@ -159,10 +168,11 @@ la principal, la siguiente pasa a serlo.
 - Arriba de la ventana hay una pestaña por línea, con un punto verde (conectada), amarillo (esperando) o rojo (falta algo).
 - En **Datos de la línea** se ven y se cambian sus datos (también el tipo), y está **Quitar línea de esta PC**.
 - En el celular, el dispositivo vinculado aparece como *WhatsAppSync · nombre de la línea*.
-- Los **avisos de despacho** salen de cada línea de tipo Envíos, para los envíos que pedidosv2 carga en **su** base.
-  Hoy pedidosv2 solo carga en la base `whatsappsync-e3245`, así que en la práctica salen desde esa línea.
-- pedidosv2 sigue mostrando solo las conversaciones de la base `whatsappsync-e3245` (la de la línea Envíos original).
-- El aviso de **actualización** también va siempre por esa base, sin importar cuál sea la principal.
+- Los **avisos de despacho** salen de cada línea de tipo Envíos, para los envíos que pedidosv2 carga en **su** nodo.
+  Hoy pedidosv2 solo carga en `lineas/envios`, así que en la práctica salen desde la línea Envíos.
+- pedidosv2 y el control de transferencias muestran solo la línea **Envíos** (`whatsappRaiz` en
+  `pedidosv2/config-whatsapp.js`). Ver Munro o Caseros ahí es trabajo aparte.
+- El aviso de **actualización** va en la raíz de la base (`actualizacion`), común a todas las PCs.
 
 **Pasar una línea a otra PC:** en la PC vieja, **Quitar línea de esta PC**. En la nueva, **+** con los mismos datos
 y escanear el QR. ⚠️ Una línea no puede estar en dos PCs a la vez: se pisan la conexión y aparece "Hay otra copia conectada".
@@ -176,8 +186,9 @@ y escanear el QR. ⚠️ Una línea no puede estar en dos PCs a la vez: se pisan
 - Arranca solo al prender la PC (se puede desactivar en *Iniciar con Windows*). Siempre arranca
   escondido en la bandeja, también si lo abrís a mano: la ventana solo aparece al hacer clic en el ícono,
   o sola cuando hace falta algo (escanear el QR, cargar la clave, otra copia conectada).
-- Los datos de cada línea (clave, sesión de WhatsApp, registros) están en `%APPDATA%\WhatsAppSync\lineas\<línea>`
-  (botón **Carpeta de datos**). Desinstalar la app no los borra.
+- Los datos de cada línea (sesión de WhatsApp, registros) están en `%APPDATA%\WhatsAppSync\lineas\<línea>`
+  (botón **Carpeta de datos**) y la clave común en `%APPDATA%\WhatsAppSync\firebase\clave.json`.
+  Desinstalar la app no los borra.
 - Los plazos (90 días, 30 días) están en `ajustes.js` y valen para todas las líneas.
 - La primera vez que arranca esta versión hace una **limpieza única**: borra de Firebase los textos
   que se guardaban antes y revisa las fotos ya guardadas, dejando solo cotizaciones y comprobantes.
@@ -223,11 +234,25 @@ sin bandeja: no usarlo al mismo tiempo que la app.
 |---|---|
 | Vuelve a pedir el QR | Se desvinculó desde el celular o pasó mucho tiempo sin conexión. Escaneá de nuevo. |
 | "se vinculó el número X y se esperaba..." | Escaneaste con otro celular. Usá el de esa línea (el que dice el QR). |
-| "La clave o la base de Firebase no sirven" | La clave no es de ese proyecto o la dirección de la base está mal. Elegí otra clave o corregí **Datos de la línea**. |
-| "Esa clave es del proyecto X, que ya usa otra línea" | Cada línea va en su propio proyecto de Firebase. |
+| "La clave o la base de Firebase no sirven" | La clave no es del proyecto de WhatsApp. Elegí la clave correcta (una sola para toda la PC). |
+| "Esta línea la usa otro número" | Esa línea ya está en Firebase con otro número (otra PC, o se equivocó de línea). Corregí **Editar datos** o, si es a propósito, **Usar este número**. |
 | En pedidosv2 pide la contraseña | Pasa una sola vez por usuario. Si dice "usuario no creado", falta el paso 3 para ese email. |
 | "Todavía no hay mensajes guardados" | Ese número no tiene chat con el local, o el teléfono del pedido está mal cargado. |
 | "Hay otra copia conectada" | Esa línea está abierta en otra PC (o quedó el programa viejo). Quitala allá y tocá **Reiniciar conexión**. |
 | Registro de lo que pasó | Sección **Actividad** de la ventana, o carpeta `logs` dentro de la carpeta de datos. |
 
 Para desvincular: en la pestaña de la línea, botón **Desvincular WhatsApp**. También cierra la sesión en el celular.
+
+---
+
+## Mudanza a un solo proyecto (una sola vez, 2026-11)
+
+Hasta la versión anterior todo estaba en la raíz de la base. Para pasar al formato de líneas, en horario sin movimiento:
+
+1. Publicar **`database.rules.transicion.json`** en Firebase → Realtime Database → Reglas (sirve para el formato viejo y el nuevo).
+2. **`publicar-actualizacion.bat`**: las PCs se actualizan solas y desde ese momento guardan en `lineas/envios`.
+   La clave de cada PC se pasa sola a la carpeta común; no hace falta volver a escanear el QR.
+3. Subir **`pedidosv2/pedidosv2.html`**, **`pedidosv2/config-whatsapp.js`** y **`controlTransferencias.html`**.
+4. En una PC con la clave: `node migrar-a-lineas.js` (solo mide) y después `node migrar-a-lineas.js --mudar`.
+   Si se corta, se vuelve a correr. Después, **Reiniciar conexión** en la línea Envíos.
+5. Revisar pedidosv2 (conversaciones, comprobantes, avisos de despacho) y publicar **`database.rules.json`** (la final).
