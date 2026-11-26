@@ -21,7 +21,13 @@
 <!-- Barcode scanning (cámara del móvil) -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-<!-- Config (Google Sheets credentials) -->
+<!-- Firebase: solo para leer las ofertas vigentes (articulos/*/Oferta). La sesión es la
+     misma que la de articulos.html (Auth persiste por origen). -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<!-- Config (Google Sheets credentials + firebaseConfig) -->
 <script src="../config.js"></script>
 
 <!-- Fonts -->
@@ -167,6 +173,19 @@ input[type=number]{-moz-appearance:textfield}
 .label-preview .lp-bottom{display:flex;justify-content:space-between;align-items:flex-end;font-size:7px;font-weight:700;color:#464646;padding:0 10px 5px;gap:6px}
 .label-preview .lp-date{font-family:var(--mono)}
 .preview-empty{color:var(--faint);font-size:.84rem;text-align:center;padding:24px}
+/* Etiqueta en oferta: recuadro OFERTA + "Antes $X" a la izquierda, precio de oferta al lado */
+.label-preview .lp-of{display:none;flex-direction:column;align-items:flex-start;gap:3px;margin-right:9px;flex-shrink:0}
+.label-preview.oferta .lp-of{display:flex}
+.label-preview .lp-of-tag{background:#000;color:#fff;font-size:10px;font-weight:800;letter-spacing:.04em;padding:3px 5px;border-radius:3px}
+.label-preview .lp-of-antes{font-size:9px;font-weight:700;color:#333;line-height:1.2;white-space:nowrap}
+.label-preview.oferta .lp-price{font-size:44px}
+.of-toggle-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+.of-toggle-row .of-info{font-size:.74rem;color:var(--muted)}
+.tool-btn.toggle.of.on{background:var(--danger-soft);border-color:var(--danger);color:var(--danger-600)}
+.tool-btn.toggle.of.on .pill-dot{background:var(--danger);box-shadow:0 0 0 3px rgba(244,63,94,.2)}
+table.art td.pricecol .of-badge{display:inline-block;font-family:var(--font);font-size:.6rem;font-weight:800;color:#fff;background:var(--danger);border-radius:5px;padding:2px 5px;margin-right:6px;vertical-align:1px}
+table.art td.pricecol .of-price{color:var(--danger-600)}
+table.art td.pricecol s{color:var(--faint);font-weight:500;margin-left:6px}
 
 /* ====== TABLE TOOLS ====== */
 .tabla-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:13px}
@@ -416,6 +435,12 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
           </div>
         </div>
       </div>
+      <div class="of-toggle-row">
+        <button class="tool-btn toggle of on" id="ofertaToggle" type="button" title="Con la oferta activada, los artículos en oferta vigente se imprimen con el precio de oferta, el precio de lista tachado y la fecha de fin">
+          <span class="pill-dot"></span>Usar precio de oferta
+        </button>
+        <span class="of-info" id="ofertaInfo">Cargando ofertas…</span>
+      </div>
       <div class="cfg-note">Cada artículo seleccionado genera una etiqueta. Con “Artículos por hoja” mayor a 1, se agrupan varias etiquetas en la misma página separadas por una línea de corte. “Imprimir POS” ignora ese valor: manda cada etiqueta por separado a la térmica (máx. 72 mm de ancho) y la corta.</div>
     </div>
 
@@ -430,6 +455,10 @@ table.art td.pricecol{font-family:var(--mono);font-weight:700;color:var(--succes
             <div class="lp-name" id="previewName">Nombre del artículo</div>
           </div>
           <div class="lp-price-row">
+            <span class="lp-of">
+              <span class="lp-of-tag">OFERTA</span>
+              <span class="lp-of-antes" id="previewAntes"></span>
+            </span>
             <span class="lp-currency">$</span>
             <span class="lp-price" id="previewPrice">0</span>
           </div>
@@ -589,7 +618,7 @@ let articulos = [];          // from Google Sheets: { codigo, nombre, imagen, pr
 const selected = new Map();  // codigo -> articulo (selección global, persiste entre filtros/páginas)
 let lastPreviewCodigo = null;
 
-let labelSettings = { width: 70, height: 25, perLabel: 1 };
+let labelSettings = { width: 70, height: 25, perLabel: 1, usarOferta: true };
 
 const $ = id => document.getElementById(id);
 
@@ -604,8 +633,10 @@ function loadSettings(){
       labelSettings.width = p.width || 70;
       labelSettings.height = p.height || 25;
       labelSettings.perLabel = p.perLabel || 1;
+      labelSettings.usarOferta = p.usarOferta !== false;
     }
   }catch(_){}
+  $('ofertaToggle').classList.toggle('on', labelSettings.usarOferta);
   $('settingWidth').value = labelSettings.width;
   $('settingHeight').value = labelSettings.height;
   $('settingPerLabel').value = labelSettings.perLabel;
@@ -614,7 +645,105 @@ function saveSettings(){
   labelSettings.width = Math.max(20, Math.min(300, parseInt($('settingWidth').value) || 70));
   labelSettings.height = Math.max(20, Math.min(300, parseInt($('settingHeight').value) || 25));
   labelSettings.perLabel = Math.max(1, Math.min(20, parseInt($('settingPerLabel').value) || 1));
-  sessionStorage.setItem('labelSettings', JSON.stringify(labelSettings));
+  try{ sessionStorage.setItem('labelSettings', JSON.stringify(labelSettings)); }catch(_){}
+}
+
+// ============================================================
+//  Ofertas vigentes (Firebase: articulos/{codigo}/Oferta, OfertaDesde, OfertaHasta)
+// ============================================================
+// La oferta es un precio fijo en ARS que convive con el de lista. Se gestiona en
+// articulos.html → Ofertas. Acá solo se lee; si no hay sesión o falla, las etiquetas
+// salen con el precio de lista de siempre.
+let ofertasMap = {};          // codigo -> { precio, hasta }
+let ofertasCargadas = false;
+let fbDb = null;
+
+function iniciarFirebase(){
+  if(fbDb) return fbDb;
+  if(typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') return null;
+  if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  fbDb = firebase.database();
+  return fbDb;
+}
+
+// Espera a que Auth restaure la sesión guardada (o confirme que no hay ninguna)
+function esperarSesion(ms){
+  return new Promise(resolve => {
+    let listo = false;
+    const fin = u => { if(listo) return; listo = true; resolve(u || null); };
+    const off = firebase.auth().onAuthStateChanged(u => { off(); fin(u); });
+    setTimeout(() => fin(firebase.auth().currentUser), ms);
+  });
+}
+
+async function loadOfertas(){
+  ofertasCargadas = false;
+  try{
+    const db = iniciarFirebase();
+    if(!db) throw new Error('Firebase no disponible');
+    const user = await esperarSesion(6000);
+    if(!user){
+      ofertasMap = {};
+      renderOfertaInfo('Sin sesión: iniciá sesión en Artículos para usar las ofertas.');
+      return false;
+    }
+    const ahora = Date.now();
+    const snap = await Promise.race([
+      db.ref('articulos').orderByChild('OfertaHasta').startAt(ahora).once('value'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), 15000))
+    ]);
+    const map = {};
+    snap.forEach(ch => {
+      const a = ch.val() || {};
+      const precio = Number(a.Oferta);
+      const desde = Number(a.OfertaDesde) || 0;
+      const hasta = Number(a.OfertaHasta) || 0;
+      if(precio > 0 && hasta >= ahora && desde <= ahora){
+        map[String(a.Codigo || ch.key).trim()] = { precio, hasta };
+      }
+    });
+    ofertasMap = map;
+    ofertasCargadas = true;
+    const n = Object.keys(map).length;
+    renderOfertaInfo(n ? n + ' artículo' + (n === 1 ? '' : 's') + ' en oferta vigente' : 'No hay ofertas vigentes');
+    return true;
+  }catch(err){
+    console.error('Error cargando ofertas:', err);
+    ofertasMap = {};
+    renderOfertaInfo('No se pudieron leer las ofertas.');
+    showToast('No se pudieron cargar las ofertas: las etiquetas salen con precio de lista.', 'err');
+    return false;
+  }
+}
+
+function renderOfertaInfo(txt){ $('ofertaInfo').textContent = txt; }
+
+// Oferta a imprimir para un artículo (null = etiqueta normal). Se revalida la fecha al
+// momento de imprimir por si la página quedó abierta y la oferta venció.
+function ofertaDe(item){
+  if(!labelSettings.usarOferta || !item) return null;
+  const of = ofertasMap[item.codigo];
+  if(!of || of.hasta < Date.now()) return null;
+  const lista = parseFloat(String(item.precio || '').replace(/[$\s,]/g, ''));   // mismo criterio que formatPriceDisplay
+  return {
+    precioTxt: Math.round(of.precio).toLocaleString('es-AR'),
+    // "Antes" solo si la lista es realmente mayor (si no, sería un tachado engañoso)
+    antesTxt: (isFinite(lista) && lista > of.precio) ? formatPriceDisplay(item.precio) : '',
+    hastaTxt: 'Hasta ' + fechaCortaAR(of.hasta)
+  };
+}
+function fechaCortaAR(ms){
+  try{
+    return new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit' }).format(new Date(ms));
+  }catch(_){
+    const d = new Date(ms - 3 * 3600 * 1000);
+    return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');
+  }
+}
+// Precio que se mostraría/imprimiría (para tabla y avisos de escaneo)
+function precioMostrado(item){
+  const of = ofertaDe(item);
+  return of ? of.precioTxt + ' (oferta)' : formatPriceDisplay(item.precio);
 }
 
 // ============================================================
@@ -683,7 +812,7 @@ async function actualizarPrecios(){
   btn.disabled = true;
   showBlock('Actualizando precios…');
   try{
-    await loadSheets();
+    await Promise.all([ loadSheets(), loadOfertas() ]);
     // La selección guarda copias de los artículos: se reemplazan por los recién leídos
     // para que se impriman con el precio nuevo. Los que ya no existen se quitan.
     let quitados = 0;
@@ -780,7 +909,12 @@ function renderPage(){
       <td><img class="thumb" src="${foto}" data-alt="${escapeAttr(alt)}" alt="" loading="lazy" decoding="async" onerror="imgFallback(this)"></td>
       <td class="namecol">${escapeHtml(a.nombre)}</td>
       <td class="stockcol ${a.stock >= 1 ? 'pos' : 'zero'}">${escapeHtml(String(a.stock))}</td>
-      <td class="pricecol">$${formatPriceDisplay(a.precio)}</td>`;
+      <td class="pricecol">${(() => {
+        const of = ofertaDe(a);
+        return of
+          ? `<span class="of-badge">OFERTA</span><span class="of-price">$${of.precioTxt}</span><s>$${formatPriceDisplay(a.precio)}</s>`
+          : '$' + formatPriceDisplay(a.precio);
+      })()}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -879,8 +1013,11 @@ function updatePreview(item){
   $('previewEmpty').style.display = 'none';
   $('previewName').textContent = item.nombre;
   $('previewCode').textContent = formatCodigoLinea(item);
-  $('previewPrice').textContent = formatPriceDisplay(item.precio);
-  $('previewDate').textContent = getFechaEtiqueta();
+  const of = ofertaDe(item);
+  $('labelPreview').classList.toggle('oferta', !!of);
+  $('previewPrice').textContent = of ? of.precioTxt : formatPriceDisplay(item.precio);
+  $('previewAntes').innerHTML = of && of.antesTxt ? 'Antes<br><s>$' + escapeHtml(of.antesTxt) + '</s>' : '';
+  $('previewDate').textContent = of ? of.hastaTxt : getFechaEtiqueta();
 }
 function hidePreview(){
   $('labelPreview').style.display = 'none';
@@ -989,6 +1126,39 @@ function generatePDF(){
   }
 }
 
+// Medidas de la zona de precio de una etiqueta en oferta, en mm relativos a la esquina del
+// slot. La comparten el PDF y la térmica; `medir(texto, tamañoMm)` devuelve el ancho en mm
+// con la fuente bold de cada motor. Izquierda: recuadro "OFERTA" y debajo "Antes $X"
+// tachado; a la derecha el precio de oferta, achicado si no entra.
+function planOferta(of, slotW, slotH, medir){
+  const NAME_H_MM = 3, PRICE_H_MM = 15, BOTTOM_H_MM = 3, pad = 2;
+  const zoneTop = NAME_H_MM + 2;
+  const zoneH = slotH - zoneTop - (BOTTOM_H_MM + 1.5);
+  const tagFont = 3, antesFont = 2.6, padX = 1.2, gapCol = 1.3;
+  const tagW = medir('OFERTA', tagFont) + padX * 2;
+  const tagH = tagFont * 0.72 + 2;
+  // "Antes" y el precio de lista en dos renglones: así la columna no es más ancha que el
+  // recuadro y le deja lugar al precio de oferta, que es lo que importa.
+  const antesTxt = of.antesTxt ? '$' + of.antesTxt : '';
+  const antesW = antesTxt ? medir(antesTxt, antesFont) : 0;
+  const lineH = antesFont * 0.72 + 1;
+  const colW = Math.max(tagW, antesW, antesTxt ? medir('Antes', antesFont) : 0);
+  const colH = tagH + (antesTxt ? gapCol + lineH + antesFont * 0.72 : 0);
+  const colTop = zoneTop + Math.max(0, (zoneH - colH) / 2);
+  const priceX = pad + colW + 2;
+  const avail = slotW - pad - priceX;
+  const ancho = f => medir('$ ', f * 0.45) + medir(of.precioTxt, f);
+  let pf = Math.min(PRICE_H_MM, (zoneH - 1) / 0.72);
+  while(ancho(pf) > avail && pf > 5) pf -= 0.5;
+  const antesBase1 = colTop + tagH + gapCol + antesFont * 0.72;
+  const antesBase = antesBase1 + lineH;
+  return {
+    tag: { x: pad, y: colTop, w: tagW, h: tagH, font: tagFont, padX, baseline: colTop + tagH / 2 + tagFont * 0.36 },
+    antes: antesTxt ? { rotulo: 'Antes', rotuloBaseline: antesBase1, txt: antesTxt, font: antesFont, x: pad, w: antesW, baseline: antesBase, strikeY: antesBase - antesFont * 0.3 } : null,
+    price: { x: priceX, font: pf, curFont: pf * 0.45, dollarW: medir('$ ', pf * 0.45), baseline: zoneTop + zoneH / 2 + pf * 0.32, txt: of.precioTxt }
+  };
+}
+
 function drawArticleInSlot(doc, item, x, y, slotW, slotH, today){
   const MM2PT = 2.835;
   const NAME_H_MM = 3;
@@ -1022,23 +1192,50 @@ function drawArticleInSlot(doc, item, x, y, slotW, slotH, today){
   doc.text(displayName, x + pad, nameBaseline);
 
   // === PRICE ZONE ===
-  const priceText = formatPriceDisplay(item.precio);
-  const bottomStripH = BOTTOM_H_MM + 1.5;
-  const priceZoneTop = y + topBandH;
-  const priceZoneH = slotH - topBandH - bottomStripH;
+  const of = ofertaDe(item);
+  if(of){
+    const medir = (t, f) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(f * MM2PT); return doc.getTextWidth(t); };
+    const p = planOferta(of, slotW, slotH, medir);
+    doc.setFillColor(0, 0, 0);
+    doc.roundedRect(x + p.tag.x, y + p.tag.y, p.tag.w, p.tag.h, 0.6, 0.6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(p.tag.font * MM2PT);
+    doc.setTextColor(255, 255, 255);
+    doc.text('OFERTA', x + p.tag.x + p.tag.padX, y + p.tag.baseline);
+    if(p.antes){
+      doc.setFontSize(p.antes.font * MM2PT);
+      doc.setTextColor(50, 50, 50);
+      doc.text(p.antes.rotulo, x + p.antes.x, y + p.antes.rotuloBaseline);
+      doc.text(p.antes.txt, x + p.antes.x, y + p.antes.baseline);
+      doc.setDrawColor(50, 50, 50);
+      doc.setLineWidth(0.25);
+      doc.line(x + p.antes.x, y + p.antes.strikeY, x + p.antes.x + p.antes.w, y + p.antes.strikeY);
+    }
+    doc.setFontSize(p.price.curFont * MM2PT);
+    doc.setTextColor(50, 50, 50);
+    doc.text('$', x + p.price.x, y + p.price.baseline);
+    doc.setFontSize(p.price.font * MM2PT);
+    doc.setTextColor(0, 0, 0);
+    doc.text(p.price.txt, x + p.price.x + p.price.dollarW, y + p.price.baseline);
+  } else {
+    const priceText = formatPriceDisplay(item.precio);
+    const bottomStripH = BOTTOM_H_MM + 1.5;
+    const priceZoneTop = y + topBandH;
+    const priceZoneH = slotH - topBandH - bottomStripH;
 
-  doc.setFont('helvetica', 'bold');
+    doc.setFont('helvetica', 'bold');
 
-  const currSizePt = pricePt * 0.45;
-  doc.setFontSize(currSizePt);
-  doc.setTextColor(50, 50, 50);
-  const dollarW = doc.getTextWidth('$ ');
-  const priceBaseline = priceZoneTop + priceZoneH / 2 + (pricePt / MM2PT) * 0.32;
-  doc.text('$', x + pad, priceBaseline);
+    const currSizePt = pricePt * 0.45;
+    doc.setFontSize(currSizePt);
+    doc.setTextColor(50, 50, 50);
+    const dollarW = doc.getTextWidth('$ ');
+    const priceBaseline = priceZoneTop + priceZoneH / 2 + (pricePt / MM2PT) * 0.32;
+    doc.text('$', x + pad, priceBaseline);
 
-  doc.setFontSize(pricePt);
-  doc.setTextColor(0, 0, 0);
-  doc.text(priceText, x + pad + dollarW, priceBaseline);
+    doc.setFontSize(pricePt);
+    doc.setTextColor(0, 0, 0);
+    doc.text(priceText, x + pad + dollarW, priceBaseline);
+  }
 
   // === BOTTOM STRIP: codigo + fecha ===
   // Se usa bold + gris más oscuro para que la línea sobreviva la rasterización
@@ -1048,7 +1245,8 @@ function drawArticleInSlot(doc, item, x, y, slotW, slotH, today){
   doc.setFontSize(bottomPt);
   doc.setTextColor(70, 70, 70);
   doc.text(formatCodigoLinea(item), x + pad, bottomYmm);
-  doc.text(today, x + slotW - pad, bottomYmm, { align:'right' });
+  // En oferta, la fecha de impresión se reemplaza por la de fin de la oferta
+  doc.text(of ? of.hastaTxt : today, x + slotW - pad, bottomYmm, { align:'right' });
 }
 
 // ============================================================
@@ -1108,12 +1306,34 @@ function dibujarEtiquetaCanvas(item, today){
   // === PRICE ZONE ===
   const bottomStripH = (BOTTOM_H_MM + 1.5) * k;
   const priceZoneH = H - topBandH - bottomStripH;
-  const priceBaseline = topBandH + priceZoneH / 2 + PRICE_H_MM * k * 0.32;
-  ctx.font = font(PRICE_H_MM * 0.45);
-  const dollarW = ctx.measureText('$ ').width;
-  ctx.fillText('$', pad, priceBaseline);
-  ctx.font = font(PRICE_H_MM);
-  ctx.fillText(formatPriceDisplay(item.precio), pad + dollarW, priceBaseline);
+  const of = ofertaDe(item);
+  if(of){
+    const medir = (t, f) => { ctx.font = font(f); return ctx.measureText(t).width / k; };
+    const p = planOferta(of, W / k, hMm, medir);
+    ctx.fillRect(p.tag.x * k, p.tag.y * k, p.tag.w * k, p.tag.h * k);
+    ctx.fillStyle = '#fff';
+    ctx.font = font(p.tag.font);
+    ctx.fillText('OFERTA', (p.tag.x + p.tag.padX) * k, p.tag.baseline * k);
+    ctx.fillStyle = '#000';
+    if(p.antes){
+      ctx.font = font(p.antes.font);
+      ctx.fillText(p.antes.rotulo, p.antes.x * k, p.antes.rotuloBaseline * k);
+      ctx.fillText(p.antes.txt, p.antes.x * k, p.antes.baseline * k);
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.antes.x * k, p.antes.strikeY * k); ctx.lineTo((p.antes.x + p.antes.w) * k, p.antes.strikeY * k); ctx.stroke();
+    }
+    ctx.font = font(p.price.curFont);
+    ctx.fillText('$', p.price.x * k, p.price.baseline * k);
+    ctx.font = font(p.price.font);
+    ctx.fillText(p.price.txt, (p.price.x + p.price.dollarW) * k, p.price.baseline * k);
+  } else {
+    const priceBaseline = topBandH + priceZoneH / 2 + PRICE_H_MM * k * 0.32;
+    ctx.font = font(PRICE_H_MM * 0.45);
+    const dollarW = ctx.measureText('$ ').width;
+    ctx.fillText('$', pad, priceBaseline);
+    ctx.font = font(PRICE_H_MM);
+    ctx.fillText(formatPriceDisplay(item.precio), pad + dollarW, priceBaseline);
+  }
 
   // === BOTTOM STRIP: código + fecha ===
   const bottomY = H - 1 * k;
@@ -1121,7 +1341,7 @@ function dibujarEtiquetaCanvas(item, today){
   ctx.textAlign = 'left';
   ctx.fillText(formatCodigoLinea(item), pad, bottomY);
   ctx.textAlign = 'right';
-  ctx.fillText(today, W - pad, bottomY);
+  ctx.fillText(of ? of.hastaTxt : today, W - pad, bottomY);
 
   // Umbral a blanco/negro
   const img = ctx.getImageData(0, 0, W, H);
@@ -1413,6 +1633,16 @@ $('pagerNext').addEventListener('click', () => gotoPage(page + 1));
   $(id).addEventListener('change', saveSettings);
 });
 
+// Usar / no usar el precio de oferta en las etiquetas
+$('ofertaToggle').addEventListener('click', () => {
+  labelSettings.usarOferta = !labelSettings.usarOferta;
+  $('ofertaToggle').classList.toggle('on', labelSettings.usarOferta);
+  saveSettings();
+  renderPage();
+  if(lastPreviewCodigo && selected.has(lastPreviewCodigo)) updatePreview(selected.get(lastPreviewCodigo));
+  $('ofertaToggle').blur();
+});
+
 // ============================================================
 //  Escáner de códigos de barras (cámara del móvil)
 // ============================================================
@@ -1520,7 +1750,7 @@ function onScanSuccess(decodedText){
   addToSelection(art);
   scanSession.unshift(art);
   renderScanChips();
-  scanFeedback('ok', 'Agregado', art.nombre + ' · $' + formatPriceDisplay(art.precio));
+  scanFeedback('ok', 'Agregado', art.nombre + ' · $' + precioMostrado(art));
   buzz(true);
 }
 
@@ -1636,7 +1866,7 @@ function procesarCodigoPistola(code){
     return;
   }
   addToSelection(art);
-  showToast('Agregado: ' + art.nombre + ' · $' + formatPriceDisplay(art.precio), 'ok');
+  showToast('Agregado: ' + art.nombre + ' · $' + precioMostrado(art), 'ok');
   $('gunLast').textContent = 'Último: ' + art.nombre;
   buzz(true);
 }
@@ -1695,9 +1925,15 @@ async function init(){
     if(localStorage.getItem('etiquetaPistola') === '1') setGunMode(true);
   }catch(_){}
   showBlock('Cargando artículos…');
+  // Las ofertas se leen en paralelo y no frenan la carga: al llegar, se repinta.
+  const ofertasP = loadOfertas();
   try{
     await loadSheets();
     renderTable();
+    ofertasP.then(() => {
+      renderPage();
+      if(lastPreviewCodigo && selected.has(lastPreviewCodigo)) updatePreview(selected.get(lastPreviewCodigo));
+    });
   }catch(err){
     console.error('Init error:', err);
     showToast('Error al cargar artículos desde Google Sheets', 'err');
