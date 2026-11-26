@@ -82,6 +82,53 @@ function escribirSeguro(destino, texto) {
   fs.renameSync(temporal, destino);
 }
 
+// Copias del catálogo y la cotización: se guardan cada vez que la caja abre
+// "Nuevo" (el catálogo pesa ~500 KB). Escribirlas de forma sincrónica frenaba
+// todo el programa mientras el disco (y el antivirus) terminaban, y con eso se
+// trababa el paso caja ↔ historial. Acá se escriben sin frenar a nadie, una
+// por vez por clave y quedándose sólo con la más nueva si llegan varias juntas.
+const copiasEnCurso = new Map();   // clave -> { escribiendo: Promise, siguiente: texto|null }
+
+async function escribirSeguroAsync(destino, texto) {
+  const temporal = destino + '.tmp';
+  const archivo = await fs.promises.open(temporal, 'w');
+  try {
+    await archivo.writeFile(texto, 'utf8');
+    await archivo.sync();
+  } finally {
+    await archivo.close();
+  }
+  await fs.promises.rename(temporal, destino);
+}
+
+function guardarCopia(clave, texto) {
+  const destino = path.join(rutas().copias, clave + '.json');
+  const actual = copiasEnCurso.get(clave);
+  if (actual) {
+    actual.siguiente = texto;
+    return actual.escribiendo.then(() => ({ ok: true }));
+  }
+  const tarea = { siguiente: null, escribiendo: null };
+  copiasEnCurso.set(clave, tarea);
+  tarea.escribiendo = (async () => {
+    let pendiente = texto;
+    try {
+      while (pendiente !== null) {
+        tarea.siguiente = null;
+        try {
+          await escribirSeguroAsync(destino, pendiente);
+        } catch (error) {
+          log.warn(`Offline: no se pudo guardar la copia ${clave}:`, error.message);
+        }
+        pendiente = tarea.siguiente;
+      }
+    } finally {
+      copiasEnCurso.delete(clave);
+    }
+  })();
+  return tarea.escribiendo.then(() => ({ ok: true }));
+}
+
 function leerJson(archivo) {
   return JSON.parse(fs.readFileSync(archivo, 'utf8'));
 }
@@ -261,8 +308,7 @@ function iniciarOffline(opciones) {
   // la cotización. Se guardan cada vez que llegan de internet.
   atender('offline:copia-guardar', (clave, datos) => {
     if (!CLAVE_COPIA.test(clave || '')) throw new Error('Clave inválida');
-    escribirSeguro(path.join(rutas().copias, clave + '.json'), JSON.stringify({ fecha: Date.now(), datos }));
-    return { ok: true };
+    return guardarCopia(clave, JSON.stringify({ fecha: Date.now(), datos }));
   });
   atender('offline:copia-leer', (clave) => {
     if (!CLAVE_COPIA.test(clave || '')) throw new Error('Clave inválida');

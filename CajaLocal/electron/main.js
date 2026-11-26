@@ -17,10 +17,12 @@
 
 const { app, BrowserWindow, Menu, shell, ipcMain, net, dialog, session } = require('electron');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
+const { execFile } = require('child_process');
 const log = require('electron-log/main');
 
-const { iniciarServidor, PAGINA_INICIAL } = require('./servidor');
+const { iniciarServidor, PAGINA_INICIAL, RUTA_VIVO } = require('./servidor');
 const { iniciarActualizador } = require('./actualizador');
 const { iniciarOffline } = require('./offline');
 const { iniciarRegistro, anotarSistema, ventanaDe, carpetaRegistro } = require('./registro');
@@ -45,10 +47,101 @@ let cerrando = false;
 let cierreListo = false;
 let reabrirAlCerrar = false;
 
+// Topes de tiempo para que la caja nunca quede trabada a medio cerrar.
+const TOPE_SALIDA_MS = 20000;        // desde que empieza a cerrarse hasta salir sí o sí
+const TOPE_CIERRE_VENTANA_MS = 6000; // una ventana colgada que no contesta al cerrarla
+const TOPE_MOSTRAR_VENTANA_MS = 15000;
+
+// ------------------------------------------------- copia anterior colgada ---
+// Antes, si la copia que ya estaba abierta quedaba colgada (o trabada a medio
+// cerrar, invisible), el doble clic no hacía nada: la copia nueva veía que ya
+// había una y se cerraba. Había que reiniciar la PC.
+// Ahora la copia nueva le pregunta a la vieja si responde (servidor local,
+// RUTA_VIVO). Si no contesta, la cierra a la fuerza y abre la caja de nuevo.
+const archivoInstancia = () => path.join(app.getPath('userData'), 'instancia.json');
+const archivoRescate = () => path.join(app.getPath('userData'), 'rescate.lock');
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function anotarInstancia(puerto) {
+  try {
+    fs.writeFileSync(archivoInstancia(), JSON.stringify({ pid: process.pid, puerto, desde: Date.now() }), 'utf8');
+  } catch (error) {
+    log.warn('No se pudo anotar la instancia:', error.message);
+  }
+}
+
+function respondeLaOtra(puerto) {
+  return new Promise((resolve) => {
+    const pedido = http.get({ host: '127.0.0.1', port: puerto, path: RUTA_VIVO, timeout: 2500 }, (respuesta) => {
+      respuesta.resume();
+      resolve(respuesta.statusCode === 200);
+    });
+    pedido.on('timeout', () => { pedido.destroy(); resolve(false); });
+    pedido.on('error', () => resolve(false));
+  });
+}
+
+// Que el número de proceso sea de verdad el programa principal de la caja (y
+// no otro programa que heredó el número, ni una pantalla de la caja).
+function esLaCajaPrincipal(pid) {
+  return new Promise((resolve) => {
+    const comando = `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}"; if ($p) { $p.ExecutablePath + '|' + $p.CommandLine }`;
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', comando],
+      { windowsHide: true, timeout: 15000 }, (error, salida) => {
+        if (error || !salida) return resolve(false);
+        const [ejecutable, ...resto] = String(salida).trim().split('|');
+        const lineaDeComando = resto.join('|');
+        // Sólo el nombre del programa: la ruta puede traer acentos (usuario de
+        // Windows) que PowerShell no devuelve en UTF-8.
+        resolve(path.basename(ejecutable || '').toLowerCase() === path.basename(process.execPath).toLowerCase() &&
+          !/--type=/.test(lineaDeComando));
+      });
+  });
+}
+
+function cerrarALaFuerza(pid) {
+  return new Promise((resolve) => {
+    execFile('taskkill.exe', ['/F', '/T', '/PID', String(pid)], { windowsHide: true, timeout: 15000 }, () => resolve());
+  });
+}
+
+// Devuelve true si cerró una copia colgada (entonces hay que volver a abrir).
+async function rescatarInstancia() {
+  let datos = null;
+  try { datos = JSON.parse(fs.readFileSync(archivoInstancia(), 'utf8')); } catch {}
+  if (!datos || !Number.isInteger(datos.pid) || !Number.isInteger(datos.puerto) || datos.pid === process.pid) return false;
+
+  // Varios dobles clics seguidos: rescata uno solo.
+  try {
+    const rescate = archivoRescate();
+    if (fs.existsSync(rescate) && Date.now() - fs.statSync(rescate).mtimeMs < 30000) return false;
+    fs.writeFileSync(rescate, String(process.pid), 'utf8');
+  } catch {}
+
+  try {
+    // Se le da tiempo: puede estar ocupada un momento o terminando de cerrarse.
+    for (let intento = 0; intento < 3; intento++) {
+      if (await respondeLaOtra(datos.puerto)) return false;
+      await esperar(1500);
+    }
+    if (!(await esLaCajaPrincipal(datos.pid))) return false;
+    log.warn(`La caja abierta (proceso ${datos.pid}) no responde: se cierra a la fuerza y se vuelve a abrir`);
+    anotarSistema(`La caja anterior quedó colgada (proceso ${datos.pid}): se cerró a la fuerza al volver a abrirla`);
+    await cerrarALaFuerza(datos.pid);
+    await esperar(1000);
+    return true;
+  } finally {
+    try { fs.unlinkSync(archivoRescate()); } catch {}
+  }
+}
+
 // Una sola copia del programa: si alguien vuelve a hacer doble clic, la copia
 // que ya está corriendo abre otra ventana de caja.
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  rescatarInstancia()
+    .then((rescatada) => { if (rescatada) app.relaunch(); })
+    .catch((error) => log.warn('No se pudo revisar la caja abierta:', error.message))
+    .finally(() => app.exit(0));
 } else {
   app.on('second-instance', () => {
     // Si justo se está cerrando (subiendo el registro), se vuelve a abrir al terminar.
@@ -219,21 +312,60 @@ function prepararContenido(ventana) {
   // El título de la ventana es siempre el del programa.
   ventana.on('page-title-updated', (evento) => evento.preventDefault());
 
+  // Cierre de la ventana. Si la pantalla está colgada nunca contesta al
+  // pedido de cierre y la ventana quedaba abierta (o el programa trabado a
+  // medio cerrar). Pasado el tope, se cierra igual.
+  let cerrandoVentana = false;
+  let topeCierre = null;
+  ventana.on('close', () => {
+    cerrandoVentana = true;
+    clearTimeout(topeCierre);
+    topeCierre = setTimeout(() => {
+      if (ventana.isDestroyed()) return;
+      log.warn('La ventana no contestó al cerrarla: se cierra a la fuerza');
+      anotarSistema(`${ventanaDe(contenido)}: la pantalla no contestó al cerrarla, se cerró a la fuerza`);
+      ventana.destroy();
+    }, TOPE_CIERRE_VENTANA_MS);
+  });
+  ventana.on('closed', () => clearTimeout(topeCierre));
+
   // La caja bloquea el cierre mientras guarda un pedido en Firebase
   // (beforeunload en ingresoPedidoV2.js). En una app ese bloqueo es mudo, así
   // que se pregunta, como haría un navegador.
-  contenido.on('will-prevent-unload', (evento) => {
-    const eleccion = dialog.showMessageBoxSync(ventana, {
+  // El aviso NO es sincrónico a propósito: showMessageBoxSync congelaba todo el
+  // programa (las otras ventanas y el paso entre pantallas) mientras estaba a
+  // la vista. Sin preventDefault la salida queda cancelada; si se elige
+  // "Cerrar igual", se cierra la ventana sin volver a preguntar.
+  let avisoGuardando = false;
+  contenido.on('will-prevent-unload', () => {
+    const eraCierre = cerrandoVentana;
+    cerrandoVentana = false;
+    clearTimeout(topeCierre);
+    if (avisoGuardando || ventana.isDestroyed()) return;
+    avisoGuardando = true;
+    const opciones = eraCierre
+      ? {
+          detail: 'Si cerrás ahora, el pedido puede quedar sin guardar. Conviene esperar unos segundos.',
+          buttons: ['Esperar', 'Cerrar igual']
+        }
+      : {
+          detail: 'Esperá unos segundos a que termine y volvé a intentarlo.',
+          buttons: ['Entendido']
+        };
+    dialog.showMessageBox(ventana, {
       type: 'warning',
       title: 'Caja HomePoint',
       message: 'Se está guardando un pedido',
-      detail: 'Si cerrás ahora, el pedido puede quedar sin guardar. Conviene esperar unos segundos.',
-      buttons: ['Esperar', 'Cerrar igual'],
       defaultId: 0,
       cancelId: 0,
-      noLink: true
-    });
-    if (eleccion === 1) evento.preventDefault();
+      noLink: true,
+      ...opciones
+    }).then(({ response }) => {
+      if (eraCierre && response === 1 && !ventana.isDestroyed()) {
+        anotarSistema(`${ventanaDe(contenido)}: se cerró igual mientras se guardaba un pedido`);
+        ventana.destroy();
+      }
+    }).catch(() => {}).finally(() => { avisoGuardando = false; });
   });
 
   // Atajos de soporte: F5 recarga, Ctrl+Shift+I abre las herramientas,
@@ -258,8 +390,49 @@ function prepararContenido(ventana) {
     anotarSistema(`${ventanaDe(contenido)}: la pantalla se cerró inesperadamente (${detalle.reason})`);
     if (detalle.reason !== 'clean-exit' && !ventana.isDestroyed()) contenido.reload();
   });
-  ventana.on('unresponsive', () => log.warn('La ventana dejó de responder'));
-  ventana.on('responsive', () => log.info('La ventana volvió a responder'));
+  // Pantalla colgada: antes sólo quedaba anotado y había que cerrar el
+  // programa. Ahora se ofrece recargarla (Chromium avisa recién después de
+  // varios segundos sin respuesta). Si vuelve sola, el aviso se va solo.
+  let colgada = false;
+  let avisoColgada = null;
+  const ofrecerRecarga = () => {
+    if (!colgada || avisoColgada || ventana.isDestroyed()) return;
+    avisoColgada = new AbortController();
+    dialog.showMessageBox(ventana, {
+      type: 'warning',
+      title: 'Caja HomePoint',
+      message: 'La pantalla no responde',
+      detail: 'Podés esperar unos segundos más o recargarla. Si había un pedido a medio cargar, se pierde.',
+      buttons: ['Esperar', 'Recargar'],
+      defaultId: 1,
+      cancelId: 0,
+      noLink: true,
+      signal: avisoColgada.signal
+    }).then(({ response }) => {
+      avisoColgada = null;
+      if (ventana.isDestroyed() || !colgada) return;
+      if (response === 1) {
+        anotarSistema(`${ventanaDe(contenido)}: la pantalla no respondía, se recargó`);
+        // Se termina la pantalla trabada; render-process-gone la vuelve a cargar.
+        contenido.forcefullyCrashRenderer();
+      } else {
+        setTimeout(ofrecerRecarga, 10000);
+      }
+    }).catch(() => { avisoColgada = null; });
+  };
+  ventana.on('unresponsive', () => {
+    colgada = true;
+    log.warn('La ventana dejó de responder');
+    anotarSistema(`${ventanaDe(contenido)}: la pantalla dejó de responder`);
+    // Al cerrar se ocupa el tope de cierre: no hace falta preguntar.
+    if (!cerrandoVentana) ofrecerRecarga();
+  });
+  ventana.on('responsive', () => {
+    colgada = false;
+    if (avisoColgada) { avisoColgada.abort(); avisoColgada = null; }
+    log.info('La ventana volvió a responder');
+    anotarSistema(`${ventanaDe(contenido)}: la pantalla volvió a responder`);
+  });
 }
 
 async function crearVentanaCaja() {
@@ -269,12 +442,17 @@ async function crearVentanaCaja() {
   anotarSistema(`Se abrió la ventana de caja ${nombreVentana}`);
   ventana.on('closed', () => anotarSistema(`Se cerró la ventana de caja ${nombreVentana}`));
 
-  ventana.once('ready-to-show', () => {
+  const mostrar = () => {
+    if (ventana.isDestroyed() || ventana.isVisible()) return;
     ventana.maximize();
     ventana.show();
     ventana.focus();
     cerrarSplash();
-  });
+  };
+  ventana.once('ready-to-show', mostrar);
+  // Si la página tarda en pintarse (internet lento, una fuente que no llega),
+  // la ventana no puede quedar invisible: se muestra igual.
+  setTimeout(mostrar, TOPE_MOSTRAR_VENTANA_MS);
 
   if (await hayInternet()) {
     ventana.loadURL(urlCaja);
@@ -311,6 +489,7 @@ async function arrancar() {
   }
 
   urlCaja = `http://localhost:${servidor.puerto}/${PAGINA_INICIAL}`;
+  anotarInstancia(servidor.puerto);
   // Versión instalada: la muestra el selector de usuario (preload.js).
   ipcMain.on('caja:version', (evento) => { evento.returnValue = app.getVersion(); });
   iniciarActualizador(log, anotarSistema, prepararSalida);
@@ -350,6 +529,15 @@ function prepararSalida() {
     cerrando = true;
     anotarSistema('Caja HomePoint se cerró');
     salida = subirAlCerrar().finally(() => { cierreListo = true; });
+    // Red de seguridad: si algo traba la salida (una ventana colgada que no
+    // deja cerrar, una subida que no termina), el programa sale igual. Antes
+    // quedaba vivo e invisible y la caja no volvía a abrir hasta reiniciar.
+    setTimeout(() => {
+      log.warn('La caja no terminó de cerrarse a tiempo: se fuerza la salida');
+      anotarSistema('La caja no terminó de cerrarse a tiempo: se forzó la salida');
+      if (reabrirAlCerrar) app.relaunch();
+      app.exit(0);
+    }, TOPE_SALIDA_MS);
   }
   return salida;
 }

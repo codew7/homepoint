@@ -20,6 +20,7 @@ const path = require('path');
 
 const PUERTOS = [8123, 8124, 8125];
 const PAGINA_INICIAL = 'ingresoPedidoV2.html';
+const RUTA_VIVO = '/__caja/vivo';
 
 const TIPOS = {
   '.html': 'text/html; charset=utf-8',
@@ -52,6 +53,22 @@ function crearManejador(raiz, log) {
       ruta = decodeURIComponent(new URL(pedido.url, 'http://localhost').pathname);
     } catch {
       respuesta.writeHead(400).end();
+      return;
+    }
+
+    // Señal de vida: la usa una copia nueva del programa para saber si la que
+    // ya está abierta responde o quedó colgada (main.js, rescatarInstancia).
+    if (ruta === RUTA_VIVO) {
+      respuesta.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end(String(process.pid));
+      return;
+    }
+
+    // Las pantallas piden de antemano la otra (speculationrules, pensado para
+    // la web). Desde la misma PC no ahorra nada y en la app de escritorio el
+    // paso caja ↔ historial quedaba a veces trabado: se rechaza el pedido
+    // anticipado y el navegador simplemente carga la página al hacer clic.
+    if (/prefetch|prerender/i.test(String(pedido.headers['sec-purpose'] || pedido.headers['purpose'] || ''))) {
+      respuesta.writeHead(503, { 'Cache-Control': 'no-store' }).end();
       return;
     }
 
@@ -141,4 +158,4 @@ async function iniciarServidor(raiz, log) {
   throw new Error(`Los puertos ${PUERTOS.join(', ')} están ocupados por otro programa`);
 }
 
-module.exports = { iniciarServidor, PAGINA_INICIAL };
+module.exports = { iniciarServidor, PAGINA_INICIAL, RUTA_VIVO, PUERTOS };
