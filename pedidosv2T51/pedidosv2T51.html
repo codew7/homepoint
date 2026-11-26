@@ -367,6 +367,7 @@
       border: 2px solid var(--graphite);
     }
     .header-badge.visible { display: flex; }
+    .header-badge.is-sumado { background: var(--warn); }
 
     .header-sep {
       width: 1px;
@@ -3514,6 +3515,11 @@
        hasta que se vuelva a marcar por la cantidad nueva. */
     .nec-row.is-parcial .nec-check i { border-color: var(--warn); border-style: dashed; background: var(--warn-soft); }
     .nec-parcial { font-size: 11px; font-weight: 700; color: var(--warn); line-height: 1.2; }
+    /* "Se sumaron": articulos con OK que volvieron a pedir unidades. */
+    .nec-cat--sumados { color: var(--warn); }
+    .nec-cat--sumados .nec-cat-n { color: var(--warn); background: var(--warn-soft); }
+    .nec-row.is-parcial { background: var(--warn-soft); box-shadow: var(--sh1), inset 3px 0 0 var(--warn); }
+    .nec-det-falta { color: var(--warn); font-weight: 700; white-space: nowrap; }
     .nec-check.is-rebote i { animation: necRebote .32s var(--ease-spring); }
     @keyframes necRebote { 0% { transform: scale(.7); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
 
@@ -11313,7 +11319,9 @@
           completo: [[1318, 0, .07], [1976, .085, .13]],
           sobra:    [[740, 0, .16]],
           error:    [[196, 0, .14], [165, .17, .24]],
-          fin:      [[1046, 0, .09], [1318, .1, .09], [1568, .2, .24]]
+          fin:      [[1046, 0, .09], [1318, .1, .09], [1568, .2, .24]],
+          // Articulos necesarios: se sumaron unidades a algo ya juntado.
+          aviso:    [[880, 0, .12], [1175, .15, .12], [880, .3, .2]]
         }[tipo];
         if (!tonos) return;
         const t0 = ctlAudio.currentTime + .01;
@@ -15630,94 +15638,168 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       let cargado = false;
 
       // ---------- Persistencia del tilde (compartida en Firebase) ----------
-      // El OK guarda la cantidad que hacia falta al marcarlo:
-      // armadoVerificados/<codigo>: 5. Si despues entra mas cantidad (pedido
-      // nuevo, o uno que vuelve al calculo) el OK queda corto y el articulo
-      // vuelve a "Faltan" como parcial; si la cantidad baja, sigue OK.
-      // Los OK viejos valian `true` (sin cantidad): se toman como validos por
-      // la cantidad que se ve al cargarlos y se reescriben con ese numero.
+      // El OK guarda POR PEDIDO cuantas unidades se juntaron para cada uno:
+      //   armadoVerificados/<codigo>: { <pedidoId>: 6, <pedidoId>: 4 }
+      // Lo que falta juntar es, por cada pedido del calculo, lo que pide menos
+      // lo que ya se junto para el (nunca menos de 0). Asi:
+      //  - si a un pedido le suman unidades, falta solo la diferencia;
+      //  - un pedido nuevo no tiene nada juntado: falta todo lo suyo;
+      //  - al armar un pedido sale de la lista junto con lo suyo y no deja un
+      //    "sobrante" que tape lo que piden los demas.
+      // Formatos viejos, que se pasan a este al cargar: `true` (OK sin
+      // cantidad) y un numero (total juntado). Mientras tanto se interpretan
+      // como antes.
       const refVerif = db.ref('armadoVerificados');
-      let verificados = new Map();   // clave segura -> cantidad verificada (o true, formato viejo)
+      let verificados = new Map();   // clave segura -> { pedidoId: unidades } (o true / numero, formato viejo)
       let escuchando = false;
 
       // Firebase no admite . # $ / [ ] en las claves.
       const claveSegura = (codigo) => String(codigo).replace(/[.#$\/\[\]]/g, '_');
       const cantNecesaria = (codigo) => (articulos[codigo] ? articulos[codigo].cantidad : 0);
+      const esCobertura = (v) => !!v && typeof v === 'object';
 
-      // OK completo: cubre lo que hace falta hoy.
+      // Lo que pide hoy cada pedido del calculo: { pedidoId: unidades }. Un
+      // pedido puede traer el articulo en varias lineas: se suman.
+      function necesidadPorPedido(codigo) {
+        const res = {};
+        const a = articulos[codigo];
+        if (a) a.pedidos.forEach(p => { res[p.id] = (res[p.id] || 0) + p.cantidad; });
+        return res;
+      }
+
+      // Estado del OK de un articulo:
+      //   falta      unidades que quedan por juntar
+      //   cubierto   unidades juntadas para los pedidos de hoy
+      //   sinCubrir  [{ id, cliente, falta }] pedidos a los que les falta algo
+      //   sumado     tenia OK para algun pedido de hoy y ahora pide mas: va a "Se sumaron"
+      function estadoOk(codigo) {
+        const total = cantNecesaria(codigo);
+        const v = verificados.get(claveSegura(codigo));
+        if (v === undefined || v === null) return { falta: total, cubierto: 0, sinCubrir: [], sumado: false };
+        if (v === true) return { falta: 0, cubierto: total, sinCubrir: [], sumado: false };
+        if (typeof v === 'number') {
+          const falta = Math.max(0, total - v);
+          return { falta, cubierto: Math.min(v, total), sinCubrir: [], sumado: falta > 0 && v > 0 };
+        }
+        if (!esCobertura(v)) return { falta: total, cubierto: 0, sinCubrir: [], sumado: false };
+        const nec = necesidadPorPedido(codigo);
+        const a = articulos[codigo];
+        let falta = 0, cubierto = 0, algunoCubierto = false;
+        const sinCubrir = [];
+        Object.keys(nec).forEach(id => {
+          const juntado = Math.max(0, Number(v[id]) || 0);
+          if (juntado > 0) algunoCubierto = true;
+          const f = Math.max(0, nec[id] - juntado);
+          cubierto += nec[id] - f;
+          if (f > 0) {
+            falta += f;
+            const p = a.pedidos.find(x => x.id === id);
+            sinCubrir.push({ id, cliente: p ? p.cliente : id, falta: f });
+          }
+        });
+        return { falta, cubierto, sinCubrir, sumado: falta > 0 && algunoCubierto };
+      }
+
+      // OK completo: no queda nada por juntar.
       function getVerificado(codigo) {
         const v = verificados.get(claveSegura(codigo));
-        if (v === true) return true;
-        return typeof v === 'number' && v >= cantNecesaria(codigo);
+        return v !== undefined && v !== null && estadoOk(codigo).falta === 0;
       }
-      // OK que quedo corto: devuelve la cantidad que se habia verificado.
+      // OK que quedo corto: el estado, o null si no hay nada que avisar.
       function getParcial(codigo) {
-        const v = verificados.get(claveSegura(codigo));
-        return (typeof v === 'number' && v < cantNecesaria(codigo)) ? v : null;
+        const e = estadoOk(codigo);
+        return e.sumado ? e : null;
+      }
+
+      // Al marcar se anota lo que hoy pide cada pedido del calculo. Se
+      // conserva lo juntado para pedidos que siguen pendientes pero hoy estan
+      // fuera del calculo (si vuelven a entrar, ya figuran juntados).
+      function coberturaActual(codigo) {
+        const previo = verificados.get(claveSegura(codigo));
+        const res = {};
+        if (esCobertura(previo)) {
+          const vivos = new Set(pedidos.map(p => p.id));
+          Object.keys(previo).forEach(id => {
+            const n = Number(previo[id]) || 0;
+            if (n > 0 && vivos.has(id)) res[id] = n;
+          });
+        }
+        Object.assign(res, necesidadPorPedido(codigo));
+        return res;
       }
 
       // Se marca en memoria al instante y se escribe en segundo plano; si el
-      // servidor lo rechaza se vuelve atras. Marcar guarda la cantidad actual.
-      // Si las reglas de Firebase todavia validan armadoVerificados como
-      // booleano, el numero vuelve PERMISSION_DENIED. En ese caso se guarda
-      // `true` como antes (OK sin cantidad) y no se insiste con la migracion,
-      // asi la pantalla sigue andando hasta que se actualice la regla.
-      let soloBooleano = false;
-      const esPermiso = (err) => err && /permission/i.test(String(err.code || err.message || ''));
-
+      // servidor lo rechaza se vuelve atras.
       function setVerificado(codigo, v) {
         const k = claveSegura(codigo);
         const previo = verificados.get(k);
-        const cant = cantNecesaria(codigo);
-        const valor = soloBooleano ? true : cant;
+        const valor = coberturaActual(codigo);
         if (v) verificados.set(k, valor); else verificados.delete(k);
-        const revertir = (err) => {
+        const op = v ? refVerif.child(k).set(valor) : refVerif.child(k).remove();
+        op.catch(err => {
           console.error('Error guardando verificado:', err);
           if (previo === undefined) verificados.delete(k); else verificados.set(k, previo);
           if (cargado) render();
-          showToast('No se pudo guardar el tilde');
-        };
-        const op = v ? refVerif.child(k).set(valor) : refVerif.child(k).remove();
-        op.catch(err => {
-          if (!v || valor === true || !esPermiso(err)) { revertir(err); return; }
-          soloBooleano = true;
-          console.warn('armadoVerificados no acepta cantidades: se guarda el OK sin cantidad. Actualizar la regla de Firebase.');
-          verificados.set(k, true);
-          refVerif.child(k).set(true).catch(revertir);
+          showToast(esPermiso(err) ? 'No se pudo guardar el tilde: falta actualizar la regla de Firebase' : 'No se pudo guardar el tilde');
         });
       }
+      const esPermiso = (err) => err && /permission/i.test(String(err.code || err.message || ''));
 
-      // Pasa los OK del formato viejo (true) a la cantidad que se ve ahora.
-      // Solo los de articulos que estan en la lista: sin cantidad no hay que
-      // anotar. Se escriben todos juntos en un update.
-      // `migrando` evita un segundo intento mientras el primero sigue en vuelo:
-      // si el servidor lo rechaza, el SDK revierte la cache y dispara el
-      // listener ANTES del catch, que volveria a llamar aca.
+      // Pasa los OK del formato viejo al nuevo y borra lo juntado para pedidos
+      // que ya no estan (armados, despachados o cancelados), asi el nodo no
+      // crece. Corre al cargar y cuando llega un OK viejo desde otro equipo
+      // (en ese momento la cantidad de la pantalla es la que se marco), nunca
+      // por un cambio de pedidos: ahi un OK viejo se tragaria lo que se sumo.
+      //  - `true`: cubre lo que pide hoy cada pedido.
+      //  - numero: se reparte entre los pedidos, del mas viejo al mas nuevo.
+      // `migrando` evita un segundo intento mientras el primero sigue en vuelo.
       let migrando = false;
-      function migrarVerificados() {
-        if (soloBooleano || migrando) return;
+      function migrarVerificados(conLimpieza) {
+        if (migrando) return;
         const updates = {};
-        Object.values(articulos).forEach(a => {
-          const k = claveSegura(a.codigo);
-          if (verificados.get(k) === true) {
-            updates[k] = a.cantidad;
-            verificados.set(k, a.cantidad);
+        const enMemoria = {};
+        const vivos = new Set(pedidos.map(p => p.id));
+        verificados.forEach((v, k) => {
+          if (v === true || typeof v === 'number') {
+            const a = Object.values(articulos).find(x => claveSegura(x.codigo) === k);
+            if (!a) return;   // sin pedidos de hoy no hay como repartirlo
+            const nec = necesidadPorPedido(a.codigo);
+            const obj = {};
+            if (v === true) Object.assign(obj, nec);
+            else {
+              let quedan = v;
+              a.pedidos.slice().sort((x, y) => (x.timestamp || 0) - (y.timestamp || 0)).forEach(p => {
+                if (quedan <= 0 || obj[p.id] !== undefined) return;
+                obj[p.id] = Math.min(nec[p.id], quedan);
+                quedan -= obj[p.id];
+              });
+              Object.keys(obj).forEach(id => { if (!(obj[id] > 0)) delete obj[id]; });
+            }
+            const vacio = !Object.keys(obj).length;
+            updates[k] = vacio ? null : obj;
+            enMemoria[k] = vacio ? undefined : obj;
+          } else if (conLimpieza && esCobertura(v)) {
+            const muertos = Object.keys(v).filter(id => !vivos.has(id));
+            if (!muertos.length) return;
+            if (muertos.length === Object.keys(v).length) { updates[k] = null; enMemoria[k] = undefined; return; }
+            const obj = Object.assign({}, v);
+            muertos.forEach(id => { updates[k + '/' + id] = null; delete obj[id]; });
+            enMemoria[k] = obj;
           }
         });
         if (!Object.keys(updates).length) return;
+        const previos = new Map(verificados);
+        Object.keys(enMemoria).forEach(k => {
+          if (enMemoria[k] === undefined) verificados.delete(k); else verificados.set(k, enMemoria[k]);
+        });
         migrando = true;
         refVerif.update(updates).finally(() => { migrando = false; }).catch(err => {
-          // La memoria ya tiene los numeros: se vuelven a `true` para que
-          // coincida con lo que quedo en el servidor.
-          Object.keys(updates).forEach(k => verificados.set(k, true));
-          if (esPermiso(err)) {
-            soloBooleano = true;
-            console.warn('armadoVerificados no acepta cantidades: los OK quedan sin cantidad. Actualizar la regla de Firebase.');
-          } else {
-            console.error('Error migrando verificados:', err);
-          }
+          console.error('Error pasando los verificados al formato por pedido:', err);
+          verificados = previos;
         });
       }
+
+      const firmaVerif = (v) => (v && typeof v === 'object') ? JSON.stringify(Object.keys(v).sort().map(k => [k, v[k]])) : String(v);
 
       // Un solo listener sobre el nodo: trae todo una vez y despues solo los
       // cambios. Queda activo para que el globo del boton siga al dia.
@@ -15729,10 +15811,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           const nuevos = new Map(Object.keys(val).map(k => [k, val[k]]));
           // El eco de un tilde propio llega igual a lo que ya hay en memoria:
           // no se redibuja, asi no se corta la animacion de salida de la fila.
-          const igual = nuevos.size === verificados.size && [...nuevos].every(([k, v]) => verificados.get(k) === v);
+          const igual = nuevos.size === verificados.size &&
+            [...nuevos].every(([k, v]) => verificados.has(k) && firmaVerif(verificados.get(k)) === firmaVerif(v));
           verificados = nuevos;
           if (igual || !cargado) return;
-          migrarVerificados();
+          migrarVerificados(false);
           if (panel.classList.contains('active')) render();
           else actualizarStats(listaOrdenada());
         }, err => {
@@ -15791,9 +15874,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
       // Recalcula y redibuja lo que este a la vista; con el panel cerrado solo
       // el globo del boton de la barra.
+      // No migra los OK viejos: con la cantidad nueva se tragaria lo que se sumo.
       function refrescar() {
         construir();
-        migrarVerificados();
         if (panel.classList.contains('active')) render();
         else actualizarStats(listaOrdenada());
         if (sub.classList.contains('active')) renderSub();
@@ -15863,9 +15946,39 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // la nota, se tocan nada mas los tildes verdes.
       function aplicarPedidos(nuevos) {
         const cambio = firmaPedidos(nuevos) !== firmaPedidos(pedidos);
+        const antes = faltasSumadas();
         pedidos = nuevos;
-        if (cambio) refrescar();
+        if (cambio) { refrescar(); avisarSumados(antes); }
         else if (sub.classList.contains('active')) pedidos.forEach(pintarConfirmado);
+      }
+
+      // ---------- Aviso de "Se sumaron" ----------
+      // Articulos con OK que vuelven a pedir unidades. Solo avisa por cambios
+      // de pedidos que llegan en vivo (no al abrir ni por tocar la seleccion).
+      function faltasSumadas() {
+        const res = new Map();
+        Object.keys(articulos).forEach(c => {
+          const e = getParcial(c);
+          if (e) res.set(c, e.falta);
+        });
+        return res;
+      }
+      function avisarSumados(antes) {
+        const nuevos = [];
+        faltasSumadas().forEach((falta, c) => {
+          const delta = falta - (antes.get(c) || 0);
+          if (delta > 0) nuevos.push({ a: articulos[c], delta });
+        });
+        if (!nuevos.length) return;
+        controlBeep('aviso');
+        if (navigator.vibrate) navigator.vibrate([60, 60, 60]);
+        if (nuevos.length === 1) {
+          const { a, delta } = nuevos[0];
+          const clientes = getParcial(a.codigo).sinCubrir.map(p => p.cliente);
+          showToast('Se sumaron ' + delta + ' · ' + a.nombre + (clientes.length ? ' (' + clientes.slice(0, 2).join(', ') + (clientes.length > 2 ? '…' : '') + ')' : ''));
+        } else {
+          showToast('Se sumaron unidades en ' + nuevos.length + ' artículos ya juntados');
+        }
       }
 
       // Se engancha despues de la primera carga: el primer aviso trae lo mismo
@@ -15904,7 +16017,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           pedidos = pedidosDesde(snapAbierto, snapCerrado);
           cargado = true;
           construir();
-          migrarVerificados();
+          migrarVerificados(true);
           render();
           if (sub.classList.contains('active')) renderSub();
           escucharPedidos();
@@ -15956,7 +16069,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
       // ---------- Render ----------
       function render() {
         const todos = listaOrdenada();
-        const visibles = todos.filter(a => pasaBusqueda(a) && (!soloFaltan || !getVerificado(a.codigo)));
+        // "Se sumaron": tenian OK y ahora piden mas. Van arriba de todo.
+        const sumados = todos.filter(a => pasaBusqueda(a) && getParcial(a.codigo));
+        const enSumados = new Set(sumados.map(a => a.codigo));
+        const visibles = todos.filter(a => pasaBusqueda(a) && !enSumados.has(a.codigo) && (!soloFaltan || !getVerificado(a.codigo)));
 
         // Hay pedidos pero ninguno elegido: no es lo mismo que "no hay nada".
         if (!todos.length && pedidos.length && !pedidosEnCalculo) {
@@ -15971,7 +16087,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           actualizarStats(todos);
           return;
         }
-        if (!visibles.length) {
+        if (!visibles.length && !sumados.length) {
           const html = busqueda
             ? '<div class="nec-empty">' + IC_VACIO + '<b>Sin resultados</b><span>Ningún artículo coincide con "' + escapeHtml(busqueda) + '".</span></div>'
             : '<div class="nec-empty nec-empty--ok">' + IC_LISTO + '<b>Todo verificado</b><span>No queda nada por juntar. Tocá "Todos" para revisar la lista completa.</span></div>';
@@ -15984,6 +16100,10 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
         let cat = null;
         let i = 0;
+        if (sumados.length) {
+          html += '<div class="nec-cat nec-cat--sumados">Se sumaron<span class="nec-cat-n">' + sumados.length + '</span></div>';
+          sumados.forEach(a => { html += filaHtml(a, Math.min(i * 0.025, 0.4)); i++; });
+        }
         visibles.forEach(a => {
           if (a.categoria !== cat) {
             cat = a.categoria;
@@ -16029,9 +16149,13 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const nPed = a.pedidos.length;
 
         let det = '<div class="nec-det"><div class="nec-det-lbl">Lo piden ' + nPed + (nPed === 1 ? ' pedido' : ' pedidos') + '</div>';
+        // Con "Se sumaron", los pedidos a los que les falta llevan cuanto.
+        const faltaDe = {};
+        if (parcial) parcial.sinCubrir.forEach(p => { faltaDe[p.id] = p.falta; });
         a.pedidos.forEach(p => {
           det += '<div class="nec-det-row" data-pedido="' + escapeHtml(p.id) + '" title="Abrir el pedido">' +
-            '<span class="nec-det-cli">' + escapeHtml(p.cliente) + '</span>' +
+            '<span class="nec-det-cli">' + escapeHtml(p.cliente) +
+              (faltaDe[p.id] ? ' <b class="nec-det-falta">+' + faltaDe[p.id] + ' sin juntar</b>' : '') + '</span>' +
             '<span class="nec-det-cant">' + p.cantidad + '</span>' + IC_FLECHA + '</div>';
         });
         det += '</div>';
@@ -16043,7 +16167,9 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
               '<div class="nec-name" title="' + escapeHtml(a.nombre) + '">' + escapeHtml(a.nombre) + '</div>' +
               '<div class="nec-code"><span>' + codAttr + (barras ? ' · ' + escapeHtml(barras) : '') + '</span>' +
                 '<span class="nec-npedidos">' + IC_PERSONAS + nPed + '</span>' + remotoHtml(a.codigo) + '</div>' +
-              (parcial !== null ? '<div class="nec-parcial">OK por ' + parcial + ' · faltan ' + (a.cantidad - parcial) + ' más</div>' : '') +
+              (parcial !== null ? '<div class="nec-parcial">+' + parcial.falta + ' para juntar' +
+                (parcial.sinCubrir.length ? ' · ' + escapeHtml(parcial.sinCubrir.map(p => p.cliente + (parcial.sinCubrir.length > 1 ? ' (' + p.falta + ')' : '')).join(', ')) : '') +
+                ' · ya juntaste ' + parcial.cubierto + '</div>' : '') +
             '</div>' +
             stockCelda(stock) + stockCelda(si.stockCaseros) +
             '<span class="nec-nec' + (falta ? ' is-falta' : '') + '" title="' + (falta ? 'Faltan ' + (a.cantidad - stock) + ' para cubrir los pedidos' : '') + '">' + a.cantidad + '</span>' +
@@ -16078,9 +16204,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           : 'Pedidos';
 
         // El globo del boton de la barra superior muestra cuanto queda por juntar.
+        // En naranja mientras haya algo en "Se sumaron".
         if (badgeHeader) {
           badgeHeader.textContent = faltan > 99 ? '99+' : faltan;
           badgeHeader.classList.toggle('visible', cargado && faltan > 0);
+          badgeHeader.classList.toggle('is-sumado', cargado && todos.some(a => getParcial(a.codigo)));
         }
       }
 
@@ -16175,6 +16303,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
         const check = e.target.closest('.nec-check');
         if (check) {
           // Sobre un parcial, tocar vuelve a marcar OK por la cantidad de hoy.
+          const eraSumado = row.classList.contains('is-parcial');
           const nuevo = !getVerificado(codigo);
           setVerificado(codigo, nuevo);
           row.classList.toggle('is-ok', nuevo);
@@ -16189,7 +16318,8 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           actualizarStats(listaOrdenada());
           // Con "Faltan" activo la fila se va: primero se desliza y despues se
           // reconstruye la lista, para que la categoria vacia tambien se retire.
-          if (soloFaltan && nuevo) {
+          // Si venia de "Se sumaron", vuelve a su categoria.
+          if ((soloFaltan || eraSumado) && nuevo) {
             row.classList.add('is-saliendo');
             if (abierta === codigo) abierta = null;
             setTimeout(render, 280);
@@ -16583,7 +16713,6 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
           .filter(a => !getVerificado(a.codigo))
           .map(a => {
             const si = sheetsData[a.codigo] || {};
-            const parcial = getParcial(a.codigo);
             const k = claveSegura(a.codigo);
             return {
               k,
@@ -16592,7 +16721,7 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
               barras: (si.codigoBarras && si.codigoBarras.length) ? String(si.codigoBarras[0]) : '',
               imagen: si.imagen || '',
               imagenAlt: si.imagenAlt || '',
-              cantidad: parcial !== null ? a.cantidad - parcial : a.cantidad,
+              cantidad: estadoOk(a.codigo).falta,
               yaPedido: abiertos[k] || ''
             };
           });
