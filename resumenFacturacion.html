@@ -2287,7 +2287,19 @@
             tableHeaders.appendChild(totalTh);
         }
 
+        // Antes de calcular se lee la planilla de artículos (una vez por sesión) para
+        // reconocer los artículos de Moda en los pedidos que no guardan la categoría.
         function cargarDatos() {
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) loadingText.textContent = 'Leyendo categorías de artículos...';
+            mostrarLoading(true);
+            asegurarCatalogo().then(ok => {
+                if (!ok) mostrarNotificacion('No se pudo leer la planilla de artículos: en los pedidos de envíos no se pueden excluir los artículos de Moda. Tocá Actualizar para reintentar.', 'error');
+                cargarDatosAhora();
+            });
+        }
+
+        function cargarDatosAhora() {
             const year = parseInt(yearSelect.value);
             const carga = ++cargaVigente;
 
@@ -2625,7 +2637,11 @@
             const desde = claveMes(year, Math.min(...mesesIdx));
             const hasta = claveMes(year, Math.max(...mesesIdx));
 
-            return leerPedidosRango(year, desde, hasta, false).then(pedidos => {
+            // Sin la planilla no se reconoce Moda en los pedidos de envíos: no se guarda nada a medias
+            return asegurarCatalogo().then(ok => {
+                if (!ok) throw new Error('catalogo');
+                return leerPedidosRango(year, desde, hasta, false);
+            }).then(pedidos => {
                 const acumulado = {};
                 mesesIdx.forEach(mes => {
                     acumulado[mes] = { cantidad: 0, Local: {}, Envios: {}, alias: { Local: {}, Envios: {} } };
@@ -3061,7 +3077,9 @@
                     const permiso = error && /permission/i.test(error.code || error.message || '');
                     mostrarNotificacion(permiso
                         ? 'Firebase rechazó la escritura en "facturacion". Revisá las reglas de la base de datos.'
-                        : 'Error al consolidar. Intentá de nuevo.', 'error');
+                        : error && error.message === 'catalogo'
+                            ? 'No se pudo leer la planilla de artículos (hace falta para excluir Moda). No se consolidó nada; intentá de nuevo.'
+                            : 'Error al consolidar. Intentá de nuevo.', 'error');
                 })
                 .finally(() => {
                     botones.forEach(b => b.disabled = false);
@@ -3158,13 +3176,64 @@
         // que devuelve una copia sin esas líneas (o null si no es facturable o solo tenía Moda).
         const CATEGORIA_EXCLUIDA = 'Moda';
 
+        // Los pedidos de la caja guardan la categoría en cada línea, pero los de pedidosv2
+        // (envíos) no: para esas líneas se toma la categoría actual de la planilla de
+        // artículos (columna A), buscando por código interno (C) o, si no hay, por nombre (D).
+        let categoriasPorCodigo = null; // null = planilla todavía no leída
+        let categoriasPorNombre = {};
+        let promesaCatalogo = null;
+
+        function normalizarCodigo(valor) {
+            return String(valor ?? '').trim().toUpperCase();
+        }
+
+        // Resuelve true si la planilla quedó leída. Si falla, se reintenta en la próxima carga.
+        function asegurarCatalogo() {
+            if (categoriasPorCodigo) return Promise.resolve(true);
+            if (promesaCatalogo) return promesaCatalogo;
+            if (typeof GOOGLE_SHEETS_CONFIG === 'undefined') return Promise.resolve(false);
+            const cfg = GOOGLE_SHEETS_CONFIG;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${cfg.SPREADSHEET_ID}/values/${cfg.RANGO}?key=${cfg.API_KEY}`;
+            const control = new AbortController();
+            const corte = setTimeout(() => control.abort(), 20000);
+            promesaCatalogo = fetch(url, { signal: control.signal })
+                .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(data => {
+                    const porCodigo = {}, porNombre = {};
+                    (data.values || []).forEach(fila => {
+                        const categoria = fila[0] || '';
+                        const codigo = normalizarCodigo(fila[2]);
+                        if (codigo) porCodigo[codigo] = categoria;
+                        if (fila[3]) porNombre[fila[3]] = categoria;
+                    });
+                    categoriasPorCodigo = porCodigo;
+                    categoriasPorNombre = porNombre;
+                    return true;
+                })
+                .catch(error => {
+                    console.error('No se pudo leer la planilla de artículos:', error);
+                    return false;
+                })
+                .finally(() => { clearTimeout(corte); promesaCatalogo = null; });
+            return promesaCatalogo;
+        }
+
         function lineasDePedido(pedido) {
             const lineas = pedido.items || pedido.productos;
             return lineas && typeof lineas === 'object' ? Object.values(lineas).filter(Boolean) : [];
         }
 
+        // La categoría guardada en la línea manda; solo si viene vacía se usa la de la planilla
+        function categoriaDeLinea(linea) {
+            if (typeof linea.categoria === 'string' && linea.categoria !== '') return linea.categoria;
+            if (!categoriasPorCodigo) return '';
+            const codigo = normalizarCodigo(linea.codigo);
+            if (codigo && codigo in categoriasPorCodigo) return categoriasPorCodigo[codigo];
+            return (linea.nombre && categoriasPorNombre[linea.nombre]) || '';
+        }
+
         function esLineaExcluida(linea) {
-            return linea.categoria === CATEGORIA_EXCLUIDA;
+            return categoriaDeLinea(linea) === CATEGORIA_EXCLUIDA;
         }
 
         // Mismo criterio que ingresoPedidoV2.js: VENTA suma, DEVOLUCION resta, el resto no mueve importes
@@ -3184,7 +3253,7 @@
             let monto = 0, costo = 0;
             excluidas.forEach(linea => {
                 const unidades = signoDeLinea(linea) * (Number(linea.cantidad) || 0);
-                monto += unidades * (Number(linea.valorU) || 0);
+                monto += Math.round(unidades * Math.round(Number(linea.valorU) || 0)); // igual que el subtotal de pedidosv2
                 costo += unidades * (Number(linea.valorC) || 0);
             });
 
