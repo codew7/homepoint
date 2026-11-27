@@ -1172,7 +1172,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
       </div>
       <button class="filterbtn" id="ofPurge" hidden>Quitar vencidas</button>
     </div>
-    <div class="of-info">El precio de oferta es fijo en pesos y no reemplaza al de lista. El % de descuento se calcula contra el precio de lista con el dólar estático actual.</div>
+    <div class="of-info">El precio de oferta es fijo en pesos y no reemplaza al de lista. El % de descuento se calcula contra el precio de lista con el dólar estático actual; el costo, con el dólar blue en vivo.</div>
     <div class="of-list" id="ofList"></div>
   </section>
 
@@ -2758,7 +2758,7 @@ $('brandHome').addEventListener('click', goHome);
 // ============================================================
 //  Cotización Dólar Blue (bluelytics) — header
 // ============================================================
-let blueSell = null;    // cotización Blue (venta) — solo informativa en el header
+let blueSell = null;    // cotización Blue (venta) en vivo — header + costo en ARS de Ofertas (costoARS)
 let dolarManual = null; // valor del dólar (nodo "dolar" en Firebase) usado para PrecioARS
 
 async function loadBlue(){
@@ -3458,16 +3458,18 @@ function fmtARS(n){
   return '$' + Math.round(Number(n) || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 }
 
-// Precio de lista y costo en ARS con el dólar estático (los mismos que muestra la tabla). null si no hay dólar.
+// Precio de lista en ARS con el dólar estático (el mismo que muestra la tabla). null si no hay dólar.
 function precioListaARS(rec){
   const usd = Number(rec && (rec.PrecioUSD != null ? rec.PrecioUSD : rec.ValorUSD));
   if (!(dolarManual > 0) || !isFinite(usd) || usd <= 0) return null;
   return Math.round(usd * dolarManual);
 }
+// Costo en ARS con el dólar EN VIVO (blue venta de bluelytics), no el estático: lo que
+// cuesta reponer hoy. null mientras la cotización no cargó o si falló.
 function costoARS(rec){
   const usd = Number(rec && rec.CostoUSD);
-  if (!(dolarManual > 0) || !isFinite(usd) || usd <= 0) return null;
-  return Math.round(usd * dolarManual);
+  if (!(blueSell > 0) || !isFinite(usd) || usd <= 0) return null;
+  return Math.round(usd * blueSell);
 }
 function pctDescuento(oferta, lista){
   if (!(lista > 0)) return null;
