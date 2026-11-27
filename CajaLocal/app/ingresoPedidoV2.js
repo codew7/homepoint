@@ -3002,6 +3002,8 @@ function getTipoCliente() {
             // Puesto de sólo ingreso: el efectivo lo cobra la caja ("Por cobrar").
             escriturasCaja = CajaTurno.marcarPendiente(pedidoRef.key, pedidoObj);
           }
+          // Sin efectivo: queda marcado por si después se edita y se paga en efectivo.
+          if (window.CajaTurno) CajaTurno.marcarNuevo(pedidoObj);
 
           // BLOQUEAR INTERFAZ durante proceso crítico
           bloquearInterfaz('Registrando pedido y actualizando inventario...');
@@ -3096,6 +3098,7 @@ function getTipoCliente() {
     // la caja lo sume al turno al volver la conexión (cajaTurno.js). Va antes
     // de armar el paquete porque marca pedidoObj.cobro.
     const fichaCaja = window.CajaTurno ? CajaTurno.fichaOffline(pedidoKey, pedidoObj) : {};
+    if (window.CajaTurno) CajaTurno.marcarNuevo(pedidoObj);
     let paquete;
     try {
       paquete = armarActualizacionPedido(pedidoKey, pedidoObj, items);
@@ -5154,7 +5157,11 @@ swiTwxojtYcW2WoyuWXzJClYn1id6V+kpFuDiLDJjg6ngdeXvZ9BHRY8J/eWe1JE
 
     // Admin sólo para Alejandro, Javier y Sabrina, con la clave personal de cada uno.
     const ADMINS = ['alejandro', 'javier', 'sabrina'];
-    function esAdmin(nombre) { return ADMINS.includes(String(nombre || '').trim().toLowerCase()); }
+    // La lista vive en usuarioActivo.js (la usan también el Historial y la caja).
+    function esAdmin(nombre) {
+      if (window.UsuarioActivo && typeof UsuarioActivo.esAdmin === 'function') return UsuarioActivo.esAdmin(nombre);
+      return ADMINS.includes(String(nombre || '').trim().toLowerCase());
+    }
     // cajaTurno.js lo usa para dejar configurar el puesto de cobro sólo a un Admin.
     window.esUsuarioAdmin = esAdmin;
     function actualizarBotonAdmin() {

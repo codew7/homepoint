@@ -58,7 +58,10 @@
     return ts ? new Date(ts).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   }
   function usuario() { return window.UsuarioActivo ? UsuarioActivo.actual() : ''; }
-  function esAdmin() { return typeof window.esUsuarioAdmin === 'function' && window.esUsuarioAdmin(usuario()); }
+  function esAdmin() {
+    if (window.UsuarioActivo && typeof UsuarioActivo.esAdmin === 'function') return UsuarioActivo.esAdmin(usuario());
+    return typeof window.esUsuarioAdmin === 'function' && window.esUsuarioAdmin(usuario());
+  }
   // Marcar o cambiar el puesto de cobro de un equipo: sólo Alejandro y Javier.
   const CONFIGURAN_PUESTO = ['alejandro', 'javier'];
   // "Otro" (usuario genérico, usuarioActivo.js): vende, pero no opera la caja.
@@ -111,14 +114,25 @@
   const LS_HAY_CAJAS = 'hpHayCajas' + SUFIJO_PV;
   if (lsGet(LS_HAY_CAJAS) === '1') hayCajas = true;
 
+  // Nombre de cada caja de la sucursal (para "Caja 1 ✓" en el Historial).
+  let nombresCajas = {};
+
   function cargarHayCajas() {
     if (!hayFirebase()) return;
     db().ref('cajas').once('value')
       .then(s => {
         hayCajas = s.exists();
         if (hayCajas) lsSet(LS_HAY_CAJAS, '1'); else lsDel(LS_HAY_CAJAS);
+        nombresCajas = {};
+        s.forEach(ch => { nombresCajas[ch.key] = (ch.val() || {}).nombre || 'Caja'; });
+        avisarCambio();
       })
       .catch(err => console.warn('Cajas no disponibles:', err));
+  }
+
+  // Otras pantallas (el Historial) repintan cuando cambia algo de la caja.
+  function avisarCambio() {
+    try { document.dispatchEvent(new CustomEvent('cajaturno:cambio')); } catch (_) {}
   }
 
   // Tipo de cada ficha de "Por cobrar":
@@ -159,9 +173,7 @@
       const v = ch.val();
       if (v && Number(v.efectivo)) pendientes[ch.key] = v;
     });
-    pintarBoton();
-    // Con la lista abierta, se repinta sola.
-    if (dlg && !dlg.hidden && dlg.dataset.paso === 'pendientes') pasoPendientes();
+    avisarCambio();
   }
 
   function escucharPendientes() {
@@ -171,15 +183,17 @@
     refPend = db().ref('cajaPendientes');
     refPend.on('value', alCambiarPendientes, err => console.warn('Por cobrar no disponible:', err));
   }
-  function cantidadPendientes() { return Object.keys(pendientes).length; }
 
   function alCambiarCaja(snap) {
     caja = snap.val();
     if (!caja) {
       // La caja se borró desde otro lado: el equipo vuelve a sólo ingresar.
       console.warn('Caja: la caja de este equipo ya no existe.');
+    } else {
+      nombresCajas[cajaId] = caja.nombre || 'Caja';
     }
     pintarBoton();
+    avisarCambio();
   }
 
   function escucharCaja() {
@@ -197,13 +211,6 @@
     boton = boton || document.getElementById('cajaNavBtn');
     if (!boton) return;
     const texto = boton.querySelector('.caja-nav-texto');
-    const badge = boton.querySelector('.caja-nav-badge');
-    const n = cajaId ? cantidadPendientes() : 0;
-    if (badge) {
-      badge.textContent = String(n);
-      badge.hidden = !n;
-    }
-    boton.classList.toggle('caja-nav-con-pendientes', n > 0);
     if (cajaId) {
       const abierta = !!(caja && caja.turno);
       const viejo = turnoViejo();
@@ -211,8 +218,7 @@
       boton.dataset.estado = viejo ? 'vieja' : abierta ? 'abierta' : 'cerrada';
       texto.textContent = (caja && caja.nombre) || 'Caja';
       boton.title = ((caja && caja.nombre) || 'Caja') +
-        (viejo ? ' · el turno quedó abierto desde otro día: cerralo' : abierta ? ' · turno abierto' : ' · sin turno abierto') +
-        (n ? ` · ${n} por cobrar` : '');
+        (viejo ? ' · el turno quedó abierto desde otro día: cerralo' : abierta ? ' · turno abierto' : ' · sin turno abierto');
     } else {
       // Sin caja asignada sólo lo ven Alejandro y Javier, para configurar el equipo.
       boton.hidden = !puedeConfigurar();
@@ -256,7 +262,6 @@
     if (alCerrar !== undefined) alCerrarDlg = alCerrar;
     dlg.innerHTML = html;
     delete dlg.dataset.ocupado;
-    delete dlg.dataset.paso;
     dlg.hidden = false;
     setTimeout(() => {
       const f = foco ? dlg.querySelector(foco) : dlg.querySelector('input, button');
@@ -341,19 +346,6 @@
     else pasoSinTurno();
   }
 
-  // Arriba de todo en el panel: lo que dejaron los puestos de sólo ingreso.
-  function botonPendientes() {
-    const n = cantidadPendientes();
-    if (!n) return '';
-    return `<button type="button" class="caja-pend-btn" data-accion="pendientes">
-        <span>Por cobrar</span><span class="caja-pend-n">${n}</span>
-      </button>`;
-  }
-  function conectarPendientes() {
-    const b = dlg.querySelector('[data-accion="pendientes"]');
-    if (b) b.addEventListener('click', pasoPendientes);
-  }
-
   // El usuario genérico no abre ni cierra turnos, no cobra "Por cobrar" ni
   // saca o ingresa efectivo: nada de eso puede quedar a nombre de "Otro".
   function pasoGenerico() {
@@ -398,7 +390,6 @@
     mostrar(`
       <div class="usr-clave-card caja-card">
         ${cabecera(nombreCaja(), 'No hay un turno abierto. Para cobrar en efectivo hay que abrir uno contando el cambio.')}
-        ${botonPendientes()}
         ${ultimo}
         ${cierrePendienteHtml()}
         <div class="usr-clave-error" role="alert"></div>
@@ -407,7 +398,6 @@
       </div>`, '[data-accion="abrir"]', null);
     dlg.querySelector('[data-accion="abrir"]').addEventListener('click', () => pasoAbrir(null));
     conectarCierrePendiente();
-    conectarPendientes();
     conectarPie();
   }
 
@@ -429,7 +419,6 @@
       <div class="usr-clave-card caja-card">
         ${cabecera(nombreCaja(), `Turno abierto por <strong>${esc(turno.abiertoPor || '')}</strong> ${mismoDia(turno.abiertoTs) ? 'a las ' + esc(hora(turno.abiertoTs)) : 'el ' + esc(fechaHora(turno.abiertoTs))}`)}
         ${mismoDia(turno.abiertoTs) ? '' : `<p class="caja-aviso-viejo" role="alert">Este turno quedó abierto desde otro día. Cerralo contando la plata y abrí uno nuevo para hoy.</p>`}
-        ${botonPendientes()}
         <div class="caja-resumen">${resumen}</div>
         ${lista}
         <div class="caja-acciones-3">
@@ -441,45 +430,15 @@
       </div>`, '[data-accion="cerrarTurno"]', null);
     dlg.querySelector('[data-accion="retiro"]').addEventListener('click', () => pasoMovimiento('retiro'));
     dlg.querySelector('[data-accion="ingreso"]').addEventListener('click', () => pasoMovimiento('ingreso'));
-    dlg.querySelector('[data-accion="cerrarTurno"]').addEventListener('click', () => pasoCerrar(turno));
-    conectarPendientes();
+    dlg.querySelector('[data-accion="cerrarTurno"]').addEventListener('click', () => pasoAntesDeContar(turno));
     conectarPie();
   }
 
   // ------------------------------------------------------------ por cobrar --
   // Pedidos en efectivo cargados en un puesto de sólo ingreso: el cliente
-  // paga acá. Recién al confirmar entran al turno abierto de esta caja.
+  // paga acá. Se marcan como cobrados desde el Historial (historialRecientes
+  // .html): botón "Cobrado", imprimir el ticket o usar la calculadora de vuelto.
   function ticketCorto(id) { return String(id || '').slice(-8).toUpperCase(); }
-
-  function pasoPendientes() {
-    const ids = Object.keys(pendientes).sort((a, b) => (pendientes[a].ts || 0) - (pendientes[b].ts || 0));
-    const aviso = avisoPend;
-    avisoPend = '';
-    mostrar(`
-      <div class="usr-clave-card caja-card">
-        ${cabecera('Por cobrar · ' + nombreCaja(), ids.length
-          ? 'Pedidos en efectivo cargados en otros puestos. Tocá el del cliente que vino a pagar.'
-          : 'No hay nada por cobrar.')}
-        ${aviso ? `<p class="caja-aviso-ok" role="status">${esc(aviso)}</p>` : ''}
-        ${ids.length ? `<div class="caja-pend-lista">${ids.map(id => {
-          const p = pendientes[id];
-          const devolver = Number(p.efectivo) < 0;
-          const tipo = tipoFicha(p);
-          return `
-            <button type="button" class="caja-pend-item" data-pedido="${esc(id)}">
-              <span class="caja-pend-cliente">${esc(p.cliente || 'Sin nombre')}</span>
-              <span class="caja-pend-meta">${tipo !== 'cobro' ? `<em class="caja-pend-tipo caja-pend-${tipo}">${esc(TIPOS_FICHA[tipo])}</em> · ` : ''}${esc(mismoDia(p.ts) ? hora(p.ts) : fechaHora(p.ts))} · ${esc(p.vendedor || '')} · Ticket ${esc(ticketCorto(id))}</span>
-              <span class="caja-pend-monto${devolver ? ' neg' : ''}">${devolver ? 'Devolver ' + pesos(-p.efectivo) : pesos(p.efectivo)}</span>
-            </button>`;
-        }).join('')}</div>` : ''}
-        <div class="caja-pie">
-          <button type="button" class="caja-enlace" data-accion="volver">Volver</button>
-        </div>
-      </div>`, '.caja-pend-item', null);
-    dlg.dataset.paso = 'pendientes';
-    dlg.querySelectorAll('[data-pedido]').forEach(b => b.addEventListener('click', () => pasoConfirmarCobro(b.dataset.pedido)));
-    dlg.querySelector('[data-accion="volver"]').addEventListener('click', abrirPanel);
-  }
 
   // Quita una ficha que ya no corresponde (pedido borrado, cancelado, ya cobrado…).
   async function soltarPendiente(id, motivo) {
@@ -537,6 +496,56 @@
     };
   }
 
+  // Aviso breve abajo de la pantalla: confirma un cobro sin abrir ventanas.
+  // accion: { texto, fn } agrega un botón (por ejemplo "Deshacer"); con
+  // botón el aviso dura más, para dar tiempo a tocarlo.
+  let toastEl = null, toastTimer = null;
+  function toast(texto, mal, accion) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'caja-toast';
+      toastEl.setAttribute('role', 'status');
+      toastEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(toastEl);
+    }
+    toastEl.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = texto;
+    toastEl.appendChild(span);
+    if (accion) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'caja-toast-accion';
+      b.textContent = accion.texto;
+      b.addEventListener('click', () => {
+        toastEl.classList.remove('caja-toast-visible');
+        accion.fn();
+      }, { once: true });
+      toastEl.appendChild(b);
+    }
+    toastEl.classList.toggle('caja-toast-mal', !!mal);
+    toastEl.classList.toggle('caja-toast-con-accion', !!accion);
+    toastEl.classList.add('caja-toast-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('caja-toast-visible'), accion ? 10000 : mal ? 6000 : 3500);
+  }
+
+  // Al terminar algo que se hizo en una ventana (confirmar una diferencia o
+  // una devolución): muestra el resultado, o cierra si no se hizo nada.
+  function volverDeCobro() {
+    const aviso = avisoPend;
+    avisoPend = '';
+    // "Volver" sin haber hecho nada: se cierra y queda el Historial.
+    if (!aviso) { cerrarDlg(null); return; }
+    mostrar(`
+      <div class="usr-clave-card caja-card">
+        ${cabecera(nombreCaja(), '')}
+        <p class="caja-aviso-ok" role="status">${esc(aviso || 'Listo.')}</p>
+        <button type="button" class="usr-clave-btn caja-btn-pri caja-btn-ancho" data-accion="listo">Listo</button>
+      </div>`, '[data-accion="listo"]', null);
+    dlg.querySelector('[data-accion="listo"]').addEventListener('click', () => cerrarDlg(null));
+  }
+
   async function pasoConfirmarCobro(id) {
     const f = pendientes[id] || {};
     mostrar(`<div class="usr-clave-card caja-card">${cabecera('Por cobrar', 'Cargando el pedido…')}</div>`, null, null);
@@ -546,11 +555,11 @@
       await leerCaja();
     } catch (err) {
       avisoPend = 'No se pudo leer el pedido. Revisá internet e intentá de nuevo.';
-      pasoPendientes();
+      volverDeCobro();
       return;
     }
     const ev = evaluarFicha(f, pedido);
-    if (ev.motivo) { await soltarPendiente(id, ev.motivo); pasoPendientes(); return; }
+    if (ev.motivo) { await soltarPendiente(id, ev.motivo); volverDeCobro(); return; }
 
     const tx = textosFicha(ev);
     const devolver = ev.monto < 0;
@@ -571,29 +580,32 @@
         </div>
         ${esAdmin() ? '<div class="caja-pie"><button type="button" class="caja-enlace" data-accion="quitar">Quitar de la lista sin sumar a la caja</button></div>' : ''}
       </div>`, '[data-accion="ok"]', null);
-    dlg.querySelector('[data-accion="volver"]').addEventListener('click', pasoPendientes);
+    dlg.querySelector('[data-accion="volver"]').addEventListener('click', volverDeCobro);
     const quitar = dlg.querySelector('[data-accion="quitar"]');
     if (quitar) quitar.addEventListener('click', async () => {
       if (!confirm('¿Quitar este pedido de "Por cobrar"? No va a sumar a ninguna caja.')) return;
       await soltarPendiente(id, `lo quitó ${usuario()} sin sumarlo a la caja.`);
-      pasoPendientes();
+      volverDeCobro();
     });
     dlg.querySelector('[data-accion="ok"]').addEventListener('click', () => {
       if (!usuario()) { error('Elegí quién está en la caja.'); return; }
       if (caja && caja.turno) { cobrarPendiente(id, pedido, ev, caja.turno); return; }
       pasoAbrir(turnoId => {
         if (turnoId) cobrarPendiente(id, pedido, ev, turnoId);
-        else pasoPendientes();
+        else volverDeCobro();
       });
     });
   }
 
-  async function cobrarPendiente(id, pedido, ev, turnoId) {
+  // silencioso: sin ventana, el resultado sale en el aviso breve (toast).
+  async function cobrarPendiente(id, pedido, ev, turnoId, silencioso) {
     const quien = usuario();
     const ts = Date.now();
     const cliente = (pedido.cliente && pedido.cliente.nombre) || 'Sin nombre';
-    mostrar(`<div class="usr-clave-card caja-card">${cabecera('Por cobrar', 'Guardando…')}</div>`, null, null);
-    dlg.dataset.ocupado = '1';
+    if (!silencioso) {
+      mostrar(`<div class="usr-clave-card caja-card">${cabecera('Por cobrar', 'Guardando…')}</div>`, null, null);
+      dlg.dataset.ocupado = '1';
+    }
     const mov = { t: ev.t, monto: ev.monto, pedido: id, por: quien, ts, porCobrar: true };
     if (ev.tipo === 'offline') mov.offline = true;
     const escrituras = {
@@ -616,8 +628,17 @@
     } catch (err) {
       console.warn('Cobrar pendiente:', err);
       avisoPend = 'No se pudo guardar. Puede que ya lo haya cobrado otra caja o que el turno se haya cerrado: revisá y probá de nuevo.';
+      if (silencioso) { toast(avisoPend + ' (' + cliente + ')', true); avisoPend = ''; return false; }
     }
-    pasoPendientes();
+    if (silencioso) {
+      const deshacer = (ev.tipo === 'cobro' || ev.tipo === 'offline')
+        ? { texto: 'Deshacer', fn: () => revertirCobro(id, 'Deshecho al momento', false) }
+        : null;
+      toast(avisoPend + ' · ' + nombreCaja(), false, deshacer);
+      avisoPend = '';
+      return true;
+    }
+    volverDeCobro();
   }
 
   // ------------------------------------------------------------ abrir turno --
@@ -740,6 +761,146 @@
     });
   }
 
+  // ------------------------------------------------- antes de contar el cierre --
+  // Lo que quedó en efectivo sin marcar (de cualquier día): si alguien se
+  // olvidó de tocar "Cobrado", al cierre esa plata aparecería como "sobra"
+  // sin explicación. Se muestra antes de contar y se puede marcar ahí mismo.
+  // Son de toda la sucursal: sólo se marca lo que se cobró en ESTA caja.
+  function pasoAntesDeContar(turno) {
+    const ids = Object.keys(pendientes).sort((a, b) => (pendientes[a].ts || 0) - (pendientes[b].ts || 0));
+    if (!ids.length) { pasoCerrar(turno); return; }
+    const aviso = avisoPend;
+    avisoPend = '';
+    mostrar(`
+      <div class="usr-clave-card caja-card">
+        ${cabecera('Antes de contar · ' + nombreCaja(),
+          `Quedan <strong>${ids.length}</strong> ${ids.length === 1 ? 'venta' : 'ventas'} en efectivo sin marcar. Marcá sólo las que se cobraron (o devolvieron) en esta caja; el resto queda para quien corresponda.`)}
+        ${aviso ? `<p class="caja-aviso-ok" role="status">${esc(aviso)}</p>` : ''}
+        <ul class="caja-sinmarcar">${ids.map(id => {
+          const f = pendientes[id];
+          const tipo = tipoFicha(f);
+          const monto = Math.round(Number(f.efectivo) || 0);
+          const devolver = monto < 0;
+          return `
+            <li>
+              <span class="caja-sinmarcar-det">
+                <strong>${esc(f.cliente || 'Sin nombre')}</strong>
+                <small>${tipo !== 'cobro' ? esc(TIPOS_FICHA[tipo]) + ' · ' : ''}${esc(mismoDia(f.ts) ? hora(f.ts) : fechaHora(f.ts))}${f.vendedor ? ' · ' + esc(f.vendedor) : ''}</small>
+              </span>
+              <span class="caja-sinmarcar-monto${devolver ? ' neg' : ''}">${pesos(Math.abs(monto))}</span>
+              <button type="button" class="usr-clave-btn usr-clave-cancelar" data-marcar="${esc(id)}">${devolver ? 'Devuelto' : 'Cobrado'}</button>
+            </li>`;
+        }).join('')}</ul>
+        <div class="usr-clave-error" role="alert"></div>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar" data-accion="volver">Volver</button>
+          <button type="button" class="usr-clave-btn caja-btn-pri" data-accion="contar">Seguir al conteo</button>
+        </div>
+      </div>`, '[data-accion="contar"]', null);
+    dlg.querySelector('[data-accion="volver"]').addEventListener('click', abrirPanel);
+    dlg.querySelector('[data-accion="contar"]').addEventListener('click', () => pasoCerrar(turno));
+    dlg.querySelectorAll('[data-marcar]').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      b.textContent = '…';
+      await marcarFichaEnTurno(b.dataset.marcar);
+      pasoAntesDeContar(turno);
+    }));
+  }
+
+  // Marca una ficha cualquiera (venta, sin conexión, diferencia o devolución)
+  // en el turno abierto de esta caja, sin ventana.
+  async function marcarFichaEnTurno(id) {
+    try {
+      const pedido = (await conLimite(db().ref('pedidos/' + id).once('value'), 8000)).val();
+      await leerCaja();
+      if (!caja || !caja.turno) { avisoPend = 'El turno ya no está abierto.'; return; }
+      const ev = evaluarFicha(pendientes[id] || {}, pedido);
+      if (ev.motivo) { await soltarPendiente(id, ev.motivo); delete pendientes[id]; return; }
+      // La lista se vuelve a pintar ya: no espera a que Firebase avise.
+      if (await cobrarPendiente(id, pedido, ev, caja.turno, true)) delete pendientes[id];
+    } catch (err) {
+      console.warn('Marcar antes del cierre:', err);
+      avisoPend = 'No se pudo marcar. Revisá internet e intentá de nuevo.';
+    }
+  }
+
+  // ------------------------------------------------------- revertir un cobro --
+  // Para cuando alguien se adjudicó por error una venta en efectivo que no le
+  // correspondía. El pedido vuelve a quedar "por cobrar" (con su botón en el
+  // Historial) y el turno donde se había sumado recibe un movimiento
+  // "Cobro revertido" que la resta. Sólo mientras ese turno siga abierto: si
+  // ya se cerró, ese efectivo quedó contado en su cierre.
+  // Lo usa "Deshacer" (al momento, en el mismo equipo) y el modo Admin del
+  // Historial (con confirmación y clave personal ya validada).
+  async function revertirCobro(id, motivo, conVentana) {
+    const quien = usuario();
+    const fallar = texto => {
+      if (conVentana) { avisoPend = texto; volverDeCobro(); } else toast(texto, true);
+      return false;
+    };
+    try {
+      const pedido = (await conLimite(db().ref('pedidos/' + id).once('value'), 8000)).val();
+      const cobro = (pedido && pedido.cobro) || {};
+      if (!pedido || !cobro.caja) return fallar('Ese pedido no estaba cobrado en ninguna caja.');
+      if (String(pedido.status || '').toUpperCase() === 'CANCELADO') return fallar('El pedido está cancelado: no se puede revertir el cobro.');
+      const cajaCobro = (await conLimite(db().ref('cajas/' + cobro.caja).once('value'), 8000)).val() || {};
+      const nombre = cajaCobro.nombre || 'la caja';
+      if (!cobro.turno || cajaCobro.turno !== cobro.turno) {
+        return fallar(`El turno de ${nombre} donde se cobró ya se cerró: no se puede revertir (ese efectivo quedó en su cierre).`);
+      }
+      const efectivo = Math.round(Number(cobro.efectivo) || 0);
+      const actual = efectivoDe(pedido.pagos);
+      const ts = Date.now();
+      const escrituras = {
+        ['pedidos/' + id + '/cobro']: actual ? { pendiente: true } : { sinEfectivo: true },
+        ['cajaPendientes/' + id]: actual ? ficha(pedido.sinConexion ? 'offline' : 'cobro', actual, pedido, pedido.timestamp) : null
+      };
+      if (efectivo) {
+        escrituras['cajaTurnos/' + cobro.turno + '/movs/' + db().ref().push().key] = {
+          t: 'reversion', monto: -efectivo, pedido: id, por: quien, ts, motivo: String(motivo || '').slice(0, 80)
+        };
+      }
+      await conLimite(db().ref().update(escrituras), 8000);
+      const cliente = (pedido.cliente && pedido.cliente.nombre) || 'Sin nombre';
+      reg(`Revirtió el cobro de ${pesos(efectivo)} del ticket ${ticketCorto(id)} (${cliente}) en ${nombre}${motivo ? ': ' + motivo : ''} (${quien})`);
+      const texto = `Cobro revertido: ${pesos(efectivo)} de ${cliente} vuelve a quedar por cobrar.`;
+      if (conVentana) { avisoPend = texto; volverDeCobro(); } else toast(texto);
+      return true;
+    } catch (err) {
+      console.warn('Revertir cobro:', err);
+      return fallar('No se pudo revertir. Revisá internet e intentá de nuevo.');
+    }
+  }
+
+  // Modo Admin del Historial: confirmación con motivo antes de revertir.
+  async function revertirCobroAdmin(id, pedidoVisto) {
+    if (!esAdmin()) return;
+    const cobro = (pedidoVisto && pedidoVisto.cobro) || {};
+    const cliente = (pedidoVisto && pedidoVisto.cliente && pedidoVisto.cliente.nombre) || 'Sin nombre';
+    const nombre = nombresCajas[cobro.caja] || 'la caja';
+    mostrar(`
+      <form class="usr-clave-card caja-card" novalidate>
+        ${cabecera('Revertir cobro', `${esc(cliente)} · Ticket ${esc(ticketCorto(id))}`)}
+        <div class="caja-dif-grande caja-dif-falta">${pesos(cobro.efectivo)}</div>
+        <p class="caja-ayuda">Se cobró en <strong>${esc(nombre)}</strong>${cobro.por ? ' por ' + esc(cobro.por) : ''}${cobro.ts ? ' a las ' + esc(hora(cobro.ts)) : ''}. Al revertirlo se resta de ese turno y la venta vuelve a quedar por cobrar.</p>
+        <label class="caja-campo-label" for="cajaRevMotivo">Motivo</label>
+        <input id="cajaRevMotivo" class="caja-input caja-input-texto" maxlength="80" autocomplete="off" placeholder="Ej.: lo marcó otra caja por error">
+        <div class="usr-clave-error" role="alert"></div>
+        <div class="usr-clave-acciones">
+          <button type="button" class="usr-clave-btn usr-clave-cancelar" data-accion="volver">Cancelar</button>
+          <button type="submit" class="usr-clave-btn caja-btn-pri">Revertir</button>
+        </div>
+      </form>`, '#cajaRevMotivo', null);
+    dlg.querySelector('[data-accion="volver"]').addEventListener('click', () => cerrarDlg(null));
+    dlg.querySelector('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const motivo = dlg.querySelector('#cajaRevMotivo').value.trim();
+      if (!motivo) { error('Escribí el motivo.'); return; }
+      ocupado(true, dlg.querySelector('[type="submit"]'), 'Revirtiendo…');
+      await revertirCobro(id, motivo, true);
+    });
+  }
+
   // ----------------------------------------------------------- cerrar turno --
   function difClase(d) { d = Math.round(Number(d) || 0); return d === 0 ? 'caja-dif-ok' : d < 0 ? 'caja-dif-falta' : 'caja-dif-sobra'; }
   function textoDif(d) {
@@ -856,6 +1017,7 @@
       ['Devoluciones en efectivo', suma('devolucion')],
       ['Diferencias por edición', suma('ajuste')],
       ['Pedidos cancelados', suma('anulacion')],
+      ['Cobros revertidos', suma('reversion')],
       ['Ingresos', suma('ingreso')],
       ['Salidas', suma('retiro')]
     ].filter(([, v], i) => i < 2 || v);
@@ -1111,15 +1273,21 @@
   //     se borra si ya no hay efectivo);
   //   · ya cobrado → ficha "Diferencia por edición" con lo que hay que cobrar
   //     o devolver (o se borra si volvió a coincidir).
+  //   · sin efectivo al cargarlo (marca sinEfectivo) y ahora sí → "Por cobrar".
   // Pedidos de antes de la caja (sin cobro) no se tocan: ya se pagaron.
   function ajusteDeEdicion(pedidoId, anterior, pedidoObj) {
     const cobro = anterior && anterior.cobro;
     if (!cobro) return {};
     const ruta = 'cajaPendientes/' + pedidoId;
     const actual = efectivoDe(pedidoObj.pagos);
+    if (cobro.sinEfectivo) {
+      if (!actual || modoWhatsapp()) return {};
+      pedidoObj.cobro = { pendiente: true };
+      return { [ruta]: ficha('cobro', actual, pedidoObj) };
+    }
     if (cobro.pendiente) {
       if (!actual) {
-        delete pedidoObj.cobro;
+        pedidoObj.cobro = { sinEfectivo: true };
         return { [ruta]: null };
       }
       return { [ruta]: ficha(anterior.sinConexion ? 'offline' : 'cobro', actual, pedidoObj, anterior.timestamp) };
@@ -1127,6 +1295,92 @@
     if (!cobro.caja) return {};
     const dif = actual - Math.round(Number(cobro.efectivo) || 0);
     return { [ruta]: dif ? ficha('ajuste', dif, pedidoObj) : null };
+  }
+
+  // Estado de caja de un pedido, para la etiqueta del Historial:
+  //   { estado: 'pendiente' | 'ajuste' | 'anulacion' | 'cobrado', monto, tipo?, caja?, por?, ts? }
+  // o null si el pedido no tiene efectivo que pase por una caja. Las fichas
+  // sólo se conocen en un puesto de cobro (las escucha); en el resto se ve
+  // lo que dice el propio pedido.
+  function estadoCobro(id, pedido) {
+    if (!pedido) return null;
+    const cobro = pedido.cobro || {};
+    const f = pendientes[id];
+    if (f) {
+      const tipo = tipoFicha(f);
+      return {
+        estado: tipo === 'cobro' || tipo === 'offline' ? 'pendiente' : tipo,
+        tipo, monto: Math.round(Number(f.efectivo) || 0)
+      };
+    }
+    if (cobro.pendiente) {
+      const monto = efectivoDe(pedido.pagos);
+      return monto ? { estado: 'pendiente', tipo: 'cobro', monto } : null;
+    }
+    if (cobro.caja) {
+      return {
+        estado: 'cobrado', monto: Math.round(Number(cobro.efectivo) || 0),
+        caja: nombresCajas[cobro.caja] || 'Caja', por: cobro.por || '', ts: cobro.ts || 0
+      };
+    }
+    return null;
+  }
+
+  // Cobrar desde una fila del Historial. Modos:
+  //   'boton'     el botón "Cobrado" de la fila: cobra en un toque.
+  //   'auto'      imprimir el ticket o usar la calculadora con el pago
+  //               completo: si había efectivo por cobrar, se da por cobrado.
+  //               Sólo ventas en efectivo pendientes; no toca diferencias
+  //               ni devoluciones, ni molesta si no hay nada que hacer.
+  //   'confirmar' diferencia por edición o devolución: con ventana.
+  // Sin turno abierto, en cualquier modo se pide abrirlo.
+  const cobrando = new Set();
+  async function cobrarDesdeHistorial(id, opciones) {
+    const modo = (opciones && opciones.modo) || 'boton';
+    const auto = modo === 'auto';
+    if (!cajaId || !hayFirebase() || cobrando.has(id)) return;
+    if (usuarioGenerico()) { if (!auto) pasoGenerico(); return; }
+    if (modo === 'confirmar') { pasoConfirmarCobro(id); return; }
+    // Sin nada pendiente a la vista no se consulta nada (imprimir un ticket
+    // de transferencia, por ejemplo).
+    const visto = estadoCobro(id, opciones && opciones.pedido);
+    if (auto && (!visto || visto.estado !== 'pendiente')) return;
+    if (!usuario()) { if (!auto) toast('Elegí quién está en la caja antes de cobrar.', true); return; }
+    cobrando.add(id);
+    try {
+      let pedido = null;
+      try {
+        pedido = (await conLimite(db().ref('pedidos/' + id).once('value'), 8000)).val();
+        await leerCaja();
+      } catch (err) {
+        if (!auto) toast('No se pudo leer el pedido. Revisá internet e intentá de nuevo.', true);
+        return;
+      }
+      const ev = evaluarFicha(pendientes[id] || {}, pedido);
+      if (ev.motivo) {
+        if (pendientes[id]) { await soltarPendiente(id, ev.motivo); avisoPend = ''; }
+        if (!auto) toast('No hay nada para cobrar: ' + ev.motivo, true);
+        return;
+      }
+      if (ev.tipo !== 'cobro' && ev.tipo !== 'offline') {
+        if (!auto) pasoConfirmarCobro(id);
+        return;
+      }
+      if (caja && caja.turno) { await cobrarPendiente(id, pedido, ev, caja.turno, true); return; }
+      const turnoId = await new Promise(res => pasoAbrir(res));
+      if (turnoId) await cobrarPendiente(id, pedido, ev, turnoId, true);
+      else toast('No se marcó como cobrado: hace falta abrir el turno de caja.', true);
+    } finally {
+      cobrando.delete(id);
+    }
+  }
+
+  // Pedido nuevo sin efectivo, en una sucursal con cajas: queda marcado para
+  // que, si después se edita y pasa a pagarse en efectivo, la caja lo cobre
+  // (sin la marca no se distingue de un pedido anterior a las cajas).
+  function marcarNuevo(pedidoObj) {
+    if (pedidoObj.cobro || modoWhatsapp() || !(cajaId || hayCajas)) return;
+    if (!efectivoDe(pedidoObj.pagos)) pedidoObj.cobro = { sinEfectivo: true };
   }
 
   // Marca el pedido como cobrado en esta caja y devuelve las escrituras del
@@ -1156,6 +1410,11 @@
     ajusteDeEdicion,
     asegurarTurno,
     registrarCobro,
+    marcarNuevo,
+    estadoCobro,
+    cobrarDesdeHistorial,
+    revertirCobroAdmin,
+    esAdmin,
     abrirPanel,
     nombre: nombreCaja
   };

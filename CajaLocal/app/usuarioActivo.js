@@ -765,6 +765,10 @@
   const GENERICOS = ['otro'];
   function esGenerico(nombre) { return GENERICOS.includes(String(nombre || '').trim().toLowerCase()); }
   function llevaClave(nombre) { return esPersona(nombre) && !esGenerico(nombre); }
+  // Quienes pueden entrar al modo Admin (con su clave personal): la caja
+  // (ingresoPedidoV2.js), el Historial y la caja (cajaTurno.js) usan esta lista.
+  const ADMINS = ['alejandro', 'javier', 'sabrina'];
+  function esAdmin(nombre) { return ADMINS.includes(String(nombre || '').trim().toLowerCase()); }
   function tieneClave(nombre) { return !!claves[claveDe(nombre)]; }
 
   function soltarEsperas() {
@@ -2145,6 +2149,8 @@
     verificarClavePersonal,
     // "Otro" y similares: no operan la caja (cajaTurno.js).
     esGenerico,
+    // Alejandro, Javier y Sabrina: pueden entrar al modo Admin.
+    esAdmin,
     // La pantalla dice si se puede volver al selector por inactividad
     // (`puede`) y qué dejar en blanco antes de hacerlo (`limpiar`).
     alInactividad(gancho) { ganchoInactividad = gancho || null; },

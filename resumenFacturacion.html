@@ -753,7 +753,6 @@
         tr[data-tono="facturacion"] td.mes-name { box-shadow: inset 3px 0 0 var(--ink-4), inset -1px 0 0 var(--line); }
         tr[data-tono="ganancia"] td.mes-name { box-shadow: inset 3px 0 0 var(--pos), inset -1px 0 0 var(--line); }
         tr[data-tono="gastos"] td.mes-name { box-shadow: inset 3px 0 0 var(--neg), inset -1px 0 0 var(--line); }
-        tr[data-tono="ganancia-seleccionados"] td.mes-name { box-shadow: inset 3px 0 0 var(--gold), inset -1px 0 0 var(--line); }
 
         .detail-row { display: none; }
         .detail-row.show { display: table-row; animation: aparecer 0.25s var(--ease) both; }
@@ -813,7 +812,6 @@
         .facturacion-cell { color: var(--ink); }
         .ganancia-cell { color: var(--pos) !important; }
         .gastos-cell { color: var(--neg) !important; }
-        td.ganancia-seleccionados-cell { color: var(--gold) !important; }
         .facturacion-table td.is-zero { color: var(--ink-4) !important; font-weight: 400; }
         .facturacion-table td.is-neg { color: var(--neg) !important; }
 
@@ -1578,7 +1576,6 @@
                 <div class="legend" aria-hidden="true">
                     <span><i style="background: var(--ink-4)"></i>Ventas</span>
                     <span><i style="background: var(--pos)"></i>Ganancia</span>
-                    <span><i style="background: var(--gold)"></i>Seleccionados</span>
                     <span><i style="background: var(--neg)"></i>Gastos</span>
                 </div>
             </header>
@@ -1870,7 +1867,7 @@
         const CAMPOS_CONSOLIDABLES = [
             'facturacion', 'consumidorFinal', 'mayorista',
             'ventasGeneradas', 'ventasConsumidorFinal', 'ventasMayoristas',
-            'gananciaBruta', 'gananciaBrutaConsumidor', 'gananciaBrutaMayorista', 'gananciaSeleccionados',
+            'gananciaBruta', 'gananciaBrutaConsumidor', 'gananciaBrutaMayorista',
             'facturacionEfectivo', 'facturacionTransferencia',
             'facturacionDebito', 'facturacionCredito', 'facturacionOtros'
         ];
@@ -1916,7 +1913,6 @@
         const ETIQUETAS_FILA = {
             'Facturacion': 'Facturación',
             'Ganancia Bruta Tot.': 'Ganancia bruta',
-            'Ganancia Seleccionados': 'Ganancia seleccionados',
             'Ganancia Neta': 'Ganancia neta',
             'Ganancia %': 'Margen bruto',
             'Ventas Generadas': 'Ventas',
@@ -2325,7 +2321,6 @@
                 // Nuevos campos para el desglose de ganancia
                 gananciaBrutaConsumidor: new Array(numPeriodos).fill(0),
                 gananciaBrutaMayorista: new Array(numPeriodos).fill(0),
-                gananciaSeleccionados: new Array(numPeriodos).fill(0),
                 // Nuevos campos para facturación por medio de pago
                 facturacionEfectivo: new Array(numPeriodos).fill(0),
                 facturacionTransferencia: new Array(numPeriodos).fill(0),
@@ -2401,7 +2396,6 @@
                 gananciaBruta: new Array(numPeriodos).fill(0),
                 gananciaBrutaConsumidor: new Array(numPeriodos).fill(0),
                 gananciaBrutaMayorista: new Array(numPeriodos).fill(0),
-                gananciaSeleccionados: new Array(numPeriodos).fill(0),
                 facturacionEfectivo: new Array(numPeriodos).fill(0),
                 facturacionTransferencia: new Array(numPeriodos).fill(0),
                 facturacionDebito: new Array(numPeriodos).fill(0),
@@ -2641,8 +2635,9 @@
                     });
                 });
 
-                Object.values(pedidos).forEach(pedido => {
-                    if (!pedidoEsFacturable(pedido)) return;
+                Object.values(pedidos).forEach(original => {
+                    const pedido = pedidoFacturable(original);
+                    if (!pedido) return;
                     const fecha = new Date(pedido.fecha);
                     const mes = fecha.getMonth();
                     if (fecha.getFullYear() !== year || !acumulado[mes]) return;
@@ -2667,16 +2662,16 @@
                         cantidadPedidos: acumulado[mes].cantidad,
                         consolidadoEn: firebase.database.ServerValue.TIMESTAMP,
                         consolidadoPor: (usuario && usuario.email) || null,
-                        version: 3 // v2: agrega transferenciasAlias por cuenta; v3: separa Débito y Crédito de Otros
+                        version: 4 // v2: agrega transferenciasAlias por cuenta; v3: separa Débito y Crédito de Otros; v4: excluye Moda y quita ganancia seleccionados
                     };
-                    const totales = { facturacion: 0, ventasGeneradas: 0, gananciaBruta: 0, gananciaSeleccionados: 0, gastos: 0, gananciaNeta: 0 };
+                    const totales = { facturacion: 0, ventasGeneradas: 0, gananciaBruta: 0, gastos: 0, gananciaNeta: 0 };
 
                     ['Local', 'Envios'].forEach(cuenta => {
                         const datosCuenta = {};
                         CAMPOS_CONSOLIDABLES.forEach(campo => datosCuenta[campo] = redondear(acumulado[mes][cuenta][campo]));
                         // Valores de referencia al momento de consolidar (la vista usa los gastos actuales)
                         datosCuenta.gastos = redondear(gastos[cuenta]);
-                        datosCuenta.gananciaNeta = redondear(datosCuenta.gananciaBruta - datosCuenta.gananciaSeleccionados - datosCuenta.gastos);
+                        datosCuenta.gananciaNeta = redondear(datosCuenta.gananciaBruta - datosCuenta.gastos);
                         const transferenciasAlias = {};
                         Object.entries(acumulado[mes].alias[cuenta]).forEach(([alias, total]) => {
                             transferenciasAlias[aliasAClave(alias)] = redondear(total);
@@ -2728,7 +2723,7 @@
                     const gastos = gastosDelMes(year, mes);
                     return cuentas.reduce((total, cuenta) => {
                         const datos = registro[cuenta] || {};
-                        return total + (Number(datos.gananciaBruta) || 0) - (Number(datos.gananciaSeleccionados) || 0) - gastos[cuenta];
+                        return total + (Number(datos.gananciaBruta) || 0) - gastos[cuenta];
                     }, 0);
                 }
                 return cuentas.reduce((total, cuenta) => total + (Number((registro[cuenta] || {})[metrica]) || 0), 0);
@@ -3157,6 +3152,69 @@
             return !isNaN(new Date(pedido.fecha).getTime());
         }
 
+        // ===================== Exclusión de la categoría Moda =====================
+        // Los artículos de categoría exactamente "Moda" no existen para este resumen:
+        // no suman facturación, ni ganancia, ni ventas. Todo pedido entra por pedidoFacturable,
+        // que devuelve una copia sin esas líneas (o null si no es facturable o solo tenía Moda).
+        const CATEGORIA_EXCLUIDA = 'Moda';
+
+        function lineasDePedido(pedido) {
+            const lineas = pedido.items || pedido.productos;
+            return lineas && typeof lineas === 'object' ? Object.values(lineas).filter(Boolean) : [];
+        }
+
+        function esLineaExcluida(linea) {
+            return linea.categoria === CATEGORIA_EXCLUIDA;
+        }
+
+        // Mismo criterio que ingresoPedidoV2.js: VENTA suma, DEVOLUCION resta, el resto no mueve importes
+        function signoDeLinea(linea) {
+            if (!linea.tipoLinea || linea.tipoLinea === 'VENTA') return 1;
+            return linea.tipoLinea === 'DEVOLUCION' ? -1 : 0;
+        }
+
+        function pedidoFacturable(pedido) {
+            if (!pedidoEsFacturable(pedido)) return null;
+            const lineas = lineasDePedido(pedido);
+            const excluidas = lineas.filter(esLineaExcluida);
+            if (excluidas.length === 0) return pedido;
+            if (excluidas.length === lineas.length) return null; // pedido solo de Moda: invisible
+
+            // Se restan solo las líneas de Moda; recargo, descuento y envío quedan en el resto del pedido
+            let monto = 0, costo = 0;
+            excluidas.forEach(linea => {
+                const unidades = signoDeLinea(linea) * (Number(linea.cantidad) || 0);
+                monto += unidades * (Number(linea.valorU) || 0);
+                costo += unidades * (Number(linea.valorC) || 0);
+            });
+
+            const pagos = { ...(pedido.pagos || {}) };
+            const totalOriginal = Number(pagos.totalFinal) || 0;
+            const totalNuevo = totalOriginal - monto;
+            pagos.totalFinal = totalNuevo;
+            pagos.subtotal = (Number(pagos.subtotal) || 0) - monto;
+            pagos.costos = (Number(pagos.costos) || 0) - costo;
+            pagos.ganancia = (Number(pagos.ganancia) || 0) - (monto - costo);
+
+            // Pago Parcial: lo que se resta se reparte entre los medios según lo que pagó cada uno
+            // (el último absorbe el redondeo para que la suma siga dando el total exacto)
+            if (Array.isArray(pagos.desglose) && pagos.desglose.length > 0 && totalOriginal !== 0) {
+                let asignado = 0;
+                pagos.desglose = pagos.desglose.map((parte, i, todas) => {
+                    const montoParte = i === todas.length - 1
+                        ? totalNuevo - asignado
+                        : Math.round((Number(parte?.monto) || 0) * totalNuevo / totalOriginal);
+                    asignado += montoParte;
+                    return { ...parte, monto: montoParte };
+                });
+            }
+
+            const sinExcluidas = { ...pedido, pagos };
+            const campoLineas = pedido.items ? 'items' : 'productos';
+            sinExcluidas[campoLineas] = lineas.filter(linea => !esLineaExcluida(linea));
+            return sinExcluidas;
+        }
+
         // Lo que aporta un pedido a cada campo consolidable. Es la única regla de cálculo:
         // la usan tanto la vista en vivo como la consolidación, así ambas dan lo mismo.
         function aportesDePedido(pedido) {
@@ -3165,15 +3223,12 @@
 
             const totalPedido = Number(pedido.pagos?.totalFinal) || 0;
             const gananciaPedido = Number(pedido.pagos?.ganancia) || 0;
-            const gananciaSelec = Number(pedido.pagos?.gananciaSelec) || 0;
             const tipoCliente = pedido.cliente?.tipoCliente || 'consumidor final';
-            const medioPago = pedido.pagos?.medioPago || 'Efectivo';
 
             // Facturación total, ventas y ganancias
             aportes.facturacion = totalPedido;
             aportes.ventasGeneradas = 1;
             aportes.gananciaBruta = gananciaPedido;
-            aportes.gananciaSeleccionados = gananciaSelec;
 
             // Segmentar facturación por medio de pago: un pago Parcial reparte
             // cada parte en la fila de su medio; el resto va entero a la suya.
@@ -3251,7 +3306,6 @@
             const fechaPedido = new Date(pedido.fecha);
             const totalPedido = Number(pedido.pagos?.totalFinal) || 0;
             const gananciaPedido = Number(pedido.pagos?.ganancia) || 0;
-            const gananciaSelec = Number(pedido.pagos?.gananciaSelec) || 0;
             const medioPago = pedido.pagos?.medioPago || 'Efectivo';
 
             return {
@@ -3268,8 +3322,7 @@
                 partes: partesDePago(pedido),
                 totalPedido: totalPedido,
                 gananciaPedido: gananciaPedido,
-                gananciaSelec: gananciaSelec,
-                gananciaNeta: gananciaPedido - gananciaSelec,
+                gananciaNeta: gananciaPedido,
                 indicePeriodo: indicePeriodo,
                 periodoLabel: periodoLabels[indicePeriodo],
                 status: pedido.status || 'N/A',
@@ -3293,8 +3346,9 @@
             // Normalizar fecha actual al inicio del día para comparaciones consistentes
             const ahoraInicioDelDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
-            Object.entries(pedidos).forEach(([pedidoId, pedido]) => {
-                 if (!pedidoEsFacturable(pedido)) return;
+            Object.entries(pedidos).forEach(([pedidoId, original]) => {
+                 const pedido = pedidoFacturable(original);
+                 if (!pedido) return;
                  const fechaPedido = new Date(pedido.fecha);
                  // Normalizar fecha del pedido al inicio del día
                  const fechaPedidoInicioDelDia = new Date(fechaPedido.getFullYear(), fechaPedido.getMonth(), fechaPedido.getDate());
@@ -3372,11 +3426,10 @@
             // Agregar gastos después de procesar pedidos
             agregarGastosAProcesamiento();
             
-            // Calcular Ganancia Neta como Ganancia Bruta - Ganancia Seleccionados - Gastos
+            // Calcular Ganancia Neta como Ganancia Bruta - Gastos
             for (let i = 0; i < numPeriodos; i++) {
-                datosFacturacion.gananciaNeta[i] = 
-                    datosFacturacion.gananciaBruta[i] - 
-                    datosFacturacion.gananciaSeleccionados[i] - 
+                datosFacturacion.gananciaNeta[i] =
+                    datosFacturacion.gananciaBruta[i] -
                     datosFacturacion.gastos[i];
                 
                 // Calcular porcentajes de ganancia usando Ganancia Bruta
@@ -3924,7 +3977,6 @@
             const facturacion = suma(datosFacturacion.facturacion);
             const neta = suma(datosFacturacion.gananciaNeta);
             const bruta = suma(datosFacturacion.gananciaBruta);
-            const seleccionados = suma(datosFacturacion.gananciaSeleccionados);
             const gastos = suma(datosFacturacion.gastos);
             const ventas = Math.round(suma(datosFacturacion.ventasGeneradas));
 
@@ -3935,7 +3987,7 @@
             poner('totalGanancia', formatearMoneda(neta));
             elNeta.classList.toggle('tono-pos', neta >= 0);
             elNeta.classList.toggle('tono-neg', neta < 0);
-            poner('kpiBrutaDetalle', `Bruta ${formatearMoneda(bruta)} · Selecc. ${formatearMoneda(seleccionados)}`);
+            poner('kpiBrutaDetalle', `Bruta ${formatearMoneda(bruta)} · Gastos ${formatearMoneda(gastos)}`);
 
             poner('porcentajeGanancia', porcentaje(neta, facturacion).toFixed(1) + '%');
             document.getElementById('porcentajeGanancia').classList.toggle('tono-neg', neta < 0);
@@ -3979,7 +4031,6 @@
             const filas = [
                 { nombre: 'Facturacion', datos: datosFacturacion.facturacion, esMoneda: true, expandible: true, color: 'facturacion' },
                 { nombre: 'Ganancia Bruta Tot.', datos: datosFacturacion.gananciaBruta, esMoneda: true, expandible: true, color: 'ganancia' },
-                { nombre: 'Ganancia Seleccionados', datos: datosFacturacion.gananciaSeleccionados, esMoneda: true, color: 'ganancia-seleccionados' },
                 { nombre: 'Gastos', datos: datosFacturacion.gastos, esMoneda: true, expandible: true, color: 'gastos' },
                 { nombre: 'Ganancia Neta', datos: datosFacturacion.gananciaNeta, esMoneda: true, color: 'ganancia' },
                 { nombre: 'Ganancia %', datos: datosFacturacion.gananciaPercent, esMoneda: false, expandible: true, color: 'ganancia' },
@@ -4007,10 +4058,6 @@
                     } else if (fila.nombre === 'Ventas Generadas') {
                         tr.addEventListener('click', () => toggleVentasGeneradasDetail());
                     }
-                }
-                // Aplicar clase exclusiva a Ganancia Seleccionados
-                if (fila.color === 'ganancia-seleccionados') {
-                    tr.classList.add('ganancia-seleccionados-cell');
                 }
                 
                 // Primera columna: nombre de la fila
@@ -4056,8 +4103,6 @@
                             td.classList.add('ganancia-cell');
                         } else if (fila.color === 'gastos') {
                             td.classList.add('gastos-cell');
-                        } else if (fila.color === 'ganancia-seleccionados') {
-                            td.classList.add('ganancia-seleccionados-cell');
                         } else {
                             td.classList.add('currency-cell');
                         }
@@ -4099,8 +4144,6 @@
                         tdTotal.classList.add('ganancia-cell');
                     } else if (fila.color === 'gastos') {
                         tdTotal.classList.add('gastos-cell');
-                    } else if (fila.color === 'ganancia-seleccionados') {
-                        tdTotal.classList.add('ganancia-seleccionados-cell');
                     } else {
                         tdTotal.classList.add('currency-cell');
                     }
@@ -4809,8 +4852,9 @@
             leerPedidosRango(year, claveMes(year, Math.min(...faltantes)), claveMes(year, Math.max(...faltantes)))
                 .then(pedidos => {
                     const mesesPedidos = new Set(faltantes);
-                    Object.entries(pedidos).forEach(([pedidoId, pedido]) => {
-                        if (!pedidoEsFacturable(pedido) || !aplicarFiltroEntrega(pedido)) return;
+                    Object.entries(pedidos).forEach(([pedidoId, original]) => {
+                        const pedido = pedidoFacturable(original);
+                        if (!pedido || !aplicarFiltroEntrega(pedido)) return;
                         const fecha = new Date(pedido.fecha);
                         if (fecha.getFullYear() !== year || !mesesPedidos.has(fecha.getMonth())) return;
                         pedidosProcesados.push(crearPedidoProcesado(pedidoId, pedido, fecha.getMonth()));
@@ -4851,7 +4895,6 @@
                 medioPago: `${pedido.medioPago} (${partes.map(p => p.medio.toLowerCase()).join(' + ')})`,
                 totalPedido: monto,
                 gananciaPedido: pedido.gananciaPedido * proporcion,
-                gananciaSelec: pedido.gananciaSelec * proporcion,
                 gananciaNeta: pedido.gananciaNeta * proporcion
             };
         }
@@ -5137,8 +5180,6 @@
                             <th>Medio de pago</th>
                             <th class="num">Total</th>
                             <th class="num">Ganancia bruta</th>
-                            <th class="num">Gan. selec.</th>
-                            <th class="num">Ganancia neta</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -5159,9 +5200,7 @@
                         <td>${obtenerDisplayCuenta(pedido.entrega)}</td>
                         <td>${medioPagoDisplay}</td>
                         <td class="num txt-strong">${formatearMoneda(pedido.totalPedido)}</td>
-                        <td class="num">${formatearMoneda(pedido.gananciaPedido)}</td>
-                        <td class="num txt-gold">${formatearMoneda(pedido.gananciaSelec)}</td>
-                        <td class="num ${pedido.gananciaNeta < 0 ? 'txt-neg' : 'txt-pos'}">${formatearMoneda(pedido.gananciaNeta)}</td>
+                        <td class="num ${pedido.gananciaPedido < 0 ? 'txt-neg' : 'txt-pos'}">${formatearMoneda(pedido.gananciaPedido)}</td>
                     </tr>
                 `;
             });
