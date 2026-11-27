@@ -646,7 +646,7 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
 .of-head .btn-dark{padding:11px 16px}
 .of-filters{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
 .of-filters .abc-seg button .n{font-family:var(--mono);font-size:.7rem;margin-left:4px;opacity:.75}
-.of-filters .filterbtn{margin-left:auto}
+.of-filters .of-actions{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .of-filters .filterbtn[hidden]{display:none}
 .of-info{font-size:.74rem;color:var(--muted);margin:0 2px 12px}
 .of-list{display:flex;flex-direction:column;gap:9px}
@@ -1170,7 +1170,13 @@ tr.dirty .row-save{opacity:1;pointer-events:auto}
         <button type="button" data-f="programada">Programadas<span class="n" id="ofNProg">0</span></button>
         <button type="button" data-f="vencida">Vencidas<span class="n" id="ofNVenc">0</span></button>
       </div>
-      <button class="filterbtn" id="ofPurge" hidden>Quitar vencidas</button>
+      <div class="of-actions">
+        <button class="filterbtn" id="ofPurge" hidden>Quitar vencidas</button>
+        <button class="filterbtn" id="ofSyncSheet" title="Actualizar la hoja ArticulosV2 de Google Sheets con los artículos disponibles">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+          Actualizar Sheet
+        </button>
+      </div>
     </div>
     <div class="of-info">El precio de oferta es fijo en pesos y no reemplaza al de lista. El % de descuento se calcula contra el precio de lista con el dólar estático actual; el costo, con el dólar blue en vivo.</div>
     <div class="of-list" id="ofList"></div>
@@ -3254,9 +3260,10 @@ $('editFlag').addEventListener('click', () => {
   applyEditableState();
 });
 
-$('syncSheet').addEventListener('click', async () => {
+// Sincronización manual con la hoja ArticulosV2 (Web App de Apps Script).
+// La usan el botón del Listado (#syncSheet) y el de Ofertas (#ofSyncSheet).
+async function syncSheet(btn){
   if (!SHEETS_SYNC_URL){ toast('Falta configurar SHEETS_SYNC_URL (Web App)', 'err'); return; }
-  const btn = $('syncSheet');
   btn.disabled = true;
   showBlock('Sincronizando con Google Sheets…');
   try {
@@ -3271,7 +3278,9 @@ $('syncSheet').addEventListener('click', async () => {
     hideBlock();
     btn.disabled = false;
   }
-});
+}
+$('syncSheet').addEventListener('click', e => syncSheet(e.currentTarget));
+$('ofSyncSheet').addEventListener('click', e => syncSheet(e.currentTarget));
 
 $('tablaSearch').addEventListener('input', filterTable);
 $('tablaCatFilter').addEventListener('change', e => {
